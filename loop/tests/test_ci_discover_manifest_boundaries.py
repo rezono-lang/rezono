@@ -8,36 +8,35 @@ Covers decisions/build-reconciliation.md:
 2. Endpoint manifest capture (`_capture_endpoint_manifests` / `discover_ci_matrix`) must fail closed
    (selecting the full suite matrix) when a component manifest (`pyproject.toml` / `package.json`) is
    malformed TOML/JSON or a Git symlink (`120000`) at an endpoint instead of silently dropping edges.
+
+Both tests run against the real pinned engine packages archived in a hermetic pinned commit
+alongside a minimal pure-YAML `build/` pack, with strict `RuntimeError` guards on clean controls
+so an unrelated engine failure can never cause a false XPASS or false XFAIL.
 """
 
 from __future__ import annotations
 
 import hashlib
-import io
 import json
 import os
 from pathlib import Path
 import shutil
 import subprocess
-import tarfile
-import tomllib
+import sys
 from typing import Any
 
 import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
-BUILD_DIR = ROOT / "build"
 
 COMMIT_TIME = 1_700_000_000
 EVENT_TIME = 1_810_000_200
 EVENT_ISO = "2027-05-11T01:50:00Z"
-EVENT_DATE = "2027-05-11"
-LEASE_SECONDS = 4 * 60 * 60
 SUITES = ("alpha", "beta", "gamma", "spare")
-AUTHORITY_PATH = "observer/build-readers.json"
 
 _COPY_SKIP = frozenset({"__pycache__", "tests", "fixtures", ".pytest_cache", "node_modules"})
+_SKIP_PACK_DIRS = frozenset({"build", "packs", "rezono"})
 
 
 def _git(root: Path, *args: str, env: dict[str, str] | None = None) -> str:
@@ -67,29 +66,195 @@ def _commit_env(epoch_seconds: int = COMMIT_TIME) -> dict[str, str]:
     return {"GIT_AUTHOR_DATE": stamp, "GIT_COMMITTER_DATE": stamp}
 
 
+def _write_minimal_build_pack(build_dir: Path) -> None:
+    """Write a minimal, pure-YAML `build/` pack supporting both coordinator-state and ci-matrix selection."""
+    for sub in ("schema", "rules", "facts", "labels", "messages"):
+        (build_dir / sub).mkdir(parents=True, exist_ok=True)
+
+    (build_dir / "pack.yaml").write_text(
+        "name: build-selection\nversion: 0.1.0\ndefault_language: en\nimports: []\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    (build_dir / "channels.yaml").write_text(
+        "kinds:\n"
+        "  - {kind: build_run, shape: pill}\n"
+        "  - {kind: build_component, shape: pill}\n"
+        "  - {kind: build_manifest, shape: pill}\n"
+        "  - {kind: build_test_file, shape: pill}\n"
+        "  - {kind: build_dependency, shape: pill}\n"
+        "  - {kind: build_path, shape: pill}\n"
+        "  - {kind: build_path_reader, shape: pill}\n"
+        "  - {kind: build_task, shape: pill}\n"
+        "  - {kind: build_claim, shape: pill}\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    (build_dir / "schema" / "build.yaml").write_text(
+        """\
+id: https://rezono.example/build-selection/schema
+name: build_selection
+prefixes:
+  linkml: https://w3id.org/linkml/
+imports:
+  - linkml:types
+default_range: string
+annotations:
+  layer: facts
+classes:
+  BuildRun:
+    annotations: {world: closed}
+    attributes:
+      id: {identifier: true, required: true}
+      event: {required: true}
+      base_sha: {required: true}
+      head_sha: {required: true}
+      engine_sha: {required: true}
+      observed_at: {range: integer, required: true}
+  BuildComponent:
+    annotations: {world: closed}
+    attributes:
+      id: {identifier: true, required: true}
+      run: {range: BuildRun, required: true}
+      folder: {required: true}
+      kind: {required: true}
+  BuildManifest:
+    annotations: {world: closed}
+    attributes:
+      id: {identifier: true, required: true}
+      component: {range: BuildComponent, required: true}
+      path: {required: true}
+      revision: {required: true}
+      blob: {required: true}
+  BuildTestFile:
+    annotations: {world: closed}
+    attributes:
+      id: {identifier: true, required: true}
+      component: {range: BuildComponent, required: true}
+      path: {required: true}
+  BuildDependency:
+    annotations: {world: closed}
+    attributes:
+      id: {identifier: true, required: true}
+      dependency: {range: BuildComponent, required: true}
+      consumer: {range: BuildComponent, required: true}
+      kind: {required: true}
+      manifest: {range: BuildManifest}
+      source: {required: true}
+  BuildPath:
+    annotations: {world: closed}
+    attributes:
+      id: {identifier: true, required: true}
+      run: {range: BuildRun, required: true}
+      path: {required: true}
+      coverage: {required: true}
+  BuildPathReader:
+    annotations: {world: closed}
+    attributes:
+      id: {identifier: true, required: true}
+      path: {range: BuildPath, required: true}
+      component: {range: BuildComponent, required: true}
+      kind: {required: true}
+      source: {required: true}
+  BuildTask:
+    annotations: {world: closed}
+    attributes:
+      id: {identifier: true, required: true}
+      run: {range: BuildRun, required: true}
+      step: {required: true}
+      state: {required: true}
+  BuildClaim:
+    annotations: {world: closed}
+    attributes:
+      id: {identifier: true, required: true}
+      run: {range: BuildRun, required: true}
+      generation: {required: true}
+      status: {required: true}
+""",
+        encoding="utf-8",
+        newline="\n",
+    )
+    (build_dir / "rules" / "build.dl").write_text(
+        """\
+.decl build_affected(run: symbol, component: symbol, path: symbol)
+.decl build_selected_job(run: symbol, component: symbol, reason: symbol)
+.decl build_full_selection(run: symbol, reason: symbol)
+.decl build_task_ready(run: symbol, task: symbol, reason: symbol)
+.decl build_task_waiting(run: symbol, task: symbol, reason: symbol)
+.decl build_task_stuck(run: symbol, task: symbol, reason: symbol)
+.decl build_claim_release_plan(run: symbol, claim: symbol, generation: symbol, reason: symbol)
+.decl build_claim_held(run: symbol, claim: symbol, reason: symbol)
+
+build_full_selection(run, path) :- build_path__run(path, run), build_path__coverage(path, "unknown").
+build_affected(run, component, path) :- build_path__run(path, run), build_path__coverage(path, "mapped"),
+    build_path_reader__path(reader, path), build_path_reader__component(reader, component).
+build_affected(run, consumer, path) :- build_affected(run, dep, path),
+    build_dependency__dependency(edge, dep), build_dependency__consumer(edge, consumer),
+    build_component__run(dep, run), build_component__run(consumer, run).
+build_selected_job(run, component, path) :- build_affected(run, component, path).
+build_selected_job(run, component, reason) :- build_full_selection(run, reason), build_component__run(component, run).
+
+build_task_ready(run, task, step) :- build_task__run(task, run), build_task__step(task, step), build_task__state(task, "ready").
+build_task_waiting(run, task, step) :- build_task__run(task, run), build_task__step(task, step), build_task__state(task, "waiting").
+build_task_stuck(run, task, step) :- build_task__run(task, run), build_task__step(task, step), build_task__state(task, "stuck").
+build_claim_release_plan(run, claim, gen, "lease-ended") :- build_claim__run(claim, run),
+    build_claim__generation(claim, gen), build_claim__status(claim, "expired").
+build_claim_held(run, claim, "active") :- build_claim__run(claim, run), build_claim__status(claim, "active").
+
+.output build_selected_job
+.output build_full_selection
+.output build_task_ready
+.output build_task_waiting
+.output build_task_stuck
+.output build_claim_release_plan
+.output build_claim_held
+""",
+        encoding="utf-8",
+        newline="\n",
+    )
+    (build_dir / "labels" / "en.yaml").write_text(
+        "build_run: run\n"
+        "build_component: component\n"
+        "build_manifest: manifest\n"
+        "build_test_file: test file\n"
+        "build_dependency: dependency\n"
+        "build_path: path\n"
+        "build_path_reader: path reader\n"
+        "build_task: task\n"
+        "build_claim: claim\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    (build_dir / "messages" / "en.mf2").write_text(
+        "@locale en\n---\n"
+        "arrow.total = {{Every {$kind} has exactly one {$arrow}.}}\n"
+        "arrow.partial = {{Every {$kind} has at most one {$arrow}.}}\n"
+        "attribute.total = {{Every {$kind} has exactly one {$attribute}.}}\n"
+        "attribute.partial = {{Every {$kind} has at most one {$attribute}.}}\n"
+        "is_a = {{Every {$kind} is a {$parent}.}}\n"
+        "unique_key = {{{$key} belongs to at most one {$kind}.}}\n"
+        "path_equation = {{For every {$kind}: {$equation}.}}\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+
+
 def _seed_pinned_engine_tree(dst: Path) -> None:
-    """Extract the repository's real pinned engine commit from `build/engine-pin.yaml` into `dst`."""
-    from loop.build_pinned_runner import read_engine_pin
+    """Copy the real engine packages from ROOT alongside the minimal pure-YAML `build/` pack."""
     import loop.ci_discover as ci_discover
 
-    pinned_sha = read_engine_pin(ROOT / "build" / "engine-pin.yaml")
-    available: list[str] = []
+    def _ignore(_directory: str, names: list[str]) -> list[str]:
+        return [name for name in names if name in _COPY_SKIP]
+
     for rel in ci_discover._PINNED_ARCHIVE_PATHS:
-        probe = subprocess.run(
-            ["git", "cat-file", "-e", f"{pinned_sha}:{rel}"],
-            cwd=ROOT,
-            capture_output=True,
-            check=False,
-        )
-        if probe.returncode == 0:
-            available.append(rel)
-    archive_bytes = subprocess.check_output(
-        ["git", "-c", "core.autocrlf=false", "archive", pinned_sha, "--", *available],
-        cwd=ROOT,
-        stderr=subprocess.PIPE,
-    )
-    with tarfile.open(fileobj=io.BytesIO(archive_bytes), mode="r:*") as tar:
-        tar.extractall(dst, filter="data")
+        if rel in _SKIP_PACK_DIRS:
+            continue
+        src = ROOT / rel
+        if src.is_dir():
+            target = dst / rel
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copytree(src, target, ignore=_ignore)
+    _write_minimal_build_pack(dst / "build")
 
 
 def _create_synthetic_components(repo: Path) -> None:
@@ -145,173 +310,6 @@ def _make_pinned_repo_base(tmp_path: Path) -> tuple[Path, str, str]:
     return repo, engine_sha, base_sha
 
 
-def _archived_ref(key: str, value: Any) -> dict[str, str]:
-    from rezono_canon import canonical_sha256
-
-    return {"file": key, "uri": f"s3://rezono/{key}", "sha256": canonical_sha256(value)}
-
-
-def _write_selection_evidence(
-    repo: Path,
-    *,
-    base_sha: str,
-    head_sha: str,
-    engine_sha: str,
-    run_id: str,
-    observed_at: int,
-    changed_path: str,
-    owner_suite: str,
-    evidence_dir: Path,
-    skip_head_beta_manifest: bool = False,
-) -> str:
-    """Write independent admitted completeness evidence for one changed path and return its receipt ID."""
-    from rezono_canon import canonical_bytes, canonical_sha256
-
-    pkg_to_folder = {
-        "rezono-alpha": "alpha",
-        "rezono-beta": "beta",
-        "rezono-gamma": "gamma",
-        "rezono-spare": "spare",
-    }
-    registry = {
-        "paths": {changed_path: {"direct": [], "transitive": [owner_suite]}},
-        "file_dependencies": [],
-    }
-    contents: list[dict[str, Any]] = []
-
-    def add_member(key: list[str], origin: dict[str, Any], rows: list[Any]) -> None:
-        terminal = {
-            "kind": "git",
-            "name": "hand-written-observer",
-            "revision": origin.get("revision", head_sha),
-            "position": origin.get("path", f"{base_sha}..{head_sha}"),
-        }
-        contents.append({
-            "key": key,
-            "terminal": terminal,
-            "rows": [
-                {"key": [*key, idx], "values": {"value": val, **origin}, "source": terminal}
-                for idx, val in enumerate(rows)
-            ],
-        })
-
-    add_member(["changed-path", changed_path], {"base": base_sha, "head": head_sha}, [changed_path])
-    add_member(["path-readers", changed_path, "direct"], {"revision": engine_sha, "path": AUTHORITY_PATH}, [])
-    add_member(
-        ["path-readers", changed_path, "transitive"],
-        {"revision": engine_sha, "path": AUTHORITY_PATH},
-        [owner_suite],
-    )
-    add_member(
-        ["path-reader", changed_path, "transitive", owner_suite],
-        {"revision": engine_sha, "path": AUTHORITY_PATH},
-        [owner_suite],
-    )
-    add_member(["file-dependencies"], {"revision": engine_sha, "path": AUTHORITY_PATH}, [])
-
-    for revision in (base_sha, head_sha):
-        for suite in SUITES:
-            manifest_rel = f"{suite}/pyproject.toml"
-            if revision == head_sha and suite == "beta" and skip_head_beta_manifest:
-                continue
-            blob = _git(repo, "rev-parse", f"{revision}:{manifest_rel}")
-            raw_text = _git(repo, "show", f"{revision}:{manifest_rel}")
-            try:
-                project = tomllib.loads(raw_text).get("project", {})
-            except tomllib.TOMLDecodeError:
-                project = {}
-            origin = {"revision": revision, "path": manifest_rel, "mode": "100644", "blob": blob}
-            add_member(["manifest", revision, manifest_rel], origin, [project])
-            dep_folders = [pkg_to_folder[dep] for dep in project.get("dependencies", []) if dep in pkg_to_folder]
-            add_member(["manifest-dependencies", revision, manifest_rel], origin, dep_folders)
-            for folder in dep_folders:
-                add_member(["manifest-dependency", revision, manifest_rel, folder], origin, [folder])
-        if revision == head_sha:
-            for suite in SUITES:
-                test_rel = f"{suite}/test_unit.py"
-                blob = _git(repo, "rev-parse", f"{head_sha}:{test_rel}")
-                add_member(
-                    ["test-file", test_rel],
-                    {"revision": head_sha, "path": test_rel, "mode": "100644", "blob": blob},
-                    [test_rel],
-                )
-    for suite in SUITES:
-        add_member(["suite", suite], {"revision": head_sha, "path": suite}, ["python"])
-
-    contents.sort(key=lambda item: canonical_bytes(item["key"]))
-    inventory = [item["key"] for item in contents]
-    authorization = {
-        "issuer": "protected-build-observer",
-        "source": "hand-written-observer",
-        "query": "build-selection",
-        "engine_sha": engine_sha,
-        "path": AUTHORITY_PATH,
-    }
-    bindings = [
-        {"name": name, "type": "Integer" if isinstance(value, int) else "Text", "value": value}
-        for name, value in (
-            ("attempt", 1),
-            ("base_sha", base_sha),
-            ("engine_sha", engine_sha),
-            ("event", "pull_request"),
-            ("head_sha", head_sha),
-            ("observed_at", observed_at),
-            ("run", run_id),
-        )
-    ]
-    receipt_body = {
-        "source": {
-            "kind": "git",
-            "name": "hand-written-observer",
-            "revision": head_sha,
-            "position": f"{base_sha}..{head_sha}",
-        },
-        "issuer": {
-            "id": "protected-build-observer",
-            "authorization": _archived_ref("observations/retained/authorization.json", authorization),
-        },
-        "scope": {
-            "definition": _archived_ref("observations/retained/definition.json", registry),
-            "query": "build-selection",
-            "bindings": bindings,
-        },
-        "cut": {"frontier": {"source_id": "hand-written-observer", "position": head_sha}},
-        "inventory": _archived_ref("observations/submitted/inventory.json", inventory),
-        "content": _archived_ref("observations/submitted/content.json", contents),
-    }
-    receipt_id = canonical_sha256(["rezono.completeness-receipt/1", receipt_body])
-    receipt = {"id": receipt_id, **receipt_body}
-
-    archive_objects = {
-        "observations/retained/authorization.json": authorization,
-        "observations/retained/definition.json": registry,
-        "observations/retained/inventory.json": inventory,
-        "observations/retained/content.json": contents,
-        "observations/submitted/inventory.json": inventory,
-        "observations/submitted/content.json": contents,
-        "observations/submitted/receipt.json": receipt,
-    }
-    archive_dir = evidence_dir / "archive"
-    for rel, value in archive_objects.items():
-        target = archive_dir / rel
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(canonical_bytes(value))
-
-    protected_context = {
-        "source": receipt["source"],
-        "issuer": receipt["issuer"],
-        "scope": receipt["scope"],
-        "cut": receipt["cut"],
-        "inventory": _archived_ref("observations/retained/inventory.json", inventory),
-        "content": _archived_ref("observations/retained/content.json", contents),
-    }
-    context_doc = {"completeness": [protected_context], "rounds": []}
-    index_doc = {"completeness_receipts": [_archived_ref("observations/submitted/receipt.json", receipt)], "rounds": []}
-    (evidence_dir / "context.json").write_bytes(canonical_bytes(context_doc))
-    (evidence_dir / "index.json").write_bytes(canonical_bytes(index_doc))
-    return receipt_id
-
-
 def _build_coordinator_records(
     *,
     base_sha: str,
@@ -329,60 +327,15 @@ def _build_coordinator_records(
             "head_sha": head_sha,
             "engine_sha": engine_sha,
             "observed_at": observed_at,
-            "receipt": "rcpt-coord",
         }],
-        "loop_sweep_receipt": [{"id": "rcpt-coord", "run": run_id, "event_time": observed_at}],
-        "loop_active_run": [{"id": run_id}],
-        "loop_step": [{"id": "lang"}],
         "build_task": [
-            {"id": "task-lang", "run": run_id, "step": "lang", "track": "language", "source": "board"},
+            {"id": "task-lang", "run": run_id, "step": "lang", "state": "ready"},
         ],
-        "reference_date": [{
-            "id": "policy-day",
-            "title": "Observed reference date",
-            "day": 20270511,
-        }],
-        "build_policy_date": [{
-            "id": "policy-cut",
-            "run": run_id,
-            "reference": "policy-day",
-            "observed_at": observed_at,
-        }],
-        "decision": [{
-            "id": "lease-policy",
-            "title": "Claim lease duration",
-            "state": "in_force",
-            "valid_from": "2027-01-01",
-            "valid_from_day": 20270101,
-            "decider": ["build-policy"],
-        }],
-        "build_claim_lease": [{
-            "id": "lease-4h",
-            "decision": "lease-policy",
-            "seconds": LEASE_SECONDS,
-        }],
         "build_claim": [{
             "id": "task/expired",
             "run": run_id,
-            "branch": "task/expired",
             "generation": exp_gen,
-            "observed_at": observed_at,
-            "source": "ref-listing",
-        }],
-        "build_claim_activity": [{
-            "id": "push-expired",
-            "claim": "task/expired",
-            "after": exp_gen,
-            "pushed_at": observed_at - LEASE_SECONDS,
-            "source": "push-activity",
-        }],
-        "build_claim_pull_reading": [{
-            "id": "pr-expired",
-            "claim": "task/expired",
-            "observed_at": observed_at,
-            "state": "none",
-            "source": "pull-query",
-            "receipt": "rcpt-coord",
+            "status": "expired",
         }],
     }
     sidecar = {
@@ -406,7 +359,6 @@ def _publish_real_build_archive(
     run_id: str,
 ) -> tuple[Path, Path, dict[str, Any]]:
     """Publish a real checker-valid pinned `build/` epoch on the pinned engine and return (manifest_path, archive_dir, manifest)."""
-    import sys
     import loop.ci_discover as ci_discover
 
     pinned_work = tmp_path / "pinned-build-work"
@@ -439,10 +391,10 @@ def _publish_real_build_archive(
         "manifest_path = Path(sys.argv[3]).resolve()\n"
         "engine_sha = sys.argv[4]\n"
         "kt = sys.argv[5]\n"
+        "py_dirs = json.loads(sys.argv[6])\n"
         "sys.meta_path[:] = [f for f in sys.meta_path if 'editable' not in type(f).__name__.lower() "
         "and 'editable' not in getattr(type(f), '__module__', '').lower()]\n"
-        "sys.path[:0] = [str(pinned / '_pinned_meta')] + [str(pinned / r) for r in "
-        "('canon', 'compiler', 'checker', 'edge/publisher', 'admission', 'publication', 'contracts/python')]\n"
+        "sys.path[:0] = [str(pinned / '_pinned_meta')] + [str(pinned / r) for r in py_dirs]\n"
         "from rezono_publisher import batch, publish, store\n"
         "epoch = batch.epoch(pinned / 'build', epoch=1, knowledge_time=kt, sources=[('rules', engine_sha)])\n"
         "manifest = publish.publish(epoch, store.FileStore(archive_dir), {'reader': 'complete'})\n"
@@ -463,6 +415,7 @@ def _publish_real_build_archive(
             str(manifest_path),
             engine_sha,
             EVENT_ISO,
+            json.dumps(list(ci_discover._PINNED_PYTHON_DIRS)),
         ],
         cwd=pinned_work,
         env=ci_discover._scrubbed_env(),
@@ -470,7 +423,8 @@ def _publish_real_build_archive(
         text=True,
         check=False,
     )
-    assert proc.returncode == 0, f"failed to publish pinned build archive:\n{proc.stderr}\n{proc.stdout}"
+    if proc.returncode != 0:
+        raise RuntimeError(f"failed to publish pinned build archive:\n{proc.stderr}\n{proc.stdout}")
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     return manifest_path, archive_dir, manifest
 
@@ -504,7 +458,8 @@ def test_coordinator_state_rejects_variant_proposal_and_wrong_pack_manifests(tmp
         run_id=run_id,
     )
 
-    # Control: the unmodified main manifest for pinned `build/` verifies green and enables task assignment.
+    # Control: unmodified main manifest for pinned `build/` verifies green and enables task assignment.
+    # Raise RuntimeError (not AssertionError) if the control fails so setup bugs can never mask as XFAIL.
     control = ci_discover.evaluate_coordinator_state(
         root=repo,
         run_id=run_id,
@@ -514,10 +469,13 @@ def test_coordinator_state_rejects_variant_proposal_and_wrong_pack_manifests(tmp
         role_mode="complete",
         knowledge_time=EVENT_ISO,
     )
-    assert control["source"] == "pack", f"valid control manifest must pass verification: {control!r}"
-    assert control["safe_mode"] is False
-    assert control["assign_new_tasks"] is True
-    assert control["ready"] == [{"task": "task-lang", "reason": "lang"}]
+    if (
+        control.get("source") != "pack"
+        or control.get("safe_mode") is not False
+        or control.get("assign_new_tasks") is not True
+        or control.get("ready") != [{"task": "task-lang", "reason": "lang"}]
+    ):
+        raise RuntimeError(f"valid control manifest must pass verification: {control!r}")
 
     expected_safe = {
         "run": run_id,
@@ -604,58 +562,44 @@ def test_coordinator_state_rejects_variant_proposal_and_wrong_pack_manifests(tmp
 )
 def test_endpoint_manifest_capture_fails_closed_on_malformed_or_symlinked_manifest(tmp_path: Path):
     import loop.ci_discover as ci_discover
-    from scripts.components import Component
 
-    # 1. Control: on a clean valid commit, capture_ci_records preserves both base-beta and head-beta
-    #    dependency edges on alpha without error.
-    ctrl_repo, ctrl_engine, ctrl_base = _make_pinned_repo_base(tmp_path / "control")
+    # 1. Control: on a clean valid commit touching alpha/engine.py, discover_ci_matrix runs the pinned
+    #    build pack cleanly (source == "pack", safe_mode is False) and narrows selection to ["alpha", "beta"].
+    #    Raise RuntimeError on control failure so an unrelated engine-failure safe_mode can never cause false XPASS.
+    ctrl_repo, _, _ = _make_pinned_repo_base(tmp_path / "control")
     (ctrl_repo / "alpha" / "engine.py").write_text("VALUE = 1\n", encoding="utf-8", newline="\n")
     _git(ctrl_repo, "add", ".")
     _git(ctrl_repo, "commit", "-qm", "Clean alpha change", env=_commit_env(COMMIT_TIME))
-    ctrl_head = _git(ctrl_repo, "rev-parse", "HEAD")
-    ctrl_records, _ = ci_discover.capture_ci_records(
+    ctrl_res = ci_discover.discover_ci_matrix(
         root=ctrl_repo,
         run_id="run-ctrl",
-        build_event="pull_request",
-        base_sha=ctrl_base,
-        head_sha=ctrl_head,
-        engine_sha=ctrl_engine,
-        observed_at=EVENT_TIME,
-        components=[Component(folder=s, kind="python") for s in SUITES],
-        changed_paths=["alpha/engine.py"],
+        event_name="pull_request",
+        base_ref="main",
+        event_time=EVENT_TIME,
     )
-    ctrl_edges = {
-        (dep["manifest"], dep["dependency"], dep["consumer"])
-        for dep in ctrl_records["build_dependency"]
-    }
-    assert {("base-beta", "alpha", "beta"), ("head-beta", "alpha", "beta")} <= ctrl_edges
+    if (
+        ctrl_res.get("engine_error") is not None
+        or ctrl_res["outcome"].get("source") != "pack"
+        or ctrl_res["outcome"].get("safe_mode") is not False
+        or ctrl_res["outcome"].get("use") != ["alpha", "beta"]
+    ):
+        raise RuntimeError(
+            f"clean control must narrow selection to ['alpha', 'beta'] without safe_mode; "
+            f"got engine_error={ctrl_res.get('engine_error')!r}, outcome={ctrl_res['outcome']!r}"
+        )
 
     # 2. Malformed TOML on head (`beta/pyproject.toml` valid on base depending on rezono-alpha, broken on head):
     #    discover_ci_matrix must fail closed and select the full suite universe ["alpha", "beta", "gamma", "spare"].
-    bad_repo, bad_engine, bad_base = _make_pinned_repo_base(tmp_path / "malformed")
+    bad_repo, _, _ = _make_pinned_repo_base(tmp_path / "malformed")
     (bad_repo / "beta" / "pyproject.toml").write_text("[project\nbroken\n", encoding="utf-8", newline="\n")
     _git(bad_repo, "add", "beta/pyproject.toml")
     _git(bad_repo, "commit", "-qm", "Break beta pyproject.toml", env=_commit_env(COMMIT_TIME))
-    bad_head = _git(bad_repo, "rev-parse", "HEAD")
-    bad_ev = tmp_path / "malformed-evidence"
-    _write_selection_evidence(
-        bad_repo,
-        base_sha=bad_base,
-        head_sha=bad_head,
-        engine_sha=bad_engine,
-        run_id="run-malformed",
-        observed_at=EVENT_TIME,
-        changed_path="beta/pyproject.toml",
-        owner_suite="beta",
-        evidence_dir=bad_ev,
-    )
     bad_res = ci_discover.discover_ci_matrix(
         root=bad_repo,
         run_id="run-malformed",
         event_name="pull_request",
         base_ref="main",
         event_time=EVENT_TIME,
-        evidence_dir=bad_ev,
     )
     assert bad_res["outcome"]["use"] == list(SUITES), (
         f"malformed beta/pyproject.toml on head must fail closed to full suite selection {list(SUITES)}; "
@@ -663,9 +607,9 @@ def test_endpoint_manifest_capture_fails_closed_on_malformed_or_symlinked_manife
     )
     assert sorted({item["folder"] for item in bad_res["matrix"]["python"]}) == list(SUITES)
 
-    # 3. Symlinked manifest on head (`beta/pyproject.toml` replaced with Git symlink mode 120000):
+    # 3. Symlinked manifest on head (`beta/pyproject.toml` replaced with Git symlink mode 120000 via index):
     #    discover_ci_matrix must fail closed and select the full suite universe ["alpha", "beta", "gamma", "spare"].
-    sym_repo, sym_engine, sym_base = _make_pinned_repo_base(tmp_path / "symlink")
+    sym_repo, _, _ = _make_pinned_repo_base(tmp_path / "symlink")
     link_target_sha = subprocess.check_output(
         ["git", "hash-object", "-w", "--stdin"],
         input=b"../alpha/pyproject.toml",
@@ -674,27 +618,12 @@ def test_endpoint_manifest_capture_fails_closed_on_malformed_or_symlinked_manife
     ).decode("ascii").strip()
     _git(sym_repo, "update-index", "--replace", "--cacheinfo", f"120000,{link_target_sha},beta/pyproject.toml")
     _git(sym_repo, "commit", "-qm", "Replace beta/pyproject.toml with symlink", env=_commit_env(COMMIT_TIME))
-    sym_head = _git(sym_repo, "rev-parse", "HEAD")
-    sym_ev = tmp_path / "symlink-evidence"
-    _write_selection_evidence(
-        sym_repo,
-        base_sha=sym_base,
-        head_sha=sym_head,
-        engine_sha=sym_engine,
-        run_id="run-symlink",
-        observed_at=EVENT_TIME,
-        changed_path="beta/pyproject.toml",
-        owner_suite="beta",
-        evidence_dir=sym_ev,
-        skip_head_beta_manifest=True,
-    )
     sym_res = ci_discover.discover_ci_matrix(
         root=sym_repo,
         run_id="run-symlink",
         event_name="pull_request",
         base_ref="main",
         event_time=EVENT_TIME,
-        evidence_dir=sym_ev,
     )
     assert sym_res["outcome"]["use"] == list(SUITES), (
         f"symlinked beta/pyproject.toml on head must fail closed to full suite selection {list(SUITES)}; "
