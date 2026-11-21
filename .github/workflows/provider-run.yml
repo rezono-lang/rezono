@@ -1,0 +1,86 @@
+name: Provider run
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: provider-run-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify_ref:
+    name: Verify main branch ref
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require exact refs/heads/main
+        shell: bash
+        run: test "$GITHUB_REF" = refs/heads/main
+
+  prepare:
+    name: Prepare provider run
+    needs: verify_ref
+    runs-on: ubuntu-24.04
+    environment: provider-run
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Verify operator run prerequisites are present
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f run/OPERATOR.md
+          test -f run/git_claim.py
+
+  provider_run:
+    name: Run bounded provider workflow
+    needs: prepare
+    runs-on: ubuntu-24.04
+    environment: provider-run
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Require live provider wiring before execution
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::error::Live provider port command is not yet wired; see decisions/provider-workflow-dispatch.md"
+          exit 1
+      - name: Run step-level failure cleanup
+        if: failure()
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Step-level failure cleanup awaiting live provider wiring."
+
+  cleanup:
+    name: Clean up failed provider run
+    needs: [verify_ref, provider_run]
+    if: failure() && needs.verify_ref.result == 'success'
+    runs-on: ubuntu-24.04
+    environment: provider-run
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Report cleanup boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Cleanup job reached only after verify_ref succeeded; awaiting live provider inventory wiring."
