@@ -22,7 +22,7 @@ import { canonicalJson } from '../../viewer/src/lib/canon.ts';
 import { isError } from './check.ts';
 import { JsonFormError } from './json.ts';
 import { hasMetadata } from './module-metadata.ts';
-import { parseModule, type Module } from './module.ts';
+import { parseModule, type Module, type ParseModuleOptions } from './module.ts';
 import type { Diagnostic, Span } from './parse.ts';
 import { printModule } from './print.ts';
 
@@ -48,7 +48,7 @@ function formatOf(module: Module): ModuleForm['format'] {
 	if (module.decls.some(decl => 'step' in decl || hasIntermediateInvariant(decl))) return SAFE_STEP_MODULE_FORMAT;
 	if (module.decls.some(decl => 'rule' in decl)) return NATIVE_RULE_MODULE_FORMAT;
 	const extended = module.schema !== undefined || module.decls.some(decl => {
-		if ('dataset' in decl || 'rules' in decl || ('source' in decl && 'fields' in decl)) return true;
+		if ('dataset' in decl || 'rules' in decl || 'decide' in decl || ('source' in decl && 'fields' in decl)) return true;
 		if ('kind' in decl) {
 			if (decl.parent !== undefined) return true;
 			return decl.abstract || decl.embedded || decl.relationship || decl.keys?.length || decl.deprecated !== undefined || hasMetadata(decl)
@@ -117,18 +117,23 @@ function places(module: Module, spans: WeakMap<object, Span>, text: string): Pla
 	return out;
 }
 
+/** Builds and round-trip verifies the JSON form of an already-parsed module. */
+export function formOfModule(text: string, module: Module, spans: WeakMap<object, Span>, options?: ParseModuleOptions): ModuleForm {
+	const again = parseModule(printModule(module), options);
+	if (!again.module || again.diagnostics.some(isError) || canonicalJson(again.module) !== canonicalJson(module))
+		throw new JsonFormError('the module is not the tree of its own printed text');
+	return { format: formatOf(module), module, spans: places(module, spans, text) };
+}
+
 /**
  * The form of a module's text, or the diagnostics that leave it without one. A form is the tree of its own
  * printed text: that is checked here for every form made, so a tree the printer and the reader do not agree on
  * is refused, never written.
  */
-export function moduleForm(text: string): FormOf {
-	const { module, diagnostics, spans } = parseModule(text);
+export function moduleForm(text: string, options?: ParseModuleOptions): FormOf {
+	const { module, diagnostics, spans } = parseModule(text, options);
 	if (!module || diagnostics.some(isError)) return { diagnostics };
-	const again = parseModule(printModule(module));
-	if (!again.module || again.diagnostics.some(isError) || canonicalJson(again.module) !== canonicalJson(module))
-		throw new JsonFormError('the module is not the tree of its own printed text');
-	return { form: { format: formatOf(module), module, spans: places(module, spans, text) }, diagnostics };
+	return { form: formOfModule(text, module, spans, options), diagnostics };
 }
 
 /** The bytes of a form: canonical JSON (RFC 8785), so the same text gives the same bytes. */

@@ -43,3 +43,16 @@ complete_inventory: complete inventory and terminal page
 conflicting_attempt: contradictory dispatch evidence
 cleanup_evidence: deletion attempt and terminal page
 cleanup_page_evidence: page supporting cleanup
+listing: server listing
+listing.coverage: listing coverage
+listing.unfiltered: unfiltered listing
+listed_service: listed service
+listed_service.listing: source listing
+listed_service.service: service name
+delivered_service: delivered service
+delivered_service.service: delivered service name
+invalid_listing: incomplete or filtered listing
+conflicting_listed_service: conflicting listed service
+has_listed_service_name: listed service with a name
+conflicting_delivered_service: conflicting delivered service
+still_listed: delivered service still listed

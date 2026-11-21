@@ -84,9 +84,10 @@ from pathlib import Path
 
 from rdflib import Graph, URIRef
 from rdflib.namespace import PROV, RDF
-from rezono_canon import canonical_json
+from rezono_canon import canonical_bytes, canonical_json
+from rezono_checker import difference as checker_difference
 
-from . import export_index, timing
+from . import difference, export_index, pointers, timing
 from . import store as stores
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -284,10 +285,12 @@ def inputs(st, m: dict, role: str, bundle: bytes) -> dict:
     w = [x for x in m.get("witnesses", []) if x["role"] == role]
     s = [x for x in m.get("fact_sources") or [] if x["role"] == role]
     data = _read(st, snaps + w + s)
+    snap_bytes = {e["relation"]: b for e, b in zip(snaps, data)}
     rows = {e["relation"]: [tuple(x["key"]) for x in json.loads(b)] for e, b in zip(snaps, data)}
     rest = data[len(snaps):]
     return {
         "rows": rows,
+        "snapshot_bytes": snap_bytes,
         "full": {e["relation"] for e in snaps if e.get("complete") or e.get("full")},
         "witnesses": json.loads(rest[0])["witnesses"] if w else [],
         "sources": json.loads(rest[len(w)]) if s else [],
@@ -412,17 +415,115 @@ def listable(names: list[str]) -> None:
         raise Blocked(f"{bad[0]} is not a name the gate serves")
 
 
-def epoch_statement(pack: str, role: str, form: dict, h: dict, sources: list[dict], objects: dict[str, bytes]) -> bytes:
-    """The role's epoch statement over its form's objects, made from the verified form and held to the
+def _previous_candidate(st, pack: str, prev_m: dict, current_epoch: int, role: str) -> tuple[dict, bytes] | None:
+    """If `prev_m` is an earlier main manifest that includes filtered `role` and holds a published form with
+    `statement.json` for `role`, return `(prev_m, statement_bytes)`; else None."""
+    if not pointers.is_main(prev_m):
+        return None
+    prev_epoch = prev_m.get("epoch")
+    if isinstance(prev_epoch, bool) or not isinstance(prev_epoch, int) or prev_epoch >= current_epoch:
+        return None
+    if not any(s["role"] == role and s.get("complete") is False for s in prev_m.get("snapshots", [])):
+        return None
+    stmt_bytes = st.get(prefix(pack, prev_m["id"], role) + statements.NAME)
+    idx_bytes = st.get(index_key(pack, prev_m["id"], role))
+    if stmt_bytes is None or idx_bytes is None:
+        return None
+    idx = json.loads(idx_bytes)
+    if idx.get("sources") != sources_of(prev_m, role):
+        raise Blocked(f"previous publication {prev_m['id']} index sources do not match manifest")
+    listed = {o["name"]: o["sha256"] for o in idx.get("objects", [])}
+    if listed.get(statements.NAME) != sha256(stmt_bytes):
+        raise Blocked(f"previous publication {prev_m['id']} {statements.NAME} sha256 does not match its index")
+    return prev_m, stmt_bytes
+
+
+def previous_role_publication(st, pack: str, m: dict, role: str) -> tuple[dict, bytes] | None:
+    """Find this filtered role's immediately preceding published main epoch (`epoch < current.epoch`, or
+    `base_manifest` when present) that includes `role` and holds a published `statement.json` for `role`."""
+    current_epoch = m["epoch"]
+    if isinstance(current_epoch, bool) or not isinstance(current_epoch, int):
+        raise Blocked(f"{m.get('id')}: manifest epoch is not an integer")
+    base_id = m.get("base_manifest")
+    if isinstance(base_id, str) and MAIN.match(base_id):
+        raw = st.get(f"{pack}/manifests/{base_id}.json")
+        if raw is not None:
+            found = _previous_candidate(st, pack, json.loads(raw), current_epoch, role)
+            if found is not None:
+                return found
+    head_keys = sorted(k for k in st.list(f"{pack}/heads/") if k.endswith(".json"))
+    for head_key in head_keys:
+        body = st.get(head_key)
+        try:
+            head_doc = json.loads(body)
+            head_epoch = head_doc["epoch"]
+            name = head_doc["manifest"]
+        except (TypeError, KeyError, ValueError) as err:
+            raise Blocked(f"{head_key} is not a head: {err}") from err
+        if isinstance(head_epoch, bool) or not isinstance(head_epoch, int):
+            raise Blocked(f"{head_key} is not a head: epoch is not an integer")
+        if head_epoch >= current_epoch:
+            continue
+        raw = st.get(f"{pack}/manifests/{name}.json")
+        if raw is None or pointers.head(pack, raw) != (head_key, body):
+            raise Blocked(f"{head_key} is not a head: it names another manifest, or none")
+        found = _previous_candidate(st, pack, json.loads(raw), current_epoch, role)
+        if found is not None:
+            return found
+    return None
+
+
+def role_diff(st, prev_m: dict, role: str, after: dict[str, bytes]) -> tuple[bytes, dict[str, bytes]]:
+    """Compute canonical `diff.json` (`rezono.role-diff/1`) strictly from this filtered role's own previous and
+    current snapshot bytes, independently checked by `rezono_checker.difference.changes` (fail closed)."""
+    prev_snaps = sorted((s for s in prev_m["snapshots"] if s["role"] == role), key=lambda s: s["relation"])
+    if any(s.get("complete") is not False for s in prev_snaps):
+        raise Blocked(f"previous manifest {prev_m['id']} has complete snapshots for filtered role {role}")
+    prev_data = _read(st, prev_snaps)
+    before = {s["relation"]: b for s, b in zip(prev_snaps, prev_data)}
+    relations: dict[str, list[dict]] = {}
+    for rel in sorted(set(before) | set(after)):
+        b_bytes = before.get(rel, b"[]")
+        a_bytes = after.get(rel, b"[]")
+        rs = difference.entries(b_bytes, a_bytes)
+        try:
+            with timing.phase("checker"):
+                want = checker_difference.changes(b_bytes, a_bytes)
+        except ValueError as err:
+            raise Blocked(f"role diff check failed on {rel}: {err}") from err
+        if rs != want:
+            raise Blocked(f"role diff disagreement on {rel}: publisher and checker differ")
+        if rs:
+            relations[rel] = rs
+    return canonical_bytes({"format": statements.DIFF_FORMAT, "relations": relations}), before
+
+
+def epoch_statement(
+    pack: str, role: str, form: dict, h: dict, sources: list[dict], objects: dict[str, bytes], *,
+    previous_statement: bytes | None = None,
+    previous_snapshots: dict[str, bytes] | None = None,
+    current_snapshots: dict[str, bytes] | None = None,
+) -> bytes:
+    """The role's epoch statement v2 over its form's objects, made from the verified form and held to the
     reader's check of `rezono_publication.statement` from the bytes alone. Raises Blocked with what differs."""
     index = {"pack": pack, "role": role, "manifest": form["manifest"], "schema": h["schema"], "dataset": h["dataset"],
              "sources": sources, "objects": [{"name": n, "sha256": sha256(b)} for n, b in objects.items()]}
+    prev_hash = sha256(previous_statement) if previous_statement is not None else None
+    diff_hash = sha256(objects[statements.DIFF_NAME]) if statements.DIFF_NAME in objects else None
     try:
-        data = statements.dumps(statements.make(index, objects, form["schema"], form["rows"]))
+        data = statements.dumps(
+            statements.make(index, objects, form["schema"], form["rows"],
+                            version=2, previous=prev_hash, diff=diff_hash)
+        )
     except ValueError as err:
         raise Blocked(str(err)) from err
     index["objects"].append({"name": statements.NAME, "sha256": sha256(data)})
-    problems = statements.verify(data, index, {**objects, statements.NAME: data})
+    problems = statements.verify(
+        data, index, {**objects, statements.NAME: data},
+        previous_statement=previous_statement,
+        previous_snapshots=previous_snapshots,
+        current_snapshots=current_snapshots,
+    )
     if problems:
         raise Blocked("; ".join(problems[:3]))
     return data
@@ -502,20 +603,34 @@ def role_files(st, pack: str, m: dict, bundle: bytes, role: str) -> list[tuple[s
     del trace
     timing.switch(f"{role} tables")
     tables = verified_tables(data, form, h)
-    names = [*OBJECTS, *made, *indexed, *losses(made), *tables]
+    timing.switch(f"{role} diff")
+    prev = previous_role_publication(st, pack, m, role)
+    diff_obj: dict[str, bytes] = {}
+    prev_stmt_bytes: bytes | None = None
+    prev_snaps: dict[str, bytes] | None = None
+    if prev is not None:
+        prev_m, prev_stmt_bytes = prev
+        diff_bytes, prev_snaps = role_diff(st, prev_m, role, given["snapshot_bytes"])
+        diff_obj[statements.DIFF_NAME] = diff_bytes
+    names = [*OBJECTS, *made, *indexed, *losses(made), *tables, *diff_obj]
     count = len(names) + 1  # the statement is named in the index too
     print(f"forms {pack} {manifest} {role}: {count} objects of the {FORM_OBJECTS} a listing may name", file=sys.stderr)
     if count > FORM_OBJECTS // 2:
         print(f"warning: {pack} {manifest} {role}: {count} objects, more than half the {FORM_OBJECTS} a form listing "
               "may name", file=sys.stderr)
     listable([*names, statements.NAME])
-    data |= made | indexed | losses(made) | tables
+    data |= made | indexed | losses(made) | tables | diff_obj
     base = prefix(pack, manifest, role)
-    # The statement's subjects are every object of the role's form, the tables among them: made last.
+    # The statement's subjects are every object of the role's form, the tables and diff among them: made last.
     sources = sources_of(m, role)
     timing.switch(f"{role} statement")
     try:
-        data[statements.NAME] = epoch_statement(pack, role, form, h, sources, {n: data[n] for n in names})
+        data[statements.NAME] = epoch_statement(
+            pack, role, form, h, sources, {n: data[n] for n in names},
+            previous_statement=prev_stmt_bytes,
+            previous_snapshots=prev_snaps,
+            current_snapshots=given["snapshot_bytes"] if prev is not None else None,
+        )
     except Blocked as err:
         raise Blocked(f"epoch statement: {err}") from err
     names.append(statements.NAME)

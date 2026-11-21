@@ -17,8 +17,8 @@ export type Expr =
 	| Path
 	| { dot: [Expr, string] }
 	| { kind: string }
-	| { agg: [string, Expr] | [string, Expr, Expr] }
-	| { filter: [Expr, Expr] }
+	| { agg: [string, Expr] | [string, Expr, Expr] | [string, Expr, Expr, string] }
+	| { filter: [Expr, Expr] | [Expr, Expr, string] }
 	| { cmp: [string, Expr, Expr] }
 	| { in: [Expr, Expr] }
 	| { is: [Expr, State] }
@@ -27,10 +27,12 @@ export type Expr =
 	| { or: Expr[] }
 	| { not: Expr }
 	| { imply: [Expr, Expr] }
+	| { otherwise: [Expr, Expr] }
 	| { arith: [string, Expr, Expr] }
 	| { neg: Expr }
 	| { when: [Expr, Expr, Expr] }
 	| { call: [string, Expr[]] }
+	| { as: [Expr, string] }
 	| { timesel: [Expr, TimeSel] };
 
 /** A value along the validity axis (`at`) and the knowledge axis (`as_known`); reserved (§1). */

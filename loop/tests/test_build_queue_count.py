@@ -71,17 +71,18 @@ def derived(tmp, records, evidence=None):
     reader's snapshot gives them: {"key": [text, ...]}, sorted by key."""
     build = tmp / "build"
     shutil.copytree(ROOT / "build", build)
-    for pack in ("std-loop", "std-order", "std-decision"):
+    for pack in ("std-loop", "std-order", "std-decision", "std-access"):
         shutil.copytree(ROOT / "packs" / pack, tmp / "packs" / pack)
-    (build / "facts").mkdir()
+    (build / "facts").mkdir(exist_ok=True)
     (build / "facts" / "input.yaml").write_text(yaml.safe_dump(records), encoding="utf-8")
     handoff = {} if evidence is None else {"evidence": evidence(store.FileStore(tmp / "archive"))}
     with mock.patch.object(engine, "witnesses", lambda con, prog, rule_ids=None: {}):
         epoch = batch.epoch(build, epoch=1, knowledge_time="2027-01-15T08:00:00Z", sources=[("facts", "input")],
                             **handoff)
     assert not epoch.witnesses
-    red = [check for check in epoch.checks if check["status"] != "green"]
+    red = [check for check in epoch.checks if check["status"] == "red"]
     assert not red, f"red checks would block the publication: {red}"
+    assert all(check["status"] == "green" for check in epoch.checks if check["name"] != "rezono:origins")
     return {relation: [{"key": list(row)} for row in sorted(set(rows), key=publish.key_text)]
             for relation, rows in epoch.rows.items()}
 

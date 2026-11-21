@@ -32,11 +32,11 @@
 // its type has: `n + 0.5` is no whole number. So the proofs are exact over stored values; over a computed one
 // they may name an overlap or a gap that the arithmetic never gives, and never miss one.
 import { isError, near, typing, type Head, type Typed } from './check.ts';
-import { amount, factor, reader, type Frac } from './evaluate.ts';
+import { amount, factor, reader, utcInstant, type Frac } from './evaluate.ts';
 import { parseDeclarations, type Decl, type DerivedDecl, type Table, type TableTest, type TableValue } from './module.ts';
 import { inOrder, type Diagnostic, type Span } from './parse.ts';
 import { printExpr } from './print.ts';
-import { knownType, slotType, STATES, type Schema, type SlotDef, type StateName, type Ty } from './schema.ts';
+import { baseTypeOf, isOrdered, knownType, slotType, STATES, type Schema, type SlotDef, type StateName, type Ty } from './schema.ts';
 import type { Expr } from './tree.ts';
 
 /** A decision table as evaluation reads it. */
@@ -86,8 +86,11 @@ function dayOf(date: string): Frac | undefined {
 	at.setUTCFullYear(y);
 	return at.getUTCMonth() === m - 1 && at.getUTCDate() === d ? { n: BigInt(at.getTime() / 86400000), d: 1n } : undefined;
 }
-/** A number and a date have an order a range can use (tables.md §2). */
-const ordered = (ty: Ty): boolean => ty.t === 'num' || (ty.t === 'val' && ty.name === 'Date');
+/** A DateTime as its UTC nanosecond instant, or undefined when it is not a valid calendar date-time. */
+function instantOf(dateTime: string): Frac | undefined {
+	const ns = utcInstant(dateTime);
+	return ns === undefined ? undefined : { n: ns, d: 1n };
+}
 
 /** Checks declarations that stand on top of a schema. The schema handed in is not changed. */
 export function declare(text: string, schema: Schema): Declared {
@@ -115,11 +118,12 @@ export function declare(text: string, schema: Schema): Declared {
 	}
 
 	/**
-	 * A literal that reads as its type and has no value: a date that is no day of the calendar (the order of
-	 * dates is that of their days), a number that divides by zero (`1/0`). R012.
+	 * A literal that reads as its type and has no value: a date/instant that is no day of the calendar,
+	 * or a number that divides by zero (`1/0`). R012.
 	 */
 	function valueless(ty: Ty, v: TableValue): boolean {
-		const none = ty.t === 'val' && ty.name === 'Date' ? !dayOf(v.lit) : ty.t === 'num' && !amount(next, v.lit);
+		const base = ty.t === 'val' ? baseTypeOf(next, ty.name) : undefined;
+		const none = base === 'Date' ? !dayOf(v.lit) : base === 'DateTime' ? !instantOf(v.lit) : ty.t === 'num' && !amount(next, v.lit);
 		if (none) t.report('R012', spanOf(v), [v.lit, t.describe(ty)]);
 		return none;
 	}
@@ -135,7 +139,7 @@ export function declare(text: string, schema: Schema): Declared {
 			else if (b.ty.t !== 'err' && !valueless(b.ty, v)) continue;
 			good = false;
 		}
-		if (!('lit' in test) && good && !ordered(a.ty)) {
+		if (!('lit' in test) && good && !isOrdered(next, a.ty)) {
 			t.report('R003', span, [t.describe(a.ty), test.between.op]);
 			good = false;
 		}
@@ -152,7 +156,7 @@ export function declare(text: string, schema: Schema): Declared {
 	 * of that type gives: `stepAt` decides where it may be used.
 	 */
 	function stepOf(ty: Ty): Frac | undefined {
-		if (ty.t === 'val' && ty.name === 'Date') return { n: 1n, d: 1n };
+		if (ty.t === 'val' && baseTypeOf(next, ty.name) === 'Date') return { n: 1n, d: 1n };
 		if (ty.t !== 'num' || ty.name === undefined) return undefined;
 		const def = next.types?.[ty.name];
 		const scale = 10n ** BigInt(def?.scale ?? '0');
@@ -185,8 +189,9 @@ export function declare(text: string, schema: Schema): Declared {
 		if (!tests.length) return [{ has: () => false }];
 		const name = 'path' in input ? printExpr(input) : `(${printExpr(input)})`;
 		const values = tests.flatMap((x) => ('lit' in x ? [x] : [x.between.from, x.between.to].filter(defined)));
-		if (ordered(a.ty)) {
-			const key = (v: TableValue): Frac => (a.ty.t === 'val' ? dayOf(v.lit)! : (valueOf(v) as Frac));
+		if (isOrdered(next, a.ty)) {
+			const base = a.ty.t === 'val' ? baseTypeOf(next, a.ty.name) : undefined;
+			const key = (v: TableValue): Frac => (base === 'Date' ? dayOf(v.lit)! : base === 'DateTime' ? instantOf(v.lit)! : (valueOf(v) as Frac));
 			const ends = values
 				.map((v) => ({ k: key(v), text: v.lit }))
 				.sort((x, y) => compare(x.k, y.k))

@@ -22,3 +22,36 @@ build_planner_waiting: Planner waiting
 build_citation_scan: Citation scan
 build_red_citation: Red test decision citation
 build_red_cites_replaced: Red test cites replaced decision
+build_milestone: Build milestone
+build_milestone.scope: Scope
+build_milestone_scope: Milestone scope
+build_milestone_scope.release_1: Release 1
+build_milestone_scope.outside_release_1: Outside release 1
+build_progress_scan: Progress scan
+build_progress_scan.run: Run
+build_progress_scan.observed_at: Observed at
+build_progress_scan.source: Source
+build_red_test: Observed red test
+build_red_test.scan: Progress scan
+build_red_test.test: Test
+build_red_test.milestone: Milestone
+build_green_transition: Observed green transition
+build_green_transition.scan: Progress scan
+build_green_transition.test: Test
+build_green_transition.milestone: Milestone
+build_green_transition.commit: Commit
+build_offboard_work: Off-board release-1 work
+build_offboard_work.scan: Progress scan
+build_offboard_work.item: Work item
+build_offboard_work.state: Observation state
+build_offboard_work.completed: Completed
+build_offboard_work.total: Total
+build_offboard_work.reason: Reason
+build_offboard_work.source: Source
+build_offboard_state: Off-board observation state
+build_offboard_state.known: Known
+build_offboard_state.unknown: Unknown
+build_milestone_progress: Milestone progress
+release_1_done: Release 1 done
+build_offboard_work_count: Off-board work count
+build_offboard_work_unknown: Unknown off-board work

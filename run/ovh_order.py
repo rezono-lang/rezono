@@ -1,14 +1,30 @@
-"""Read an unpaid OVHcloud order into a binding quote guarantee, per decisions/run-price-enforcement.md."""
+"""Read an unpaid OVHcloud order into a quote guarantee using the provider-terms pack, per decisions/run-price-enforcement.md."""
 
 from collections.abc import Mapping
+from contextlib import closing
 from datetime import date, datetime, time, timedelta, timezone
 from fractions import Fraction
+from functools import cache
+from pathlib import Path
 import re
+
+from rezono_compiler import batch, facts, pack, rules, scenarios
 
 _UCENTS_PER_UNIT = 10**8
 _PLAN_HASH_RE = re.compile(r"[0-9a-f]{64}")
 _DAY_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
-_USAGE_DETAIL_TYPES = frozenset({"CONSUMPTION", "OUTPLAN"})
+_EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
+_MICROSECOND = timedelta(microseconds=1)
+_PACK_DIR = Path(__file__).resolve().parent / "packs" / "provider-terms"
+
+
+@cache
+def _provider_terms() -> tuple[pack.Pack, rules.Program, dict[str, list[tuple]]]:
+    model = pack.read(_PACK_DIR)
+    program = rules.load(model.rules)
+    states = scenarios.fact_states(model, _PACK_DIR, diagnostics=False)
+    pack_facts = states[0][3] if states else {}
+    return model, program, pack_facts
 
 
 def _price(value: object, label: str) -> tuple[str, int]:
@@ -86,18 +102,18 @@ def guarantee(
         raise ValueError("currency mismatch across order prices")
 
     details_total = 0
+    detail_types: list[str] = []
     for index, detail in enumerate(details):
         if not isinstance(detail, Mapping):
             raise ValueError("each order detail must be an object")
         detail_type = detail.get("detailType")
         if not isinstance(detail_type, str) or not detail_type.strip():
             raise ValueError("order detail requires a nonempty detailType")
-        if detail_type in _USAGE_DETAIL_TYPES:
-            raise ValueError("usage-billed order detail gives no guarantee")
         detail_currency, line_ucents = _price(detail.get("totalPrice"), f"details[{index}].totalPrice")
         if detail_currency != currency:
             raise ValueError("currency mismatch across order details")
         details_total += line_ucents
+        detail_types.append(detail_type)
 
     if details_total != without_tax:
         raise ValueError("order details totalPrice sum does not match prices.withoutTax")
@@ -112,15 +128,42 @@ def guarantee(
 
     expiration_utc = _utc_timestamp(record.get("expirationDate"), "expirationDate")
     day_end = datetime.combine(order_day + timedelta(days=1), time.min, timezone.utc)
-    expires = min(expiration_utc, day_end)
+
+    model, program, pack_facts = _provider_terms()
+    order_key = str(order_id)
+    runtime_rows = facts.rows_of(model, {
+        "order": [{
+            "id": order_key,
+            "expiration_us": (expiration_utc - _EPOCH) // _MICROSECOND,
+            "day_end_us": (day_end - _EPOCH) // _MICROSECOND,
+        }],
+        "order_detail": [
+            {"id": f"{order_key}/{index}", "order": order_key, "detail_type": detail_type}
+            for index, detail_type in enumerate(detail_types)
+        ],
+    })
+    merged = {
+        table: [*pack_facts.get(table, ()), *runtime_rows.get(table, ())]
+        for table in pack_facts.keys() | runtime_rows.keys()
+    }
+    inputs = scenarios.rule_rows(model, program, merged)
+    with closing(batch.connect(program, inputs)) as connection:
+        batch.compute(connection, program)
+        guarantees = batch.read(connection, program, ["order_guarantee"])["order_guarantee"]
+    if not guarantees:
+        raise ValueError("usage-billed order detail gives no guarantee")
+    if len(guarantees) != 1:
+        raise ValueError("provider terms derived ambiguous order guarantee")
+    (_, mode, expires_us_text), = guarantees
+    expires = _EPOCH + timedelta(microseconds=int(expires_us_text))
 
     total = Fraction(with_tax, _UCENTS_PER_UNIT)
     return {
-        "mode": "binding_quote",
+        "mode": mode,
         "currency": currency,
         "total": [total.numerator, total.denominator],
         "includes_setup": True,
         "expires_at": expires.isoformat().replace("+00:00", "Z"),
-        "reference": str(order_id),
+        "reference": order_key,
         "plan_hash": plan_hash,
     }

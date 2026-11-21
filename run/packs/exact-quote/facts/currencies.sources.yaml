@@ -1,0 +1,5 @@
+default:
+  kind: git
+  name: rezono-lang/rezono
+  revision: 91630dc2b17d0d4dd979a9b06b6e1581bfd037be
+  position: decisions/run-effective-currency.md

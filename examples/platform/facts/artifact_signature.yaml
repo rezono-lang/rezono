@@ -1,0 +1,4 @@
+signature_scan:
+  - {id: scan-1, covers: [a-shop, a-lab]}
+artifact_signature:
+  - {id: sig-1, artifact: a-shop, scan: scan-1}

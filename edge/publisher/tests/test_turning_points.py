@@ -24,20 +24,17 @@ def between():
         raise MissingTurningPoints(str(error)) from error
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=(MissingTurningPoints, AssertionError),
-    reason=(
-        "extra: decisions/viewer-slip.md: Write edge/publisher/rezono_publisher/turns.py with between(columns, program, before, after): the "
-        "conclusions the role reads that turn between two stops, with their causes, as decisions/viewer-slip.md, "
-        "section Turning points, defines them (the same row by relation and key prefix, or by rule and subject "
-        "for a calculation; the ten causes; the argument a min or max took derived from its steps and the "
-        "program's constants). The signature and the stop format are in tests/fixtures/turns/cases.py. "
-        "Writing the rezono.turns/1 objects in a sweep run is the next task (test_turn_unknown_neighbour)."
-    ),
-)
 def test_turning_points():
     turns = between()
     got = {case: turns(FIXTURE["COLUMNS"], FIXTURE["PROGRAM"], given["before"], given["after"])
            for case, given in sorted(CASES.items())}
     assert got == {case: given["turns"] for case, given in sorted(CASES.items())}
+
+
+def test_publisher_and_checker_agree_on_all_turning_point_cases():
+    turns = between()
+    check = importlib.import_module("rezono_checker.turns").check
+    columns, program = FIXTURE["COLUMNS"], FIXTURE["PROGRAM"]
+    for case, given in sorted(CASES.items()):
+        listed = turns(columns, program, given["before"], given["after"])
+        assert check(columns, program, given["before"], given["after"], listed) == [], case

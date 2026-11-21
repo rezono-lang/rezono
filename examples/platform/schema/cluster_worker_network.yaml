@@ -10,6 +10,11 @@ annotations:
 classes:
   ClusterWorkerNode:
     description: A named node assigned to one cluster and one of its worker endpoints.
+    annotations:
+      path_equations:
+        - name: same_cluster
+          left: endpoint.owner
+          right: owner
     attributes:
       id: {identifier: true}
       owner: {range: Cluster, required: true}

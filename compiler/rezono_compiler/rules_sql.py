@@ -31,7 +31,7 @@ from .rules import BOOLEAN, Condition, calc_input_table, const_type, is_var, upp
 from .sqltext import literal, q
 
 OPS = {"eq": "=", "ne": "<>", "lt": "<", "le": "<=", "gt": ">", "ge": ">=", "add": "+", "sub": "-", "mul": "*", "div": "/"}
-SQL_TYPE = {"string": "VARCHAR", "integer": "BIGINT", "boolean": "BOOLEAN"}
+SQL_TYPE = {"string": "VARCHAR", "integer": "BIGINT", "rational": "VARCHAR", "boolean": "BOOLEAN"}
 # Integer division truncated toward zero, on the absolute values, so it does not depend on how `//` rounds a
 # negative operand; HUGEINT, so that abs(-2^63) fits. Only the quotient -2^63 / -1 does not fit a BIGINT.
 DUCKDB_MACROS = ("CREATE OR REPLACE MACRO rezono_quotient(a, b) AS CAST(CASE WHEN (a < 0) = (b < 0) "
@@ -231,12 +231,23 @@ def witness_select(prog, rule, dialect="feldera"):
     return r.select([(r.term(v, r.types[v]), var_col(v)) for v in rule.variables])
 
 
+def _col_defs(cols):
+    out = []
+    for c in cols:
+        if c.type == "rational":
+            out.append(f"{q(c.name + '_n')} BIGINT NOT NULL")
+            out.append(f"{q(c.name + '_d')} BIGINT NOT NULL")
+        else:
+            out.append(f"{q(c.name)} {SQL_TYPE[c.type]} NOT NULL")
+    return out
+
+
 def _base_tables(prog, names=None):
     out = []
     for rel in prog.relations.values():
         if rel.role != "base" or (names is not None and rel.name not in names):
             continue
-        cols = [f"{q(c.name)} {SQL_TYPE[c.type]} NOT NULL" for c in rel.key + rel.values]
+        cols = _col_defs(rel.key + rel.values)
         out.append(f"CREATE TABLE {q(rel.name)} ({', '.join(cols)});")
     return out
 
@@ -259,6 +270,16 @@ def outcome_checks(prog, name):
     return [(f"{name}__total", total), (f"{name}__state", state)]
 
 
+def functional_checks(prog, name):
+    """For a functional derivation with conflict_policy == 'block', one check view `<name>__invalid`
+    holding any domain key whose state is 'invalid'. A row in it blocks publication."""
+    rel = prog.relations[name]
+    if rel.role != "functional" or rel.conflict_policy != "block":
+        return []
+    cols = ", ".join(q(c.name) for c in rel.key)
+    return [(f"{name}__invalid", f"SELECT {cols} FROM {q(name)} WHERE {q('state')} = 'invalid'")]
+
+
 def bound_checks(prog, name, dialect="feldera"):
     """The check of a counter with an explicit bound, as (view, SELECT): `<relation>__exhausted`
     holds the rows the counting rule would add where it stopped, read from the final relation with the bound
@@ -272,8 +293,8 @@ def bound_checks(prog, name, dialect="feldera"):
 
 
 def checks(prog, name, dialect="feldera"):
-    """Every check view of one derived relation, as (view, SELECT): a row in any of them is a red check."""
-    return outcome_checks(prog, name) + bound_checks(prog, name, dialect)
+    """Every check view of one derived or functional relation, as (view, SELECT): a row in any of them is a red check."""
+    return outcome_checks(prog, name) + functional_checks(prog, name) + bound_checks(prog, name, dialect)
 
 
 def unrolled(prog, name, dialect="feldera"):
@@ -339,7 +360,7 @@ def _input_tables(prog, names):
     out = []
     for name in names:
         rel = prog.relations[name]
-        cols = [f"{q(c.name)} {SQL_TYPE[c.type]} NOT NULL" for c in rel.key]
+        cols = _col_defs(rel.row_columns)
         out.append(f"CREATE TABLE {q(name)} ({', '.join(cols)});")
     return out
 
@@ -392,7 +413,25 @@ def duckdb_program(prog, witnesses=False, relations=None):
     return out
 
 
+def is_functional_aggregate(prog, name):
+    """True when a functional derivation needs candidate aggregation, precedence, or rational arithmetic
+    (more than one rule, any aggregate, or a rational column), else a deterministic projection."""
+    rel = prog.relations[name]
+    if rel.role != "functional":
+        return False
+    rules = prog.rules_for(name)
+    return (
+        len(rules) > 1
+        or rel.value.type == "rational"
+        or any(c.type == "rational" for c in rel.key)
+        or any(r.aggregates for r in rules)
+    )
+
+
 def views(prog, name):
-    """The engine views one derived relation costs: itself, its materialized witnesses and its checks."""
-    return (1 + sum(1 for r in prog.rules_for(name) if wants_witness(prog, r, "materialize"))
+    """The engine view budget cost of one derived or functional relation: itself (weight 1 for derived
+    or deterministic functional projection, weight 2 for candidate-aggregating / precedence / rational
+    functional derivation), its materialized witnesses, and its checks."""
+    base = 2 if is_functional_aggregate(prog, name) else 1
+    return (base + sum(1 for r in prog.rules_for(name) if wants_witness(prog, r, "materialize"))
             + len(checks(prog, name)))

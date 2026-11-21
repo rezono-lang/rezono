@@ -1,26 +1,30 @@
-"""Independent Python reference for the first slice of the healthcare allowance
-(decisions/language-healthcare-allowance-slice.md).
+"""Independent Python reference for the healthcare allowance slice
+(decisions/language-healthcare-allowance-slice.md, decisions/healthcare-allowance-three-sources.md).
 
-allowance(facts, household, as_of, known) gives the monthly allowance of one household in whole cents, or the
-pair (state, reason) of an allowance that is not known. It is evaluated on the day `as_of` with the versions
-known on `known`, as one `as of DAY known DAY` line of a publication is.
+`allowance(facts, claimant, as_of, known)` gives the monthly allowance of one claimant in whole cents, or the
+pair `(state, reason)` of an allowance that is not known. It is evaluated on `as_of` with the versions known
+on `known`.
 
-It shares no code with the compiler or the reader. It reads the fact rows of facts.rezono with its own reading,
-and it states the parameter versions itself, from the decision, rather than reading the module. Money is exact:
-whole cents and fractions, with one rounding, the monthly allowance down to whole euros.
+Supports both:
+- the single-source first slice (`facts.rezono`, kind `Household` with `ann..kim`), and
+- the three-source slice (`facts/` with `Persoon`, `civil.Adres`, `civil.Partner`, `civil.Ouder`,
+  `tax.Inkomen`, `tax.Partner`, `insurer.Polis`), deriving `toeslagpartner`, `insured`, and `joint_income`
+  independently from the three sources while never reading `tax.Partner` as a benefit-partner fact.
 
-Selection follows docs/rezono/v0.md section 5a: among the versions whose `valid` range holds on the day and
-whose `known` date is at or before the knowledge cut, the one with the later `known` date applies; two with
-the same `known` date give `invalid versions_overlap`, and none gives `unknown no_version_applies`. The
-exceptions follow section 5b: the last `unless` block is read first, and a condition that is not known gives
-the allowance its state. States follow section 7b. Standard library only.
+It shares no code with the compiler or the reader. It reads fact files with its own parser, and states the
+statutory parameter versions itself from the decision. Money is exact: whole cents and fractions, with one
+rounding, the monthly allowance down to whole euros. Standard library only.
 """
 import datetime
+import json
 import pathlib
 import re
+import shutil
 from fractions import Fraction
 
-# The state codes of a value that is not known, in the order of section 7b.
+HERE = pathlib.Path(__file__).parent
+
+# The state codes of a value that is not known, in the order of v0 section 7b.
 STATES = ("n/a", "unknown", "invalid")
 NO_VERSION = ("unknown", "no_version_applies")
 OVERLAP = ("invalid", "versions_overlap")
@@ -28,6 +32,11 @@ OVERLAP = ("invalid", "versions_overlap")
 
 def day(text):
     return datetime.date.fromisoformat(text)
+
+
+def day_int(value):
+    s = f"{int(value):08d}"
+    return datetime.date(int(s[:4]), int(s[4:6]), int(s[6:8]))
 
 
 # The parameter versions of the decision, in cents: (valid from, valid until or None, known, value).
@@ -54,17 +63,27 @@ RATE_SINGLE = Fraction("1.879") / 100
 RATE_PARTNER = Fraction("4.256") / 100
 RATE_ABOVE = Fraction("13.7") / 100
 
-HEADER = re.compile(r"^fact\s+(\w+)\s*$")
-VERSION = re.compile(r"^fact\s+(\w+)\s+(\w+)\s*,\s*valid\s+(\d{4}-\d{2}-\d{2})\.\.(?:<(\d{4}-\d{2}-\d{2}))?"
-                     r"\s*,\s*known\s+(\d{4}-\d{2}-\d{2})\s*$")
+HEADER = re.compile(r"^fact\s+([\w.]+)\s*$")
+VERSION = re.compile(
+    r"^fact\s+([\w.]+)\s+([\w-]+)\s*,\s*valid\s+(\d{4}-\d{2}-\d{2})\.\.(?:<(\d{4}-\d{2}-\d{2}))?"
+    r"\s*,\s*known\s+(\d{4}-\d{2}-\d{2})\s*$"
+)
 ASSIGN = re.compile(r"^\s+(\w+)\s*=\s*(\S+)\s*$")
+ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 def scalar(text):
+    text = text.strip()
     if text in ("true", "false"):
         return text == "true"
+    if text in ("null", "~", ""):
+        return None
+    if (text.startswith('"') and text.endswith('"')) or (text.startswith("'") and text.endswith("'")):
+        return text[1:-1]
     if re.fullmatch(r"-?\d+", text):
         return int(text)
+    if re.fullmatch(r"[A-Za-z0-9_.-]+", text):
+        return text
     raise ValueError(f"facts: a value this reference does not read: {text}")
 
 
@@ -72,9 +91,124 @@ def strip(line):
     return line.split("--", 1)[0].rstrip()
 
 
+def _yaml_scalar(text):
+    text = text.strip()
+    if text in ("true", "false"):
+        return text == "true"
+    if text in ("null", "~", ""):
+        return None
+    if (text.startswith('"') and text.endswith('"')) or (text.startswith("'") and text.endswith("'")):
+        return text[1:-1]
+    if re.fullmatch(r"-?\d+", text):
+        return int(text)
+    return text
+
+
+def _strip_yaml_comment(line):
+    in_single = False
+    in_double = False
+    for idx, ch in enumerate(line):
+        if ch == "'" and not in_double:
+            in_single = not in_single
+        elif ch == '"' and not in_single:
+            in_double = not in_double
+        elif ch == "#" and not in_single and not in_double:
+            if idx == 0 or line[idx - 1].isspace():
+                return line[:idx].rstrip()
+    return line.rstrip()
+
+
+def _parse_flow_mapping(text):
+    text = text.strip()
+    if text.startswith("{") and text.endswith("}"):
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            pass
+        inner = text[1:-1].strip()
+        if not inner:
+            return {}
+        out = {}
+        parts = []
+        buf = []
+        in_single = False
+        in_double = False
+        for ch in inner:
+            if ch == "'" and not in_double:
+                in_single = not in_single
+            elif ch == '"' and not in_single:
+                in_double = not in_double
+            if ch == "," and not in_single and not in_double:
+                parts.append("".join(buf))
+                buf = []
+            else:
+                buf.append(ch)
+        if buf:
+            parts.append("".join(buf))
+        for item in parts:
+            key, sep, val = item.partition(":")
+            if not sep:
+                raise ValueError(f"facts: malformed YAML entry: {text}")
+            out[key.strip().strip("\"'")] = _yaml_scalar(val)
+        return out
+    raise ValueError(f"facts: unsupported YAML row: {text}")
+
+
+def _read_yaml_sections(path):
+    """Read a YAML fact file into `{section: [record_dict, ...]}` using only the standard library.
+
+    Supports JSON-per-line rows (`- {"id": ...}`), flow mappings (`- {id: ...}`), and plain block mappings.
+    """
+    sections = {}
+    section = None
+    current = None
+    lines = pathlib.Path(path).read_text(encoding="utf-8").splitlines()
+    for raw in lines:
+        line = _strip_yaml_comment(raw)
+        if not line.strip():
+            continue
+        indent = len(line) - len(line.lstrip(" "))
+        stripped = line.strip()
+        if indent == 0 and ":" in stripped and not stripped.startswith("-"):
+            key, _, rest = stripped.partition(":")
+            section = key.strip().strip("\"'")
+            sections.setdefault(section, [])
+            current = None
+            rest = rest.strip()
+            if rest == "[]":
+                continue
+            if rest.startswith("[") and rest.endswith("]"):
+                try:
+                    items = json.loads(rest)
+                except json.JSONDecodeError:
+                    items = [_parse_flow_mapping(rest[1:-1])] if rest[1:-1].strip() else []
+                sections[section].extend(items)
+            continue
+        if section is None:
+            continue
+        if stripped.startswith("-"):
+            rest = stripped[1:].strip()
+            if rest.startswith("{"):
+                current = _parse_flow_mapping(rest)
+                sections[section].append(current)
+            elif rest:
+                key, sep, val = rest.partition(":")
+                if not sep:
+                    raise ValueError(f"facts: unsupported YAML list item: {raw}")
+                current = {key.strip().strip("\"'"): _yaml_scalar(val)}
+                sections[section].append(current)
+            else:
+                current = {}
+                sections[section].append(current)
+        elif current is not None and ":" in stripped:
+            key, _, val = stripped.partition(":")
+            current[key.strip().strip("\"'")] = _yaml_scalar(val)
+    return sections
+
+
 def read_facts(path):
-    """The fact table rows, {kind: {id: {slot: value}}}, and the dated versions,
-    [(kind, id, slot, valid from, valid until or None, known, value)]."""
+    """The fact table rows, `{kind: {id: {slot: value}}}`, and the dated versions,
+    `[(kind, id, slot, valid from, valid until or None, known, value)]`."""
     tables, versions = {}, []
     lines = [strip(line) for line in pathlib.Path(path).read_text(encoding="utf-8").splitlines()]
     i = 0
@@ -98,7 +232,7 @@ def read_facts(path):
             kind, ident, start, until, known = version.groups()
             while i < len(lines) and ASSIGN.match(lines[i]):
                 slot, value = ASSIGN.match(lines[i]).groups()
-                versions.append((kind, ident, slot, day(start), until and day(until), day(known), scalar(value)))
+                versions.append((kind.lower(), ident, slot, day(start), until and day(until), day(known), scalar(value)))
                 i += 1
         elif line.startswith("fact"):
             raise ValueError(f"facts: a line this reference does not read: {line}")
@@ -107,8 +241,11 @@ def read_facts(path):
 
 def select(rows, on, cut):
     """The value of the one version that applies on `on` with what is known on `cut`, or its state."""
-    held = [(known, value) for start, until, known, value in rows
-            if start <= on and (until is None or on < until) and known <= cut]
+    held = [
+        (known, value)
+        for start, until, known, value in rows
+        if start <= on and (until is None or on < until) and known <= cut
+    ]
     if not held:
         return NO_VERSION
     latest = max(known for known, _ in held)
@@ -134,46 +271,425 @@ def as_date(value):
     return value if isinstance(value, datetime.date) else day(str(value))
 
 
-def allowance(facts, household, as_of, known):
+def _row_window(row):
+    """Return `(valid_from, valid_until_or_None, known_from)` for a three-source fact row."""
+    if "valid_from" in row and row["valid_from"] is not None:
+        start = as_date(row["valid_from"])
+    elif "valid_from_day" in row and row["valid_from_day"] is not None:
+        start = day_int(row["valid_from_day"])
+    else:
+        start = datetime.date.min
+
+    if "valid_until" in row and row["valid_until"] is not None:
+        until = as_date(row["valid_until"])
+        if until >= datetime.date(9999, 12, 31):
+            until = None
+    elif "valid_until_day" in row and row["valid_until_day"] is not None:
+        raw_until = int(row["valid_until_day"])
+        until = None if raw_until >= 99991231 else day_int(raw_until)
+    else:
+        until = None
+
+    if "known_from" in row and row["known_from"] is not None:
+        known = as_date(row["known_from"])
+    elif "known" in row and row["known"] is not None:
+        known = as_date(row["known"])
+    elif "known_from_day" in row and row["known_from_day"] is not None:
+        known = day_int(row["known_from_day"])
+    else:
+        known = datetime.date.min
+
+    return start, until, known
+
+
+def _classify_section(section_name, file_stem=""):
+    key = section_name.lower()
+    stem = file_stem.lower()
+    if "partner" in key:
+        if "civil" in key or ("tax" not in key and "civil" in stem):
+            return "civil_partner"
+        if "tax" in key or "fiscal" in key or "tax" in stem:
+            return "tax_partner"
+    if key == "persoon" or key.endswith(("_persoon", ".persoon")):
+        return "persoon"
+    if key == "adres" or key.endswith(("_adres", ".adres")):
+        return "adres"
+    if key == "ouder" or key.endswith(("_ouder", ".ouder")):
+        return "ouder"
+    if key == "inkomen" or key.endswith(("_inkomen", ".inkomen")):
+        return "inkomen"
+    if key == "polis" or key.endswith(("_polis", ".polis")):
+        return "polis"
+    if key in ("evaluation_day", "evaluation_date"):
+        return "evaluation_day"
+    if key == "household":
+        return "household"
+    return None
+
+
+def _fact_files_in(source):
+    path = pathlib.Path(source)
+    if path.is_file():
+        return [path]
+    if path.is_dir():
+        return [
+            p
+            for p in sorted(path.rglob("*"))
+            if p.is_file()
+            and p.suffix in {".yaml", ".yml", ".rezono"}
+            and not p.name.endswith(".sources.yaml")
+        ]
+    raise FileNotFoundError(f"facts source does not exist: {path}")
+
+
+def read_three_source_facts(facts_source):
+    """Read three-source fact rows from a directory or file into canonical source buckets."""
+    data = {
+        "persoon": {},
+        "adres": [],
+        "civil_partner": [],
+        "ouder": [],
+        "inkomen": [],
+        "tax_partner": [],
+        "polis": [],
+        "evaluation_day": [],
+    }
+    for path in _fact_files_in(facts_source):
+        if path.suffix in {".yaml", ".yml"}:
+            sections = _read_yaml_sections(path)
+            for sec_name, rows in sections.items():
+                bucket = _classify_section(sec_name, path.stem)
+                if bucket is None or bucket == "household":
+                    continue
+                if bucket == "persoon":
+                    for row in rows:
+                        data["persoon"][str(row["id"])] = dict(row)
+                else:
+                    for row in rows:
+                        data[bucket].append(dict(row))
+        elif path.suffix == ".rezono":
+            tables, versions = read_facts(path)
+            for kind, by_id in tables.items():
+                bucket = _classify_section(kind, path.stem)
+                if bucket is None or bucket == "household":
+                    continue
+                if bucket == "persoon":
+                    for ident, attrs in by_id.items():
+                        data["persoon"][str(ident)] = {"id": str(ident), **attrs}
+                else:
+                    for ident, attrs in by_id.items():
+                        data[bucket].append({"id": str(ident), **attrs})
+            # Group dated Rezono rows per (kind, id, valid, known) into rows.
+            grouped = {}
+            for kind, ident, slot, start, until, known, val in versions:
+                bucket = _classify_section(kind, path.stem)
+                if bucket is None or bucket == "household":
+                    continue
+                gkey = (bucket, str(ident), start, until, known)
+                base = tables.get(kind, {}).get(ident, {})
+                entry = grouped.setdefault(
+                    gkey,
+                    {
+                        "id": str(ident),
+                        **base,
+                        "valid_from": start,
+                        "valid_until": until,
+                        "known_from": known,
+                    },
+                )
+                entry[slot] = val
+            for (bucket, _, _, _, _), entry in grouped.items():
+                data[bucket].append(entry)
+    return data
+
+
+def _is_legacy_household_source(facts_source):
+    path = pathlib.Path(facts_source)
+    if not path.is_file() or path.suffix != ".rezono":
+        return False
+    tables, _ = read_facts(path)
+    return "household" in tables and "persoon" not in tables
+
+
+def _active_rows(rows, as_of, known):
+    out = []
+    for row in rows:
+        start, until, kf = _row_window(row)
+        if start <= as_of and (until is None or as_of < until) and kf <= known:
+            out.append((kf, row))
+    return out
+
+
+def _address_of(data, person, as_of, known):
+    active = _active_rows([r for r in data["adres"] if str(r.get("persoon")) == person], as_of, known)
+    if not active:
+        return None
+    latest = max(kf for kf, _ in active)
+    addrs = {str(r["woonadres"]) for kf, r in active if kf == latest and r.get("woonadres") is not None}
+    return next(iter(addrs)) if len(addrs) == 1 else None
+
+
+def _toeslagpartner_in(data, person_a, person_b, as_of, known):
+    """Independent statutory toeslagpartner(a, b) derivation (@ awr#art-5a, @ awir#art-3).
+
+    Reads ONLY civil.Partner, civil.Adres, and civil.Ouder; never reads tax.Partner.
+    """
+    a, b = str(person_a), str(person_b)
+    if a == b:
+        return False
+    addr_a = _address_of(data, a, as_of, known)
+    addr_b = _address_of(data, b, as_of, known)
+    living_apart = addr_a is not None and addr_b is not None and addr_a != addr_b
+    same_address = addr_a is not None and addr_b is not None and addr_a == addr_b
+
+    # 1. Civil union without separation-plus-divorce-petition (@ awr#art-5a, @ awir#art-3).
+    pair = {a, b}
+    for _, row in _active_rows(data["civil_partner"], as_of, known):
+        if {str(row.get("persoon_a")), str(row.get("persoon_b"))} != pair:
+            continue
+        petition = bool(row.get("echtscheidingsverzoek", False))
+        if not (petition and living_apart):
+            return True
+
+    # 2. Unmarried cohabiting parents of a joint child (@ awir#art-3).
+    if same_address:
+        children_a = {str(r["kind"]) for r in data["ouder"] if str(r.get("ouder")) == a}
+        children_b = {str(r["kind"]) for r in data["ouder"] if str(r.get("ouder")) == b}
+        if children_a & children_b:
+            return True
+    return False
+
+
+def toeslagpartner(facts_source, person_a, person_b, as_of, known):
     as_of, known = as_date(as_of), as_date(known)
-    tables, versions = read_facts(facts)
-    record = tables.get("household", {}).get(household)
-    if record is None:
-        raise ValueError(f"facts: no household {household}")
+    data = read_three_source_facts(facts_source)
+    return _toeslagpartner_in(data, person_a, person_b, as_of, known)
 
-    def fact(slot):
-        return select([row[3:] for row in versions if row[:3] == ("household", household, slot)], as_of, known)
 
+def _all_persons(data):
+    persons = set(data["persoon"])
+    for r in data["adres"]:
+        if "persoon" in r:
+            persons.add(str(r["persoon"]))
+    for r in data["civil_partner"]:
+        for k in ("persoon_a", "persoon_b"):
+            if k in r:
+                persons.add(str(r[k]))
+    for r in data["ouder"]:
+        for k in ("ouder", "kind"):
+            if k in r:
+                persons.add(str(r[k]))
+    for r in data["inkomen"]:
+        if "persoon" in r:
+            persons.add(str(r["persoon"]))
+    for r in data["polis"]:
+        if "persoon" in r:
+            persons.add(str(r["persoon"]))
+    return sorted(persons)
+
+
+def _partners_of(data, person, as_of, known):
+    person = str(person)
+    return [other for other in _all_persons(data) if other != person and _toeslagpartner_in(data, person, other, as_of, known)]
+
+
+def _insured_in(data, person, as_of, known):
+    person = str(person)
+    active = _active_rows([r for r in data["polis"] if str(r.get("persoon")) == person], as_of, known)
+    if not active:
+        return NO_VERSION
+    latest = max(kf for kf, _ in active)
+    soorten = {str(r.get("soort")) for kf, r in active if kf == latest}
+    return "basis" in soorten
+
+
+def insured(facts_source, person, as_of, known):
+    as_of, known = as_date(as_of), as_date(known)
+    data = read_three_source_facts(facts_source)
+    return _insured_in(data, person, as_of, known)
+
+
+def _own_income_in(data, person, as_of, known):
+    person = str(person)
+    rows = [
+        (*_row_window(r), int(r["bedrag"]))
+        for r in data["inkomen"]
+        if str(r.get("persoon")) == person and r.get("bedrag") is not None
+    ]
+    return select(rows, as_of, known)
+
+
+def _joint_income_in(data, person, as_of, known):
+    person = str(person)
+    partners = _partners_of(data, person, as_of, known)
+    if len(partners) > 1:
+        return ("invalid", "multiple_partners")
+    own = _own_income_in(data, person, as_of, known)
+    if not partners:
+        return own
+    other = _own_income_in(data, partners[0], as_of, known)
+    state = strict(own, other)
+    return state if state else own + other
+
+
+def joint_income(facts_source, person, as_of, known):
+    as_of, known = as_date(as_of), as_date(known)
+    data = read_three_source_facts(facts_source)
+    return _joint_income_in(data, person, as_of, known)
+
+
+def _compute_allowance(partner, insured_val, joint_income_val, as_of, known):
     def param(name):
         return select(PARAMETERS[name], as_of, known)
 
-    partner = record.get("partner", NO_VERSION)
-    insured = fact("insured")
-    joint_income = fact("joint_income")
-
     # income_limit = when partner then income_limit_partner else income_limit_single
-    income_limit = partner if is_state(partner) else param("income_limit_partner" if partner else "income_limit_single")
+    income_limit = (
+        partner
+        if is_state(partner)
+        else param("income_limit_partner" if partner else "income_limit_single")
+    )
 
-    # The last block first: unless joint_income > income_limit then 0.
-    state = strict(joint_income, income_limit)
+    # The last block first: unless joint_income > income_limit then 0 (@ wzt#art-2.2).
+    state = strict(joint_income_val, income_limit)
     if state:
         return state
-    if joint_income > income_limit:
+    if joint_income_val > income_limit:
         return 0
-    # Then: unless not insured then 0.
-    if is_state(insured):
-        return insured
-    if not insured:
+    # Then: unless not insured then 0 (@ wzt#art-2.1).
+    if is_state(insured_val):
+        return insured_val
+    if not insured_val:
         return 0
 
     # The base value: floor(yearly / 1200) * 100.
     standard_premium, threshold_income = param("standard_premium"), param("threshold_income")
-    state = strict(partner, standard_premium, threshold_income, joint_income)
+    state = strict(partner, standard_premium, threshold_income, joint_income_val)
     if state:
         return state
     rate = RATE_PARTNER if partner else RATE_SINGLE
     household_premium = 2 * standard_premium if partner else standard_premium
-    above = joint_income - threshold_income if joint_income > threshold_income else 0
+    above = joint_income_val - threshold_income if joint_income_val > threshold_income else 0
     norm_premium = rate * threshold_income + RATE_ABOVE * above
     yearly = household_premium - norm_premium if household_premium > norm_premium else 0
     return int(Fraction(yearly) // 1200) * 100
+
+
+def allowance(facts, household, as_of, known):
+    as_of, known = as_date(as_of), as_date(known)
+    if _is_legacy_household_source(facts):
+        tables, versions = read_facts(facts)
+        record = tables.get("household", {}).get(household)
+        if record is None:
+            raise ValueError(f"facts: no household {household}")
+
+        def fact(slot):
+            return select(
+                [row[3:] for row in versions if row[:3] == ("household", household, slot)],
+                as_of,
+                known,
+            )
+
+        return _compute_allowance(
+            record.get("partner", NO_VERSION),
+            fact("insured"),
+            fact("joint_income"),
+            as_of,
+            known,
+        )
+
+    data = read_three_source_facts(facts)
+    claimant = str(household)
+    if claimant not in _all_persons(data):
+        raise ValueError(f"facts: no person {claimant}")
+    partners = _partners_of(data, claimant, as_of, known)
+    if len(partners) > 1:
+        return ("invalid", "multiple_partners")
+    return _compute_allowance(
+        bool(partners),
+        _insured_in(data, claimant, as_of, known),
+        _joint_income_in(data, claimant, as_of, known),
+        as_of,
+        known,
+    )
+
+
+def merge_tax_partner_into_civil(facts_dir, dest_dir):
+    """Counterexample helper: copy three-source facts to `dest_dir` and silently merge every
+    `tax.Partner` row into `civil.Partner` (without `echtscheidingsverzoek`, as a bare-name
+    merge across sources would do). Never mutates `facts_dir`."""
+    src = pathlib.Path(facts_dir)
+    dst = pathlib.Path(dest_dir)
+    if dst.exists():
+        shutil.rmtree(dst)
+    if src.is_dir():
+        shutil.copytree(src, dst)
+    else:
+        dst.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dst / src.name)
+
+    data = read_three_source_facts(dst)
+    merged_rows = []
+    for idx, row in enumerate(data["tax_partner"], start=1):
+        entry = {
+            "id": f"merged-tax-partner-{idx}",
+            "persoon_a": str(row["persoon_a"]),
+            "persoon_b": str(row["persoon_b"]),
+            "soort": "huwelijk",
+            "echtscheidingsverzoek": False,
+        }
+        for key in ("valid_from", "valid_until", "known_from", "valid_from_day", "valid_until_day", "known_from_day"):
+            if key in row and row[key] is not None:
+                entry[key] = row[key]
+        merged_rows.append(entry)
+
+    lines = ["zorgtoeslag_civil_civil_partner:"]
+    for entry in merged_rows:
+        lines.append(f"  - {json.dumps(entry, sort_keys=True)}")
+    (dst / "merged_civil_partner.yaml").write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
+    return dst
+
+
+def _evaluation_dates_of(data):
+    for row in data.get("evaluation_day") or ():
+        if "as_of" in row and "known" in row:
+            return as_date(row["as_of"]), as_date(row["known"])
+        if "as_of_day" in row and "known_day" in row:
+            return day_int(row["as_of_day"]), day_int(row["known_day"])
+        if "valid_at" in row and "known_at" in row:
+            return as_date(row["valid_at"]), as_date(row["known_at"])
+        if "valid_day" in row and "known_day" in row:
+            return day_int(row["valid_day"]), day_int(row["known_day"])
+    return day("2026-02-01"), day("2026-02-10")
+
+
+def states():
+    """Yield `(state_label, three_source_data)` for `examples/test_rules.py`."""
+    facts_dir = HERE / "facts"
+    files = sorted(f for f in facts_dir.glob("*.yaml") if not f.name.endswith(".sources.yaml"))
+    if not files:
+        return
+    data = read_three_source_facts(facts_dir)
+    yield f"0-{files[0].stem}", data
+    scenarios_dir = HERE / "scenarios"
+    if scenarios_dir.is_dir():
+        for sc in sorted(scenarios_dir.glob("*.yaml")):
+            extra = read_three_source_facts(sc)
+            merged = {
+                key: (data[key] | extra[key] if isinstance(data[key], dict) else data[key] + extra[key])
+                for key in data
+            }
+            data = merged
+            yield sc.stem, data
+
+
+def rules(data):
+    """Independent derived rule relations (`toeslagpartner`, `joint_income`) for `examples/test_rules.py`."""
+    as_of, known = _evaluation_dates_of(data)
+    persons = _all_persons(data)
+    tp = [(a, b) for a in persons for b in persons if a != b and _toeslagpartner_in(data, a, b, as_of, known)]
+    ji = []
+    for p in persons:
+        inc = _joint_income_in(data, p, as_of, known)
+        if not is_state(inc):
+            ji.append((p, inc))
+    return {"toeslagpartner": sorted(tp), "joint_income": sorted(ji)}

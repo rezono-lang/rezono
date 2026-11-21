@@ -148,11 +148,13 @@ test('what passed unexamined: the mode of `round`, a date beside a truth value, 
 	assert.deepEqual(found('ask Plan where round(monthly_price, plan.memory) > € 1'), ['R030 at plan.memory']);
 	for (const mode of ['half_even', 'half_up', 'down', 'up']) clean(`ask Plan where round(monthly_price, ${mode}) > € 1`);
 	clean('ask Plan where round(hourly_price * 730 h) > € 500');
-	// A date takes a number or a date beside it; a date moved by a number is a date, so no condition.
+	// A date takes a time/calendar duration or a date beside it; a date moved by a duration is a date, so no condition.
 	assert.deepEqual(found('ask Host where 2026-11-01 + true'), ['R003 at 2026-11-01 + true']);
 	assert.deepEqual(found('ask Host where 2026-11-01 * 2 > 2026-11-01'), ['R003 at 2026-11-01 * 2']);
-	assert.deepEqual(found('ask Host where 2026-11-01 + 3'), ['R017 at 2026-11-01 + 3']);
-	clean('ask Host where 2026-11-01 + 3 > 2026-11-02');
+	assert.deepEqual(found('ask Host where 2026-11-01 + 3 > 2026-11-02'), ['R003 at 2026-11-01 + 3']);
+	assert.deepEqual(found('ask Host where 2026-11-01 + 5 GiB > 2026-11-02'), ['R003 at 2026-11-01 + 5 GiB']);
+	assert.deepEqual(found('ask Host where 2026-11-01 + 24 h'), ['R017 at 2026-11-01 + 24 h']);
+	clean('ask Host where 2026-11-01 + 24 h > 2026-11-02');
 	clean('ask Host where 2026-12-01 - 2026-11-01 > 3');
 	// Both branches of `when` are one value, or both a set.
 	assert.deepEqual(found('ask Host where (when true then clusters else HostCluster:`x2`).count() > 0'), ['R005 at when true then clusters else HostCluster:`x2`']);
@@ -216,6 +218,18 @@ test('R011: nothing shadows silently (§5 rules 2 and 7)', () => {
 	clean('ask Host where clusters.any(it.host = host-a)');
 	clean('ask hc: HostCluster where host = host-a and hc.count > 1');
 	clean('ask Host where Host.any(it.memory_need > host.memory_need)');
+});
+
+test('explicit method binders shadow slots cleanly, while forbidding `it` and schema parameter collisions', () => {
+	// Explicit method binder colliding with a slot on its own element kind (`HostCluster.host`) or an outer kind (`Host.owner`).
+	clean('ask h: Host where clusters.any(host: host.count > 1)');
+	clean('ask h: Host where clusters.any(owner: owner.count > 1)');
+	// `it` is forbidden as an explicit method binder (no bogus `R001` with `hint.row: ['it']`).
+	assert.deepEqual(found('ask h: Host where clusters.any(it: it.count > 1)'), ['R011 at it']);
+	assert.deepEqual(found('ask h: Host where clusters.any(it: true)'), ['R011 at it']);
+	assert.deepEqual(found('ask h: Host where clusters.where(it: it.count > 1).count() > 0'), ['R011 at it']);
+	// Collisions with `schema.params` (`host_reserve`) are refused at the binder.
+	assert.deepEqual(found('ask h: Host where clusters.any(host_reserve: count > 1)'), ['R011 at host_reserve']);
 });
 
 test('R012 and R013: a literal token is read by the type its context expects', () => {

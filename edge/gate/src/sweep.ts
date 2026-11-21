@@ -95,7 +95,7 @@ async function readableCell(view: View, grid: Grid): Promise<boolean> {
 	return false;
 }
 
-function completeScope(view: View): boolean {
+export function completeScope(view: View): boolean {
 	return [...view.snaps.values()].every((entry) => entry.complete || entry.full)
 		&& (view.manifest.snapshots ?? []).every((entry) => view.snaps.has(entry.relation));
 }

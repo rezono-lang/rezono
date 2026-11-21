@@ -1,10 +1,12 @@
 """Regression cases for the policy, using inert bytes without executing proposed changes."""
 import ast
+import json
 from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from red_guard import (DEFINITION, UNREADABLE_CONFIG, Change, Tree, allowed, pack_hash, pin_update, protected,
+from red_guard import (DEFINITION, RED_DECISION_BUDGET, UNREADABLE_CONFIG, Change, Tree, allowed,
+                       decision_citation, has_valid_decision_head, inventory, pack_hash, pin_update, protected,
                        review, source)
 
 
@@ -49,6 +51,7 @@ def main():
     plugin_cases(function)
     pytest_config_cases(function)
     green_to_red_cases()
+    decision_citation_cases()
 
 
 def pytest_config_cases(function):
@@ -710,6 +713,153 @@ def milestone_cases(edit, other):
     ], False, planner=False)
     run("reason without a milestone is explained",
         [edit("tests/test_total.py", red(b'"pending"'), red(b'"documented"'))], False, planner=False)
+
+
+def decision_citation_cases():
+    """Added or edited red marks must cite an existing headed decision, and the legacy budget only shrinks."""
+    headed = (
+        b"---\n"
+        b"decider: [loop, core]\n"
+        b"decided_on: 2026-11-20\n"
+        b"valid_from: 2026-11-20\n"
+        b"state: in_force\n"
+        b"subject: sample-rule\n"
+        b"---\n\n"
+        b"# Sample headed decision\n"
+    )
+    proposed = (
+        b"---\n"
+        b"decider: [loop]\n"
+        b"state: proposed\n"
+        b"subject: draft-rule\n"
+        b"---\n\n"
+        b"# Proposed decision\n"
+    )
+    headless = b"# Legacy decision without head\n"
+    for label, blob, expected in (
+        ("valid in_force head", headed, True),
+        ("valid proposed head without dates", proposed, True),
+        ("valid head with valid_until and supersedes",
+         headed.replace(b"state: in_force\n", b"valid_until: 2026-12-01\nstate: in_force\nsupersedes: [old-rule]\n"),
+         True),
+        ("headless markdown", headless, False),
+        ("quoted date", headed.replace(b"2026-11-20", b'"2026-11-20"', 1), False),
+        ("invalid calendar date", headed.replace(b"2026-11-20", b"2026-02-30", 1), False),
+        ("unknown field", headed.replace(b"state: in_force\n", b"state: in_force\nowner: [loop]\n"), False),
+        ("missing valid_from when in_force", headed.replace(b"valid_from: 2026-11-20\n", b""), False),
+        ("valid_until not after valid_from",
+         headed.replace(b"state: in_force\n", b"valid_until: 2026-11-20\nstate: in_force\n"), False),
+        ("empty decider", headed.replace(b"[loop, core]", b"[]"), False),
+        ("unknown decider", headed.replace(b"[loop, core]", b"[board]"), False),
+        ("unknown state", headed.replace(b"in_force", b"settled"), False),
+        ("bad subject", headed.replace(b"sample-rule", b"Sample_Rule"), False),
+        ("missing empty line before title", headed.replace(b"---\n\n# ", b"---\n# "), False),
+        ("missing title", headed.replace(b"# Sample headed decision", b"Sample headed decision"), False),
+        ("unclosed head", headed.replace(b"---\n\n# ", b"\n# "), False),
+        ("invalid UTF-8", b"\xff\xfe", False),
+    ):
+        actual = has_valid_decision_head(blob)
+        if actual != expected:
+            raise AssertionError(f"has_valid_decision_head({label}): expected {expected}, got {actual}")
+        print(f"{'VALID' if actual else 'INVALID'} decision head: {label}")
+
+    def test_src(reason):
+        return (
+            "import pytest\n\n" + "@" + f"pytest.mark.xfail(strict=True, reason={reason!r})\n"
+            "def test_case():\n    assert False\n"
+        ).encode("utf-8")
+
+    for reason, expected in (
+        ("M3: decisions/headed.md: section 1", "decisions/headed.md"),
+        ("extra: decisions/headed.md", "decisions/headed.md"),
+        ("later: decisions/a-1.md next", "decisions/a-1.md"),
+        ("M3: missing citation", None),
+        ("M3: mentions decisions/headed.md too late", None),
+        ("decisions/headed.md: no milestone", None),
+    ):
+        _, mark = inventory(test_src(reason)).marks[0]
+        actual = decision_citation(mark)
+        if actual != expected:
+            raise AssertionError(f"decision_citation({reason!r}): expected {expected!r}, got {actual!r}")
+
+    files = {
+        "decisions/headed.md": headed,
+        "decisions/headless.md": headless,
+        "decisions/broken.md": headed.replace(b"2026-11-20", b'"2026-11-20"', 1),
+    }
+    head_tree = Tree(
+        {**{p: "100644" for p in files}, "decisions/linked.md": "120000"},
+        lambda p: files.get(p, headed),
+    )
+
+    for bad_reason in (
+        "M3: missing decision citation",
+        "extra: decisions/nonexistent.md: missing file",
+        "extra: decisions/headless.md: no head",
+        "M3: decisions/broken.md: malformed head",
+        "M3: decisions/linked.md: symlink",
+        "M3: mentions decisions/headed.md too late",
+    ):
+        errors, _ = review([Change("loop/tests/test_new.py", "A", None, test_src(bad_reason))],
+                           planner=True, head_tree=head_tree)
+        if not errors:
+            raise AssertionError(f"expected refusal for {bad_reason!r}")
+        print(f"DENY added red mark: {bad_reason}")
+
+    for good_reason in ("M3: decisions/headed.md: section 1.", "extra: decisions/headed.md: section 2."):
+        errors, _ = review([Change("loop/tests/test_new.py", "A", None, test_src(good_reason))],
+                           planner=True, head_tree=head_tree)
+        if errors:
+            raise AssertionError(f"unexpected refusal for {good_reason!r}: {errors}")
+        print(f"ALLOW added red mark: {good_reason}")
+
+    legacy = test_src("M3: legacy uncited reason")
+    for planner_flag in (False, True):
+        errors, _ = review([Change("loop/tests/test_legacy.py", "M", legacy, test_src("M3: still uncited"))],
+                           planner=planner_flag, head_tree=head_tree)
+        if not errors:
+            raise AssertionError(f"expected refusal on edited legacy mark (planner={planner_flag})")
+        errors, _ = review([Change("loop/tests/test_legacy.py", "M", legacy,
+                                   test_src("M3: decisions/headed.md: cited now"))],
+                           planner=planner_flag, head_tree=head_tree)
+        if errors:
+            raise AssertionError(f"unexpected refusal when citing headed decision (planner={planner_flag}): {errors}")
+
+    both = (
+        legacy + b"\n" + b"@"
+        + b"pytest.mark.xfail(strict=True, reason='extra: decisions/headed.md: ok')\ndef test_two():\n    assert False\n"
+    )
+    errors, _ = review([Change("loop/tests/test_legacy.py", "M", legacy, both)], planner=True, head_tree=head_tree)
+    if errors:
+        raise AssertionError(f"untouched legacy mark should stay green: {errors}")
+
+    budget = lambda items: (json.dumps(sorted(items), indent=2) + "\n").encode("utf-8")
+    before = budget(["loop/tests/test_legacy.py::test_case", "loop/tests/test_other.py::test_other"])
+    shrunk = budget(["loop/tests/test_other.py::test_other"])
+    grown = budget(["loop/tests/test_added.py::test_added", "loop/tests/test_legacy.py::test_case",
+                    "loop/tests/test_other.py::test_other"])
+    unsorted = b'[\n  "loop/tests/test_other.py::test_other",\n  "loop/tests/test_legacy.py::test_case"\n]\n'
+    duped = b'[\n  "loop/tests/test_other.py::test_other",\n  "loop/tests/test_other.py::test_other"\n]\n'
+    lifted = b"import pytest\n\ndef test_case():\n    assert False\n"
+
+    for planner_flag in (False, True):
+        errors, _ = review([
+            Change("loop/tests/test_legacy.py", "M", legacy, lifted),
+            Change(RED_DECISION_BUDGET, "M", before, shrunk),
+        ], planner=planner_flag, head_tree=head_tree)
+        if errors:
+            raise AssertionError(f"shrinking budget alongside lift failed (planner={planner_flag}): {errors}")
+        for label, change in (
+            ("grown budget", Change(RED_DECISION_BUDGET, "M", before, grown)),
+            ("unsorted budget", Change(RED_DECISION_BUDGET, "M", before, unsorted)),
+            ("duplicate budget", Change(RED_DECISION_BUDGET, "M", before, duped)),
+            ("malformed budget", Change(RED_DECISION_BUDGET, "M", before, b"{}\n")),
+            ("deleted budget", Change(RED_DECISION_BUDGET, "D", before, None)),
+        ):
+            errors, _ = review([change], planner=planner_flag, head_tree=head_tree)
+            if not errors:
+                raise AssertionError(f"expected refusal for {label} (planner={planner_flag})")
+    print("ALLOW shrink-only budget alongside lift; DENY growth, misformatting and deletion")
 
 
 if __name__ == "__main__":

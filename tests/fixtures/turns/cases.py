@@ -71,18 +71,27 @@ COLUMNS = {
     "rated": ["reference", "enum"],
     "open": ["reference", "boolean"],
     "flagged": ["reference", "number"],
+    "exempt": ["reference", "number"],
     "member": ["reference", "reference"],
     "size": ["reference", "number"],
     "busy": ["reference"],
+    "step_a": ["reference"],
+    "step_b": ["reference"],
+    "cycle_b": ["reference"],
+    "cycle_c": ["reference"],
+    "cycle_z": ["reference"],
     "calc__share": ["reference", "number", "enum", "text"],
     "calc__capped": ["reference", "number", "enum", "text"],
+    "calc__bounded": ["reference", "number", "enum", "text"],
 }
 
 # A calculation program for the cap: capped = min(measure, 20); share = measure, for the other calculation cases.
 PROGRAM = {
     "format": "rezono.calc/1", "pack": "turns", "subject": "thing",
     "rules": [{"rule": "capped", "type": "number", "versions": ["capped@v1"], "view": "calc__capped"},
-              {"rule": "share", "type": "number", "versions": ["share@v1", "share@v2"], "view": "calc__share"}],
+              {"rule": "share", "type": "number", "versions": ["share@v1", "share@v2"], "view": "calc__share"},
+              {"rule": "bounded", "type": "number", "versions": ["bounded@v1", "bounded@v2"],
+               "view": "calc__bounded"}],
     "versions": [
         {"id": "capped@v1", "rule": "capped", "version": "v1", "view": "calc__capped__v1",
          "valid_from": "2026-01-01", "valid_until": "2027-01-01", "known_from": "2026-01-01",
@@ -97,6 +106,14 @@ PROGRAM = {
         {"id": "share@v2", "rule": "share", "version": "v2", "view": "calc__share__v2",
          "valid_from": "2026-01-01", "valid_until": "2027-01-01", "known_from": "2026-01-01",
          "definitions": [{"name": "d", "before": [], "when": {"boolean": True}, "value": {"fact": "measure.value"}}]},
+        {"id": "bounded@v1", "rule": "bounded", "version": "v1", "view": "calc__bounded",
+         "valid_from": "2025-01-01", "valid_until": "2026-01-01", "known_from": "2025-01-01",
+         "definitions": [{"name": "d", "before": [], "when": {"boolean": True},
+                          "value": {"op": "min", "args": [{"fact": "measure.value"}, {"integer": "10"}]}}]},
+        {"id": "bounded@v2", "rule": "bounded", "version": "v2", "view": "calc__bounded__v2",
+         "valid_from": "2026-01-01", "valid_until": "2027-01-01", "known_from": "2026-01-01",
+         "definitions": [{"name": "d", "before": [], "when": {"boolean": True},
+                          "value": {"op": "min", "args": [{"fact": "measure.value"}, {"integer": "20"}]}}]},
     ],
 }
 
@@ -177,4 +194,124 @@ CASES = {
         "before": share("5", [step("d/value", "fact", "5", ref="measure.value", relation="measure")]),
         "after": share("7", [step("d/value", "fact", "7", ref="measure.value", relation="measure")]),
         "turns": []},
+    # Multiple witnesses in reversed order: deterministic selection chooses the same proof on both stops.
+    "witness order": {
+        "before": stop(
+            {**fact("12"), "flagged": [("x1", "12")]},
+            [witness("flagged", ("x1", "12"), "flagged_high", [premise("measure", "x1", "12")]),
+             witness("flagged", ("x1", "12"), "flagged_low", [premise("measure", "x1", "12")])],
+        ),
+        "after": stop(
+            {**fact("12"), "flagged": [("x1", "12")]},
+            [witness("flagged", ("x1", "12"), "flagged_low", [premise("measure", "x1", "12")]),
+             witness("flagged", ("x1", "12"), "flagged_high", [premise("measure", "x1", "12")])],
+        ),
+        "turns": []},
+    # Minimum proof depth beats a lexicographically smaller rule_id even when listed last.
+    "witness minimum depth": {
+        "before": stop(
+            {**fact("12"), "step_a": [("x1",)], "step_b": [("x1",)]},
+            [witness("step_a", ("x1",), "rule_mid", [premise("measure", "x1", "12")]),
+             witness("step_b", ("x1",), "rule_a", [premise("step_a", "x1", stratum=1)])],
+        ),
+        "after": stop(
+            {**fact("12"), "step_a": [("x1",)], "step_b": [("x1",)]},
+            [witness("step_a", ("x1",), "rule_mid", [premise("measure", "x1", "12")]),
+             witness("step_b", ("x1",), "rule_z", [premise("measure", "x1", "12")]),
+             witness("step_b", ("x1",), "rule_a", [premise("step_a", "x1", stratum=1)])],
+        ),
+        "turns": [{"relation": "step_b", "key": k("x1"), "causes": ["presence", "rule"]}]},
+    # Encoded value state transition on a non-calc number column.
+    "encoded number state": {
+        "before": flagged_by("flagged_high", "known:10"),
+        "after": flagged_by("flagged_high", "unknown"),
+        "turns": [{"relation": "flagged", "key": k("x1", "unknown"), "causes": ["state"]}]},
+    # Negative premise with same prefix and changed number column: no turning point.
+    "negative premise number change": {
+        "before": stop(
+            {**fact("10"), "flagged": [("x1", "10")]},
+            [witness("flagged", ("x1", "10"), "flagged_high",
+                     [premise("measure", "x1", "10"), premise("exempt", "x1", "10", negative=True)])],
+        ),
+        "after": stop(
+            {**fact("20"), "flagged": [("x1", "20")]},
+            [witness("flagged", ("x1", "20"), "flagged_high",
+                     [premise("measure", "x1", "20"), premise("exempt", "x1", "20", negative=True)])],
+        ),
+        "turns": []},
+    # Negative premise with same prefix and changed enum column: value turn.
+    "negative premise value change": {
+        "before": stop(
+            {**fact("12"), "flagged": [("x1", "12")]},
+            [witness("flagged", ("x1", "12"), "flagged_high",
+                     [premise("measure", "x1", "12"), premise("rated", "x1", "low", negative=True)])],
+        ),
+        "after": stop(
+            {**fact("12"), "flagged": [("x1", "12")]},
+            [witness("flagged", ("x1", "12"), "flagged_high",
+                     [premise("measure", "x1", "12"), premise("rated", "x1", "high", negative=True)])],
+        ),
+        "turns": [{"relation": "flagged", "key": k("x1", "12"), "causes": ["value"]}]},
+    # Aggregate with changed group_key on the same (relation, position) slot: contributors turn.
+    "aggregate group key change": {
+        "before": stop(
+            {"busy": [("x1",)]},
+            [witness("busy", ("x1",), "busy", aggregates=[aggregate("member", ("g1",), 2, "a", "known:2")])],
+        ),
+        "after": stop(
+            {"busy": [("x1",)]},
+            [witness("busy", ("x1",), "busy", aggregates=[aggregate("member", ("g2",), 2, "b", "known:2")])],
+        ),
+        "turns": [{"relation": "busy", "key": k("x1"), "causes": ["contributors"]}]},
+    # Paired row switching from fact (no witness) to conclusion (with witness): rule turn.
+    "fact to conclusion": {
+        "before": stop({**fact("12"), "flagged": [("x1", "12")]}),
+        "after": flagged_by("flagged_high", "12"),
+        "turns": [{"relation": "flagged", "key": k("x1", "12"), "causes": ["rule"]}]},
+    # Aggregate result without "known:" prefix: plain known numbers do not cause a state turn.
+    "aggregate plain result": {
+        "before": stop(
+            {"member": [("m1", "g1"), ("m2", "g1")], "size": [("g1", "2")], "busy": [("g1",)]},
+            [witness("size", ("g1", "2"), "size", aggregates=[aggregate("member", ("g1",), 2, "a", "2")]),
+             witness("busy", ("g1",), "busy", [premise("size", "g1", "2", stratum=1)])],
+        ),
+        "after": stop(
+            {"member": [("m1", "g1"), ("m2", "g1"), ("m3", "g1")], "size": [("g1", "3")], "busy": [("g1",)]},
+            [witness("size", ("g1", "3"), "size", aggregates=[aggregate("member", ("g1",), 3, "b", "3")]),
+             witness("busy", ("g1",), "busy", [premise("size", "g1", "3", stratum=1)])],
+        ),
+        "turns": [{"relation": "busy", "key": k("g1"), "causes": ["contributors", "count"]},
+                  {"relation": "size", "key": k("g1", "3"), "causes": ["contributors", "count"]}]},
+    # Mutually recursive witness cycle: cycle_b <-> cycle_z with turning cycle_c must not drop cycle_z.
+    "mutually recursive cycle": {
+        "before": stop(
+            {"cycle_b": [("x1",)], "cycle_c": [("x1",)], "cycle_z": [("x1",)]},
+            [witness("cycle_c", ("x1",), "rule_c1"),
+             witness("cycle_b", ("x1",), "rule_b", [premise("cycle_z", "x1"), premise("cycle_c", "x1")]),
+             witness("cycle_z", ("x1",), "rule_z", [premise("cycle_b", "x1")])],
+        ),
+        "after": stop(
+            {"cycle_b": [("x1",)], "cycle_c": [("x1",)], "cycle_z": [("x1",)]},
+            [witness("cycle_c", ("x1",), "rule_c2"),
+             witness("cycle_b", ("x1",), "rule_b", [premise("cycle_z", "x1"), premise("cycle_c", "x1")]),
+             witness("cycle_z", ("x1",), "rule_z", [premise("cycle_b", "x1")])],
+        ),
+        "turns": [{"relation": "cycle_b", "key": k("x1"), "causes": ["rule"]},
+                  {"relation": "cycle_c", "key": k("x1"), "causes": ["rule"]},
+                  {"relation": "cycle_z", "key": k("x1"), "causes": ["rule"]}]},
+    # Calculation version lookup matches (rule, version) before falling back to version view name.
+    "version lookup before view": {
+        "before": stop(
+            fact("15"),
+            calc_witnesses=[calc("x1", "15", "bounded", [
+                step("d/value", "min", "15"),
+                step("d/value/0", "fact", "15", ref="measure.value", relation="measure")], version="v2")],
+        ),
+        "after": stop(
+            fact("25"),
+            calc_witnesses=[calc("x1", "20", "bounded", [
+                step("d/value", "min", "20"),
+                step("d/value/0", "fact", "25", ref="measure.value", relation="measure")], version="v2")],
+        ),
+        "turns": [{"relation": "calc__bounded", "key": k("x1", "20", "known", ""), "causes": ["cap"]}]},
 }

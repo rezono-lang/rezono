@@ -1,5 +1,5 @@
 import { named, optSrc, optTree, printSource, printValue, type Build, type Line, type Logical, type ModuleComponent } from './module-support.ts';
-import { refused, spanOf, type Diagnostic, type Span } from './parse-support.ts';
+import { refused, run, spanOf, type Diagnostic, type Span } from './parse-support.ts';
 import type { Node } from 'ohm-js';
 import type { Module } from './module.ts';
 import type { ParamDecl } from './module-parameter.ts';
@@ -145,15 +145,17 @@ export function versionGaps(module: Module, spans: WeakMap<object, Span>): Diagn
 	return out;
 }
 
-/** Expand `YYYY` or `YYYY-MM` validity shorthand to `[start, exclusiveEnd]`. */
-function expandPeriod(text: string): [string, string] {
+/** Expand `YYYY` or `YYYY-MM` validity shorthand to `[start, exclusiveEnd]`. Returns undefined when the end would exceed year 9999. */
+function expandPeriod(text: string): [string, string] | undefined {
 	const parts = text.split('-');
 	const year = Number(parts[0]);
 	if (parts.length === 1) {
+		if (year >= 9999) return undefined;
 		return [`${parts[0]}-01-01`, `${String(year + 1).padStart(4, '0')}-01-01`];
 	}
 	const month = Number(parts[1]);
 	const nextYear = month === 12 ? year + 1 : year;
+	if (nextYear > 9999) return undefined;
 	const nextMonth = month === 12 ? 1 : month + 1;
 	return [
 		`${text}-01`,
@@ -189,8 +191,30 @@ export const version = {
 		},
 		VContext_closed: (_k, from, _op, to) => ({ valid: [from.sourceString, to.sourceString] }),
 		VContext_open: (_k, from, _op) => ({ valid: [from.sourceString] }),
-		VContext_month: (_k, ym) => ({ valid: expandPeriod(ym.sourceString) }),
-		VContext_year: (_k, y) => ({ valid: expandPeriod(y.sourceString) }),
+		VContext_month(_k, ym) {
+			if (run.version === '0') {
+				refused(ym, 'R000', ['a validity range `YYYY-MM-DD..` or `YYYY-MM-DD..<YYYY-MM-DD`']);
+				return {};
+			}
+			const range = expandPeriod(ym.sourceString);
+			if (!range) {
+				refused(ym, 'R000', ['a period ending on or before 9999-12-01']);
+				return {};
+			}
+			return { valid: range };
+		},
+		VContext_year(_k, y) {
+			if (run.version === '0') {
+				refused(y, 'R000', ['a validity range `YYYY-MM-DD..` or `YYYY-MM-DD..<YYYY-MM-DD`']);
+				return {};
+			}
+			const range = expandPeriod(y.sourceString);
+			if (!range) {
+				refused(y, 'R000', ['a year before 9999']);
+				return {};
+			}
+			return { valid: range };
+		},
 		VContext_known: (_k, date) => ({ known: date.sourceString })
 	},
 } satisfies ModuleComponent;

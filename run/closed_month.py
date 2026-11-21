@@ -18,6 +18,8 @@ from typing import Literal, NotRequired, Protocol, TypedDict
 from rezono_canon import canonical_sha256
 from rezono_checker.completeness import admit, scope_digest
 
+from run.effective_quote import pack_currencies
+
 
 _EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
 _SUBMICROSECOND = re.compile(r"[.,][0-9]{6}([0-9]+)$")
@@ -95,9 +97,10 @@ def _rates(store: PublicationReader, digest: str) -> dict[str, Fraction]:
     if body is None or sha256(body).hexdigest() != digest:
         raise ValueError("price publication unavailable or digest mismatch")
 
+    _, publication_currency, _ = pack_currencies()
     publication = json.loads(body)
-    if not isinstance(publication, dict) or publication.get("currency") != "EUR":
-        raise ValueError("the price publication must be in EUR")
+    if not isinstance(publication, dict) or publication.get("currency") != publication_currency:
+        raise ValueError(f"the price publication must be in {publication_currency}")
     raw_rates = publication.get("rates")
     if not isinstance(raw_rates, dict):
         raise ValueError("the price publication must have line rates")

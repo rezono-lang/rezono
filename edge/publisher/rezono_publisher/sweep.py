@@ -285,7 +285,8 @@ def run(repo: Path, pack: str, base_commit: str, st, roles: dict[str, str],
                         result = f"{there} kept"
                     else:
                         change = {"op": "set", "kind": sw["kind"], "key": sw["key"], "slot": sw["slot"], "value": value}
-                        texts, _ = writer.apply_delta(pack_dir, {"format": writer.FORMAT, "changes": [change]})
+                        stated = {"sources": [{"kind": "synthetic", "name": f"sweep/{sw['name']}", "position": f"index={i}"}]}
+                        texts, _ = writer.apply_delta(pack_dir, {"format": writer.FORMAT, "changes": [change]}, stated=stated)
                         originals = {f: writer.read_fact_file(pack_dir, f) for f in texts}
                         writer.write_files(pack_dir, texts)
                         try:

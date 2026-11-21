@@ -11,3 +11,8 @@ kinds:
   - {kind: build_track_rank, shape: rect}
   - {kind: build_queue_limit, shape: rect}
   - {kind: build_queue_reading, shape: rect}
+  - {kind: build_milestone, shape: rect}
+  - {kind: build_progress_scan, shape: rect}
+  - {kind: build_red_test, shape: rect}
+  - {kind: build_green_transition, shape: rect}
+  - {kind: build_offboard_work, shape: rect}

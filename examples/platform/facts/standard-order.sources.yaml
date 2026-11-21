@@ -1,0 +1,5 @@
+default:
+  kind: git
+  name: rezono-lang/rezono
+  revision: e5bd4b752d74eefb907a298eae80adf39364336c
+  position: decisions/platform-derivation-acceptance.md#import-and-exercise-the-five-standard-packs

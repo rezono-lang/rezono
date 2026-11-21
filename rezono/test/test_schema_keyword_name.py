@@ -7,8 +7,8 @@ import pytest
 from reader_probe import at, read_modules
 
 HEADER = "rezono 0\npack sample\n"
-BARE = HEADER + "schema example\n"
-QUOTED = HEADER + "schema `example`\n  iri \"urn:example:example\"\n"
+BARE = HEADER + "schema where\n"
+QUOTED = HEADER + "schema `where`\n  iri \"urn:example:where\"\n"
 
 
 class MissingBacktickedSchemaName(AssertionError):
@@ -17,9 +17,9 @@ class MissingBacktickedSchemaName(AssertionError):
 
 def test_schema_keyword_name():
     bare, quoted = read_modules(BARE, QUOTED)
-    # The counter-case holds before and after: `example` is a keyword, so it is no bare name.
+    # The counter-case holds before and after: `where` is a hard expression keyword, so it is no bare name.
     assert bare["module"] is None, bare
-    assert bare["diagnostics"] == [{"code": "R000", "span": at(BARE, "example", "schema ")}], bare
+    assert bare["diagnostics"] == [{"code": "R000", "span": at(BARE, "where", "schema ")}], bare
     module = quoted["module"] or {}
-    if quoted["diagnostics"] or module.get("schema") != "example" or quoted["printed"] != QUOTED:
+    if quoted["diagnostics"] or module.get("schema") != "where" or quoted["printed"] != QUOTED:
         raise MissingBacktickedSchemaName(json.dumps(quoted, indent=2))

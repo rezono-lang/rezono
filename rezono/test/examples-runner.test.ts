@@ -175,3 +175,43 @@ example "invalid predicate under none matches violation on subject"
 	assert.deepEqual(res.failures, []);
 	assert.equal(res.passed, 1);
 });
+
+test('examples: undecided definition overriding every conflicting winner returns undecided instead of exception_conflict', () => {
+	const src = `rezono 1
+pack sample
+kind Item world closed
+  a: Bool
+  b: Bool
+  c: Bool
+  d: Bool
+  derived resolved: Int
+    definition first when a then 10
+    definition second when b then 20
+    definition mid when false then 30 overrides first because "mid beats first" overrides second because "mid beats second"
+    definition top when c then 40 overrides mid because "top transitively beats both"
+  derived partial_override: Int
+    definition first when a then 10
+    definition second when b then 20
+    definition only_first when d then 30 overrides first because "only beats first"
+example "undecided transitive override over both winners stays unknown without conflict"
+  given
+    i1.a = true
+    i1.b = true
+    i1.c = unknown pending
+    i1.d = false
+  expect
+    i1.resolved is unknown
+example "undecided override over only one winner still reports exception_conflict"
+  given
+    i2.a = true
+    i2.b = true
+    i2.c = false
+    i2.d = unknown pending
+  expect
+    i2.partial_override is invalid
+    violation exception_conflict on i2
+`;
+	const res = run(src);
+	assert.deepEqual(res.failures, []);
+	assert.equal(res.passed, 2);
+});

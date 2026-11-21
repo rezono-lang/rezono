@@ -24,6 +24,11 @@ tls_eval_clock(day_num, warning_days) :-
     warning_days >= 0,
     day_num = @days(day, "1970-01-01").
 
+.decl tls_eval_clock_present(service: symbol)
+tls_eval_clock_present(req) :-
+    tls_required(req, _, _),
+    tls_eval_clock(_, _).
+
 .decl tls_read_complete(service: symbol)
 tls_read_complete(service) :-
     tls_read__service(read, service),
@@ -84,6 +89,10 @@ managed_tls_unknown(req) :-
     tls_required(req, _, _),
     !tls_leaf_present(req),
     !tls_read_complete(req).
+managed_tls_unknown(req) :-
+    tls_required(req, _, _),
+    tls_leaf_present(req),
+    !tls_eval_clock_present(req).
 
 .output managed_tls_finding
 .output managed_tls_unknown

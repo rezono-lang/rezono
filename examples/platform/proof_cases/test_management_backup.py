@@ -25,13 +25,6 @@ def records():
     }
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "M2: Implement the platform backup-plan, scoped inventory and age rules in schema/management_backup.yaml "
-    "and rules/management_backup.dl using std-time and std-decision. Read decisions/platform-management-backup.md. "
-    "Waits for boolean support in compiler/tests/souffle.py (TYPE lacks boolean and TRUE/FALSE are not rewritten, "
-    "crashing examples/test_rules.py Souffle oracle tests on backup_inventory__complete with KeyError: 'boolean') "
-    "and for view_typing.resolve and view_rules.bind to support attributes on multi-source kind unions in views.yaml "
-    "(#716 only updated view_rules.lower, and views.yaml already maps std-time reference_point to cluster_right_clock)."))
 def test_management_backup_age_and_absence():
     from management_probes import compiled
 
@@ -49,6 +42,27 @@ def test_management_backup_age_and_absence():
             assert any(rel.startswith("backup_inventory__") and key[0] == "scan-missing" for rel, key in leaves)
     imported("std-time")
     imported("std-decision")
+
+
+def test_management_backup_incomplete_inventory_with_old_copy_is_unknown():
+    from management_probes import compiled
+
+    data = records()
+    for scan in data["backup_inventory"]:
+        if scan["id"] == "scan-old":
+            scan["complete"] = False
+    _, state = compiled(data)
+    assert ("old", "unknown") in state.derived.get("managed_backup_state", set())
+    assert ("old", "too-old") not in state.derived.get("managed_backup_state", set())
+
+    data["backup_inventory"] = [scan for scan in data["backup_inventory"] if scan["id"] != "scan-old"]
+    for scan in data["backup_inventory"]:
+        if scan["id"] == "scan-kept":
+            scan["complete"] = False
+    _, state = compiled(data)
+    assert ("old", "unknown") in state.derived.get("managed_backup_state", set())
+    assert ("old", "too-old") not in state.derived.get("managed_backup_state", set())
+    assert ("kept", "current") in state.derived.get("managed_backup_state", set())
 
 
 @pytest.mark.parametrize(("kind", "changes"), [

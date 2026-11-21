@@ -51,6 +51,17 @@ enums:
       base: {description: "An input table: a kind, an arrow or attribute table, a parameter table or an imported relation."}
       calc: {description: "An open input from a calculation selection, read positively with a known value and empty reason. The value column is integer or rational."}
       derived: {description: Defined by rules; a set.}
+      functional: {description: "A rezono.rules/2 functional derivation over a mandatory closed finite domain, co-locating (key..., state, reason, value)."}
+  ConflictPolicy:
+    description: "How a functional derivation handles invalid (conflicting) candidate rows at publication."
+    permissible_values:
+      publish: {description: "Emit the invalid row carrying all competing candidates as conflict witness."}
+      block: {description: "Emit an invalid-check view so any invalid row blocks publication."}
+  EmptyState:
+    description: "The state emitted by a functional derivation when zero candidates match a domain key."
+    permissible_values:
+      unknown: {}
+      not_applicable: {}
   ColumnType:
     permissible_values:
       string: {}
@@ -98,15 +109,25 @@ enums:
       materialize: {description: The engine keeps the witness relations of the rules of this relation.}
       on_demand: {description: "The explainer finds witnesses when asked, with the witness query."}
 
+slots:
+  rules:
+    range: Rule
+    multivalued: true
+    inlined_as_list: true
+
 classes:
   RuleProgram:
     tree_root: true
+    slots: [rules]
     attributes:
-      format: {required: true, pattern: "^rezono\\.rules/1$"}
+      format: {required: true, pattern: "^rezono\\.rules/[12]$"}
       pack: {required: true}
       relations: {range: Relation, multivalued: true, inlined_as_list: true, required: true}
-      rules: {range: Rule, multivalued: true, inlined_as_list: true}
       seals: {range: Seal, multivalued: true, inlined_as_list: true, description: "The sealed kind, so the checker can recompute row hashes and refused and accepted input from the snapshots."}
+    rules:
+      - description: Every rule in rezono.rules/1 names its witness relation.
+        preconditions: {slot_conditions: {format: {equals_string: "rezono.rules/1"}, rules: {value_presence: PRESENT}}}
+        postconditions: {slot_conditions: {rules: {range_expression: {slot_conditions: {witness: {required: true}}}}}}
 
   Seal:
     description: >-
@@ -164,6 +185,15 @@ classes:
       outcome: {range: RelationName, description: "Derived relations only. A named outcome (`// @outcome <kind>`): the kind whose every element has exactly one state; the columns are the element, `state` (known, unknown, not_applicable) and `reason`."}
       closes: {range: RelationName, description: "Derived relations only, and not on an invariant or an outcome. Another derived relation (`// @closes <relation>` above the .decl): a row of this relation states, for its key, that no row of that relation holds there. Its key columns are, by position and type, a prefix of that relation's. The program then holds the invariant `<this>_closes_<relation>` with one rule: a row of this relation and a row of that one at the same key."}
       release: {range: Release, multivalued: true, inlined_as_list: true, description: "Reserved, not supported yet: the compiler, the publisher and the checker refuse it. Derived relations only. A delimited release under O8 (`// @release <role>`): the role may read this relation's rows even where they negate or aggregate over relations it does not read in full (docs/architecture.md, access and privacy)."}
+      domain: {range: RelationName, description: "Functional relations only. Mandatory closed finite base or strictly lower-stratum derived relation whose key columns match this relation's key."}
+      value: {range: Column, inlined: true, description: "Functional relations only. The single typed value column co-located with state and reason."}
+      conflict_policy: {range: ConflictPolicy, description: "Functional relations only. Whether invalid rows publish with full conflict witnesses or block publication."}
+      empty_state: {range: EmptyState, description: "Functional relations only. State emitted when zero candidates match a domain key (default unknown)."}
+      empty_reason: {range: Name, description: "Functional relations only. Reason code emitted when zero candidates match a domain key."}
+    rules:
+      - description: A functional relation declares its closed domain, value column and conflict policy.
+        preconditions: {slot_conditions: {role: {equals_string: functional}}}
+        postconditions: {slot_conditions: {domain: {required: true}, value: {required: true}, conflict_policy: {required: true}}}
 
   Release:
     description: >-
@@ -238,5 +268,5 @@ classes:
       aggregates: {range: Aggregate, multivalued: true, inlined_as_list: true}
       conditions: {range: Condition, multivalued: true, inlined_as_list: true}
       assignments: {range: Assignment, multivalued: true, inlined_as_list: true}
-      witness: {range: Witness, inlined: true, required: true}
+      witness: {range: Witness, inlined: true}
       origin: {range: Origin, inlined: true, required: true}

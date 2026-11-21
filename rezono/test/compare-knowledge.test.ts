@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { compareAsKnown } from '../src/compare-knowledge.ts';
+import { parseModule, type KindDecl } from '../src/module.ts';
 
 test('compareAsKnown: table unique enforces unique policy, bare enum values, conflict, and undecided rows', () => {
 	// Bare enum tests and outputs + conflict when two rows apply + undecided row when one row applies.
@@ -148,5 +149,208 @@ fact item i1, valid 2026-01-01.., known 2026-02-01
 	for (const fc of factCauses) {
 		assert.equal(fc.key, 'i1');
 		assert.ok(fc.slot, 'fact cause must carry slot');
+	}
+});
+
+test('compareAsKnown: undecided definition overriding every conflicting winner yields undecided instead of exception_conflict', () => {
+	const src = `rezono 1
+pack sample
+kind Item world closed
+  a: Bool
+  b: Bool
+  c: Bool
+  d: Bool
+  derived resolved: Int
+    definition first when a then 10
+    definition second when b then 20
+    definition mid when false then 30 overrides first because "mid beats first" overrides second because "mid beats second"
+    definition top when c then 40 overrides mid because "top transitively beats both"
+  derived partial_override: Int
+    definition first when a then 10
+    definition second when b then 20
+    definition only_first when d then 30 overrides first because "only beats first"
+fact Item
+  | id | a    | b    | c               | d               |
+  | i1 | true | true | unknown pending | unknown pending |
+fact item i1, valid 2026-01-01.., known 2026-02-01
+  c = true
+`;
+	// Before 2026-02-01:
+	// - resolved: first and second both apply, but top (unknown pending) transitively overrides both -> unknown pending!
+	// - partial_override: first and second both apply, and only_first (unknown) does NOT override second -> invalid exception_conflict!
+	// After 2026-02-01:
+	// - resolved: c = true so top wins -> known 40!
+	const res = compareAsKnown(src, {
+		question: 'ask Item at 2026-06-01 where a show resolved, partial_override',
+		beforeKnown: '2026-01-15',
+		afterKnown: '2026-02-15',
+	});
+
+	assert.equal(res.turns.length, 1);
+	const turn = res.turns[0];
+	assert.equal(turn.key, 'i1');
+	assert.deepEqual(turn.before.states?.resolved, { state: 'unknown', reason: 'pending' });
+	assert.equal(turn.after.values?.resolved, '40');
+	assert.deepEqual(turn.after.states?.resolved, { state: 'known' });
+	assert.deepEqual(turn.before.states?.partial_override, { state: 'invalid', reason: 'exception_conflict' });
+	assert.deepEqual(turn.after.states?.partial_override, { state: 'invalid', reason: 'exception_conflict' });
+});
+
+test('compareAsKnown: table priority does not let non-enum or non-known outputs outrank valid enum entries', () => {
+	const src = `rezono 0
+pack sample
+enum Tier = high | low
+kind Item world closed
+  a: Bool
+  b: Bool
+  derived tier: Tier
+    table priority
+      | a    | b    | -> tier |
+      | true | -    | high    |
+      | -    | true | "other" |
+fact Item
+  | id | a    | b     |
+  | i1 | true | false |
+  | i2 | true | false |
+fact item i1, valid 2026-01-01.., known 2026-02-01
+  b = true
+fact item i2, valid 2026-01-01.., known 2026-02-01
+  b = unknown pending
+`;
+	// Row 1 gives the highest-priority valid enum value `high` (rank 0).
+	// Row 2 gives `"other"`, which is not in `Tier` (indexOf === -1) and must rank after all valid entries (+Infinity).
+	// Neither applying row 2 (i1) nor an undecided row 2 (i2) may beat `high`.
+	const res = compareAsKnown(src, {
+		question: 'ask Item at 2026-06-01 where a show tier',
+		beforeKnown: '2026-01-15',
+		afterKnown: '2026-02-15',
+	});
+
+	assert.equal(res.turns.length, 0, 'invalid/out-of-enum priority output must not beat valid enum entry high');
+});
+
+test('compareAsKnown: table priority propagates non-known applying and undecided row outcomes instead of swallowing them', () => {
+	const makeModule = (row0Lit: string, row1Lit: string, extraFacts = '') => {
+		const src = `rezono 0
+pack sample
+enum Tier = high | low
+kind Item world closed
+  a: Bool
+  b: Bool
+  derived tier: Tier
+    table priority
+      | a    | b    | -> tier |
+      | true | -    | high    |
+      | -    | true | low     |
+fact Item
+  | id | a     | b     |
+  | i1 | true  | false |
+  | i2 | false | true  |
+${extraFacts}`;
+		const parsed = parseModule(src);
+		assert.ok(parsed.module, JSON.stringify(parsed.diagnostics));
+		const kindDecl = parsed.module.decls.find((d): d is KindDecl => 'kind' in d && d.kind === 'Item');
+		assert.ok(kindDecl);
+		kindDecl.derived[0].table!.rows[0].value = { lit: row0Lit };
+		kindDecl.derived[0].table!.rows[1].value = { lit: row1Lit };
+		return parsed.module;
+	};
+
+	// 1. Applying unknown output must NOT be beaten by applying lower-priority known `low`,
+	//    and undecided row with unknown output must block applying `low`.
+	{
+		const mod = makeModule(
+			'unknown missing',
+			'low',
+			`fact item i1, valid 2026-01-01.., known 2026-02-01
+  b = true
+fact item i2, valid 2026-01-01.., known 2026-02-01
+  a = unknown pending
+`
+		);
+		const res = compareAsKnown(mod, {
+			question: 'ask Item at 2026-06-01 where a or b show tier',
+			beforeKnown: '2026-01-15',
+			afterKnown: '2026-02-15',
+		});
+		const byKey = new Map(res.turns.map((t) => [t.key, t]));
+		// i1 stays unknown missing both before (only row 1) and after (row 1 + row 2 low) -> no turn.
+		assert.equal(byKey.has('i1'), false, 'applying low must not swallow applying unknown missing');
+		// i2 turns from known low to unknown pending when row 1 becomes undecided with unknown output.
+		const t2 = byKey.get('i2');
+		assert.ok(t2, 'undecided row with non-known output must block applying low');
+		assert.equal(t2.before.values?.tier, 'low');
+		assert.deepEqual(t2.after.states?.tier, { state: 'unknown', reason: 'pending' });
+	}
+
+	// 2. Applying invalid output must propagate invalid even against highest-priority `high` (rank 0)
+	//    and against applying `unknown`, and undecided row with invalid output must block `high`.
+	{
+		const mod = makeModule(
+			'invalid bad',
+			'high',
+			`fact item i1, valid 2026-01-01.., known 2026-02-01
+  b = true
+fact item i2, valid 2026-01-01.., known 2026-02-01
+  a = unknown pending
+`
+		);
+		const res = compareAsKnown(mod, {
+			question: 'ask Item at 2026-06-01 where a or b show tier',
+			beforeKnown: '2026-01-15',
+			afterKnown: '2026-02-15',
+		});
+		const byKey = new Map(res.turns.map((t) => [t.key, t]));
+		assert.equal(byKey.has('i1'), false, 'applying high must not swallow applying invalid bad');
+		const t2 = byKey.get('i2');
+		assert.ok(t2, 'undecided row with invalid output must block applying high');
+		assert.equal(t2.before.values?.tier, 'high');
+		assert.deepEqual(t2.after.states?.tier, { state: 'unknown', reason: 'pending' });
+	}
+
+	// 3. Applying unknown + applying invalid must yield invalid (worstOf severity: invalid > unknown),
+	//    and undecided invalid condition with higher-priority output must beat applying unknown output.
+	{
+		const mod = makeModule(
+			'unknown missing',
+			'invalid bad',
+			`fact item i1, valid 2026-01-01.., known 2026-02-01
+  b = true
+`
+		);
+		const res = compareAsKnown(mod, {
+			question: 'ask Item at 2026-06-01 where a or b show tier',
+			beforeKnown: '2026-01-15',
+			afterKnown: '2026-02-15',
+		});
+		const byKey = new Map(res.turns.map((t) => [t.key, t]));
+		const t1 = byKey.get('i1');
+		assert.ok(t1, 'i1 should turn from unknown missing to invalid bad when invalid row also applies');
+		assert.deepEqual(t1.before.states?.tier, { state: 'unknown', reason: 'missing' });
+		assert.deepEqual(t1.after.states?.tier, { state: 'invalid', reason: 'bad' });
+	}
+
+	// 4. Applying n/a output propagates strictly per Appendix A.3 instead of being swallowed by low.
+	{
+		const mod = makeModule(
+			'n/a',
+			'low',
+			`fact item i1, valid 2026-01-01.., known 2026-02-01
+  b = true
+fact item i2, valid 2026-01-01.., known 2026-02-01
+  a = unknown pending
+`
+		);
+		const res = compareAsKnown(mod, {
+			question: 'ask Item at 2026-06-01 where a or b show tier',
+			beforeKnown: '2026-01-15',
+			afterKnown: '2026-02-15',
+		});
+		const byKey = new Map(res.turns.map((t) => [t.key, t]));
+		assert.equal(byKey.has('i1'), false, 'applying low must not swallow applying n/a');
+		const t2 = byKey.get('i2');
+		assert.ok(t2, 'undecided row with n/a output must block applying low');
+		assert.equal(t2.before.values?.tier, 'low');
+		assert.deepEqual(t2.after.states?.tier, { state: 'unknown', reason: 'pending' });
 	}
 });

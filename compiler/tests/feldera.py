@@ -37,6 +37,7 @@ def call(method, path, body=None, raw=False):
 def wait(name, field, done, timeout=3600, *, telemetry=False):
     started = time.monotonic()
     last = None
+    seen_active = False
     while time.monotonic() < started + timeout:
         p = call("GET", f"/v0/pipelines/{name}")
         state = p[field]
@@ -47,6 +48,13 @@ def wait(name, field, done, timeout=3600, *, telemetry=False):
             return p
         if p.get("program_status", "").endswith("Error"):
             raise RuntimeError(json.dumps(p.get("program_error"))[:4000])
+        if field == "deployment_status" and "Running" in done:
+            if p.get("deployment_error"):
+                raise RuntimeError(f"{name}: deployment_error={json.dumps(p['deployment_error'])[:4000]}")
+            if state in {"Provisioning", "Initializing", "Stopping"}:
+                seen_active = True
+            elif seen_active and state == "Stopped":
+                raise RuntimeError(f"{name}: deployment stopped before reaching {done} (desired={p.get('deployment_desired_status')})")
         time.sleep(1)
     raise TimeoutError(f"{name}: {field} did not reach {done}")
 
@@ -69,7 +77,9 @@ def deploy(name, program, profile=None, workers=4, udf_rust="", udf_toml=""):
         pass
     start = time.monotonic()
     record_storage(name, f"submit_sql bytes={len(program.encode('utf-8'))}")
-    call("PUT", f"/v0/pipelines/{name}", {"name": name, "program_code": program, "runtime_config": {"workers": workers},
+    # Unoptimized rule pipelines for large packs can exceed 6 GB; allow 5m for provisioning copy/startup.
+    runtime_config = {"workers": workers, "provisioning_timeout": "5m"}
+    call("PUT", f"/v0/pipelines/{name}", {"name": name, "program_code": program, "runtime_config": runtime_config,
                                           "program_config": {"profile": profile}, "udf_rust": udf_rust, "udf_toml": udf_toml})
     wait(name, "program_status", {"Success"}, telemetry=True)
     compiled = time.monotonic() - start

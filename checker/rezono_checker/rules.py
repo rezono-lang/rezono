@@ -25,13 +25,33 @@ cannot choose a value. What the loader does take on trust is in the checker's RE
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+import re
 
 from .canon import INTEGER, CalcColumnType
 
+FORMATS = ("rezono.rules/1", "rezono.rules/2")
 FUNCTIONS = ("count", "sum", "min", "max")
 COMPARISONS = ("eq", "ne", "lt", "le", "gt", "ge")
 COMPARE_AS = ("binary_text", "utc_instant")  # Condition.compare_as: how two bound text operands are ordered
 OPERATORS = ("add", "sub", "mul", "div", "days")  # days: a view's reading of an ISO date (evaluate._arith)
+VALUE_TYPES = ("string", "integer", "rational", "boolean")
+CONFLICT_POLICIES = ("publish", "block")
+EMPTY_STATES = ("unknown", "not_applicable")
+ACCESS_RELATIONS = ("may_read", "may_read_full")
+REASON_CODE = re.compile(r"^[a-z][a-z0-9_]*$")
+
+
+@dataclass(frozen=True)
+class FunctionalSpec:
+    """A rezono.rules/2 functional derivation over a finite closed domain."""
+    name: str
+    key_arity: int
+    domain: str
+    value_name: str
+    value_type: str
+    conflict_policy: str
+    empty_state: str = "unknown"
+    empty_reason: str | None = None
 
 
 @dataclass(frozen=True)
@@ -55,6 +75,8 @@ class AggregateSpec:
     var: str | None
     stratum: int
     over_key: int | None = None  # rule IR: the key position of `over`, when it is a key column
+    format: str = "rezono.rules/2"  # program format: strict four-state unless rezono.rules/1
+    state_key: int | None = None  # functional IR: the state column position when `over` reads a functional value
 
 
 @dataclass(frozen=True)
@@ -79,6 +101,7 @@ class Rule:
     bare_values: bool = False  # rule IR: bindings are bare key values, not '<state>:<payload>'
     calc_inputs: frozenset[str] = frozenset()  # these premises need their own checked W12 witness
     rational_calc_inputs: frozenset[str] = frozenset()  # the subset with exact numbers
+    format: str = "rezono.rules/1"
 
     def calc_input_type(self, relation: str) -> CalcColumnType | None:
         if relation in self.rational_calc_inputs:
@@ -98,34 +121,85 @@ class Rule:
 
 class Rules(dict):
     """The rules by id, with the epoch's obligations the rule IR declares (empty in the minimal form):
-    `invariants`, the relations that must be empty, and `outcomes`, each outcome relation with its kind."""
+    `invariants`, the relations that must be empty, `outcomes`, each outcome relation with its kind,
+    `functionals`, each rezono.rules/2 functional derivation spec, and `format`."""
     invariants: frozenset = frozenset()
     outcomes: dict = {}
+    functionals: dict[str, FunctionalSpec] = {}
+    format: str = "rezono.rules/1"
 
 
-def _obligations(doc: dict) -> tuple[frozenset, dict]:
-    """The invariant and outcome relations of a rule IR, each on a derived relation. An outcome's kind is a
-    declared base relation with one key column, of the type of the outcome's element: any other target,
-    such as an empty derived relation, would let the totality check pass vacuously. Raises ValueError."""
-    invariants, outcomes = set(), {}
+def _obligations(doc: dict) -> tuple[frozenset, dict, dict[str, FunctionalSpec]]:
+    """The invariant, outcome and functional relations of a rule IR. An outcome's kind is a declared base
+    relation with one key column of the outcome's element type; a functional relation requires rezono.rules/2,
+    a finite closed base or derived domain whose key types match, a typed value column and a conflict policy.
+    Raises ValueError."""
+    fmt = doc.get("format")
+    invariants, outcomes, functionals = set(), {}, {}
     declared = {r.get("name"): r for r in doc.get("relations", [])}
     for r in doc.get("relations", []):
-        derived = r.get("role") == "derived"
+        name = r["name"]
+        role = r.get("role")
+        derived = role == "derived"
+        functional = role == "functional"
+        if functional and fmt != "rezono.rules/2":
+            raise ValueError(f"{name}: role 'functional' requires format rezono.rules/2")
         if r.get("invariant", False) not in (True, False) or (r.get("invariant") and not derived):
-            raise ValueError(f"{r['name']}: invariant is true or false, on a derived relation")
+            raise ValueError(f"{name}: invariant is true or false, on a derived relation")
         if r.get("invariant"):
-            invariants.add(r["name"])
+            invariants.add(name)
         if "outcome" in r:
             if not (derived and isinstance(r["outcome"], str) and len(r.get("key", [])) == 3
                     and [c.get("name") for c in r["key"][1:]] == ["state", "reason"]):
-                raise ValueError(f"{r['name']}: an outcome is derived, with the element, state and reason")
+                raise ValueError(f"{name}: an outcome is derived, with the element, state and reason")
             kind = declared.get(r["outcome"], {})
             if not (kind.get("role") == "base" and len(kind.get("key", [])) == 1
                     and kind["key"][0].get("type") == r["key"][0].get("type")):
-                raise ValueError(f"{r['name']}: {r['outcome']} is not a kind: a base relation with one key column "
+                raise ValueError(f"{name}: {r['outcome']} is not a kind: a base relation with one key column "
                                  f"of the element's type")
-            outcomes[r["name"]] = r["outcome"]
-    return frozenset(invariants), outcomes
+            outcomes[name] = r["outcome"]
+        if functional:
+            if sum(other.get("name") == name for other in doc.get("relations", [])) != 1:
+                raise ValueError(f"{name}: duplicate relation declaration")
+            if r.get("world") == "open":
+                raise ValueError(f"{name}: a functional derivation is always closed")
+            key = r.get("key", [])
+            if not isinstance(key, list) or not key:
+                raise ValueError(f"{name}: a functional derivation needs at least one key column")
+            domain = r.get("domain")
+            dom = declared.get(domain) if isinstance(domain, str) else None
+            if dom is None or dom.get("role") not in ("base", "derived") or domain == name:
+                raise ValueError(f"{name}: functional domain {domain!r} must name a declared base or derived relation")
+            if [c.get("type") for c in dom.get("key", [])] != [c.get("type") for c in key]:
+                raise ValueError(f"{name}: functional domain {domain} key columns must match exactly")
+            val = r.get("value")
+            if not isinstance(val, dict) or not isinstance(val.get("name"), str) or val.get("type") not in VALUE_TYPES:
+                raise ValueError(f"{name}: a functional derivation requires a typed value column")
+            key_names = {c.get("name") for c in key}
+            if "state" in key_names or "reason" in key_names or val["name"] in {"state", "reason"} | key_names:
+                raise ValueError(f"{name}: key/value columns conflict with co-located (state, reason, value)")
+            policy = r.get("conflict_policy")
+            if policy not in CONFLICT_POLICIES:
+                raise ValueError(f"{name}: conflict_policy must be one of {CONFLICT_POLICIES}")
+            empty_state = r.get("empty_state")
+            if empty_state is not None and empty_state not in EMPTY_STATES:
+                raise ValueError(f"{name}: empty_state must be one of {EMPTY_STATES}")
+            empty_reason = r.get("empty_reason")
+            if empty_reason is not None and (not isinstance(empty_reason, str) or not REASON_CODE.fullmatch(empty_reason)):
+                raise ValueError(f"{name}: empty_reason must be a snake_case reason code")
+            functionals[name] = FunctionalSpec(
+                name=name,
+                key_arity=len(key),
+                domain=domain,
+                value_name=val["name"],
+                value_type=val["type"],
+                conflict_policy=policy,
+                empty_state=empty_state or "unknown",
+                empty_reason=empty_reason,
+            )
+        elif any(r.get(f) is not None for f in ("domain", "value", "conflict_policy", "empty_state", "empty_reason")):
+            raise ValueError(f"{name}: domain/value/conflict_policy are only allowed on functional relations")
+    return frozenset(invariants), outcomes, functionals
 
 
 def _closes(doc: dict, invariants: frozenset) -> None:
@@ -138,6 +212,8 @@ def _closes(doc: dict, invariants: frozenset) -> None:
     for r in doc.get("relations", []):
         if "closes" not in r:
             continue
+        if r.get("role") != "derived":
+            raise ValueError(f"{r['name']}: closes is only allowed on a derived relation")
         name, closed, n = r["name"], r["closes"], len(r.get("key", []))
         check = f"{name}_closes_{closed}"
         own = [x for x in rules if x["head"]["relation"] == check]
@@ -168,6 +244,13 @@ def _over_key(a: dict, keys: dict) -> int | None:
         if a["terms"][pos] != "_":
             raise ValueError(f"aggregate over key column {a['over']} must range over it ('_')")
         return pos
+    return None
+
+
+def _state_key(a: dict, functionals: dict[str, FunctionalSpec]) -> int | None:
+    func = functionals.get(a["relation"])
+    if func is not None and a.get("over") == func.value_name:
+        return func.key_arity
     return None
 
 
@@ -216,14 +299,22 @@ def load_seals(doc: dict) -> list[dict]:
     return out
 
 
-def _rational_keys(relations: Sequence[dict]) -> dict[str, tuple[bool, ...]]:
-    """Rational columns are selection values and derived key columns."""
+def _rational_keys(relations: Sequence[dict], fmt: str | None = "rezono.rules/1") -> dict[str, tuple[bool, ...]]:
+    """Rational columns in rezono.rules/1 are selection values and derived key columns;
+    in rezono.rules/2 base and functional relations also carry exact rational columns."""
     result = {}
     for r in relations:
         columns = tuple(c.get("type") == "rational" for c in r.get("key", ()))
         if any(c.get("type") == "rational" for c in r.get("values") or ()):
             raise ValueError(f"{r['name']}: a rational column is part of the key")
         if not any(columns):
+            continue
+        if fmt == "rezono.rules/2":
+            if r.get("role") == "calc" and (columns != (False, True, False, False)
+                                            or sum(other["name"] == r["name"] for other in relations) != 1):
+                raise ValueError(f"{r['name']}: expected a rational selection value")
+            if r.get("role") == "calc":
+                result[r["name"]] = columns
             continue
         if ((r.get("role") != "derived" and (r.get("role") != "calc" or columns != (False, True, False, False)))
                 or sum(other["name"] == r["name"] for other in relations) != 1):
@@ -258,24 +349,54 @@ def _check_rational_uses(rule: Rule, keys: dict[str, tuple[bool, ...]]) -> None:
         raise ValueError(f"{rule.id}: a rational premise must be positive")
 
 
+def _check_access_boundary(rules: Rules) -> None:
+    """Neither may_read nor may_read_full may depend (directly or transitively) on a functional derivation."""
+    if not rules.functionals:
+        return
+    consumers: dict[str, set[str]] = {}
+    for func in rules.functionals.values():
+        consumers.setdefault(func.domain, set()).add(func.name)
+    for rule in rules.values():
+        for premise in (*rule.body, *rule.aggregates):
+            consumers.setdefault(premise.atom.relation, set()).add(rule.head.relation)
+    after, todo = set(rules.functionals), sorted(rules.functionals)
+    while todo:
+        new = consumers.get(todo.pop(), set()) - after
+        after.update(new)
+        todo.extend(sorted(new))
+    for rel in ACCESS_RELATIONS:
+        if rel in after:
+            raise ValueError(f"{rel} cannot depend on a functional derivation")
+
+
 def load_rules(doc: dict) -> dict:
     """Read rule definitions and check their stratification. Raises ValueError on bad input."""
-    ir = doc.get("format") is not None
-    if ir and doc["format"] != "rezono.rules/1":
-        raise ValueError(f"unknown rule format {doc['format']}")
+    fmt = doc.get("format")
+    ir = fmt is not None
+    if ir and fmt not in FORMATS:
+        raise ValueError(f"unknown rule format {fmt}")
+    effective_format = fmt or "rezono.rules/1"
     relations = doc.get("relations", ()) if ir else ()
-    keys = {r["name"]: [c["name"] for c in r.get("key", [])] for r in relations}
     calc_relations = {r["name"] for r in relations if r.get("role") == "calc"}
-    rational_keys = _rational_keys(relations)
+    rational_keys = _rational_keys(relations, fmt)
     for r in relations:
-        if r.get("role") == "derived" and r.get("values"):  # a witness proves a key; nothing would prove a value
-            raise ValueError(f"{r['name']}: a derived relation is a set, without value columns")
+        if r.get("role") in ("derived", "functional") and r.get("values"):  # a witness proves a key; nothing would prove a value
+            raise ValueError(f"{r['name']}: a {r['role']} relation is a set, without value columns")
         if "release" in r:  # a release has proof obligations this checker does not verify yet
             raise ValueError(f"{r['name']}: release is not supported yet: a role reads a negation or an aggregate only over relations it reads in full (docs/architecture.md, delimited release)")
     rules = Rules()
+    rules.format = effective_format
+    rules.invariants, rules.outcomes, rules.functionals = (
+        _obligations(doc) if ir else (frozenset(), {}, {})
+    )
     if ir:
-        rules.invariants, rules.outcomes = _obligations(doc)
         _closes(doc, rules.invariants)
+    keys = {}
+    for r in relations:
+        col_names = [c["name"] for c in r.get("key", [])]
+        if r.get("role") == "functional" and r["name"] in rules.functionals:
+            col_names = [*col_names, "state", "reason", rules.functionals[r["name"]].value_name]
+        keys[r["name"]] = col_names
     for r in doc.get("rules", []):
         rule = Rule(
             id=r["id"],
@@ -283,7 +404,8 @@ def load_rules(doc: dict) -> dict:
             head=_atom(r["head"]),
             body=tuple(BodyAtom(_atom(b), b["polarity"], int(b["stratum"])) for b in r.get("body", [])),
             aggregates=tuple(
-                AggregateSpec(_atom(a), a["function"], a.get("over"), a.get("as"), int(a["stratum"]), _over_key(a, keys))
+                AggregateSpec(_atom(a), a["function"], a.get("over"), a.get("as"), int(a["stratum"]),
+                              _over_key(a, keys), effective_format, _state_key(a, rules.functionals))
                 for a in r.get("aggregates", [])
             ),
             conditions=tuple(Calculation(c["op"], c["left"], c["right"], compare_as=c.get("compare_as"))
@@ -294,6 +416,7 @@ def load_rules(doc: dict) -> dict:
             calc_inputs=frozenset(b["relation"] for b in r.get("body", ()) if b["relation"] in calc_relations),
             rational_calc_inputs=frozenset(b["relation"] for b in r.get("body", ())
                                            if b["relation"] in calc_relations and b["relation"] in rational_keys),
+            format=effective_format,
         )
         for c in rule.assignments:
             if not isinstance(c.var, str):
@@ -311,6 +434,10 @@ def load_rules(doc: dict) -> dict:
             raise ValueError(f"duplicate rule id {rule.id}")
         if rule.head.relation in calc_relations:
             raise ValueError(f"{rule.id}: a rule cannot produce a calculation selection")
+        if rule.head.relation in rules.functionals:
+            func = rules.functionals[rule.head.relation]
+            if len(rule.head.terms) != func.key_arity + 1:
+                raise ValueError(f"{rule.id}: functional head {rule.head.relation} needs {func.key_arity + 1} terms")
         if "_" in rule.head.terms or any("_" in b.atom.terms for b in rule.body):
             raise ValueError(f"{rule.id}: '_' is only allowed in aggregates")
         for b in rule.body:
@@ -318,15 +445,19 @@ def load_rules(doc: dict) -> dict:
                 raise ValueError(f"{rule.id}: unknown polarity {b.polarity}")
             if b.atom.relation in rule.calc_inputs and (b.polarity != "positive" or b.atom.terms[2:] != ("known", "")):
                 raise ValueError(f"{rule.id}: calculation inputs must be positive with selections known")
+            if (bf := rules.functionals.get(b.atom.relation)) is not None and len(b.atom.terms) != bf.key_arity + 3:
+                raise ValueError(f"{rule.id}: functional premise {b.atom.relation} needs {bf.key_arity + 3} terms")
         for a in rule.aggregates:
             if a.atom.relation in calc_relations:
                 raise ValueError(f"{rule.id}: an aggregate cannot read a calculation selection")
+            if (af := rules.functionals.get(a.atom.relation)) is not None and len(a.atom.terms) != af.key_arity + 3:
+                raise ValueError(f"{rule.id}: functional aggregate {a.atom.relation} needs {af.key_arity + 3} terms")
             if a.function not in FUNCTIONS or (a.function != "count" and not a.over):
                 raise ValueError(f"{rule.id}: bad aggregate {a}")
             if a.var is not None and not a.var.startswith("?"):
                 raise ValueError(f"{rule.id}: aggregate result {a.var} is not a variable")
         _check_safety(rule)
-        if rational_keys:
+        if rational_keys and fmt != "rezono.rules/2":
             _check_rational_uses(rule, rational_keys)
         rules[rule.id] = rule
 
@@ -334,17 +465,22 @@ def load_rules(doc: dict) -> dict:
     for rule in rules.values():
         if strata.setdefault(rule.head.relation, rule.stratum) != rule.stratum:
             raise ValueError(f"{rule.id}: {rule.head.relation} is derived in two strata")
+    for func in rules.functionals.values():
+        if func.name in strata and strata.get(func.domain, 0) >= strata[func.name]:
+            raise ValueError(f"{func.name}: functional stratum {strata[func.name]} must exceed domain {func.domain}")
     for rule in rules.values():
-        uses = [(b.atom.relation, b.stratum, b.polarity == "positive") for b in rule.body]
+        is_func = rule.head.relation in rules.functionals
+        uses = [(b.atom.relation, b.stratum, b.polarity == "positive" and not is_func) for b in rule.body]
         uses += [(a.atom.relation, a.stratum, False) for a in rule.aggregates]
-        for relation, declared, positive in uses:
+        for relation, declared, allow_equal in uses:
             actual = strata.get(relation, 0)
             if declared != actual:
                 raise ValueError(f"{rule.id}: {relation} is in stratum {actual}, declared {declared}")
-            if actual > rule.stratum or (not positive and actual == rule.stratum):
+            if actual > rule.stratum or (not allow_equal and actual == rule.stratum):
                 raise ValueError(f"{rule.id}: {relation} breaks stratification")
     if ir:
         check_worlds(doc, rules)
+        _check_access_boundary(rules)
     return rules
 
 
@@ -415,14 +551,15 @@ def check_worlds(doc: dict, rules: dict) -> dict:
     def absence(name):
         return declared.get(name, {}).get("absence") is True
 
-    opened = {n for n, r in declared.items() if r.get("role") != "derived" and r.get("world") == "open"}
+    opened = {n for n, r in declared.items() if r.get("role") not in ("derived", "functional") and r.get("world") == "open"}
     changed = True
     while changed:  # least fixpoint: open spreads along positive literals only
         changed = False
         for rule in rules.values():
             head = rule.head.relation
-            if head not in opened and not absence(head) and any(
-                    b.polarity == "positive" and b.atom.relation in opened for b in rule.body):
+            if (head not in opened and not absence(head)
+                    and declared.get(head, {}).get("role") != "functional"
+                    and any(b.polarity == "positive" and b.atom.relation in opened for b in rule.body)):
                 opened.add(head)
                 changed = True
     for rule in sorted(rules.values(), key=lambda r: r.id):
@@ -451,6 +588,8 @@ def check_worlds(doc: dict, rules: dict) -> dict:
             raise ValueError(f"{name}: declared {r['world']}, but its rules make it {worlds[name]}")
         if r.get("outcome") and worlds[name] != "closed":
             raise ValueError(f"{name}: an outcome is closed, but a rule reads an open relation positively")
+        if r.get("role") == "functional" and worlds.get(r.get("domain")) != "closed":
+            raise ValueError(f"{name}: functional domain {r.get('domain')} must be closed")
     return worlds
 
 
@@ -500,15 +639,15 @@ def check_calc_bindings(doc: dict, rules: dict, calculation: dict | None) -> Non
 
 
 def derived_relations(doc: dict, rules: dict) -> set:
-    """Every derived relation the definitions declare: the relation catalogue of the rule IR (role
-    `derived`), or the rule heads in the minimal form. Only an explicit `extend: true` may have no rule.
-    It stays in this catalogue: check_epoch then requires its snapshot and refuses every row without a
-    valid witness. With no rules, no such witness exists, so the snapshot must independently be empty.
-    Unmarked declarations without rules and undeclared heads are refused. Raises ValueError."""
+    """Every derived and functional relation the definitions declare: the relation catalogue of the rule IR
+    (role `derived` or `functional`), or the rule heads in the minimal form. Only an explicit `extend: true`
+    on a derived relation may have no rule. It stays in this catalogue: check_epoch then requires its snapshot
+    and refuses every row without a valid witness. With no rules, no such witness exists, so the snapshot must
+    independently be empty. Unmarked declarations without rules and undeclared heads are refused. Raises ValueError."""
     heads = {r.head.relation for r in rules.values()}
     if doc.get("format") is None:
         return heads
-    declared = {r["name"] for r in doc.get("relations", []) if r.get("role") == "derived"}
+    declared = {r["name"] for r in doc.get("relations", []) if r.get("role") in ("derived", "functional")}
     extensions = set()
     for r in doc.get("relations", []):
         if "extend" in r:

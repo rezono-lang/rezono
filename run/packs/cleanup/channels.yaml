@@ -3,8 +3,12 @@ kinds:
   - {kind: resource, shape: rect}
   - {kind: page, shape: rect}
   - {kind: attempt, shape: rect}
+  - {kind: listing, shape: rect}
+  - {kind: listed_service, shape: rect}
+  - {kind: delivered_service, shape: rect}
 arrows:
   - {arrow: resource.sweep, dash: none}
   - {arrow: resource.page, dash: none}
   - {arrow: page.sweep, dash: none}
   - {arrow: sweep.attempt, dash: none}
+  - {arrow: listed_service.listing, dash: none}

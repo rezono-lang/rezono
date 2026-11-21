@@ -40,12 +40,6 @@ def _closure(pairs: set) -> set:
     return closed
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "M2: decisions/platform-facts-not-conclusions.md, section 5. Give std-order an @extend relation "
-    "stated_precedes(a, b) that before closes over, with its staged candidate, and re-pin std-order in "
-    "packs/std-loop/pack.yaml and examples/platform/pack.yaml and onward; then state stated_precedes(b, a) for each "
-    "needs(a, b, _) in examples/platform/rules/core.dl. Keep Service.step and flow_from_step: a planner retires "
-    "them."))
 def test_start_order_follows_from_needs_through_std_order():
     needs = {(a, b) for a, b, _ in json.loads((PLATFORM / "oracle-rows.json").read_text(encoding="utf-8"))["needs"]}
     model, prog, label, rows = _rows()

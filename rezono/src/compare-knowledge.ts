@@ -264,7 +264,7 @@ function moduleToSchema(module: Module): {
 			});
 		}
 		derived.set(k.kind, derivedMap);
-		kinds[k.kind] = { world: k.world ?? 'closed', id: { type: idType }, slots };
+		kinds[k.kind] = { world: k.world ?? (module.rezono === '1' ? 'closed' : 'open'), id: { type: idType }, slots };
 	}
 
 	for (const ext of extendDecls) {
@@ -837,16 +837,22 @@ function evaluateSnapshot(
 			(x) => !applying.some((other) => other !== x && overrides.get(other.def.name)!.has(x.def.name))
 		);
 
-		if (undecided.length) {
-			const blockingUndecided = undecided.filter(
-				(u) => !applying.some((a) => overrides.get(a.def.name)!.has(u.def.name))
-			);
-			if (blockingUndecided.length && unoverridden.length <= 1) {
-				return worstOf(blockingUndecided.map((u) => u.cond))!;
-			}
-		}
+		const blockingUndecided = undecided.filter(
+			(u) => !applying.some((a) => overrides.get(a.def.name)!.has(u.def.name))
+		);
 
-		if (unoverridden.length > 1) return { s: 'invalid', reason: 'exception_conflict', cause };
+		if (unoverridden.length > 1) {
+			const resolvingUndecided = blockingUndecided.filter((u) =>
+				unoverridden.every((w) => overrides.get(u.def.name)!.has(w.def.name))
+			);
+			if (resolvingUndecided.length) {
+				return worstOf(resolvingUndecided.map((u) => u.cond))!;
+			}
+			return { s: 'invalid', reason: 'exception_conflict', cause };
+		}
+		if (blockingUndecided.length) {
+			return worstOf(blockingUndecided.map((u) => u.cond))!;
+		}
 		if (!unoverridden.length) return { s: 'unknown', reason: 'no_row_applies', cause };
 		const chosen = unoverridden[0].def;
 		trace.definitions.set(`derived:${kindName}.${propName}`, chosen.name);
@@ -982,7 +988,7 @@ function evaluateSnapshot(
 			const ty: Ty = { t: 'ref', kind: kindName };
 			const table = decl.table;
 			const rowsWhen = model.tableWhen.get(table) ?? [];
-			const outputs = table.rows.map((row) => r.ex(row.value as TableValue) as V & { s: 'known' });
+			const outputs: V[] = table.rows.map((row) => r.within({ s: 'known', v: { id } }, ty, () => r.ex(row.value as TableValue)));
 			const decided = table.rows.map((_row, idx) => {
 				const whenExprs = rowsWhen[idx] ?? [];
 				const condVal = r.within({ s: 'known', v: { id } }, ty, () => {
@@ -1020,10 +1026,20 @@ function evaluateSnapshot(
 				const slotTy = slotType(schema, schema.kinds[kindName].slots[propName]);
 				const ev = slotTy.t === 'val' ? schema.enums?.[schema.types?.[slotTy.name]?.enum ?? slotTy.name] : undefined;
 				const orderList = ev === undefined ? undefined : Array.isArray(ev) ? ev : ev.values;
-				const rank = (idx: number) => (orderList ? orderList.indexOf(outputs[idx].v as string) : idx);
-				const picked = applying.reduce((best, d) => (rank(d.idx) < rank(best.idx) ? d : best));
-				const wins = undecided.filter((d) => rank(d.idx) < rank(picked.idx));
-				v = wins.length ? worstOf(wins.map((d) => d.v))! : outputs[picked.idx];
+				const knownRank = (idx: number): number => {
+					if (!orderList) return idx;
+					const pos = orderList.indexOf((outputs[idx] as { s: 'known'; v: unknown }).v as string);
+					return pos < 0 ? Number.POSITIVE_INFINITY : pos;
+				};
+				const applyingNonKnown = applying.map((d) => outputs[d.idx]).filter((out) => out.s !== 'known');
+				const applyingKnown = applying.filter((d) => outputs[d.idx].s === 'known');
+				const picked = applyingKnown.length
+					? applyingKnown.reduce((best, d) => (knownRank(d.idx) < knownRank(best.idx) ? d : best))
+					: undefined;
+				const pickedRank = picked ? knownRank(picked.idx) : Number.POSITIVE_INFINITY;
+				const wins = undecided.filter((d) => outputs[d.idx].s !== 'known' || knownRank(d.idx) < pickedRank);
+				const issues: V[] = [...applyingNonKnown, ...wins.map((d) => d.v)];
+				v = issues.length ? worstOf(issues)! : outputs[picked!.idx];
 			} else {
 				const picked = applying[0];
 				const wins = undecided.filter((d) => d.idx < picked.idx && !sameOut(d.idx, picked.idx));

@@ -37,6 +37,8 @@ updates:
       - /rezono
       - "/tools/mcp*"
       - "/tools/repl*"
+      - /viewer/messages
+      - /viewer/slip
     schedule:
       interval: weekly
     groups:

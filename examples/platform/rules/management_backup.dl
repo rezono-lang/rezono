@@ -1,0 +1,79 @@
+// Backup plan freshness against the decision's maximum age and scoped absence from a complete inventory.
+
+.decl backup_plan_eval(plan: symbol, as_of: symbol, as_of_num: number, max_age: number)
+backup_plan_eval(plan, as_of, as_of_num, max_age) :-
+    backup_plan(plan),
+    backup_plan__decided_by(plan, decision),
+    backup_decision__as_of(decision, as_of),
+    backup_decision__max_age_days(decision, max_age),
+    max_age >= 0,
+    as_of_num = @days(as_of, "1970-01-01").
+
+.decl backup_plan_evaluated(plan: symbol)
+backup_plan_evaluated(plan) :-
+    backup_plan_eval(plan, _, _, _).
+
+.decl backup_plan_copy(plan: symbol, copy: symbol, taken_num: number)
+backup_plan_copy(plan, copy, taken_num) :-
+    backup_plan_eval(plan, _, as_of_num, _),
+    backup_plan__service(plan, service),
+    backup_plan__target(plan, target),
+    backup_copy__service(copy, service),
+    backup_copy__target(copy, target),
+    backup_copy__taken(copy, taken),
+    taken_num = @days(taken, "1970-01-01"),
+    taken_num <= as_of_num.
+
+.decl backup_plan_has_copy(plan: symbol)
+backup_plan_has_copy(plan) :-
+    backup_plan_copy(plan, _, _).
+
+.decl backup_plan_latest_day(plan: symbol, latest_num: number)
+backup_plan_latest_day(plan, latest_num) :-
+    backup_plan_has_copy(plan),
+    latest_num = max d : { backup_plan_copy(plan, _, d) }.
+
+.decl backup_inventory_complete(plan: symbol)
+backup_inventory_complete(plan) :-
+    backup_plan_eval(plan, as_of, _, _),
+    backup_plan__service(plan, service),
+    backup_plan__target(plan, target),
+    backup_inventory__service(inv, service),
+    backup_inventory__target(inv, target),
+    backup_inventory__day(inv, as_of),
+    backup_inventory__complete(inv, TRUE).
+
+.decl managed_backup_state(plan: symbol, state: symbol)
+managed_backup_state(plan, "current") :-
+    backup_plan_eval(plan, _, as_of_num, max_age),
+    backup_plan_latest_day(plan, latest_num),
+    backup_plan_copy(plan, _, latest_num),
+    age = as_of_num - latest_num,
+    age <= max_age.
+managed_backup_state(plan, "too-old") :-
+    backup_plan_eval(plan, _, as_of_num, max_age),
+    backup_plan_latest_day(plan, latest_num),
+    backup_plan_copy(plan, _, latest_num),
+    age = as_of_num - latest_num,
+    age > max_age,
+    backup_inventory_complete(plan).
+managed_backup_state(plan, "unknown") :-
+    backup_plan_eval(plan, _, as_of_num, max_age),
+    backup_plan_latest_day(plan, latest_num),
+    backup_plan_copy(plan, _, latest_num),
+    age = as_of_num - latest_num,
+    age > max_age,
+    !backup_inventory_complete(plan).
+managed_backup_state(plan, "missing") :-
+    backup_plan_eval(plan, _, _, _),
+    !backup_plan_has_copy(plan),
+    backup_inventory_complete(plan).
+managed_backup_state(plan, "unknown") :-
+    backup_plan_eval(plan, _, _, _),
+    !backup_plan_has_copy(plan),
+    !backup_inventory_complete(plan).
+managed_backup_state(plan, "unknown") :-
+    backup_plan(plan),
+    !backup_plan_evaluated(plan).
+
+.output managed_backup_state

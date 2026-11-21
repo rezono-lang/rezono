@@ -42,17 +42,6 @@ def part(store, role, manifest_id) -> dict:
     return body
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=(MissingRolePartOfBundle, AssertionError),
-    reason=(
-        "extra: decisions/viewer-slip.md: Give the role's part of the bundle at GET /<pack>/bundle?m= in edge/gate/src/catalogue.ts and "
-        "edge/gate/src/local.ts: the rules, labels, messages, home claim and questions of what the role reads, "
-        "as decisions/viewer-slip.md, section The role's part of the bundle, says. A role reads a relation when "
-        "its snapshot is full or holds a row, and the catalogue follows the same rule, so a kind the role does "
-        "not read is absent as if it did not exist. Expectation: tests/fixtures/slip, ids named by hand."
-    ),
-)
 def test_role_part_of_bundle(tmp_path):
     store, manifest = publish_main(tmp_path)
     reader, summary = (part(store, role, manifest["id"]) for role in ("reader", "summary"))

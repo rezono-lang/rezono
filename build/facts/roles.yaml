@@ -1,0 +1,3 @@
+role:
+  - {id: coordinator, title: Coordinator, capability: [read, agent]}
+  - {id: owner, title: Owner, capability: [read, review, administer]}

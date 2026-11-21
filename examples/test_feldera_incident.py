@@ -86,7 +86,7 @@ def test_a_confirmed_disagreement_requires_complete_comparison_evidence(tmp_path
 
 
 @pytest.mark.xfail(strict=True, raises=ValueError, reason=(
-    "extra: compiler/ci/feldera_shards.py does not yet expect "
+    "M3: compiler/ci/feldera_shards.py does not yet expect "
     "compiler/tests/test_recorded_dates.py::test_independent_date_equality and "
     "examples/test_calculation_engine_parity.py::test_feldera_calculations_match_duckdb_and_checker[subsidy] in the live "
     "collection. Each joins its shard there and stays out of ORIGINAL, as INTERFACE does. Lift this mark "

@@ -19,8 +19,10 @@ export interface Diagnostic {
 /** What one parse collects; the semantics below are built once and read it through this. */
 interface Run {
 	text: string;
-	/** Code-point offset per UTF-16 offset, or undefined when the two are equal (no astral character). */
+	/** Code-point offset per UTF-16 offset of the full source, or undefined when the two are equal (no astral character). */
 	points?: number[];
+	/** UTF-16 base offset of `text` inside the full source (0 when `text` is the full source). */
+	offset: number;
 	spans: WeakMap<object, Span>;
 	/** Nodes that are an id token, so that `host-b.owner` reads as one path. */
 	ids: WeakSet<object>;
@@ -28,6 +30,8 @@ interface Run {
 	reserved: Diagnostic[];
 	/** Time selections on a literal: the writer meant the question's context (§4, E30). */
 	misplaced: [Diagnostic, 'at' | 'as_known'][];
+	/** Language version when reading a module; undefined for standalone questions. */
+	version?: '0' | '1';
 }
 export let run: Run;
 
@@ -47,7 +51,9 @@ export function points(text: string): number[] | undefined {
 
 export function spanAt(from: number, to: number): Span {
 	const p = run.points;
-	return { text: run.text.slice(from, to), start: p ? p[from] : from, end: p ? p[to] : to };
+	const start = run.offset + from;
+	const end = run.offset + to;
+	return { text: run.text.slice(from, to), start: p ? p[start] : start, end: p ? p[end] : end };
 }
 /** The span of a parse node, without the white space and comments around it. */
 export function spanOf(node: Node): Span {
@@ -73,6 +79,12 @@ export function refused(node: Node, code: string, args: string[]): void {
 	run.errors.push({ code, span: spanOf(node), args });
 }
 
-export function startRun(text: string, spans: WeakMap<object, Span>, at: number[] | undefined): void {
-	run = { text, points: at, spans, ids: new WeakSet(), errors: [], reserved: [], misplaced: [] };
+export function startRun(
+	text: string,
+	spans: WeakMap<object, Span>,
+	at: number[] | undefined,
+	version?: '0' | '1',
+	offset = 0
+): void {
+	run = { text, points: at, offset, spans, ids: new WeakSet(), errors: [], reserved: [], misplaced: [], version };
 }
