@@ -7,19 +7,6 @@ import yaml
 from slip_support import ROOT, MissingSlipPage, line_ref, lines, publish_main, render
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=(MissingSlipPage, AssertionError),
-    reason=(
-        "M3: decisions/viewer-slip.md: Waits for tests/slip/test_role_part_of_bundle.py--test_role_part_of_bundle, "
-        "tests/slip/test_head_status_and_hash.py--test_head_status_and_hash, "
-        "tests/slip/test_message_filled.py--test_message_filled and, for the page itself, "
-        "tests/slip/test_slip_rule_row.py--test_slip_rule_row. "
-        "Then draw the slip and each answer in viewer/slip/ as a table with a header row, and a legend "
-        "table[data-part=legend] with one row per sign the page draws, from the key of std-view "
-        "(decisions/viewer-slip.md). Expectation: tests/fixtures/slip."
-    ),
-)
 def test_tables_and_legend(tmp_path):
     store, _ = publish_main(tmp_path)
     row = {"relation": "busy", "key": ["group-a"]}

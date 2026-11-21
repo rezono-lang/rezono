@@ -12,19 +12,6 @@ import pytest
 from slip_support import MissingSlipPage, lines, publish_main, render
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=(MissingSlipPage, AssertionError),
-    reason=(
-        "M3: decisions/viewer-slip.md: Waits for tests/slip/test_role_part_of_bundle.py--test_role_part_of_bundle, "
-        "tests/slip/test_head_status_and_hash.py--test_head_status_and_hash, "
-        "tests/slip/test_message_filled.py--test_message_filled and, for the page itself, "
-        "tests/slip/test_slip_rule_row.py--test_slip_rule_row. "
-        "Then show a calculated row in viewer/slip/ as decisions/viewer-slip.md, sections The sentence and The "
-        "lines, say: the rule's name and its value, and one line per step with data-path and data-depth. "
-        "Expectation: tests/fixtures/slip/calc/capped.yaml, steps written by hand."
-    ),
-)
 def test_slip_calculated_row(tmp_path):
     store, _ = publish_main(tmp_path)
     page = render(store, "reader", row={"relation": "calc__capped_amount", "key": ["item-a", "12", "known", ""]})
