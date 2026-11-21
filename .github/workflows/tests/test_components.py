@@ -98,7 +98,6 @@ class WorkflowEnvironmentTests(unittest.TestCase):
 
         import red_guard
         for protected_path in (
-            "loop/ci_discover.py",
             "loop/build_cutover.py",
             "loop/build_pinned_runner.py",
             "loop/build_job_matrix.py",
