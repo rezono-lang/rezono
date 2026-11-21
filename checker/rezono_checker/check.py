@@ -182,11 +182,13 @@ EXACT_BOUND = 2**63 - 1  # symmetric 64-bit exact-number bound (decisions/langua
 
 
 def _classify_rational_candidate(text: str) -> tuple[str, str, str | None]:
-    """Classify a candidate rational value string as `(state, reason, canonical_text_or_None)`.
+    """Classify a candidate rational base/input value as `(state, reason, canonical_text_or_None)`.
 
-    Non-integer spelling or non-positive denominator is an invalid input violation (empty reason);
-    a positive denominator whose reduced fraction exceeds `EXACT_BOUND` yields
-    `('unknown', 'beyond_exact_bound', None)`; otherwise returns `('known', '', canonical_text)`.
+    In `rezono.rules/2` (which has no rational arithmetic), every rational head value is a base
+    fact: non-integer spelling, non-positive denominator, or a reduced fraction outside
+    `[-EXACT_BOUND, +EXACT_BOUND]` (with `1 <= d <= EXACT_BOUND`) is an input violation yielding
+    `('invalid', '', None)` (decisions/language-rezono-1-refinements.md §3.4C); otherwise returns
+    `('known', '', canonical_text)`.
     """
     if not isinstance(text, str):
         return ("invalid", "", None)
@@ -203,7 +205,7 @@ def _classify_rational_candidate(text: str) -> tuple[str, str, str | None]:
             return ("invalid", "", None)
     frac = Fraction(num, den)
     if abs(frac.numerator) > EXACT_BOUND or frac.denominator > EXACT_BOUND:
-        return ("unknown", "beyond_exact_bound", None)
+        return ("invalid", "", None)
     canon = str(frac.numerator) if frac.denominator == 1 else f"{frac.numerator}/{frac.denominator}"
     return ("known", "", canon)
 
@@ -231,12 +233,8 @@ def _functional_state_ok(func, all_vals: set[str], state: str, reason: str, val:
         if "invalid" in rat_states:
             return reason == ""
         return bool(REASON.fullmatch(reason))
-    if "unknown" in prop_states or "unknown" in rat_states:
-        if state != "unknown" or val != "":
-            return False
-        if "unknown" in prop_states:
-            return bool(REASON.fullmatch(reason))
-        return reason == "beyond_exact_bound"
+    if "unknown" in prop_states:
+        return state == "unknown" and val == "" and bool(REASON.fullmatch(reason))
     if "not_applicable" in prop_states:
         return state == "not_applicable" and val == "" and bool(REASON.fullmatch(reason))
     if len(all_vals) == 1:
@@ -252,8 +250,8 @@ def _functional_candidates(rules, func, rows, witness=None, groups=None):
     cached in `groups` when provided:
     - values_by_key: {domain_key_tuple: set[str]} of all distinct known candidate values across all rules of `func`.
     - states_by_key: {domain_key_tuple: set[str]} of propagated non-known aggregate states per domain key.
-    - rat_states_by_key: {domain_key_tuple: set[str]} of non-known states induced by rational candidates
-      (`invalid` for non-positive/malformed denominator; `unknown` for `beyond_exact_bound`).
+    - rat_states_by_key: {domain_key_tuple: set[str]} of invalid states induced by rational base
+      inputs (non-positive/malformed denominator or reduced fraction outside `EXACT_BOUND`).
     - rule_instances: {rule_id: {domain_key_tuple: list[dict[str, str]]}} of known firing variable substitutions.
     - state_instances: {rule_id: {domain_key_tuple: list[tuple[dict[str, str], str]]}} of non-known firing substitutions.
     """

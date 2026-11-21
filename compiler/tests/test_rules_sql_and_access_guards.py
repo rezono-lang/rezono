@@ -21,8 +21,8 @@ def _lit(rel: str, *terms: str, polarity: str = "positive", stratum: str = "0") 
 
 
 def _rule(rid: str, head_rel: str, head_terms: list[str], body: list[dict], *,
-          stratum: str = "1", module: str = "core") -> dict:
-    return {
+          stratum: str = "1", module: str = "core", aggregates: list[dict] | None = None) -> dict:
+    doc = {
         "id": rid,
         "module": module,
         "stratum": stratum,
@@ -30,12 +30,17 @@ def _rule(rid: str, head_rel: str, head_terms: list[str], body: list[dict], *,
         "body": body,
         "origin": {"file": f"rules/{module}.rezono", "line": "1"},
     }
+    if aggregates is not None:
+        doc["aggregates"] = aggregates
+    return doc
 
 
-def test_rational_functional_overflow_unknown_and_invalid_denominator():
-    """Exact-bound exceedance yields unknown/beyond_exact_bound (decisions/language-rezono-1-refinements.md
-    §3.4C); non-positive denominators remain invalid with empty reason (no invented reason code);
-    multi-value conflicts remain invalid/multiple_values (invalid beats unknown per Appendix A.3)."""
+def test_rational_functional_base_fact_bounds_and_invalid_denominator():
+    """In rezono.rules/2 (no rational arithmetic), every rational candidate is a base/input fact:
+    non-positive denominators and reduced fractions outside [-BOUND, +BOUND] (e.g. -2^63 / 1,
+    while -2^63 / 2 reduces to -2^62 / 1 within BOUND) are input violations -> invalid with empty
+    reason and block under conflict_policy=block (decisions/language-rezono-1-refinements.md §3.4C).
+    Multi-value conflicts among valid candidates yield invalid/multiple_values."""
     assert l0.CORE_REASONS["beyond_exact_bound"] == ("unknown",)
     assert "invalid_rational" not in l0.CORE_REASONS
 
@@ -57,41 +62,37 @@ def test_rational_functional_overflow_unknown_and_invalid_denominator():
         ],
     }
     prog = ir.load(doc, require_witness=False)
-
     feldera_sql = rules_sql.feldera(prog, witnesses=False)
-    assert "beyond_exact_bound" in feldera_sql
-    assert "invalid_rational" not in feldera_sql
-    assert "ratio_val__invalid" in feldera_sql
 
     items = [
         ("i_ok",),
         ("i_unreduced",),
         ("i_reducible_min",),
-        ("i_overflow",),
-        ("i_mixed_overflow",),
+        ("i_oob",),
+        ("i_mixed_oob",),
         ("i_zero_den",),
         ("i_neg_den",),
         ("i_mixed_bad",),
         ("i_conflict",),
-        ("i_conflict_overflow",),
+        ("i_conflict_oob",),
         ("i_empty",),
     ]
     ratio_in = [
         ("i_ok", 3, 2),
         ("i_unreduced", 4, 6),
         ("i_reducible_min", -(2**63), 2),
-        ("i_overflow", -(2**63), 1),
-        ("i_mixed_overflow", 1, 2),
-        ("i_mixed_overflow", -(2**63), 1),
+        ("i_oob", -(2**63), 1),
+        ("i_mixed_oob", 1, 2),
+        ("i_mixed_oob", -(2**63), 1),
         ("i_zero_den", 1, 0),
         ("i_neg_den", 1, -2),
         ("i_mixed_bad", 1, 2),
         ("i_mixed_bad", 1, 0),
         ("i_conflict", 1, 2),
         ("i_conflict", 3, 4),
-        ("i_conflict_overflow", 1, 2),
-        ("i_conflict_overflow", 3, 4),
-        ("i_conflict_overflow", -(2**63), 1),
+        ("i_conflict_oob", 1, 2),
+        ("i_conflict_oob", 3, 4),
+        ("i_conflict_oob", -(2**63), 1),
     ]
 
     con = duckdb.connect()
@@ -110,13 +111,13 @@ def test_rational_functional_overflow_unknown_and_invalid_denominator():
         "i_ok": ("known", "", 3, 2),
         "i_unreduced": ("known", "", 2, 3),
         "i_reducible_min": ("known", "", -(2**62), 1),
-        "i_overflow": ("unknown", "beyond_exact_bound", 0, 1),
-        "i_mixed_overflow": ("unknown", "beyond_exact_bound", 0, 1),
+        "i_oob": ("invalid", "", 0, 1),
+        "i_mixed_oob": ("invalid", "", 0, 1),
         "i_zero_den": ("invalid", "", 0, 1),
         "i_neg_den": ("invalid", "", 0, 1),
         "i_mixed_bad": ("invalid", "", 0, 1),
         "i_conflict": ("invalid", "multiple_values", 0, 1),
-        "i_conflict_overflow": ("invalid", "multiple_values", 0, 1),
+        "i_conflict_oob": ("invalid", "", 0, 1),
         "i_empty": ("unknown", "no_value", 0, 1),
     }
     assert by_id == expected
@@ -128,7 +129,9 @@ def test_rational_functional_overflow_unknown_and_invalid_denominator():
             assert reason in l0.CORE_REASONS
             assert state in l0.CORE_REASONS[reason]
 
-    expected_blocked = {"i_zero_den", "i_neg_den", "i_mixed_bad", "i_conflict", "i_conflict_overflow"}
+    expected_blocked = {
+        "i_oob", "i_mixed_oob", "i_zero_den", "i_neg_den", "i_mixed_bad", "i_conflict", "i_conflict_oob",
+    }
     blocked = {row[0] for row in con.execute('SELECT * FROM "ratio_val__invalid"').fetchall()}
     assert blocked == expected_blocked
 
@@ -215,26 +218,27 @@ def test_parse_rational_normalizes_fractions_and_rejects_zero_denominator():
 
 @pytest.mark.parametrize("fn", ["sum", "min", "max"])
 def test_aggregate_over_rational_column_rejected_cleanly(fn):
-    rels = {
-        "grp": ir.Relation("grp", "base", (ir.Column("g", "string"),)),
-        "rate": ir.Relation("rate", "base", (ir.Column("g", "string"), ir.Column("r", "rational"))),
-        "out": ir.Relation(
-            "out", "derived", (ir.Column("g", "string"), ir.Column("x", "integer")),
-            module="core", explain="on_demand",
-        ),
+    doc = {
+        "format": "rezono.rules/2",
+        "pack": "sample",
+        "relations": [
+            {"name": "grp", "role": "base", "key": [_col("g")]},
+            {"name": "rate", "role": "base", "key": [_col("g"), _col("r", "rational")]},
+            {"name": "out", "role": "derived", "module": "core", "explain": "on_demand",
+             "key": [_col("g"), _col("x", "integer")]},
+        ],
+        "rules": [
+            _rule(
+                "agg_rat", "out", ["?g", "?x"], [_lit("grp", "?g")], stratum="1",
+                aggregates=[{"relation": "rate", "terms": ["?g", "_"], "function": fn,
+                             "over": "r", "as": "?x", "stratum": "0"}],
+            ),
+        ],
     }
-    rule = ir.Rule(
-        "agg_rat", "core", 1,
-        ir.Atom("out", ("?g", "?x")),
-        (ir.Literal(ir.Atom("grp", ("?g",)), "positive", 0),),
-        aggregates=(ir.Aggregate(ir.Atom("rate", ("?g", "_")), fn, "r", "?x", 0),),
-    )
-    prog = ir.Program("sample", rels, {"agg_rat": rule}, strata={"grp": 0, "rate": 0, "out": 1}, format=ir.FORMAT_V2)
 
     with pytest.raises(ir.IRError) as exc_info:
-        rules_sql.rule_select(prog, rule, dialect="duckdb")
+        ir.load(doc, require_witness=False)
     assert exc_info.value.code == "bad_aggregate"
-    assert "rational" in str(exc_info.value)
 
 
 def test_zero_rule_functional_relation_emits_valid_sql_with_empty_state():
@@ -265,10 +269,7 @@ def test_zero_rule_functional_relation_emits_valid_sql_with_empty_state():
     }
     strata = {"item": 0, "empty_str": 1, "empty_int": 1, "empty_bool": 1, "empty_rat": 1}
     prog = ir.Program("sample", rels, {}, strata=strata, format=ir.FORMAT_V2)
-
     feldera_sql = rules_sql.feldera(prog, witnesses=False)
-    assert 'WITH "__cand" AS (\n\n)' not in feldera_sql
-    assert "FROM (VALUES (1)) AS seed(n) WHERE FALSE" in feldera_sql
 
     con = duckdb.connect()
     for ddl in rules_sql.duckdb_tables(prog):

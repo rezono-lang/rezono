@@ -120,7 +120,7 @@ selectors=(
   compiler/tests/test_bound.py::test_the_check_view_on_feldera_holds_the_rows_past_the_bound
   compiler/tests/test_boolean_rule_inputs.py::test_native_boolean_rule_inputs
   compiler/tests/test_recorded_dates.py::test_independent_date_equality
-  compiler/tests/test_rules_sql_and_access_guards.py::test_rational_functional_overflow_unknown_and_invalid_denominator
+  compiler/tests/test_rules_sql_and_access_guards.py::test_rational_functional_base_fact_bounds_and_invalid_denominator
   compiler/tests/test_rules_sql_and_access_guards.py::test_zero_rule_functional_relation_emits_valid_sql_with_empty_state
   compiler/tests/test_rules_properties.py::test_feldera_runs_generated_programs_as_duckdb_does
   compiler/tests/test_ordered_rule_scalars_engines.py::test_feldera_orders_typed_values

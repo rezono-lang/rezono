@@ -18,7 +18,7 @@ BOOLEAN = "compiler/tests/test_boolean_rule_inputs.py::test_native_boolean_rule_
 RECORDED_DATES = "compiler/tests/test_recorded_dates.py::test_independent_date_equality"
 RATIONAL_GUARDS = (
     "compiler/tests/test_rules_sql_and_access_guards.py"
-    "::test_rational_functional_overflow_unknown_and_invalid_denominator"
+    "::test_rational_functional_base_fact_bounds_and_invalid_denominator"
 )
 ZERO_RULE_FUNCTIONAL = (
     "compiler/tests/test_rules_sql_and_access_guards.py"

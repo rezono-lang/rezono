@@ -283,14 +283,6 @@ class RuleSQL:
                     filters.append(f"{q(col.name + '_d')} = CAST({rd} AS BIGINT)")
                 else:
                     filters.append(f"{q(col.name)} = {lit_sql(t, col.type)}")
-        if a.function != "count":
-            over_col = next((c for c in rel.values + rel.row_columns if c.name == a.over), None)
-            if over_col is not None and over_col.type == "rational":
-                raise IRError(
-                    "bad_aggregate",
-                    f"{self.rule.id}: SQL lowering does not support {a.function} aggregate over rational column "
-                    f"{rel.name}.{a.over}",
-                )
         fn = "COUNT(*)" if a.function == "count" else f"{a.function.upper()}({q(a.over)})"
         sel, group_cols, on_parts = [], [], []
         for j, (t, col) in enumerate(keys):
@@ -415,19 +407,12 @@ def functional_candidate_select(prog, rule, dialect="feldera"):
         vn, vd = r.rat_term(vt)
         norm_n = f"rezono_add_n({vn}, {vd}, CAST(0 AS BIGINT), CAST(1 AS BIGINT))"
         norm_d = f"rezono_add_d({vn}, {vd}, CAST(0 AS BIGINT), CAST(1 AS BIGINT))"
-        # Non-positive denominator is an invalid input violation (empty reason: no core code);
-        # positive denominator whose reduced value exceeds BOUND (2^63 - 1) yields (0, 0) from
-        # rezono_add_d -> unknown / beyond_exact_bound (decisions/language-rezono-1-refinements.md §3.4C).
-        rat_st = (
-            f"CAST(CASE WHEN {vd} <= CAST(0 AS BIGINT) THEN 3 "
-            f"WHEN {norm_d} <= CAST(0 AS BIGINT) THEN 2 "
-            f"ELSE 0 END AS BIGINT)"
-        )
-        rat_rsn = (
-            f"CAST(CASE WHEN {vd} <= CAST(0 AS BIGINT) THEN '' "
-            f"WHEN {norm_d} <= CAST(0 AS BIGINT) THEN 'beyond_exact_bound' "
-            f"ELSE '' END AS VARCHAR)"
-        )
+        # rezono.rules/2 has no rational arithmetic, so every rational head value is a base/input
+        # fact: a non-positive denominator or a reduced fraction outside [-BOUND, +BOUND]
+        # (where rezono_add_d returns 0, e.g. -2^63 / 1) is an input violation -> invalid with
+        # empty reason (decisions/language-rezono-1-refinements.md §3.4C).
+        rat_st = f"CAST(CASE WHEN {norm_d} <= CAST(0 AS BIGINT) THEN 3 ELSE 0 END AS BIGINT)"
+        rat_rsn = "CAST('' AS VARCHAR)"
         states.append((rat_st, rat_rsn))
         val_cols = [(norm_n, "__vn"), (norm_d, "__vd")]
     elif vc.type == "string":
