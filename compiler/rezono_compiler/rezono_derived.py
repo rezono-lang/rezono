@@ -17,13 +17,9 @@ decisions/language-rezono-1-refinements.md (sections 1, 3.1 and 3.3) and decisio
   through the engines' state-bearing aggregate: unknown is never read as false.
 - `means` lowers to the message of every rule of the derivation, `@` to the `source` of its bundle rule entries.
 
-Anything else is refused with a diagnostic at its place, never lowered approximately.
-
-Not yet as decided: a derived value with calculation members (`unit`, `versions`, `definitions`, `output`, `total`,
-`unless`, `table`), or in a module with `as of`, still lowers to `rezono.calc/1` (rezono_calc.py) or, for a table,
-to rezono_table.py. decisions/language-rezono-1.md section 5.6 says a `rezono 1` derivation never lowers to
-`rezono.calc/1`; the green test_rezono_module_5_calculation_lowers_to_calc_ir still pins the old route, so this
-routing stays until a planner replaces that test with one that refuses it.
+Anything else is refused with a diagnostic at its place, never lowered approximately. Numeric and Boolean
+calculations that carry calculation members, or that stand in a module with `as of`, keep lowering to
+`rezono.calc/1` (rezono_calc.py) until that IR retires (decisions/language-rezono-1.md section 5.6).
 """
 
 from __future__ import annotations
@@ -43,7 +39,7 @@ if TYPE_CHECKING:
 REZONO_1_FORMAT = "rezono.module/5"
 # Members that only the calculation IR lowers; a derived value with one of them stays a calculation.
 CALC_ONLY = frozenset({"unit", "versions", "definitions", "output", "totality", "unless", "table"})
-SCALARS = {"Int": "integer", "Text": "string", "Bool": "boolean", "Date": "date"}  # rezono_slot.py's names
+SCALARS = {"Int": "integer", "Integer": "integer", "Text": "string", "Bool": "boolean", "Date": "date"}
 COMPARE = rules_dl.COMPARE
 NEGATED = {"eq": "ne", "ne": "eq", "lt": "ge", "le": "gt", "gt": "le", "ge": "lt"}
 KNOWN, UNKNOWN = ("const", "known", "string"), ("const", "unknown", "string")
@@ -469,8 +465,10 @@ class Lowering:
             value = json.loads(token)
             if isinstance(value, str) and value != "_" and not value.startswith("?"):
                 return "const", value, "string"
-        if token in ("true", "false"):  # the grammar's boolLit
-            return "const", token, "boolean"
+        if token in ("yes", "true"):
+            return "const", "true", "boolean"
+        if token in ("no", "false"):
+            return "const", "false", "boolean"
         if isinstance(token, str) and re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*", token):
             return "const", token, "string"  # an element id or a value of an enum
         self.site.refuse(at, f"the literal {token!r} has no rule term yet", "R012")
