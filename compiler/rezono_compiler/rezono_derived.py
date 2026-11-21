@@ -39,7 +39,7 @@ if TYPE_CHECKING:
 REZONO_1_FORMAT = "rezono.module/5"
 # Members that only the calculation IR lowers; a derived value with one of them stays a calculation.
 CALC_ONLY = frozenset({"unit", "versions", "definitions", "output", "totality", "unless", "table"})
-SCALARS = {"Int": "integer", "Integer": "integer", "Text": "string", "Bool": "boolean", "Date": "date"}
+SCALARS = {"Int": "integer", "Text": "string", "Bool": "boolean", "Date": "date"}
 COMPARE = rules_dl.COMPARE
 NEGATED = {"eq": "ne", "ne": "eq", "lt": "ge", "le": "gt", "gt": "le", "ge": "lt"}
 KNOWN, UNKNOWN = ("const", "known", "string"), ("const", "unknown", "string")
@@ -465,9 +465,9 @@ class Lowering:
             value = json.loads(token)
             if isinstance(value, str) and value != "_" and not value.startswith("?"):
                 return "const", value, "string"
-        if token in ("yes", "true"):
+        if token == "true":
             return "const", "true", "boolean"
-        if token in ("no", "false"):
+        if token == "false":
             return "const", "false", "boolean"
         if isinstance(token, str) and re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*", token):
             return "const", token, "string"  # an element id or a value of an enum
