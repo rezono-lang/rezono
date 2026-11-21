@@ -22,8 +22,11 @@ const EVALUATION_STEPS = 250_000;
 const SHA256 = /^[0-9a-f]{64}$/;
 const MAIN = /^m-[0-9]+$/;
 const SAFE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+const WITNESS_CHECK = 'rezono:proofs';
+const CHECK_STATUSES = new Set(['green', 'warning', 'red'] as const);
 const headers = { 'cache-control': 'private, no-store' };
 
+type WitnessCheckStatus = 'green' | 'warning' | 'red';
 type ObjectRef = Pick<ArchivedFile, 'uri' | 'sha256'>;
 type Keyed = { key: string[] };
 type Witnesses = { witnesses: Witness[]; calc_witnesses?: CalcWitness[]; hidden: [] };
@@ -73,6 +76,20 @@ function limitOf(raw: unknown): number {
 
 function headKey(pack: string, epoch: number): string {
 	return pack + '/heads/' + (10n ** 19n - 1n - BigInt(epoch)).toString().padStart(19, '0') + '.json';
+}
+
+function witnessCheck(checks: unknown): WitnessCheckStatus | undefined {
+	if (checks === undefined) return undefined;
+	if (!Array.isArray(checks)) fault();
+	let status: WitnessCheckStatus | undefined;
+	for (const entry of checks) {
+		if (!record(entry) || typeof entry.name !== 'string') fault();
+		if (entry.name !== WITNESS_CHECK) continue;
+		if (status !== undefined || typeof entry.status !== 'string'
+			|| !CHECK_STATUSES.has(entry.status as WitnessCheckStatus)) fault();
+		status = entry.status as WitnessCheckStatus;
+	}
+	return status;
 }
 
 type QuestionBody = { text: string; limit: number; after?: string } &
@@ -156,6 +173,7 @@ function publication(store: Store, pack: string, role: string) {
 				|| manifest.variant || manifest.proposal || !Array.isArray(manifest.snapshots) || !Array.isArray(manifest.compiled))
 				fault();
 			if (manifest.access_semantics !== 2) return undefined;
+			const witness = witnessCheck(manifest.checks);
 			const snaps = new Map<string, Snapshot>();
 			for (const entry of manifest.snapshots) {
 				if (!record(entry) || typeof entry.role !== 'string') fault();
@@ -187,7 +205,10 @@ function publication(store: Store, pack: string, role: string) {
 			};
 			const range = async (relation: string, at: KeyRange): Promise<Page> =>
 				pageByKey(await rows(relation), at);
-			return { manifest, compiled, snaps, bundle: bundle as unknown as Bundle, schema, rows, range, object, read };
+			return {
+				manifest, manifestSha256: head.sha256, witnessCheck: witness,
+				compiled, snaps, bundle: bundle as unknown as Bundle, schema, rows, range, object, read
+			};
 		}
 	};
 }
@@ -228,10 +249,12 @@ async function readableSnapshots(view: Current): Promise<Snapshot[]> {
 }
 
 function listed(view: Current) {
-	const { manifest, schema, snaps } = view;
+	const { manifest, manifestSha256, witnessCheck: witness, schema, snaps } = view;
 	return {
 		id: manifest.id, epoch: manifest.epoch, knowledge_time: manifest.knowledge_time,
 		access_semantics: 2, definition_sha256: manifest.definition_sha256,
+		manifest_sha256: manifestSha256,
+		...(witness !== undefined && { witness_check: witness }),
 		compiled: [{ file: schema.file, sha256: schema.sha256 }],
 		snapshots: [...snaps.values()].map(({ relation, role, complete, full, format }) => ({ relation, role, complete, full, format }))
 	};
