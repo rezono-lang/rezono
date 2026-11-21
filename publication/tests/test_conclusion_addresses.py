@@ -148,16 +148,6 @@ def test_conclusion_and_witness_iris_resolve_to_one_row_and_match_rdf_and_prov()
         rdf.resolve_iri(SCHEMA, rows, f"https://rezono.example/sample/witness/{'0' * 64}", witnesses=[w1, w2])
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "extra: decisions/publication-conclusion-addresses.md: Pass schema doc to witness_uri in "
-        "publication/rezono_publication/publication.py:328 (and align edge/publisher/rezono_publisher/forms.py, "
-        "export_index.py, and edge/plugins/connectors/accept.py) so $why in row_json and publication.form "
-        "emits the full canonical <base>witness/<H> IRI matching the gate instead of rezono:w/<H>."
-    ),
-)
 def test_publication_row_json_and_form_emit_canonical_witness_iri_in_why():
     """One witness, one IRI: row_json and publication.form emit `<base>witness/<H>` in `$why`
     (never `rezono:w/<H>`), following the schema's `base` and resolving back to the single row."""
