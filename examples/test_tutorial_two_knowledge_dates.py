@@ -233,8 +233,10 @@ def _facts_source() -> Path:
 
 
 def _mentions_version(text: str, version: str) -> bool:
+    ver = re.escape(version)
     pattern = re.compile(
-        rf'(?:\bversion\s+{re.escape(version)}\b|\bv{re.escape(version)}\b|"version"\s*:\s*"{re.escape(version)}")',
+        rf'(?:\bversion\s+{ver}\b|\bversions\s+(?:\d+\s*(?:,|and|to|->|\u2192|-)\s*)*{ver}\b'
+        rf'|\bv{ver}\b|"version"\s*:\s*"{ver}")',
         re.IGNORECASE,
     )
     return bool(pattern.search(text))
@@ -364,14 +366,17 @@ def test_tutorial_two_knowledge_dates_step_matches_real_zorgtoeslag_ask(tmp_path
         f"inside a fenced output block; differing subjects: {diff_subjects}"
     )
 
-    # If the tutorial embeds any JSON answer excerpts from the gate, verify they match the real answers.
-    answers_by_date = {d1: body1, d2: body2}
+    # Evaluate any additional identical-question pairs (such as parameter queries) through real edge/gate POST /ask.
+    known_dates = {d1, d2}
+    extra_answers: list[dict] = []
     for (eq1, ed1), (eq2, ed2) in extra_pairs:
         extra1, extra2 = _post_ask(store_dir, "checker", "m-2", eq1, eq2)
         assert extra1["status"] == 200, (eq1, extra1)
         assert extra2["status"] == 200, (eq2, extra2)
         assert extra1["body"].get("restriction", {}).get("as_known") == ed1, extra1["body"]
         assert extra2["body"].get("restriction", {}).get("as_known") == ed2, extra2["body"]
+        known_dates.update((ed1, ed2))
+        extra_answers.extend((extra1["body"], extra2["body"]))
 
     # Determine from the real gate parameter witnesses which parameter and versions changed between d1 and d2.
     probe_subject = named_diff[0]
@@ -410,7 +415,7 @@ def test_tutorial_two_knowledge_dates_step_matches_real_zorgtoeslag_ask(tmp_path
         )
 
     # Verify any embedded rezono.answer/1 JSON block in the section matches the real gate output.
-    all_real_answers = [body1, body2] + [r["body"] for r in param_replies]
+    all_real_answers = [body1, body2, *extra_answers, *(r["body"] for r in param_replies)]
     for lang, body in blocks:
         if lang != "json":
             continue
@@ -419,7 +424,7 @@ def test_tutorial_two_knowledge_dates_step_matches_real_zorgtoeslag_ask(tmp_path
             restriction = parsed.get("restriction")
             assert isinstance(restriction, dict), parsed
             known_at = restriction.get("as_known")
-            assert known_at in answers_by_date, parsed
+            assert known_at in known_dates, parsed
             matching_real = [
                 ans for ans in all_real_answers
                 if ans.get("restriction") == restriction
