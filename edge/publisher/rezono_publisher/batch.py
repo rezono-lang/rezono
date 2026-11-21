@@ -258,8 +258,10 @@ def origin_check(model, fact_sources: list[dict], pack_dir: Path) -> dict:
 
 
 def epoch(pack_dir, *, epoch: int, knowledge_time: str, sources, proposal: str = "",
-          base_manifest: str = "", evidence=None) -> Epoch:
+          base_manifest: str = "", evidence=None, as_of: str | None = None,
+          known: str | None = None, dated_totality: str = "red") -> Epoch:
     import duckdb
+    from dataclasses import replace
     from rezono_compiler import batch, calc, emit, explain, rules_dl, scenarios, seal
     from rezono_compiler import checks as check_meta
     from rezono_compiler import facts as fact_files
@@ -267,6 +269,13 @@ def epoch(pack_dir, *, epoch: int, knowledge_time: str, sources, proposal: str =
     from rezono_compiler import rules as ir
     from rezono_compiler import sources as provenance
     from rezono_compiler.rules_dl import PROTECTED
+
+    if (as_of is None) != (known is None):
+        raise Blocked("batch.epoch: supply both as_of and known, or neither")
+    if dated_totality not in ("red", "warning"):
+        raise Blocked(f"batch.epoch: dated_totality must be 'red' or 'warning', got {dated_totality!r}")
+    if dated_totality == "warning" and (as_of is None or known is None):
+        raise Blocked("batch.epoch: dated_totality='warning' requires both as_of and known")
 
     timing.switch("compile")
     pack_dir = Path(pack_dir)
@@ -279,8 +288,11 @@ def epoch(pack_dir, *, epoch: int, knowledge_time: str, sources, proposal: str =
     files = emit.compile_pack(model)
     timing.switch("batch")  # facts in, relations and checks, then the rules and every witness instance
     facts: dict[str, list] = {}
+    dated_tables: set[str] = set()
     for f in fact_files.files(pack_dir):
-        for table, rs in fact_files.load(model, f).items():
+        loaded, dated = fact_files.load_with_dated_tables(model, f, as_of=as_of, known=known)
+        dated_tables |= dated
+        for table, rs in loaded.items():
             facts.setdefault(table, []).extend(rs)
     params = {t: [tuple(r.values()) for r in rs] for t, rs in emit.parameters(model).items()}
     admitted = admitted_rows(evidence)  # after the facts, before the rules
@@ -294,10 +306,20 @@ def epoch(pack_dir, *, epoch: int, knowledge_time: str, sources, proposal: str =
             db.executemany(f"INSERT INTO {emit.q(table)} VALUES ({', '.join('?' * len(rs[0]))})", rs)
     # One view per check kind. Each logical check gets its count from validation_result,
     # 0 when it has no rows, under the name it always had.
+    # decisions/bitemporal-history-publication.md §1.1: only when the caller explicitly passes
+    # `dated_totality="warning"` on an `(as_of, known)` epoch are dated-slot totality checks
+    # recorded as `"warning"` (preserving violation counts); default `"red"` never downgrades.
     logical = json.loads(files["bundle/schema-bundle.json"])["checks"]
     counts = dict(db.execute("SELECT info, COUNT(*) FROM validation_result GROUP BY info").fetchall()) if logical else {}
-    checks = [{"name": c["view"], "status": "red" if counts.get(c["view"]) else "green",
-               "violations": counts.get(c["view"], 0)} for c in logical]
+    dated_totality_views = {f"{t}__totality" for t in dated_tables} if dated_totality == "warning" else frozenset()
+    checks = [
+        {
+            "name": c["view"],
+            "status": ("warning" if c["view"] in dated_totality_views else "red") if counts.get(c["view"]) else "green",
+            "violations": counts.get(c["view"], 0),
+        }
+        for c in logical
+    ]
     # The check metadata (rezono__*) is schema, in the bundle: no snapshot of it, and the checker compares it.
     tables = [r[0] for r in db.execute("SELECT table_name FROM information_schema.tables "
                                        "WHERE table_type = 'BASE TABLE' ORDER BY table_name").fetchall()
@@ -314,6 +336,8 @@ def epoch(pack_dir, *, epoch: int, knowledge_time: str, sources, proposal: str =
             for t in tables}
 
     calc_program = calc.build(model, model.calc) if model.calc is not None else None
+    if calc_program is not None and as_of is not None and known is not None:
+        calc_program = replace(calc_program, as_of=(as_of, known))
     calc_witnesses, witnesses, protected = [], [], {}
     if model.rules:  # the calculation in its phase of the rules, on the same tables
         prog = ir.load(model.rules)
@@ -349,7 +373,7 @@ def epoch(pack_dir, *, epoch: int, knowledge_time: str, sources, proposal: str =
         calc_witnesses = calculate(calc_program, db, duckdb.connect(), rows)
 
     timing.switch("compile")  # the hashes of what the epoch was made with: the compiler's sources, the pack
-    fact_sources = provenance.read(model, pack_dir)  # where each base row comes from, never the engine's
+    fact_sources = provenance.read(model, pack_dir, as_of=as_of, known=known)  # where each base row comes from, never the engine's
     checks.append(origin_check(model, fact_sources, pack_dir))
     return Epoch(
         pack=model.meta["name"], theory=model.meta["theory"], epoch=epoch, knowledge_time=knowledge_time,
