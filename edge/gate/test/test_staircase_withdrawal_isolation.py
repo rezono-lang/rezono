@@ -319,14 +319,6 @@ def _run_probe() -> dict:
     return json.loads(result.stdout)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "M3: decisions/bitemporal-staircase-reading.md: staircase reading must not return 410 Gone or leak "
-        "withdrawal metadata for earlier epochs that are not readable by the caller role"
-    ),
-)
 def test_staircase_isolates_withdrawn_unreadable_earlier_epochs():
     got = _run_probe()
 
