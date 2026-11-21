@@ -408,7 +408,7 @@ def test_certificates_recorder_lets_pack_decide_from_observed_tls_inputs(
         "tls_root must supply the generated trusted root hash, not echo the peer's observed issuer_root_sha256"
     )
     leaf_names = {row["dns_name"] for row in rec.get("tls_leaf", [])}
-    assert "wrong.example.org" in leaf_names, (
+    assert any(name == "wrong.example.org" for name in leaf_names), (
         f"tls_leaf must supply the observed leaf SAN DNS name ('wrong.example.org'), got {leaf_names!r}"
     )
     clock_warning_days = [row["warning_days"] for row in rec.get("tls_clock", [])]
@@ -871,13 +871,20 @@ def test_access_recorder_renders_role_from_derived_right_and_publication_diff(
         override_action_resource: tuple[str, str] | None = None,
         roles_remaining_item_count: int | None = None,
     ) -> tuple[_BaseFakeCluster, list[dict[str, Any]], int]:
+        monkeypatch.delenv("GITHUB_ENV", raising=False)
         diff_calls = {"count": 0}
         for mod_obj, fn_name in (
             (pub_diff, "entries"),
             (pub_diff, "plan"),
             (pub_diff, "plan_role"),
+            (pub_diff, "publish"),
+            (pub_suppose, "answer"),
+            (pub_suppose, "suppose"),
             (checker_diff, "check_difference"),
+            (checker_diff, "changes"),
         ):
+            if not hasattr(mod_obj, fn_name):
+                continue
             orig = getattr(mod_obj, fn_name)
 
             def _make_spy(orig_fn: Any) -> Any:
@@ -888,15 +895,6 @@ def test_access_recorder_renders_role_from_derived_right_and_publication_diff(
                 return _spy
 
             monkeypatch.setattr(mod_obj, fn_name, _make_spy(orig))
-
-        if hasattr(pub_suppose, "answer"):
-            orig_suppose = pub_suppose.answer
-
-            def _spy_suppose(*args: Any, **kwargs: Any) -> Any:
-                diff_calls["count"] += 1
-                return orig_suppose(*args, **kwargs)
-
-            monkeypatch.setattr(pub_suppose, "answer", _spy_suppose)
 
         try:
             from examples.platform.portal import assumption_scene
@@ -1218,7 +1216,8 @@ def test_firewall_recorder_derives_allowances_and_witnessed_read_completeness(
             fake_cluster_cls=FakeFirewallCluster,
             fake_sudo=fake_sudo,
         )
-        monkeypatch.setattr(mod, "render", spy_render)
+        if hasattr(mod, "render"):
+            monkeypatch.setattr(mod, "render", spy_render)
         try:
             mod.main()
         except RuntimeError as exc:
