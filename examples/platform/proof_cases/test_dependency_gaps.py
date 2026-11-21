@@ -17,8 +17,14 @@ NO = "no"
 
 
 def records():
+    from management_probes import _committed
+
+    has_offer_port = "port" in _committed().kinds["offer"].slots
     function = lambda key: {"id": key, "recovery_allowed": NO, "open_by_design": NO}
     service = lambda key, product: {"id": key, "product": product, "role": "app-role", "step": 1}
+    offer = lambda key, product, fn, port: {
+        "id": key, "product": product, "function": fn, **({"port": port} if has_offer_port else {}),
+    }
     return {
         "zone": [{"id": "inner", "outside": NO, "entry_boundary": NO, "isolated_recovery": NO, "workload": "yes"}],
         "cluster_class": [{"id": "shared"}],
@@ -26,9 +32,9 @@ def records():
                            "build_authority": NO}],
         "function": [function("login"), function("queue"), function("search"), function("metrics")],
         "product": [{"id": "shop-app"}, {"id": "idp-app"}, {"id": "queue-app"}, {"id": "metrics-app"}],
-        "offer": [{"id": "o-login", "product": "idp-app", "function": "login", "port": 443},
-                  {"id": "o-queue", "product": "queue-app", "function": "queue", "port": 5672},
-                  {"id": "o-metrics", "product": "metrics-app", "function": "metrics", "port": 9090}],
+        "offer": [offer("o-login", "idp-app", "login", 443),
+                  offer("o-queue", "queue-app", "queue", 5672),
+                  offer("o-metrics", "metrics-app", "metrics", 9090)],
         "demand": [{"id": "d-login", "product": "shop-app", "function": "login"},
                    {"id": "d-queue", "product": "shop-app", "function": "queue"},
                    {"id": "d-search", "product": "shop-app", "function": "search"}],
