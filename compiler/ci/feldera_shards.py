@@ -25,13 +25,14 @@ ZERO_RULE_FUNCTIONAL = (
     "::test_zero_rule_functional_relation_emits_valid_sql_with_empty_state"
 )
 CALC_PARITY = "examples/test_calculation_engine_parity.py::test_feldera_calculations_match_duckdb_and_checker[subsidy]"
+RULE_WITNESS = "examples/test_rule_witness_engine_parity.py::test_feldera_rule_witnesses_match_batch[subsidy]"
 SHARDS = {
     "library": (f"{EXAMPLE}[library]",),
     "projects": (f"{EXAMPLE}[projects]",),
     "platform-incremental": (f"{INCREMENTAL}[platform]",),
     "platform-e2e": (PLATFORM_TEST,),
     "tenant-capacity-interface": (INTERFACE,),
-    "subsidy": (f"{INCREMENTAL}[subsidy]", CALC_PARITY),
+    "subsidy": (f"{INCREMENTAL}[subsidy]", CALC_PARITY, RULE_WITNESS),
     "compiler-calc": (f"{CALC}[full]", f"{CALC}[choice]"),
     "compiler-bound": ("compiler/tests/test_bound.py::test_the_check_view_on_feldera_holds_the_rows_past_the_bound",
                        BOOLEAN, RECORDED_DATES, RATIONAL_GUARDS, ZERO_RULE_FUNCTIONAL),
@@ -40,6 +41,7 @@ SHARDS = {
 EXPECTED = {node for group in SHARDS.values() for node in group}
 ORIGINAL = EXPECTED - {
     INTERFACE, BOOLEAN, ORDERED_SCALARS, RECORDED_DATES, CALC_PARITY, RATIONAL_GUARDS, ZERO_RULE_FUNCTIONAL,
+    RULE_WITNESS,
 }
 
 

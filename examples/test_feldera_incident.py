@@ -85,12 +85,6 @@ def test_a_confirmed_disagreement_requires_complete_comparison_evidence(tmp_path
     assert incident.disagreements(*records({CASES[0]: message})) == [junit_key(CASES[0])[1]]
 
 
-@pytest.mark.xfail(strict=True, raises=ValueError, reason=(
-    "M3: decisions/release-1-scope.md: section 6 (Engine agreement); "
-    "compiler/ci/feldera_shards.py does not yet expect "
-    "examples/test_rule_witness_engine_parity.py::test_feldera_rule_witnesses_match_batch[subsidy] in the live "
-    "collection. It joins the subsidy shard there and stays out of ORIGINAL, as INTERFACE and CALC_PARITY do. "
-    "Lift this mark in the pull request that routes it."))
 @pytest.mark.parametrize("missing_subsidy_report", [False, True])
 def test_classifier_uses_complete_reports_from_the_parallel_comparison(tmp_path, missing_subsidy_report):
     ci = Path(incident.__file__).resolve().parent

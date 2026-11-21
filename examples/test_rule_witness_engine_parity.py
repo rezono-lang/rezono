@@ -97,18 +97,6 @@ def oracle_input_dir():
         yield path
 
 
-@pytest.mark.xfail(strict=True, raises=MissingRuleWitnessParity, reason=(
-    "M3: docs/vision.md \"Proof\"; the batch and incremental engines must agree on conclusions and on witnesses. "
-    "Feldera's witnesses are compared with the batch run only for generated programs "
-    "(compiler/tests/test_rules_properties.py) and one platform rule (examples/test_platform_incremental_proof.py); "
-    "examples/test_feldera_rules.py compares conclusions only, and decisions/feldera-calculation-parity.md compares "
-    "calculation witnesses. Missing: the live route; select this test in compiler/ci/run_feldera_oracle.sh, add its "
-    "case to one shard in compiler/ci/feldera_shards.py (the subsidy shard already downloads the pack's dependencies; "
-    "keep the shard within its 60-minute limit) and leave it out of ORIGINAL there; scripts/feldera_admission.py "
-    "stays unchanged. The route changes the live collection that examples/test_live_feldera_shards.py and "
-    "examples/test_feldera_incident.py pin, so a planner adds the case there first. Lift this mark. A difference on "
-    "the live run is a defect in the witness SQL (compiler/rezono_compiler/rules_sql.py), not in this comparison. "
-    "Verify the exact implementation revision on hosted Feldera before queue admission."))
 @pytest.mark.parametrize("example", WITNESSED, ids=name)
 def test_feldera_rule_witnesses_match_batch(example, committed_packs, oracle_input_dir):
     files = committed_packs.compiled(example)
