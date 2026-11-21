@@ -359,7 +359,7 @@ def two_layers() -> dict:
     w["complete"], w["mine"] = complete, dict(complete)
     w["bundle"] = TWO_LAYERS_BUNDLE
     w["instances"] = [*EVERYONE, *ROLE_READS, *BY_CAPABILITY.values(), *AUTHORED.values(), *BUSY.values(), IDLE]
-    w["witnesses"] = [*EVERYONE, *ROLE_READS, *BY_CAPABILITY.values(), *AUTHORED.values(), BUSY["d1"], IDLE]
+    w["witnesses"] = [*EVERYONE, *ROLE_READS, *BY_CAPABILITY.values(), *AUTHORED.values(), *BUSY.values(), IDLE]
     w["full"] = set(complete)
     w["doc"] = TWO_LAYERS
     w["evidence"] = [{"kind": "doc", "rule": "readers", "ground": ["role__capability", "guest", "read"]},
@@ -377,6 +377,15 @@ def test_a_capability_gives_a_kind_in_full_with_its_mapping_row_as_evidence():
     assert access.grants(TWO_LAYERS, "guest", chains, True, {"read"}) == w["evidence"]
     assert access.full_kinds(TWO_LAYERS, "guest", chains, True, {"read"}) == KINDS | {"role"}
     assert access.full_kinds(TWO_LAYERS, "guest", chains, True) == {"person", "role"}
+
+
+def test_dropping_a_founded_alternative_is_refused_with_choice_mismatch():
+    """A publisher that omits a founded alternative witness (even while keeping the chosen witness) is refused."""
+    w = two_layers()
+    w["witnesses"] = [x for x in w["witnesses"] if x != BUSY["d2"]]
+    full, found = checked(w)
+    assert full == frozenset(w["full"])
+    assert found == {("choice_mismatch", None)}
 
 
 def test_without_the_mapping_row_the_capability_gives_nothing_in_full():
