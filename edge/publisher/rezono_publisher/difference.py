@@ -47,16 +47,69 @@ OPS = ("insert", "delete", "set", "unset")  # contracts/delta.yaml; any other op
 MEMBERSHIP = ("insert", "delete")  # the ops that write a kind's own table k(id)
 
 
-def entries(before: bytes, after: bytes) -> list[dict]:
+def _independent_tables(bundle: dict | None) -> frozenset[str]:
+    """Tables whose rows are independent memberships (`multivalued: true` slots and `kinds`) from `bundle`."""
+    if bundle is None:
+        return frozenset()
+    if not isinstance(bundle, dict):
+        raise views.Blocked("difference: malformed schema bundle")
+    fmt = bundle.get("format")
+    if fmt is not None and fmt != "rezono.schema-bundle/1":
+        raise views.Blocked("difference: malformed schema bundle format")
+    if not any(section in bundle for section in ("kinds", "attributes", "arrows")):
+        raise views.Blocked("difference: malformed schema bundle")
+    cardinality: dict[str, bool] = {}
+    for section in ("attributes", "arrows"):
+        if section not in bundle:
+            continue
+        items = bundle[section]
+        if not isinstance(items, list):
+            raise views.Blocked(f"difference: malformed schema bundle {section}")
+        for entry in items:
+            if not isinstance(entry, dict):
+                raise views.Blocked(f"difference: malformed schema bundle {section} entry")
+            table = entry.get("table")
+            mv = entry.get("multivalued")
+            if not isinstance(table, str) or not table or type(mv) is not bool:
+                raise views.Blocked(f"difference: malformed schema bundle {section} entry")
+            if table in cardinality:
+                raise views.Blocked(f"difference: duplicate schema slot table {table!r}")
+            cardinality[table] = mv
+    kind_tables: set[str] = set()
+    if "kinds" in bundle:
+        kinds = bundle["kinds"]
+        if not isinstance(kinds, list):
+            raise views.Blocked("difference: malformed schema bundle kinds")
+        for entry in kinds:
+            if not isinstance(entry, dict):
+                raise views.Blocked("difference: malformed schema bundle kinds entry")
+            table = entry["table"] if "table" in entry else entry.get("id")
+            if not isinstance(table, str) or not table:
+                raise views.Blocked("difference: malformed schema bundle kinds entry")
+            if table in cardinality or table in kind_tables:
+                raise views.Blocked(f"difference: duplicate schema table {table!r}")
+            kind_tables.add(table)
+    return frozenset(table for table, mv in cardinality.items() if mv) | frozenset(kind_tables)
+
+
+def entries(before: bytes, after: bytes, *, multivalued: bool = False) -> list[dict]:
     """The changed rows of one relation, by key.
 
-    A row in one snapshot only is `added` or `removed`. A changed cell is the one exception: a key of two or
-    more columns whose prefix (all columns but the last) holds exactly one row on each side, and those two
-    differ; it is one entry, `changed`, with the new key and the old one as `was`. So a single-valued
-    attribute that takes another value reads as one change, and every other change as rows."""
+    A row in one snapshot only is `added` or `removed`. When `multivalued` is False (a single-valued
+    schema slot or a non-slot multi-column relation), a key of two or more columns whose prefix (all
+    columns but the last) holds exactly one row on each side and those two differ is one `changed`
+    entry with the new key and the old one as `was`. When `multivalued` is True (a multivalued schema
+    slot), every row is an independent set membership (`added` or `removed`) and distinct values never
+    pair as `changed`."""
+    if type(multivalued) is not bool:
+        raise ValueError("multivalued must be a bool")
     b = {tuple(r["key"]) for r in json.loads(before)}
     a = {tuple(r["key"]) for r in json.loads(after)}
     removed, added = b - a, a - b
+    if multivalued:
+        out = ([{"key": list(k), "change": "added"} for k in added]
+               + [{"key": list(k), "change": "removed"} for k in removed])
+        return sorted(out, key=lambda e: e["key"])
     width_b = Counter(k[:-1] for k in b if len(k) > 1)
     width_a = Counter(k[:-1] for k in a if len(k) > 1)
     was = {k[:-1]: k for k in removed if len(k) > 1 and width_b[k[:-1]] == 1 and width_a[k[:-1]] == 1}
@@ -71,18 +124,24 @@ def entries(before: bytes, after: bytes) -> list[dict]:
     return sorted(out, key=lambda e: e["key"])
 
 
-def plan_role(st, pack: str, manifest: str, m: dict, base: dict, role: str):
+def plan_role(st, pack: str, manifest: str, m: dict, base: dict, role: str, bundle: dict | None = None):
     """One role's objects, the index last; raises views.Blocked if a check fails."""
     def mine(man):
         snaps = sorted((s for s in man["snapshots"] if s["role"] == role), key=lambda s: s["relation"])
         return snaps, views._snapshots(st, snaps)
 
+    if bundle is None:
+        bundle = _compiled(st, base, "bundle/schema-bundle.json")
+    independent = _independent_tables(bundle)
     base_snaps, before = mine(base)
     target_snaps, after = mine(m)
     at = f"{pack}/{manifest}/{role}/explain"
     made, counts, trees = [], {}, {}
     for rel in sorted(set(before) | set(after)):
-        rs = entries(before.get(rel, b"[]"), after.get(rel, b"[]"))
+        b_bytes, a_bytes = before.get(rel, b"[]"), after.get(rel, b"[]")
+        if b_bytes == a_bytes:
+            continue
+        rs = entries(b_bytes, a_bytes, multivalued=True) if rel in independent else entries(b_bytes, a_bytes)
         if not rs:
             continue
         c = Counter(e["change"] for e in rs)
@@ -95,7 +154,7 @@ def plan_role(st, pack: str, manifest: str, m: dict, base: dict, role: str):
         trees[rel] = {"file": root, "sha256": proof.sha256(files[root]), "levels": levels}
     with timing.phase("checker"):
         problems = check_difference(before, after, {k.removeprefix(at + "/"): b for k, b in made}, counts, trees,
-                                    proof.PIECE, proof.FANOUT)
+                                    proof.PIECE, proof.FANOUT, bundle=bundle)
     if problems:
         raise views.Blocked(f"role {role}: difference: {len(problems)} (first: {'; '.join(problems[:3])})")
     made_proof, proof_part = views._proof(st, pack, manifest, m, role, after, base=at)
@@ -169,7 +228,7 @@ def plan(st, pack: str, manifest: str, delta: dict | None = None) -> list[tuple[
     served &= {s["role"] for s in base["snapshots"] if s.get("complete") is False}
     files = []
     for role in sorted(served):
-        files += plan_role(st, pack, manifest, m, base, role)
+        files += plan_role(st, pack, manifest, m, base, role, bundle=bundle)
     return files
 
 
