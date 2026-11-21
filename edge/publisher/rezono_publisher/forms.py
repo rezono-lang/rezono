@@ -185,11 +185,11 @@ def exports(schema: dict, rows: list[dict], dataset: str, manifest: str, witness
     pack, Q20) leaves its export out, with a note: it refuses and never guesses (docs/standards.md)."""
     pin = {"manifest": manifest, "dataset": dataset}
     shacl, odcs, dcat = _connector("shacl"), _connector("odcs"), _connector("dcat")
-    by_id = {rd.witness_uri(w): w for w in witnesses}
+    by_id = {rd.witness_uri(w, schema): w for w in witnesses}
     named = _why_ids(rows)
     if named - set(by_id):
         raise rd.FormError(f"{len(named - set(by_id))} witness(es) named in $why are not in the role's files")
-    bundle = URIRef(f"{rdf.REZONO}m/{manifest}@{dataset}")
+    bundle = URIRef(f"{schema['base']}{manifest}@{dataset}")
 
     def prov() -> str:
         g = Graph()
@@ -198,7 +198,7 @@ def exports(schema: dict, rows: list[dict], dataset: str, manifest: str, witness
         g.add((bundle, RDF.type, PROV.Bundle))
         owners: dict[tuple, set] = {}
         for i in sorted(named):
-            one = rdf.witness_to_prov(by_id[i], manifest, dataset)
+            one = rdf.witness_to_prov(by_id[i], manifest, dataset, schema=schema)
             g += one
             if trace is not None:
                 ref = (by_id[i]["conclusion"]["relation"], by_id[i]["conclusion"]["key"])

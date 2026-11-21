@@ -612,15 +612,6 @@ def _eval_restore_fence_case(
     return out["platform_restore_goal"]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "M2: decisions/safe-step-rounds.md: Bind the recovery fence interval in "
-        "examples/platform/rules/platform_safe_rounds.dl to the management-unreachable fence "
-        "token instead of accepting any unrelated token's matching LoopExpectation as fence proof."
-    ),
-)
 def test_restore_fence_binds_token_to_management_unreachable():
     run = "rec-fence-binding-run"
     cut = "restored"
@@ -805,16 +796,6 @@ def _eval_empty_scope_case(
     return out["platform_cut_empty_scope"], out["platform_safe_frontier"]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "M2: decisions/safe-step-rounds.md: Bind platform_cut_empty_scope in "
-        "examples/platform/rules/platform_safe_rounds.dl to the LoopExpectation for "
-        "platform/managed-scope instead of treating any absent non-prerequisite token as "
-        "proving an empty managed scope."
-    ),
-)
 def test_empty_managed_scope_reads_loop_expectation_for_managed_scope():
     run = "startup-empty-scope-run"
     cut = "empty"

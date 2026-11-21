@@ -62,6 +62,7 @@ CORE_REASONS = {  # §2.3: always in scope, with the states each may label
     "no_value": ("not_applicable", "unknown"),
     "no_match": ("not_applicable", "unknown"),
     "multiple_values": ("invalid",),
+    "beyond_exact_bound": ("unknown",),
     "added_later": ("not_applicable", "unknown", "invalid"),
 }
 CORE_TYPES = {"Text", "Bool", "Integer", "Ratio", "Date", "DateTime", "Quantity", "Money", "Period", "Enum"}
@@ -114,8 +115,9 @@ _CURRENCY_SIGN = {"EUR": "€", "GBP": "£", "INR": "₹", "KRW": "₩", "ILS": 
 # contracts/source.yaml `Source`, restated (as checker/rezono_checker/sources.py does) so the reader imports no
 # contract code (§1).
 _SOURCE_KINDS = {"git", "pack", "scenario", "proposal", "query", "tool", "person", "document", "synthetic"}
+_ORIGIN_SIGNS = {"origin_decision", "origin_vendor", "origin_design", "origin_observation"}
 _SOURCE_FIELDS = {"kind", "name", "revision", "position", "url", "retrieved_at", "fragment_sha256", "ownership",
-                  "licence", "attribution"}
+                  "licence", "attribution", "origin_sign"}
 _URL = re.compile(r"https?://[^\s/?#]+([/?#][^\s]*)?")
 _INSTANT = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,6})?Z")
 _TRIMMED = re.compile(r"\S(.*\S)?", re.S)
@@ -1046,6 +1048,8 @@ def _source_problem(s) -> str:
         return "`fragment_sha256` is 64 hex"
     if "ownership" in s and s["ownership"] not in ("first_party", "third_party"):
         return "`ownership` is `first_party` or `third_party`"
+    if "origin_sign" in s and s["origin_sign"] not in _ORIGIN_SIGNS:
+        return "`origin_sign` is an OriginSign value"
     if any(f in s and not _TRIMMED.fullmatch(s[f]) for f in ("licence", "attribution")):
         return "`licence` and `attribution` are trimmed text"
     if s["kind"] == "document" and (

@@ -1,6 +1,14 @@
-# Signs of std-time (contracts/view.yaml): a shape per kind.
+# Signs of std-time (contracts/view.yaml): a shape per kind, and the default bitemporal staircase reading.
 kinds:
   - {kind: interval, shape: rect}
   - {kind: axis, shape: bar}
   - {kind: series, shape: bar}
   - {kind: reference_point, shape: pill}
+staircases:
+  - id: bitemporal
+    title_message: staircase.bitemporal
+    subject: interval
+    relation: judgement
+    valid_time_column: at
+    state_column: value
+    reason_column: reason

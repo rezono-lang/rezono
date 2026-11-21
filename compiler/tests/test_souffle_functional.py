@@ -4,10 +4,15 @@ from __future__ import annotations
 
 import shutil
 
+import duckdb
 import pytest
 
 import souffle
-from rezono_compiler import rules as ir
+from rezono_canon import canonical_bytes, sha256_hex
+from rezono_checker import rules as checker_rules
+from rezono_checker.canon import encode_key, sha256_json
+from rezono_checker.check import check, check_epoch
+from rezono_compiler import rules as ir, rules_sql
 
 
 def _col(name: str, typ: str = "string") -> dict:
@@ -213,6 +218,173 @@ def test_souffle_run_evaluates_functional_derivations_and_strict_aggregates(tmp_
     }
     assert got["resolved_pair"] == {("g1", "k_known", "v1")}
     assert got["conflict_pair"] == {("g1", "k_conflict")}
+
+
+def test_propagated_invalid_colliding_with_multiple_known_candidates_yields_multiple_values(tmp_path):
+    """When a propagated invalid state collides with two distinct known candidates on a
+    non-rational functional relation, SQL, Soufflé, and the independent checker all agree
+    on `invalid / multiple_values` (decisions/language-rezono-1.md §4)."""
+    doc = {
+        "format": "rezono.rules/2",
+        "pack": "sample",
+        "relations": [
+            {"name": "group_dom", "role": "base", "key": [_col("g")]},
+            {
+                "name": "src_raw", "role": "base",
+                "key": [_col("g"), _col("id"), _col("state"), _col("reason"), _col("n", "integer")],
+            },
+            {"name": "direct_cand", "role": "base", "key": [_col("g"), _col("n", "integer")]},
+            {
+                "name": "src_state", "role": "derived", "module": "core", "explain": "on_demand",
+                "key": [_col("g"), _col("id"), _col("state"), _col("reason"), _col("n", "integer")],
+            },
+            {
+                "name": "mixed_val", "role": "functional", "module": "core", "explain": "on_demand",
+                "key": [_col("g")], "domain": "group_dom",
+                "value": _col("value", "integer"), "conflict_policy": "publish",
+            },
+        ],
+        "rules": [
+            _rule("src_state_r", "src_state", ["?g", "?id", "?st", "?rsn", "?n"],
+                  [_lit("src_raw", "?g", "?id", "?st", "?rsn", "?n")], stratum="1"),
+            _rule("mixed_agg_r", "mixed_val", ["?g", "?total"],
+                  [_lit("group_dom", "?g")], stratum="2",
+                  aggregates=[{"relation": "src_state", "terms": ["?g", "_", "_", "_", "_"],
+                               "function": "sum", "over": "n", "as": "?total", "stratum": "1"}]),
+            _rule("mixed_direct_r", "mixed_val", ["?g", "?n"],
+                  [_lit("group_dom", "?g"), _lit("direct_cand", "?g", "?n")], stratum="2"),
+        ],
+    }
+    prog = ir.load(doc, require_witness=False)
+
+    # 1. Soufflé Datalog lowering: conflict (`multiple_values`) takes precedence over MaxSt = 3.
+    dl = souffle.program(prog)
+    assert 'mixed_val(K0_, "invalid", "multiple_values", 0) :- Func_mixed_val_Conflict(K0_).' in dl
+    assert (
+        'mixed_val(K0_, "invalid", Rsn_, 0) :- Func_mixed_val_MaxSt(K0_, 3), '
+        '!Func_mixed_val_Conflict(K0_), Func_mixed_val_MinRsn(K0_, 3, Rsn_).'
+    ) in dl
+    assert "MaxSt_ < 3" not in dl
+
+    facts = {
+        "group_dom": [("g_mix",), ("g_prop_only",)],
+        "src_raw": [
+            ("g_mix", "m1", "invalid", "bad_input", 0),
+            ("g_prop_only", "m1", "invalid", "bad_input", 0),
+        ],
+        "direct_cand": [("g_mix", 10), ("g_mix", 20)],
+    }
+
+    # 2. DuckDB SQL evaluation: g_mix -> invalid/multiple_values; g_prop_only -> invalid/bad_input.
+    con = duckdb.connect()
+    for ddl in rules_sql.duckdb_tables(prog):
+        con.execute(ddl)
+    con.executemany('INSERT INTO "group_dom" VALUES (?)', facts["group_dom"])
+    con.executemany('INSERT INTO "src_raw" VALUES (?, ?, ?, ?, ?)', facts["src_raw"])
+    con.executemany('INSERT INTO "direct_cand" VALUES (?, ?)', facts["direct_cand"])
+    for stmt in rules_sql.duckdb_program(prog, witnesses=False):
+        con.execute(stmt)
+    got_sql = set(con.execute('SELECT * FROM "mixed_val"').fetchall())
+    assert got_sql == {
+        ("g_mix", "invalid", "multiple_values", 0),
+        ("g_prop_only", "invalid", "bad_input", 0),
+    }
+
+    # 3. Soufflé oracle execution (when souffle binary is available): exact match with SQL.
+    if shutil.which("souffle") is not None:
+        got_souffle = souffle.run(prog, facts, tmp_path)
+        assert got_souffle["mixed_val"] == {
+            ("g_mix", "invalid", "multiple_values", "0"),
+            ("g_prop_only", "invalid", "bad_input", "0"),
+        }
+
+    # 4. Independent checker verification: accepts the exact SQL/Soufflé rows in check_epoch() and check().
+    def _ref(rel: str, *parts: str) -> dict:
+        return {"relation": rel, "key": encode_key(list(parts))}
+
+    src_rows = [
+        ["g_mix", "m1", "invalid", "bad_input", "0"],
+        ["g_prop_only", "m1", "invalid", "bad_input", "0"],
+    ]
+    rows = {
+        "group_dom": [["g_mix"], ["g_prop_only"]],
+        "src_raw": src_rows,
+        "direct_cand": [["g_mix", "10"], ["g_mix", "20"]],
+        "src_state": src_rows,
+        "mixed_val": [
+            ["g_mix", "invalid", "multiple_values", ""],
+            ["g_prop_only", "invalid", "bad_input", ""],
+        ],
+    }
+
+    def _agg_entry(g: str) -> dict:
+        members = sorted((encode_key(r), r[2]) for r in src_rows if r[0] == g)
+        return {
+            "relation": "src_state",
+            "position": 0,
+            "group_key": encode_key([g]),
+            "count": len(members),
+            "contributors_sha256": sha256_json([[k, st] for k, st in members]),
+            "result": "invalid",
+        }
+
+    witnesses = [
+        *[
+            {
+                "conclusion": _ref("src_state", *r),
+                "rule_id": "src_state_r",
+                "bindings": [
+                    {"variable": "?g", "value": r[0]},
+                    {"variable": "?id", "value": r[1]},
+                    {"variable": "?st", "value": r[2]},
+                    {"variable": "?rsn", "value": r[3]},
+                    {"variable": "?n", "value": r[4]},
+                ],
+                "premises": [{"row": _ref("src_raw", *r), "polarity": "positive", "stratum": 0}],
+            }
+            for r in src_rows
+        ],
+        {
+            "conclusion": _ref("mixed_val", "g_mix", "invalid", "multiple_values", ""),
+            "rule_id": "mixed_agg_r",
+            "bindings": [{"variable": "?g", "value": "g_mix"}],
+            "premises": [
+                {"row": _ref("group_dom", "g_mix"), "polarity": "positive", "stratum": 0},
+                {"row": _ref("direct_cand", "g_mix", "10"), "polarity": "positive", "stratum": 0},
+                {"row": _ref("direct_cand", "g_mix", "20"), "polarity": "positive", "stratum": 0},
+            ],
+            "aggregates": [_agg_entry("g_mix")],
+        },
+        {
+            "conclusion": _ref("mixed_val", "g_prop_only", "invalid", "bad_input", ""),
+            "rule_id": "mixed_agg_r",
+            "bindings": [{"variable": "?g", "value": "g_prop_only"}],
+            "premises": [{"row": _ref("group_dom", "g_prop_only"), "polarity": "positive", "stratum": 0}],
+            "aggregates": [_agg_entry("g_prop_only")],
+        },
+    ]
+
+    loaded = checker_rules.load_rules(doc)
+    snaps = {rel: canonical_bytes([{"key": row} for row in sorted(rs)]) for rel, rs in rows.items()}
+    manifest = {
+        "id": "m-souffle-fn-collision-1",
+        "snapshots": [
+            {"relation": rel, "role": "all", "complete": True, "uri": rel, "format": "json",
+             "sha256": sha256_hex(body)}
+            for rel, body in sorted(snaps.items())
+        ],
+    }
+    derived = checker_rules.derived_relations(doc, loaded)
+
+    epoch_rep = check_epoch(witnesses, manifest, loaded, snaps.__getitem__, derived=derived)
+    assert epoch_rep["valid"], epoch_rep["findings"]
+
+    mix_w = witnesses[2]
+    single_rep = check(
+        {"manifest_id": manifest["id"], "root": mix_w["conclusion"], "witnesses": [mix_w]},
+        manifest, loaded, snaps.__getitem__,
+    )
+    assert single_rep["valid"], single_rep["findings"]
 
 
 def test_souffle_oracle_emits_no_match_for_empty_functional_keys(tmp_path):

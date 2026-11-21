@@ -434,14 +434,6 @@ def _write_json_form_pack(directory: Path, decls: list[dict], facts: str | None 
     return directory
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "M3: decisions/language-rezono-1.md: section 2; compiler/rezono_compiler/rezono_derived.py "
-        "must accept only true/false for Bool literals (rejecting yes/no) and only Int for integer "
-        "scalars (rejecting Integer)."
-    ),
-)
 def test_rezono_1_derived_rejects_yes_no_booleans_and_integer_scalar(tmp_path):
     # Counter-cases: true/false and Int compile cleanly.
     ok_source = """\

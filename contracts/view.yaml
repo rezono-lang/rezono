@@ -124,6 +124,10 @@ enums:
   FlowDirection:
     description: "How a Flow lays out its lanes: `down`, lanes as rows; `right`, lanes as columns."
     permissible_values: {down: {}, right: {}}
+  ValidTimeSource:
+    description: Where a staircase reading takes its valid-time coordinate when not from a column of `relation`.
+    permissible_values:
+      as_of: {description: "From the epoch's calc__as_of.valid_at evaluation date."}
 
 classes:
   Key:
@@ -656,6 +660,22 @@ classes:
         pattern: "^(paper|ink|ink\\.muted|rule|proof)$"
       value: {required: true, description: "A hex colour.", pattern: "^#[0-9a-fA-F]{6}$"}
 
+  StaircaseReading:
+    description: >-
+      A bitemporal staircase reading: one subject's derived outcome across valid time and published knowledge
+      epochs, served as `rezono.staircase/1` by the gate.
+    attributes:
+      id: {required: true, pattern: "^[a-z][a-z0-9_]*$"}
+      title_message: {required: true, description: Message id of the reading's title.}
+      subject: {required: true, description: Kind id of the subject.}
+      relation: {required: true, description: Derived relation or calculation view holding the outcome rows.}
+      subject_column: {description: "Column of `relation` holding the subject id; defaults to the first column."}
+      valid_time_column: {description: "Column of `relation` holding the valid-time coordinate."}
+      valid_time_source: {range: ValidTimeSource, description: "Where valid time comes from when not a column of `relation`."}
+      state_column: {description: "Column of `relation` holding the outcome state (`state` or `value`)."}
+      value_column: {description: "Column of `relation` holding the outcome value."}
+      reason_column: {description: "Column of `relation` holding the reason code."}
+
   SheetBindings:
     description: >-
       The sheet part of a pack's channel table: which kinds and slots a map sheet draws, and with
@@ -669,3 +689,4 @@ classes:
       timelines: {range: TimelineSheet, multivalued: true, inlined_as_list: true, description: "Timelines, each at `/<pack>/timeline/<id>`."}
       nests: {range: NestSheet, multivalued: true, inlined_as_list: true, description: "Nests, each at `/<pack>/nest/<id>/<element>`."}
       reports: {range: ReportSheet, multivalued: true, inlined_as_list: true}
+      staircases: {range: StaircaseReading, multivalued: true, inlined_as_list: true, description: "Bitemporal staircase readings."}

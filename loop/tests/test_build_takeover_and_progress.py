@@ -63,7 +63,7 @@ def _declared_kinds():
 def _publish_roles(tmp, records, roles):
     build = tmp / "build"
     shutil.copytree(ROOT / "build", build)
-    for pack in ("std-loop", "std-order", "std-decision", "std-access"):
+    for pack in ("std-loop", "std-order", "std-decision", "std-access", "std-review"):
         shutil.copytree(ROOT / "packs" / pack, tmp / "packs" / pack)
     (build / "facts").mkdir(exist_ok=True)
     (build / "facts" / "input.yaml").write_text(yaml.safe_dump(records), encoding="utf-8")

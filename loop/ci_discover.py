@@ -388,27 +388,6 @@ checks = [dict(c) for c in manifest.get("checks", []) if isinstance(c, dict)]
 if not checker_valid:
     checks.append({"name": "rezono:proofs", "status": "red", "violations": 1})
 
-def _zero_violations(check: dict) -> bool:
-    if "violations" not in check:
-        return True
-    val = check["violations"]
-    return type(val) is int and val == 0
-
-if not any(c.get("name") == "rezono:schema" for c in checks):
-    schema_checks = [
-        c for c in checks
-        if isinstance(c.get("name"), str) and not c["name"].startswith("rezono:")
-    ]
-    schema_ok = bool(schema_checks) and all(
-        c.get("status") == "green" and _zero_violations(c)
-        for c in schema_checks
-    )
-    checks.append({
-        "name": "rezono:schema",
-        "status": "green" if schema_ok else "red",
-        "violations": 0 if schema_ok else 1,
-    })
-
 verified_manifest = {**manifest, "checks": checks}
 result_path.write_text(
     json.dumps({"manifest": verified_manifest, "rows": rows}, sort_keys=True),

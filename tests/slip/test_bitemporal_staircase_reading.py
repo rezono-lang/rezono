@@ -144,17 +144,6 @@ def _witness_hashes(store_dir: Path, manifest_id: str, role: str) -> set[str]:
     return {canonical_sha256(w) for w in all_witnesses}
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "extra: decisions/bitemporal-staircase-reading.md: Give packs/std-time a default bitemporal "
-        "staircase reading in channels.yaml (inherited by any std-time-bound pack without declaring "
-        "staircases itself) and serve GET /<pack>/<manifest>/readings/staircase?subject=<id> in "
-        "edge/gate/src/local.ts returning rezono.staircase/1 with verified cells, explicit unknown/known "
-        "states, canonical <base>witness/<H> IRIs, and role-scoped 404 non-disclosure."
-    ),
-)
 def test_std_time_bound_pack_serves_bitemporal_staircase_reading_via_gate(tmp_path: Path):
     st_dir = tmp_path / "store"
     st = store.FileStore(st_dir)

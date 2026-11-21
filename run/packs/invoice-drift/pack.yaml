@@ -2,6 +2,6 @@ name: invoice-drift
 version: 0.1.0
 default_language: en
 imports:
-  - {name: std-time, path: ../../../packs/std-time, sha256: bb2863a03792228005fa6784ed1022c07ac82139cdbf0ff7914cd273b3e046a7}
+  - {name: std-time, path: ../../../packs/std-time, sha256: 8086365e4aecf05bada7b2eb7571242dd26fbbf2b84c767a7c221bcf6c436f6d}
   - {name: std-decision, path: ../../../packs/std-decision, sha256: 4a0207fd27a016c932844705df813adc1037c7258ef819ae57e1642862e04a31}
   - {name: std-explain, path: ../../../packs/std-explain, sha256: 72e2897cd9baaa4962cf2235f83a332262b4da1e6d34e82d5f64d8335e27be0b}

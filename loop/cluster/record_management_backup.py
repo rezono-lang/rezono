@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from hashlib import sha256
 import json
 from pathlib import Path
+import subprocess
 from tempfile import TemporaryDirectory
 from time import monotonic, sleep, time_ns
 from typing import Any
@@ -520,6 +521,75 @@ def _scale_down_management(cluster: ManagementCluster) -> None:
     raise RuntimeError("Management service endpoints stayed ready after scale-down")
 
 
+DATASET = "management-catalog"
+
+
+class ManagementFence:
+    """Keep the stopped management plane fenced and watch its namespace for any Pod over the whole interval."""
+
+    def __init__(self, cluster: ManagementCluster, name: str) -> None:
+        self.cluster, self.name = cluster, name
+        _scale_down_management(cluster)
+        cluster.apply({
+            "apiVersion": "networking.k8s.io/v1",
+            "kind": "NetworkPolicy",
+            "metadata": {"name": name, "namespace": MGMT_NAMESPACE,
+                         "labels": {"rezono.org/management-fence": name}},
+            "spec": {"podSelector": {}, "policyTypes": ["Ingress", "Egress"]},
+        })
+        # A list-then-watch from this moment on: any Pod in the management namespace breaks the fence.
+        self.watch = subprocess.Popen(
+            [*cluster.namespaced(MGMT_NAMESPACE, "get", "pods", "--watch", "--output-watch-events", "-o", "json"),
+             "--request-timeout=0"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        sleep(2)
+        if self.watch.poll() is not None:
+            raise RuntimeError(f"The management fence watch ended at once: {self.watch.stderr.read()}")
+        self.state = self.read_state()
+        if self.state["replicas"] != 0 or self.state["ready_endpoints"]:
+            raise RuntimeError(f"The management plane is not stopped under the fence: {self.state}")
+
+    def read_state(self) -> dict[str, Any]:
+        deployment = self.cluster.read("get", "deployment", MGMT_DEPLOYMENT, namespace=MGMT_NAMESPACE)
+        policy = self.cluster.read("get", "networkpolicy", self.name, namespace=MGMT_NAMESPACE)
+        slices = self.cluster.read("get", "endpointslices", "-l", f"kubernetes.io/service-name={MGMT_DEPLOYMENT}",
+                                   namespace=MGMT_NAMESPACE).get("items", [])
+        pods = self.cluster.read("get", "pods", namespace=MGMT_NAMESPACE).get("items", [])
+        return {
+            "replicas": deployment["spec"]["replicas"],
+            "deployment_generation": deployment["metadata"]["generation"],
+            "policy_uid": policy["metadata"]["uid"],
+            "policy_resource_version": policy["metadata"]["resourceVersion"],
+            "ready_endpoints": [ep for sl in slices for ep in (sl.get("endpoints") or [])
+                                if ep.get("conditions", {}).get("ready") is True],
+            "pods": [pod["metadata"]["name"] for pod in pods],
+        }
+
+    def release(self) -> tuple[int, int]:
+        """Stop the watch and return (watched Pod events, lost watch intervals)."""
+        alive = self.watch.poll() is None
+        self.watch.terminate()
+        output, errors = self.watch.communicate(timeout=10)
+        decoder, position, seen = json.JSONDecoder(), 0, 0
+        text = output.strip()
+        while position < len(text):
+            item, end = decoder.raw_decode(text, position)
+            if item.get("object", {}).get("kind") == "Pod":
+                seen += 1
+            position = end
+            while position < len(text) and text[position].isspace():
+                position += 1
+        # kubectl reports an empty initial list on stderr; anything else means the watch lost its stream.
+        failures = [line for line in errors.splitlines() if line.strip() and not line.startswith("No resources found")]
+        return seen, 0 if alive and not failures else 1
+
+    def close(self) -> None:
+        if self.watch.poll() is None:
+            self.watch.kill()
+            self.watch.communicate(timeout=10)
+
+
 def _run_isolated_restore_read(
     cluster: ManagementCluster,
     store_url: str,
@@ -595,6 +665,29 @@ def _evaluate_backup_rules(records: dict[str, list[dict[str, Any]]]) -> dict[str
         return batch.read(con, program, targets)
 
 
+def _eligibility_records(today: str, run_key: str, backup_id: str) -> dict[str, list[dict[str, Any]]]:
+    return {
+        "backup_decision": [{"id": "daily", "as_of": today, "max_age_days": 2}],
+        "backup_plan": [{
+            "id": "management-backup-plan",
+            "service": "management",
+            "dataset": DATASET,
+            "target": STORE_POD,
+            "decided_by": "daily",
+            "interval_days": 1,
+            "retention_days": 14,
+        }],
+        "backup_inventory": [{
+            "id": f"scan-{run_key}",
+            "service": "management",
+            "target": STORE_POD,
+            "day": today,
+            "complete": True,
+        }],
+        "backup_copy": [{"id": backup_id, "service": "management", "target": STORE_POD, "taken": today}],
+    }
+
+
 def _cleanup_trial_resources(cluster: ManagementCluster) -> None:
     cluster.delete("pod", PROBE_POD, namespace=PROBE_NAMESPACE, limit=45)
     for namespace in (RECOVERY_NAMESPACE, MGMT_NAMESPACE, STORE_NAMESPACE):
@@ -614,6 +707,7 @@ def main() -> None:
     store_host_endpoint = f"{STORE_POD}.{STORE_NAMESPACE}.svc.cluster.local:{SERVICE_PORT}"
 
     events: list[dict[str, Any]] = []
+    stack_fence: ManagementFence | None = None
     try:
         store_url = _deploy_store(cluster)
         mgmt_pod, mgmt_cluster_ip = _deploy_management(cluster)
@@ -656,7 +750,36 @@ def main() -> None:
         )
         events.append(captured)
 
-        _scale_down_management(cluster)
+        # Before the outage: bind the named dataset to this exact copy after the decision finds it current.
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        eligibility = _evaluate_backup_rules(_eligibility_records(today, run_key, backup_id))
+        if eligibility["managed_backup_state"] != {("management-backup-plan", "current")}:
+            raise RuntimeError(f"The captured copy is not current: {eligibility['managed_backup_state']}")
+        binding = cluster.make_event(
+            "backup",
+            "management-dataset-bound",
+            trial=trial_id,
+            dataset=DATASET,
+            backup=backup_id,
+            source_cluster="management",
+            source_evidence=captured["evidence"],
+            payload_sha256=captured["payload_sha256"],
+            backup_state="current",
+            decision="daily",
+        )
+        events.append(binding)
+
+        fence = ManagementFence(cluster, f"management-fence-{run_key}")
+        stack_fence = fence
+        hold = cluster.make_event(
+            "backup",
+            "management-fence-acquired",
+            trial=trial_id,
+            cluster="management",
+            fence=fence.name,
+            **{key: value for key, value in fence.state.items() if key != "ready_endpoints"},
+        )
+        events.append(hold)
 
         opening = _probe_management(cluster, probe_pod, mgmt_cluster_ip, SERVICE_PORT)
         if opening.get("reachable") is not False:
@@ -685,6 +808,7 @@ def main() -> None:
             "backup",
             "recovered-read",
             backup=backup_id,
+            dataset=DATASET,
             cluster="recovery",
             trial=trial_id,
             source_evidence=captured["evidence"],
@@ -707,7 +831,32 @@ def main() -> None:
             detail=closing.get("error", ""),
         )
         events.append(closing_event)
+
+        watched, lost = fence.release()
+        after = fence.read_state()
+        unchanged = all(after[key] == fence.state[key] for key in
+                        ("replicas", "deployment_generation", "policy_uid", "policy_resource_version", "pods"))
+        if watched or lost or not unchanged or after["ready_endpoints"]:
+            raise RuntimeError(f"The management fence did not hold: watched={watched} lost={lost} after={after}")
+        events.append(cluster.make_event(
+            "backup",
+            "management-fence-coverage",
+            trial=trial_id,
+            cluster="management",
+            fence=fence.name,
+            fence_evidence=hold["evidence"],
+            complete=True,
+            lost=lost,
+            watched_pod_events=watched,
+            start=hold["observed_at"],
+            end=closing_event["observed_at"],
+            opening_probe=opening_event["evidence"],
+            closing_probe=closing_event["evidence"],
+            readback_evidence=readback["evidence"],
+        ))
     finally:
+        if stack_fence is not None:
+            stack_fence.close()
         _cleanup_trial_resources(cluster)
 
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")

@@ -37,7 +37,7 @@ if TYPE_CHECKING:
     from . import modules
 
 REZONO_1_FORMAT = "rezono.module/5"
-SCALARS = {"Int": "integer", "Integer": "integer", "Text": "string", "Bool": "boolean", "Date": "date"}
+SCALARS = {"Int": "integer", "Text": "string", "Bool": "boolean", "Date": "date"}
 COMPARE = rules_dl.COMPARE
 ARITH = rules_dl.ARITH
 NEGATED = {"eq": "ne", "ne": "eq", "lt": "ge", "le": "gt", "gt": "le", "ge": "lt"}
@@ -238,6 +238,16 @@ def ir_type(pack, typ: tuple) -> str:
     return typ[1]
 
 
+def validate_note(site: Site, at: str, decl: Mapping[str, object]) -> tuple[str | None, str | None]:
+    """Validate optional `means` and `source` note members as strings and return `(means, source)`."""
+    for field_name, label in (("means", "sentence"), ("source", "source")):
+        if field_name in decl and not isinstance(decl[field_name], str):
+            site.refuse(f"{at}/{field_name}", f"a {label} is text", "R000")
+    means = decl.get("means")
+    source = decl.get("source")
+    return means if isinstance(means, str) else None, source if isinstance(source, str) else None
+
+
 VERSION_FIELDS = frozenset({"version", "replaces", "valid", "known", "value", "source", "definitions"})
 
 
@@ -399,12 +409,8 @@ def _signature(site: Site, module: modules.Module, names: modules.Names, pack, a
         signature.value_type = ir_type(pack, result_type)
         signature.optional = card == "?"
     signature.enum_type = _enum_name(names, pack, module, decl.get("type"))
-    signature.note_source = decl.get("source")
+    _, signature.note_source = validate_note(site, at, decl)
     signature.as_of = as_of
-    if "means" in decl and not isinstance(decl["means"], str):
-        site.refuse(f"{at}/means", "a sentence is text", "R000")
-    if "source" in decl and not isinstance(decl["source"], str):
-        site.refuse(at, "a source is text", "R000")
     return signature
 
 
@@ -1538,9 +1544,9 @@ class Lowering:
             value = json.loads(token)
             if isinstance(value, str) and value != "_" and not value.startswith("?"):
                 return "const", value, "string"
-        if token in ("yes", "true"):
+        if token == "true":
             return "const", "true", "boolean"
-        if token in ("no", "false"):
+        if token == "false":
             return "const", "false", "boolean"
         if isinstance(token, str) and re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*", token):
             return "const", token, "string"  # an element id or a value of an enum

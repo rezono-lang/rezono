@@ -74,18 +74,6 @@ def _desired_rules() -> list[PacketRule]:
     return intended
 
 
-def _nft_script(rendered: bytes) -> str:
-    """Rewrite JSON witness comments into plain nftables comments without changing match clauses."""
-    lines = []
-    for line in rendered.decode("utf-8").split("\n"):
-        expression, separator, witness = line.partition(" accept comment ")
-        if separator:
-            identity = hashlib.sha256(witness.encode("utf-8")).hexdigest()
-            line = f'{expression} accept comment "rezono-allow-{identity}"'
-        lines.append(line)
-    return "\n".join(lines)
-
-
 def _parse_ip_expr(value: object) -> tuple[int, int]:
     """Parse an nftables JSON IPv4 address, range, or prefix into inclusive integer bounds."""
     if isinstance(value, str):
@@ -195,7 +183,7 @@ def _apply_and_readback(netns: str, rendered: bytes) -> tuple[str, list[dict[str
     """Apply rendered rules in an isolated netns, drop 8443, add 9443, and read back the full table."""
     sudo("ip", "netns", "add", netns)
     try:
-        sudo("ip", "netns", "exec", netns, "nft", "-f", "-", data=_nft_script(rendered))
+        sudo("ip", "netns", "exec", netns, "nft", "-f", "-", data=rendered.decode("utf-8"))
         initial_raw = sudo("ip", "netns", "exec", netns, "nft", "-j", "list", "table", "ip", TABLE)
         _, initial_rules = _parse_nft_table(initial_raw)
         handles_8443 = [

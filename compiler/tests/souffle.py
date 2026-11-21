@@ -407,10 +407,11 @@ def _functional_rules(prog, rel):
          f"St_ > 0, !{prefix}_NotMinRsn({_join_args(key_vars, ['St_', 'Rsn_'])})."),
         (f"{name}({_join_args(key_vars, [_quote(empty_state), _quote(empty_reason), sentinel])}) :- "
          f"{prefix}_Dom({_join_args(key_vars)}), !{prefix}_HasCand({_join_args(key_vars)})."),
-        (f"{name}({inv_head}) :- "
-         f"{prefix}_MaxSt({_join_args(key_vars, ['3'])}), {prefix}_MinRsn({_join_args(key_vars, ['3', 'Rsn_'])})."),
         (f"{name}({mv_head}) :- "
-         f"{prefix}_MaxSt({_join_args(key_vars, ['MaxSt_'])}), MaxSt_ < 3, {prefix}_Conflict({_join_args(key_vars)})."),
+         f"{prefix}_Conflict({_join_args(key_vars)})."),
+        (f"{name}({inv_head}) :- "
+         f"{prefix}_MaxSt({_join_args(key_vars, ['3'])}), !{prefix}_Conflict({_join_args(key_vars)}), "
+         f"{prefix}_MinRsn({_join_args(key_vars, ['3', 'Rsn_'])})."),
         (f"{name}({unk_head}) :- "
          f"{prefix}_MaxSt({_join_args(key_vars, ['2'])}), !{prefix}_Conflict({_join_args(key_vars)}), "
          f"{prefix}_MinRsn({_join_args(key_vars, ['2', 'Rsn_'])})."),

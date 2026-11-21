@@ -186,7 +186,7 @@ def checks(bundle: dict, rules_doc: dict, schema: dict, rows: list, derived: dic
     return out
 
 
-def _prov_witnesses(g: Graph) -> dict:
+def _prov_witnesses(g: Graph, schema: dict | None = None) -> dict:
     """Each witness of a role's `prov.ttl`, read back one activity at a time (`rdf.prov_to_witness` reads one)."""
     out = {}
     for a in g.subjects(RDF.type, PROV.Activity):
@@ -199,7 +199,9 @@ def _prov_witnesses(g: Graph) -> dict:
                     sub.add(t)
         for c in g.subjects(PROV.wasGeneratedBy, a):
             sub.add((c, PROV.wasGeneratedBy, a))
-        out[str(a)] = rdf.prov_to_witness(sub)
+        out[str(a)] = rdf.prov_to_witness(
+            sub, schema=None if str(a).startswith(rdf.REZONO + "w/") else schema
+        )
     return out
 
 
@@ -224,7 +226,7 @@ def published(objects: dict, at: str) -> dict:
 
     def prov():
         g = Graph().parse(data=objects["prov.ttl"].decode("utf-8"), format="turtle")
-        witnesses = _prov_witnesses(g)
+        witnesses = _prov_witnesses(g, schema=schema)
         why = set()
         for r in rows:
             for proof in r.get("$why", {}).values():

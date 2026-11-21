@@ -522,15 +522,6 @@ def test_load_startup_topology_does_not_merge_pack_signatures_into_external_fact
     assert load_startup_topology(external_with_sigs) == default_topo
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "M2: decisions/safe-step-rounds.md: section 1; loop/startup_rounds.py load_startup_topology "
-        "must not merge examples/platform/facts/port_decision.yaml or *_transport_source.yaml into "
-        "external facts files outside pack_root/facts, and must read sibling port_decision.yaml and "
-        "*_transport_source.yaml from the external facts directory when present."
-    ),
-)
 def test_load_startup_topology_does_not_merge_pack_ports_or_transport_into_external_facts(tmp_path: Path) -> None:
     # Counter-case: default pack facts still merge their own siblings under examples/platform/facts/.
     default_topo = load_startup_topology()
