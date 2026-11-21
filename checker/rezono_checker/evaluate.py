@@ -107,21 +107,36 @@ def _holds(op, left, right, compare_as=None):
 
 def cells(spec, members) -> list:
     """What each row of a group gives a `sum`, `min` or `max`: its value in the column the aggregate reads, or,
-    for a key column the aggregate ranges over, that part of the key as a known value. `members` are
-    (key parts, values); a missing column counts as unknown."""
+    for a key column the aggregate ranges over, that part of the key as a known value (or its co-located
+    state and value when reading a functional relation's value column). `members` are (key parts, values);
+    a missing column counts as unknown."""
     if spec.over_key is not None:
+        state_key = getattr(spec, "state_key", None)
+        if state_key is not None:
+            return [
+                {"state": "known", "value": parts[spec.over_key]}
+                if parts[state_key] == "known"
+                else {"state": parts[state_key]}
+                for parts, _ in members
+            ]
         return [{"state": "known", "value": parts[spec.over_key]} for parts, _ in members]
     return [values.get(spec.over, {"state": "unknown"}) for _, values in members]
 
 
-def _fold(function, cells):
-    """formal.md §6, exact: invalid blocks, unknown is strict, not_applicable does not count."""
+def _fold(function, cells, fmt=None):
+    """Exact aggregate fold: strict four-state (invalid -> unknown -> not_applicable -> known) for
+    rezono.rules/2 and without a format (decisions/language-rezono-1-aggregate-spelling.md, section 2);
+    formal.md §6 (not_applicable skipped) for rezono.rules/1."""
     states = {v["state"] for v in cells}
     known = [v for v in cells if v["state"] == "known"]
     if "invalid" in states or len({measure(v) for v in known}) > 1:
         return "invalid"  # also amounts in two currencies, or quantities in two units: they do not add up
     if "unknown" in states:
         return "unknown"
+    if fmt != "rezono.rules/1" and "not_applicable" in states:
+        return "not_applicable"
+    if function == "count":
+        return f"known:{len(known)}"
     try:
         numbers = [number(payload(v)) for v in known]
     except ValueError:
