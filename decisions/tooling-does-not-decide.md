@@ -64,9 +64,9 @@ Every push to a new commit SHA invalidates prior attestations automatically with
 
 Moving `scripts/components.py`'s dependency tables into `build/` **comes first** after the shared forms:
 
-- **Pack facts in `build/`.** Component/file consumers (`BuildFileConsumer`), shared path readers (`BuildSharedReader`), full-selection trigger paths (`BuildFullSelectionPath`), job-input readers (`BuildJobInput`), component job capabilities (`needs_oracle`, `needs_full_history`, `needs_worker_seed`), and auxiliary CI target rules (`BuildTargetRule(id, target, path_prefix, kind)` with `kind` in `"direct"` | `"full_fallback"`).
+- **Pack facts in `build/`.** Component/file consumers (`BuildFileConsumer`), shared path readers (`BuildSharedReader`), full-selection trigger paths (`BuildFullSelectionPath`), job-input readers (`BuildJobInput`), component job capabilities (`needs_oracle`, `needs_full_history`, `needs_worker_seed`), shard-count configuration (`BuildShardConfig(id, folder, shards)` with integer `shards >= 1`, declared in `build/schema/` and authored in `build/facts/` with a matching `.sources.yaml` provenance sidecar), and auxiliary CI target rules (`BuildTargetRule(id, target, path_prefix, kind)` with `kind` in `"direct"` | `"full_fallback"`).
 - **Derived relations in `build/`.** `build_selected_job(run, component, reason)` and `build_full_selection(run, reason)` derive the component and test selection directly from `build/` pack facts, manifest observations and verified receipts — never by reading Python tables from `scripts/components.py`. Auxiliary targets (`cluster-suite`, `role-publication`, `feldera-oracle`, fast-check sampling) share `build_target_selected(run, target, reason)` and `build_target_not_required(run, target)` over the same verified cut and changed-path observations.
-- **What stays thin code `(d)`.** Reading the Git diff, walking the repository tree, reading regular manifest blobs and writing the workflow matrix JSON remain thin Python adapters.
+- **What stays thin code `(d)`.** Reading the Git diff, walking the repository tree, reading regular manifest blobs, and expanding verified selections with `BuildShardConfig` facts through the single shared matrix renderer (`loop/build_job_matrix.py`) into workflow matrix JSON remain thin Python adapters.
 
 ### 2.4 Single-effect watchdog (`packs/std-loop`)
 
