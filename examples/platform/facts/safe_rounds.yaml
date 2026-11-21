@@ -1,0 +1,2 @@
+loop_expectation:
+  - {id: platform/managed-scope, value: empty}
