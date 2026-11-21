@@ -119,15 +119,6 @@ def _oracle_reads_offer_port(oracle_path: Path) -> list[int]:
     return sorted(set(lines))
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "M2: decisions/platform-facts-not-conclusions.md: section 3 (Retire). Remove Offer.port from "
-    "schema/core.yaml, all port fields on offer rows in facts/core.yaml, and the offer.port label "
-    "in labels/en.yaml; merge duplicate (product, function) offers in facts/core.yaml (o-git-https "
-    "and o-git-ssh -> one offer) and switch choice_evidence.dl and unique_evidence.dl off offer__port "
-    "atomically; update examples/platform/oracle.py to derive provides from PortDecision and vendor "
-    "transport statements instead of reading r['port'] on offers; and include the planner step "
-    "removing offer__port from examples/test_platform_incremental_proof.py. "
-    "Waits for examples/platform/test_platform_derived_ports.py--test_service_port_follows_the_vendor_statement_unless_decided."))
 def test_offer_port_is_retired():
     schema = yaml.safe_load((PLATFORM / "schema/core.yaml").read_text(encoding="utf-8"))
     assert "port" not in schema["classes"]["Offer"]["attributes"], "Offer.port is still declared in schema/core.yaml"
