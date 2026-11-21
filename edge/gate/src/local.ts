@@ -8,7 +8,8 @@ import { ask as trace, AskError, calcSteps, memoryGraph, parseAfter, questionOf,
 import { catalogueQueryScope } from './catalogue-query.ts';
 import { roleBundle } from './catalogue.ts';
 import { readPublishedVariantDifference, scenarioAnswer, type DifferenceCursor } from './difference.ts';
-import { ask as evaluate, roleSchema, type Asking } from './expr.ts';
+import { ask as evaluate, roleSchema, schemaBase, type Asking, type View } from './expr.ts';
+import { checkBase, IriError, parsePin, pinIri, splitConclusion, witnessDigest } from './iri.ts';
 import { compareKey, pageByKey, type KeyRange } from './pieces.ts';
 import { rowQueryScope, type RowSelection } from './row-query.ts';
 import {
@@ -430,8 +431,12 @@ async function named(view: Current, withdrawals: readonly WithdrawalRecord[], ro
 	const rules = compiled ? await view.object(compiled, 'bundles') as RuleDoc : undefined;
 	const steps = await stepsOf(rules, published.witnesses, async (name) => (await view.rows(name)).map((row) => row.key));
 	const calc = published.calc_witnesses ?? [];
+	// Each witness shown carries its IRI under the base of the role's publication schema; a bad base is refused.
+	const base = schemaBase(view.bundle);
+	try { checkBase(base); } catch (error) { if (error instanceof IriError) fault(); throw error; }
 	const answer = await trace(memoryGraph([...published.witnesses, ...calc], [...steps, ...calcSteps(calc)]), question,
-		view.manifest.id, { relation, key: canonicalJson(key) }, { limit: Math.min(limitOf(search.get('limit')), question.limit), after: parseAfter(search.get('after')) }, sourcesOf(view, role));
+		view.manifest.id, { relation, key: canonicalJson(key) }, { limit: Math.min(limitOf(search.get('limit')), question.limit), after: parseAfter(search.get('after')) },
+		base, sourcesOf(view, role));
 	if (!answer) return missing();
 	if (withdrawals.some((entry) => entry.rows.length > 0)) {
 		let withdrawn: WithdrawalRecord | undefined;

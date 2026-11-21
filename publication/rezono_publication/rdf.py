@@ -157,7 +157,7 @@ def element_iri(schema: dict, kind: str, rid: str) -> str:
     return f"{element_space(schema, kind)}/{spell(rid)}"
 
 
-_PIN_VALUE = re.compile(r"(?:(?P<manifest>m-[0-9]+)@)?(?P<dataset>d-[0-9a-f]{64})")
+_PIN_VALUE = re.compile(r"(?:(?P<manifest>" + l0._EPOCH + r")@)?(?P<dataset>d-[0-9a-f]{64})")
 _HEX64 = re.compile(r"[0-9a-f]{64}")
 
 

@@ -18,12 +18,14 @@ steps:
 witnesses:
   - conclusion: {relation: path, key: '["a","c"]'}
     rule_id: path1
+    iri: https://example.org/paths/witness/6174894bbbf30f12dc43eafc53dfbd633cd5051a2936b3e3e49aad8aa3b76860
     bindings: [{variable: "?x", value: a}, {variable: "?y", value: b}, {variable: "?z", value: c}]
     premises:
       - {row: {relation: path, key: '["a","b"]'}, polarity: positive, stratum: 0}
       - {row: {relation: e, key: '["b","c"]'}, polarity: positive, stratum: 0}
   - conclusion: {relation: path, key: '["a","b"]'}
     rule_id: path0
+    iri: https://example.org/paths/witness/17bedfb6cd603d1f29a55f7be4fbe0af3d199af442afab6b9cb11ad3d2755261
     bindings: [{variable: "?x", value: a}, {variable: "?y", value: b}]
     premises:
       - {row: {relation: e, key: '["a","b"]'}, polarity: positive, stratum: 0}
