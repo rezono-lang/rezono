@@ -63,13 +63,24 @@ def run_live(
     )
 
 
+def _public_identifiers(parts: Sequence[str], label: str) -> None:
+    if not parts or any(not part.isidentifier() or part.startswith("_") for part in parts):
+        raise ValueError(f"{label} must contain only public Python identifiers")
+
+
 def _load_ports(target: str) -> Mapping[str, Callable[..., Any]]:
     module_name, sep, attr_name = target.partition(":")
-    if not sep or not module_name.strip() or not attr_name.strip():
-        raise ValueError("ports must be given as '<module>:<callable>'")
+    if not sep:
+        raise ValueError("ports must be given as 'run.<module>:<public_attr>'")
+    module_parts = module_name.split(".")
+    attr_parts = attr_name.split(".")
+    if len(module_parts) < 2 or module_parts[0] != "run":
+        raise ValueError("ports module must live under 'run.'")
+    _public_identifiers(module_parts, "ports module")
+    _public_identifiers(attr_parts, "ports attribute")
     module = importlib.import_module(module_name)
     resolved: object = module
-    for part in attr_name.split("."):
+    for part in attr_parts:
         resolved = getattr(resolved, part)
     if callable(resolved):
         resolved = resolved()
@@ -106,7 +117,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
 
     print(json.dumps(result, sort_keys=True))
-    return 0
+    return 0 if result.get("delivered") is True and result.get("cleanup") == "cleaned" else 1
 
 
 if __name__ == "__main__":

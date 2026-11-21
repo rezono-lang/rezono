@@ -11,10 +11,6 @@ on:
         description: Directory containing the pinned plan, price facts, and request
         required: false
         type: string
-      ports_ref:
-        description: Python module:callable returning the live provider ports mapping
-        required: false
-        type: string
 
 permissions: {}
 
@@ -55,16 +51,16 @@ jobs:
           REZONO_RUN_SPEC: ${{ inputs.spec }}
           REZONO_FIXTURE_DIR: ${{ inputs.fixture_dir }}
           REZONO_CLAIM_REMOTE: ${{ vars.REZONO_CLAIM_REMOTE }}
-          REZONO_PROVIDER_PORTS: ${{ inputs.ports_ref || vars.REZONO_PROVIDER_PORTS }}
+          REZONO_PROVIDER_PORTS: ${{ vars.REZONO_PROVIDER_PORTS }}
           REZONO_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           set -euo pipefail
           python -m run.provider_run \
-            --spec "$REZONO_RUN_SPEC" \
-            --fixture-dir "$REZONO_FIXTURE_DIR" \
-            --claim-remote "$REZONO_CLAIM_REMOTE" \
-            --ports "$REZONO_PROVIDER_PORTS" \
-            --run-id "$REZONO_RUN_ID"
+            --spec="$REZONO_RUN_SPEC" \
+            --fixture-dir="$REZONO_FIXTURE_DIR" \
+            --claim-remote="$REZONO_CLAIM_REMOTE" \
+            --ports="$REZONO_PROVIDER_PORTS" \
+            --run-id="$REZONO_RUN_ID"
       - name: Run step-level failure cleanup
         if: failure()
         shell: bash
