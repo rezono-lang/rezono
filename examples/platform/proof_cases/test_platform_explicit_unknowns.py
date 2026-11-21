@@ -1,7 +1,8 @@
-"""Explicit unknown outcomes and single-source connection classification in platform rules.
+"""Explicit invalid multiplicity outcomes and single-source connection classification in platform rules.
 
-Covers two immediately actionable defects in examples/platform/rules/:
-- dependency_gaps.dl silently drops consumers whose provider is ambiguous.
+Covers two defects in examples/platform/rules/:
+- Under rezono 1 (decisions/language-rezono-1.md §7), ambiguous_provider retires and functional
+  needs(a, f) must emit exact ('invalid', 'multiple_values', '') with all candidate providers as witness.
 - admission_assumption.dl duplicates connection classification from tenant_connection_review.dl.
 """
 
@@ -64,40 +65,48 @@ def _ambiguous_provider_records() -> dict[str, list[dict]]:
     strict=True,
     raises=AssertionError,
     reason=(
-        "extra: decisions/platform-five-scenes.md: dependency_gaps.dl must emit an explicit "
-        "dependency_gap or dependency_gap_unknown finding when a consumer has an ambiguous_provider, "
-        "rather than silently emitting neither"
+        "M3: decisions/language-rezono-1.md: section 7. Once examples/platform/rules/ converts to "
+        "rezono 1, ambiguous_provider retires and functional needs(a, f) must emit exact "
+        "('invalid', 'multiple_values', '') with every competing candidate provider as witness when "
+        "a consumer has multiple unchosen providers. "
+        "Waits for compiler/tests/rezono/test_lower_rezono_1_derived.py--test_lower_rezono_1_derived, "
+        "checker/tests/test_functional_exact_reasons.py--test_checker_enforces_exact_functional_empty_and_conflict_reasons, "
+        "and the rezono 1 conversion of examples/platform/rules/."
     ),
 )
-def test_ambiguous_provider_produces_explicit_gap_or_unknown():
+def test_ambiguous_provider_produces_invalid_multiple_values_in_needs():
     from management_probes import compiled
 
     data = _ambiguous_provider_records()
     model, state = compiled(data)
 
-    assert ("shop", "login") in state.derived.get("ambiguous_provider", set())
-
-    findings = [
-        (rel, row)
-        for rel in ("dependency_gap", "dependency_gap_unknown")
-        for row in state.derived.get(rel, set())
-        if len(row) >= 3 and row[:2] == ("shop", "login") and row[2]
-    ]
-    assert findings, (
-        "consumer 'shop' has an ambiguous_provider for 'login', yet both dependency_gap and "
-        "dependency_gap_unknown emitted nothing for ('shop', 'login')"
+    assert "ambiguous_provider" not in set(state.derived), (
+        "ambiguous_provider must be retired on rezono 1 conversion (decisions/language-rezono-1.md §7)"
     )
-    for rel, row in findings:
-        leaves = verified(rel, row, state=(model, state))
-        assert any(r == "demand__function" and k[0] == "d-login" for r, k in leaves)
 
-    # Control: once an explicit Choice selects idp-a, ambiguity and its finding disappear.
+    invalid_row = ("shop", "login", "invalid", "multiple_values", "")
+    needs_rows = state.derived.get("needs", set())
+    assert invalid_row in needs_rows, (
+        "consumer 'shop' has multiple unchosen providers ('idp-a', 'idp-b') for 'login', yet functional "
+        f"needs did not emit {invalid_row!r}; got {sorted(r for r in needs_rows if r[:2] == ('shop', 'login'))}"
+    )
+
+    leaves = verified("needs", invalid_row, state=(model, state))
+    assert any(r == "demand__function" and k[0] == "d-login" for r, k in leaves), (
+        f"witness for {invalid_row!r} must cite demand d-login; leaves={sorted(leaves)}"
+    )
+    assert any(k and k[0] == "idp-a" for _, k in leaves) and any(k and k[0] == "idp-b" for _, k in leaves), (
+        f"witness for {invalid_row!r} must cite both competing candidate providers idp-a and idp-b; "
+        f"leaves={sorted(leaves)}"
+    )
+
+    # Control: once an explicit Choice selects idp-a, invalid multiple_values disappears and needs is known.
     resolved = copy.deepcopy(data)
     resolved["choice"] = [{"id": "c-shop-login", "service": "shop", "function": "login", "provider": "idp-a"}]
     _, resolved_state = compiled(resolved)
-    assert ("shop", "login") not in resolved_state.derived.get("ambiguous_provider", set())
-    for rel, row in findings:
-        assert row not in resolved_state.derived.get(rel, set())
+    resolved_needs = resolved_state.derived.get("needs", set())
+    assert invalid_row not in resolved_needs
+    assert ("shop", "login", "known", "", "idp-a") in resolved_needs
 
 
 @pytest.mark.xfail(
