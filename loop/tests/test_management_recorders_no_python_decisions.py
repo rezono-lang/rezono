@@ -269,13 +269,6 @@ def _event_row_tuples(event: dict[str, Any]) -> set[tuple[str, ...]]:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="M2: decisions/code-does-not-decide.md: record_management_certificates.py must supply the generated root "
-    "hash and observed leaf SAN, observe read completeness, read warning_days from pack facts with date validity, "
-    "and record derived findings instead of raising in Python.",
-)
 def test_certificates_recorder_lets_pack_decide_from_observed_tls_inputs(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -478,12 +471,6 @@ def test_certificates_recorder_lets_pack_decide_from_observed_tls_inputs(
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="M2: decisions/code-does-not-decide.md: record_management_health.py must submit raw observed http_status "
-    "and let the platform pack rule classify healthy/unhealthy instead of classifying in Python.",
-)
 def test_health_recorder_records_http_status_and_lets_pack_classify(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -917,13 +904,6 @@ def test_backup_recorder_uses_object_timestamp_pack_params_and_compiled(
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="M2: decisions/code-does-not-decide.md: record_management_access.py must render the K8s Role from "
-    "derived managed_cluster_right, contain no hardcoded calendar dates, compute weight=-1 via the publication "
-    "difference path, and observe completeness over both Roles and RoleBindings.",
-)
 def test_access_recorder_renders_role_from_derived_right_and_publication_diff(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1156,13 +1136,6 @@ def test_access_recorder_renders_role_from_derived_right_and_publication_diff(
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="M2: decisions/code-does-not-decide.md: record_management_firewall.py must derive router allowances "
-    "from the platform pack before rendering and replace _parse_nft_table / hardcoded complete=True with "
-    "read-scope facts decided by witnessed read completeness.",
-)
 def test_firewall_recorder_derives_allowances_and_witnessed_read_completeness(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

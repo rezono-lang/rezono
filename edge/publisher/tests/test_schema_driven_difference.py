@@ -209,16 +209,6 @@ def _pack_diff(rel: str, rs: list[dict]) -> tuple[dict[str, bytes], dict, dict]:
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "M3: decisions/viewer-slip.md: Use the compiled schema bundle's multivalued flag in "
-        "edge/publisher/rezono_publisher/difference.py and checker/rezono_checker/difference.py so multivalued "
-        "Work.authors emits identical membership removal + addition for both {ann} -> {bob} and {ann, kim} -> "
-        "{bob, kim}, while single-valued Work.title and Work.status remain single value changes."
-    ),
-)
 def test_multivalued_and_single_valued_slot_diffs_follow_schema_cardinality(tmp_path):
     """Published differences for multivalued Work.authors vs single-valued Work.title/status with verified witnesses."""
     repo = _init_repo(tmp_path)
@@ -274,15 +264,6 @@ def test_multivalued_and_single_valued_slot_diffs_follow_schema_cardinality(tmp_
     assert diff["counts"]["work__authors"] == {"added": 2, "removed": 2, "changed": 0}
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "M3: decisions/viewer-slip.md: checker/rezono_checker/difference.py::check_difference must accept "
-        "bundle: dict | None = None and enforce schema-driven multivalued vs single-valued diff classification, "
-        "rejecting `changed` on multivalued slots and `removed`+`added` on single-valued slot replacements."
-    ),
-)
 def test_checker_enforces_schema_driven_difference_classification(tmp_path):
     """Independent checker accepts schema-driven diffs and rejects mismatched multivalued/single-valued classification."""
     pack_dir = _write_works_pack(tmp_path / "works")

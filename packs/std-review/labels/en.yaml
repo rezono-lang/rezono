@@ -90,3 +90,38 @@ policy.none: no review needed
 evidence_outcome: evidence outcome
 evidence_outcome.passed: passed
 evidence_outcome.failed: failed
+reading: reading
+reading.change: change
+reading.commit_sha: commit hash
+reading.scope: scope
+reading.reader: reader
+reading.source: source
+reading_finding: reading finding
+reading_finding.reading: reading
+reading_finding.concern: concern
+reading_finding.source: source
+reading_dismissal: dismissal of a reading
+reading_dismissal.reading: reading
+reading_dismissal.source: source
+finding_resolution: resolution of a finding
+finding_resolution.finding: finding
+finding_resolution.commit_sha: commit hash
+finding_resolution.source: source
+reading_scope: reading scope
+reading_scope.correctness: correctness
+reading_scope.quality: quality
+finding_concern: finding concern
+finding_concern.correctness: correctness
+finding_concern.quality: quality
+reading_dismissed: reading dismissed
+reading_active: reading active
+reading_correctness_finding: correctness finding of reading
+reading_has_correctness_finding: reading has correctness finding
+reading_clean: clean reading
+reading_found: reading with finding
+head_read_clean: clean reading of head
+head_read_found: reading with finding on head
+head_read_finding: correctness finding of head
+head_read_conflict: conflicting readings of head
+quality_finding: quality finding
+quality_finding_resolved: resolved quality finding
