@@ -70,11 +70,6 @@ def test_every_script_and_workflow_if_is_audited_in_tooling_decision():
     assert "fail-closed" in lower, "decision must state the fail-closed safe state"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="extra: decisions/tooling-does-not-decide.md: Form 1 monotonically shrinking budget in packs/std-budget",
-)
 def test_monotonically_shrinking_budget_shared_form():
     """Form 1: packs/std-budget derives budget_raised, budget_exceeded, budget_ratchet_violation and budget_slack."""
     from rezono_compiler import pack, rules
