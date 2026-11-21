@@ -119,6 +119,12 @@ cluster_worker_node: cluster worker node
 cluster_worker_node.owner: owner cluster
 cluster_worker_node.endpoint: worker endpoint
 cluster_worker_node.same_cluster: the worker endpoint belongs to the owner cluster
+platform_startup_target: platform startup target
+platform_startup_target.target: target
+platform_startup_target.completion_step: completion step
+platform_startup_target.completion_token: completion token
+platform_startup_target.required_step: required step
+platform_startup_target.required_token: required token
 restore_dataset_binding: restore dataset binding
 restore_dataset_binding.trial: trial
 restore_dataset_binding.dataset: dataset

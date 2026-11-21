@@ -1,0 +1,5 @@
+default:
+  kind: git
+  name: rezono-lang/rezono
+  revision: 0d327c2ee5e00173e0f088812073e51c4acd7e34
+  position: decisions/safe-step-rounds.md#4-platform-acceptance
