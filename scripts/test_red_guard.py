@@ -423,7 +423,8 @@ def workflow_cases():
     deciders = (".github/workflows/python-environment/action.yml", "loop/rezono_cluster.py",
                 "scripts/cluster_worker_tasks.py", "scripts/role_publication_ci.py",
                 "scripts/components.py", "scripts/fast_check.py", "loop/cluster/select_tests.py",
-                "scripts/red_list.py")
+                "scripts/red_list.py", "loop/ci_discover.py", "loop/build_cutover.py",
+                "loop/build_pinned_runner.py", "loop/build_job_matrix.py", "build/engine-pin.yaml")
     for path in deciders:
         # Protected, yet still source: red_before.py runs added tests against the base copy.
         if not (protected(path) and source(path)):

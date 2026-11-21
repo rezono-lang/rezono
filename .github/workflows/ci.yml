@@ -258,7 +258,7 @@ jobs:
       has_node: ${{ steps.matrix.outputs.has_node }}
       pytest: ${{ steps.matrix.outputs.pytest }}
       has_pytest: ${{ steps.matrix.outputs.has_pytest }}
-      python_editable: ${{ steps.matrix.outputs.python_editable }}
+      python_editable: ${{ steps.build_base.outputs.python_editable }}
       cluster_mode: ${{ steps.cluster.outputs.mode }}
       cluster_tasks: ${{ steps.cluster.outputs.tasks }}
       role_publication: ${{ steps.role_publication.outputs.required }}
@@ -333,10 +333,11 @@ jobs:
           mkdir -p .build-base
           git archive "$POLICY" scripts | tar -x -C .build-base --strip-components=1
           echo "Build rules from $POLICY, scripts/components.py blob $(git rev-parse "$POLICY:scripts/components.py")"
+          raw_packages=$(python3 .build-base/components.py python-packages)
           editable=""
-          for package in $(python3 .build-base/components.py python-packages); do
-            editable+=" -e $package"
-          done
+          while IFS= read -r package; do
+            [[ -n "$package" ]] && editable+=" -e $package"
+          done < <(printf '%s\n' "$raw_packages" | tr -s '[:space:]' '\n')
           echo "python_editable=${editable# }" >> "$GITHUB_OUTPUT"
       # Install the locked Python and Node toolchain (including rezono/node_modules
       # and the cached oracle) before running the pinned build pack, the base-policy

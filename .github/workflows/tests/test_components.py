@@ -80,8 +80,13 @@ class WorkflowEnvironmentTests(unittest.TestCase):
         steps = jobs["discover"]["steps"]
         runs = [step.get("run", "") for step in steps]
         source, = [i for i, run in enumerate(runs) if "git archive" in run and ".build-base" in run]
+        self.assertEqual(steps[source]["id"], "build_base")
         self.assertEqual(steps[source]["env"]["POLICY"], base)
         self.assertIn('git archive "$POLICY" scripts | tar -x -C .build-base --strip-components=1', runs[source])
+        self.assertEqual(
+            jobs["discover"]["outputs"]["python_editable"],
+            "${{ steps.build_base.outputs.python_editable }}",
+        )
 
         environment, = [i for i, step in enumerate(steps)
                         if step.get("uses") == "./.github/workflows/python-environment"]
@@ -90,6 +95,17 @@ class WorkflowEnvironmentTests(unittest.TestCase):
         self.assertNotIn("components.py ci-matrix", "\n".join(runs))
         self.assertLess(environment, matrix_idx,
                         "pinned build pack discovery needs the locked Python and Node environment")
+
+        import red_guard
+        for protected_path in (
+            "loop/ci_discover.py",
+            "loop/build_cutover.py",
+            "loop/build_pinned_runner.py",
+            "loop/build_job_matrix.py",
+            "build/engine-pin.yaml",
+        ):
+            self.assertIn(protected_path, red_guard.SOURCE_POLICY,
+                          f"{protected_path} must be protected in SOURCE_POLICY")
 
         inv_idx, = [i for i, run in enumerate(runs) if "components.py inventory" in run]
         self.assertIn(".build-base/components.py inventory", runs[inv_idx])
