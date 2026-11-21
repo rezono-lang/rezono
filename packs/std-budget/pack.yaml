@@ -1,0 +1,7 @@
+# Standard pack std-budget: monotonically shrinking numeric budgets across base and head revisions.
+# Each cell has a ceiling (BudgetEntry) and an observed count (BudgetReading); ceilings may only fall
+# and observed counts may never exceed either the head ceiling or the base observed count.
+name: std-budget
+version: 0.1.0
+default_language: en
+imports: []
