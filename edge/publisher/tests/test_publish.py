@@ -448,7 +448,7 @@ def test_the_proof_is_chosen_per_role_among_readable_proofs(tmp_path):
     readable one, the checker the earliest."""
     s, _ = published(epoch_with_hidden(), tmp_path)
     proofs = lambda role: {(w["conclusion"]["relation"], w["conclusion"]["key"]): w
-                           for w in json.loads(object_bytes(s, role, "witnesses.json"))["witnesses"]}
+                           for w in reversed(json.loads(object_bytes(s, role, "witnesses.json"))["witnesses"])}
     assert proofs("checker")[("reach", '["a"]')]["premises"][0]["row"] == ref("path", "a", HIDDEN)
     assert proofs("guest")[("reach", '["a"]')]["premises"][0]["row"] == ref("path", "a", "b")
 

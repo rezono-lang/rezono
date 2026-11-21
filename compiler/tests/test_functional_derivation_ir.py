@@ -317,3 +317,185 @@ def test_functional_derivation_ir_and_stratification():
 
     if problems:
         raise MissingFunctionalDerivationIR("\n".join(problems))
+
+
+def _bound_program(fmt: str, value_type: str, rule_doc: dict) -> dict:
+    return {
+        "format": fmt,
+        "pack": "sample",
+        "relations": [
+            {"name": "item", "role": "base", "key": [_col("id")]},
+            {"name": "item__num", "role": "base", "key": [_col("id"), _col("v", value_type)]},
+            {"name": "out", "role": "derived", "module": "core", "explain": "on_demand",
+             "key": [_col("id"), _col("v", value_type)]},
+        ],
+        "rules": [rule_doc],
+    }
+
+
+def test_rules_v2_refuses_min_int64_constant_and_accepts_symmetric_bound():
+    min_i64 = "-9223372036854775808"
+    max_i64_plus_1 = "9223372036854775808"
+    min_bound = "-9223372036854775807"
+    max_bound = "9223372036854775807"
+
+    # Counter-case: legacy rezono.rules/1 keeps [-2^63, 2^63 - 1].
+    v1_min = _bound_program(
+        "rezono.rules/1", "integer",
+        _rule("r1", "out", ["?x", min_i64], [_lit("item", "?x")], stratum="1"),
+    )
+    ir.load(v1_min, require_witness=False)
+
+    # Accepted in rezono.rules/2: symmetric +/- (2^63 - 1) across integer and rational positions.
+    for val in (min_bound, max_bound):
+        ir.load(_bound_program(
+            "rezono.rules/2", "integer",
+            _rule("r_head", "out", ["?x", val], [_lit("item", "?x")], stratum="1"),
+        ), require_witness=False)
+        ir.load(_bound_program(
+            "rezono.rules/2", "integer",
+            _rule("r_body", "out", ["?x", val], [_lit("item__num", "?x", val)], stratum="1"),
+        ), require_witness=False)
+        cond_rule = _rule("r_cond", "out", ["?x", "?v"], [_lit("item__num", "?x", "?v")], stratum="1")
+        cond_rule["conditions"] = [{"op": "ge", "left": "?v", "right": val}]
+        ir.load(_bound_program("rezono.rules/2", "integer", cond_rule), require_witness=False)
+        assign_rule = _rule("r_assign", "out", ["?x", "?y"], [_lit("item__num", "?x", "?v")], stratum="1")
+        assign_rule["assignments"] = [{"var": "?y", "op": "add", "left": "?v", "right": val}]
+        ir.load(_bound_program("rezono.rules/2", "integer", assign_rule), require_witness=False)
+
+    for rat in (min_bound, max_bound, f"{min_bound}/2", f"{max_bound}/2"):
+        ir.load(_bound_program(
+            "rezono.rules/2", "rational",
+            _rule("r_rat", "out", ["?x", rat], [_lit("item", "?x")], stratum="1"),
+        ), require_witness=False)
+
+    # Refused in rezono.rules/2: -2^63 and +2^63 in integer and rational constant positions.
+    problems: list[str] = []
+    for bad in (min_i64, max_i64_plus_1):
+        _expect_ir_error(
+            _bound_program("rezono.rules/2", "integer",
+                           _rule("bad_head", "out", ["?x", bad], [_lit("item", "?x")], stratum="1")),
+            f"rezono.rules/2 integer head constant {bad}", problems,
+        )
+        _expect_ir_error(
+            _bound_program("rezono.rules/2", "integer",
+                           _rule("bad_body", "out", ["?x", "0"], [_lit("item__num", "?x", bad)], stratum="1")),
+            f"rezono.rules/2 integer body constant {bad}", problems,
+        )
+        bad_cond = _rule("bad_cond", "out", ["?x", "?v"], [_lit("item__num", "?x", "?v")], stratum="1")
+        bad_cond["conditions"] = [{"op": "ge", "left": "?v", "right": bad}]
+        _expect_ir_error(
+            _bound_program("rezono.rules/2", "integer", bad_cond),
+            f"rezono.rules/2 integer condition constant {bad}", problems,
+        )
+        bad_assign = _rule("bad_assign", "out", ["?x", "?y"], [_lit("item__num", "?x", "?v")], stratum="1")
+        bad_assign["assignments"] = [{"var": "?y", "op": "add", "left": "?v", "right": bad}]
+        _expect_ir_error(
+            _bound_program("rezono.rules/2", "integer", bad_assign),
+            f"rezono.rules/2 integer assignment constant {bad}", problems,
+        )
+
+    for bad_rat in (min_i64, f"{min_i64}/3"):
+        _expect_ir_error(
+            _bound_program("rezono.rules/2", "rational",
+                           _rule("bad_rat", "out", ["?x", bad_rat], [_lit("item", "?x")], stratum="1")),
+            f"rezono.rules/2 rational head constant {bad_rat}", problems,
+        )
+        bad_rat_cond = _rule("bad_rat_cond", "out", ["?x", "?v"], [_lit("item__num", "?x", "?v")], stratum="1")
+        bad_rat_cond["conditions"] = [{"op": "eq", "left": "?v", "right": bad_rat}]
+        _expect_ir_error(
+            _bound_program("rezono.rules/2", "rational", bad_rat_cond),
+            f"rezono.rules/2 rational condition constant {bad_rat}", problems,
+        )
+
+    assert not problems, "\n".join(problems)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "M3: decisions/language-rezono-1.md: sections 2 and 5.4; compiler/rezono_compiler/rules.py "
+        "must refuse any rezono.rules/2 program where a functional relation rule positively reads an "
+        "open-world base or derived relation."
+    ),
+)
+def test_rules_v2_refuses_functional_rule_reading_open_relation():
+    # Counter-case: a functional derivation over a closed domain reading closed base and closed derived
+    # relations loads cleanly.
+    closed_ok = {
+        "format": "rezono.rules/2",
+        "pack": "sample",
+        "relations": [
+            {"name": "item", "role": "base", "world": "closed", "key": [_col("id")]},
+            {"name": "closed_tag", "role": "base", "world": "closed", "key": [_col("id"), _col("v")]},
+            {"name": "closed_rel", "role": "derived", "module": "core", "explain": "on_demand",
+             "key": [_col("id"), _col("v")]},
+            {
+                "name": "pick_base", "role": "functional", "module": "core", "explain": "on_demand",
+                "key": [_col("id")], "domain": "item",
+                "value": _col("value", "string"), "conflict_policy": "publish",
+            },
+            {
+                "name": "pick_derived", "role": "functional", "module": "core", "explain": "on_demand",
+                "key": [_col("id")], "domain": "item",
+                "value": _col("value", "string"), "conflict_policy": "publish",
+            },
+        ],
+        "rules": [
+            _rule("closed_rel_r", "closed_rel", ["?x", "?v"], [_lit("closed_tag", "?x", "?v")], stratum="1"),
+            _rule("pick_base_r", "pick_base", ["?x", "?v"],
+                  [_lit("item", "?x"), _lit("closed_tag", "?x", "?v")], stratum="1"),
+            _rule("pick_derived_r", "pick_derived", ["?x", "?v"],
+                  [_lit("item", "?x"), _lit("closed_rel", "?x", "?v", stratum="1")], stratum="2"),
+        ],
+    }
+    prog = ir.load(closed_ok, require_witness=False)
+    assert prog.relations["pick_base"].world == "closed"
+    assert prog.relations["pick_derived"].world == "closed"
+
+    problems: list[str] = []
+
+    # 1. Functional relation positively reading an open base relation must be refused.
+    reads_open_base = {
+        "format": "rezono.rules/2",
+        "pack": "sample",
+        "relations": [
+            {"name": "item", "role": "base", "world": "closed", "key": [_col("id")]},
+            {"name": "open_tag", "role": "base", "world": "open", "key": [_col("id"), _col("v")]},
+            {
+                "name": "pick_open_base", "role": "functional", "module": "core", "explain": "on_demand",
+                "key": [_col("id")], "domain": "item",
+                "value": _col("value", "string"), "conflict_policy": "publish",
+            },
+        ],
+        "rules": [
+            _rule("pick_open_base_r", "pick_open_base", ["?x", "?v"],
+                  [_lit("item", "?x"), _lit("open_tag", "?x", "?v")], stratum="1"),
+        ],
+    }
+    _expect_ir_error(reads_open_base, "functional rule positively reading open base relation", problems)
+
+    # 2. Functional relation positively reading an open derived relation must be refused.
+    reads_open_derived = {
+        "format": "rezono.rules/2",
+        "pack": "sample",
+        "relations": [
+            {"name": "item", "role": "base", "world": "closed", "key": [_col("id")]},
+            {"name": "open_tag", "role": "base", "world": "open", "key": [_col("id"), _col("v")]},
+            {"name": "open_rel", "role": "derived", "module": "core", "explain": "on_demand",
+             "key": [_col("id"), _col("v")]},
+            {
+                "name": "pick_open_derived", "role": "functional", "module": "core", "explain": "on_demand",
+                "key": [_col("id")], "domain": "item",
+                "value": _col("value", "string"), "conflict_policy": "publish",
+            },
+        ],
+        "rules": [
+            _rule("open_rel_r", "open_rel", ["?x", "?v"], [_lit("open_tag", "?x", "?v")], stratum="1"),
+            _rule("pick_open_derived_r", "pick_open_derived", ["?x", "?v"],
+                  [_lit("item", "?x"), _lit("open_rel", "?x", "?v", stratum="1")], stratum="2"),
+        ],
+    }
+    _expect_ir_error(reads_open_derived, "functional rule positively reading open derived relation", problems)
+
+    assert not problems, "\n".join(problems)

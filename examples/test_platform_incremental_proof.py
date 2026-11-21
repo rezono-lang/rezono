@@ -26,13 +26,12 @@ def inputs():
         **facts.load(model, PLATFORM / "facts/core.yaml"),
         **facts.load(model, PLATFORM / "facts/port_decision.yaml"),
     }
-    # Two independent joins from the public pack. Both Offer.port and PortDecision.port change so the
-    # test holds before and after provides switches from Offer.port to PortDecision.
+    # Two independent joins from the public pack: changing PortDecision.port for the load balancer
+    # retracts its former provides row and proves the replacement without disturbing dns.
     selected = {
         "service__product": [("lb", "loadbalancer"), ("dns", "coredns")],
         "offer__product": [("o-lb", "loadbalancer"), ("o-dns", "coredns")],
         "offer__function": [("o-lb", "ingress"), ("o-dns", "dns")],
-        "offer__port": [("o-lb", 443), ("o-dns", 53)],
         "port_decision__product": [("pd-lb-ingress", "loadbalancer"), ("pd-dns", "coredns")],
         "port_decision__function": [("pd-lb-ingress", "ingress"), ("pd-dns", "dns")],
         "port_decision__port": [("pd-lb-ingress", 443), ("pd-dns", 53)],
@@ -41,7 +40,6 @@ def inputs():
         assert set(rows) <= set(source[table]), table
     after = {
         **selected,
-        "offer__port": [("o-lb", 8443), ("o-dns", 53)],
         "port_decision__port": [("pd-lb-ingress", 8443), ("pd-dns", 53)],
     }
     return model, prog, selected, after
@@ -115,11 +113,13 @@ def test_platform_incremental_delta_and_witnesses_match_batch():
     pipeline = "rezono-platform-delta-" + uuid4().hex
     sql = rules_sql.feldera(prog, relations=relations, witnesses=True)
     before_ingress = facts.ingress(model, {table: rows for table, rows in before.items() if table in base})
-    update = {table: changes for table, changes in {
-        "offer__port": [{"delete": {"id": "o-lb", "v": 443}}, {"insert": {"id": "o-lb", "v": 8443}}],
-        "port_decision__port": [{"delete": {"id": "pd-lb-ingress", "v": 443}}, {"insert": {"id": "pd-lb-ingress", "v": 8443}}],
-    }.items() if table in base}
-    assert update, "neither offer__port nor port_decision__port feeds provides"
+    assert "port_decision__port" in base, "port_decision__port does not feed provides"
+    update = {
+        "port_decision__port": [
+            {"delete": {"id": "pd-lb-ingress", "v": 443}},
+            {"insert": {"id": "pd-lb-ingress", "v": 8443}},
+        ],
+    }
     feldera.deploy(pipeline, sql, profile="unoptimized", workers=2)
     try:
         observed = []

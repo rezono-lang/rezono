@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from model_parity import legacy_file_bytes
 from rezono_compiler import facts, pack
 
 
@@ -25,8 +26,10 @@ def test_scalar_dataset_rows(tmp_path):
     form = scalar_copy_form()
     path = tmp_path / "sample.json"
     path.write_text(json.dumps(form), encoding="utf-8")
+    legacy_valid = tmp_path / "valid.yaml"
+    legacy_valid.write_bytes(legacy_file_bytes("examples/library/facts/valid.yaml"))
     model = pack.read(LIBRARY)
-    oracle = facts.load(model, LIBRARY / "facts/valid.yaml")
+    oracle = facts.load(model, legacy_valid)
     actual = facts.load(model, path)
     for relation in ("copy", "copy__reference_only"):
         expected = [row for row in oracle[relation] if row[0] in {1001, 1003}]

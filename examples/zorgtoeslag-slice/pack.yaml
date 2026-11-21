@@ -1,0 +1,5 @@
+name: zorgtoeslag-slice
+version: 0.1.0
+default_language: en
+rezono:
+  - {module: rezono/allowance.rezono, form: rezono/allowance.json, layer: conclusions}

@@ -129,6 +129,22 @@ enums:
     permissible_values:
       unknown: {description: "The condition depends on a value that is not known."}
       invalid: {description: "The condition depends on a value or calculation that is invalid."}
+
+  TrustTier:
+    description: >-
+      The trust tier of what GET /<pack>/head serves for a role (decisions/reader-served-seal-fields.md).
+    permissible_values:
+      sealed: {description: "A verified published manifest whose witness_check is green and whose store objects were hashed by the reader."}
+      provisional_checked: {description: "A published manifest without a green witness_check, or a published counterfactual/sweep variant or proposal manifest."}
+      provisional_engine: {description: "A live unsealed engine stream; never emitted by the static local reader over a published store."}
+
+  ReaderHashStatus:
+    description: >-
+      The local reader's own SHA-256 hash verification result on store objects read for an answer
+      (decisions/reader-served-seal-fields.md). A failing hash refuses the request rather than returning an answer.
+    permissible_values:
+      green: {description: "Every store object read for this answer matched its manifest SHA-256 digest."}
+      unavailable: {description: "The reader did not verify store object digests."}
 classes:
   Question:
     description: One explanation question, as the schema bundle carries it.
@@ -235,7 +251,7 @@ classes:
       delta: {range: DeltaStart, inlined: true, description: "The delta or sweep the question starts from; absent for a row."}
       nodes: {range: AnswerNode, multivalued: true, inlined_as_list: true, required: true, description: "The nodes on this page; the start, at distance 0, on the first."}
       steps: {range: AnswerStep, multivalued: true, inlined_as_list: true, description: "The edges that reach a node on this page, from a node the answer shows (on this page or an earlier one); by conclusion, how, position and premise."}
-      witnesses: {range: Witness, multivalued: true, inlined_as_list: true, description: "The chosen witness of each conclusion on this page, in page order: the captions."}
+      witnesses: {range: AnswerWitness, multivalued: true, inlined_as_list: true, description: "Projection of the rule-derived founded_witness relation for each conclusion on this page, in page order and deterministic witness order (chosen witness first, decisions/one-structure-space-and-readings.md §4, decisions/publish-founded-witnesses.md)."}
       calc_witnesses: {range: CalcWitness, multivalued: true, inlined_as_list: true, description: "The witness of each calculated row on this page, in page order: its version, definition and steps, unchanged. Each premise is also an edge of the answer (positive, at its index in premises); absent when the page has none."}
       next: {description: "The cursor of the next page, <distance>,<relation>,<key> (the query parameter after); absent on the last page."}
       more: {range: RowRef, multivalued: true, inlined_as_list: true, description: "The nodes on this page where the walk stopped before its depth, to stay within the limit: each continues with the same question from that node."}
@@ -252,6 +268,7 @@ classes:
       dataset: {range: PublicationDataset, inlined: true, description: "For an ask ... where: this page as a publication dataset (P10.2a §8a; docs/publication/l0.md): the members $schema, schema and rows, the Answer rows of the page and then its Undecided rows, as Row JSON. Its $schema equals output_schema."}
       computed: {range: boolean, description: "True on a computed answer (contrast, consequence): derived by Rezono, not quoted, and shown as computed (docs/explain/contract.md, rule 5). Absent on the others."}
       not_computed: {pattern: "^[a-z][a-z0-9_]*$", description: "A computed answer that could not be computed, with its reason code (for consequence: no_variant, no published variant withdraws the start fact alone). The answer then holds its start alone; missing is never an empty answer."}
+      reader_hashes: {range: ReaderHashCheck, inlined: true, description: "The local reader's served SHA-256 hash verification result for this answer and each witness proof piece it read (decisions/reader-served-seal-fields.md)."}
     rules:
       - description: An ask ... where answer carries its output schema id and its counts together.
         preconditions: {slot_conditions: {output_schema: {value_presence: PRESENT}}}
@@ -264,6 +281,48 @@ classes:
       - description: Undecided rows belong to an ask ... where answer, which says how many there are in all.
         preconditions: {slot_conditions: {undecided: {value_presence: PRESENT}}}
         postconditions: {slot_conditions: {counts: {required: true}}}
+  ReaderHead:
+    description: >-
+      Role-scoped head metadata served by GET /<pack>/head (decisions/viewer-slip.md,
+      decisions/reader-served-seal-fields.md).
+    attributes:
+      id: {required: true}
+      epoch: {range: integer, minimum_value: 0, required: true}
+      knowledge_time: {required: true}
+      access_semantics: {range: integer, minimum_value: 1, required: true}
+      definition_sha256: {required: true, pattern: "^[0-9a-f]{64}$"}
+      manifest_sha256: {required: true, pattern: "^[0-9a-f]{64}$"}
+      witness_check: {pattern: "^(green|warning|red)$", description: "Status of the manifest's rezono:proofs check; omitted when absent."}
+      trust_tier: {range: TrustTier, required: true, description: "Role-scoped trust tier of the served head (decisions/reader-served-seal-fields.md)."}
+      may_propose: {range: boolean, required: true, description: "True iff the role's published role-scoped may_propose projection grants at least one proposal right on this manifest."}
+      compiled: {range: ReaderCompiledFile, multivalued: true, inlined_as_list: true, required: true, description: "Compiled schema files served for this head."}
+      snapshots: {range: ReaderHeadSnapshot, multivalued: true, inlined_as_list: true, required: true, description: "Role-scoped relation snapshots listed on this head."}
+  ReaderCompiledFile:
+    description: One compiled schema bundle entry listed on GET /<pack>/head.
+    attributes:
+      file: {required: true}
+      sha256: {required: true, pattern: "^[0-9a-f]{64}$"}
+  ReaderHeadSnapshot:
+    description: One role-scoped snapshot entry listed on GET /<pack>/head.
+    attributes:
+      relation: {required: true}
+      role: {required: true}
+      complete: {range: boolean, required: true}
+      full: {range: boolean}
+      format: {required: true}
+  ReaderHashCheck:
+    description: >-
+      The local reader's served hash verification result on GET /<pack>/<manifest>/ask/grounds
+      (decisions/reader-served-seal-fields.md).
+    attributes:
+      status: {range: ReaderHashStatus, required: true}
+      checked_witnesses: {range: WitnessHashCheck, multivalued: true, inlined_as_list: true, description: "Per-conclusion witness proof-piece hash verification results in page order."}
+  WitnessHashCheck:
+    description: One conclusion's verified proof-piece digest from the local reader.
+    attributes:
+      conclusion: {range: RowRef, required: true, inlined: true}
+      status: {range: ReaderHashStatus, required: true}
+      piece_sha256: {required: true, pattern: "^[0-9a-f]{64}$", description: "SHA-256 digest of the role's proof piece that supplied the witness."}
   AnswerExpression:
     description: The question of an ask ... where answer (P10.2a §9).
     attributes:
@@ -406,6 +465,14 @@ classes:
       change: {range: NodeChange, description: "For impact: what the delta did to this row for the role; every node of an impact answer has one."}
       was: {description: "For impact, a changed cell: its row in the base, as canonical key text."}
       sources: {range: Source, multivalued: true, inlined_as_list: true, description: "A base row's sources, from the role's own source set and by today's rights, as the publisher sorted them: where a walk back ends. Absent on a conclusion, and on every node of a manifest without source sets. A locator, not proof that the row is true."}
+      witnesses_truncated: {range: boolean, description: "True when this conclusion reached the per-conclusion founded-witness cap for the role (decisions/publish-founded-witnesses.md); never set because of role-hidden alternatives. Absent when not truncated."}
+  AnswerWitness:
+    is_a: Witness
+    description: >-
+      One founded witness projected onto an Answer page from the rule-derived founded_witness relation over the
+      role's witness graph (decisions/one-structure-space-and-readings.md §4, decisions/publish-founded-witnesses.md).
+    attributes:
+      iri: {pattern: "^.+witness/[0-9a-f]{64}$", description: "Canonical witness IRI (<base>witness/<H(witness)>, decisions/publication-conclusion-addresses.md §2), where H is canonical_sha256 of the witness without iri."}
   GapAnswer:
     description: What is missing for an absent start (docs/gui.md, "gap"), in the walk's order.
     attributes:
@@ -443,3 +510,4 @@ classes:
       how: {range: StepHow, required: true}
       position: {range: integer, minimum_value: 0, required: true, description: "The premise's place in the rule body, or for contributes the aggregate's place in the rule."}
       value: {pattern: "^(known:.*|unknown|not_applicable|invalid)$", description: "On a contributes step of a sum, min or max: what the premise's row contributes, the canonical text of its value with its state, as the witness's contributors_sha256 is taken over it. Absent on every other step, and where the published proof pieces state none."}
+      load_bearing: {range: boolean, description: "Projection of the rule-derived load_bearing relation over the role's witness graph: true when this premise occurs in every founded witness the role can read for this conclusion, false when an alternative founded witness omits it (decisions/one-structure-space-and-readings.md §4, decisions/publish-founded-witnesses.md). Read unchanged by the gate."}

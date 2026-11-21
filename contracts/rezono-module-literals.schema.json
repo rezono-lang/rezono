@@ -124,6 +124,28 @@
               "confirm": {"$ref": "#/$defs/expression"}
             }
           }
+        },
+        {
+          "if": {"type": "object", "required": ["require"]},
+          "then": {
+            "properties": {
+              "when": {"$ref": "#/$defs/expression"},
+              "exists": {
+                "items": {
+                  "properties": {
+                    "where": {"$ref": "#/$defs/expression"}
+                  }
+                }
+              },
+              "options": {
+                "items": {
+                  "properties": {
+                    "invariant": {"$ref": "#/$defs/asserted"}
+                  }
+                }
+              }
+            }
+          }
         }
       ]
     },

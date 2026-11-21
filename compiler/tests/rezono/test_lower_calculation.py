@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import pytest
 
 from calc_packs import (SCHEME, SUBSIDY, MissingCalculationLowering, calc_ir, definition, derived, examples, form,
-                        lit, lowered, path, row_parameter, strip_award)
+                        lit, lowered, path, read_pack, row_parameter, strip_award)
 from rezono_compiler import pack, rezono_calc, rezono_module
 
 
@@ -95,7 +95,7 @@ def test_lower_calculation_award(tmp_path):
 def test_calculation_version_refuses_replaces_and_source(tmp_path):
     """Calculation versions carrying `replaces` or `source` are refused with R050 instead of being dropped."""
     base_dir = examples(tmp_path / "base") / SUBSIDY
-    model = pack.read(base_dir)
+    model = read_pack(base_dir)
     for member, value in (("replaces", "2025"), ("source", "Act s.1")):
         candidate = examples(tmp_path / member) / SUBSIDY
         for name in ("drift.yaml", "date.yaml"):
@@ -134,7 +134,7 @@ def test_calculation_refuses_unresolved_subject_kind(tmp_path):
         assert [d.code for d in caught.value.diagnostics] == ["R050"]
         assert subject_name in str(caught.value)
 
-    model = pack.read(examples(tmp_path / "model") / SUBSIDY)
+    model = read_pack(examples(tmp_path / "model") / SUBSIDY)
     with pytest.raises(pack.CompileError, match="R050") as root_err:
         rezono_calc.resolve_subject(model, model.meta["name"], "NoSuchKind")
     assert [d.code for d in root_err.value.diagnostics] == ["R050"]

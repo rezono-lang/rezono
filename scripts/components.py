@@ -298,7 +298,7 @@ SHARED_READERS = {
     "docs/rezono/cases/": ("compiler", "rezono"),
     "docs/semantics/value-cases.yaml": ("compiler", "rezono"),
     "docs/semantics/witness-alternatives-cases.yaml": ("checker", "compiler"),
-    "docs/formal.md": ("examples",),
+    "docs/formal.md": ("examples", "loop"),
     "docs/tutorial.md": ("examples",),
     "rezono/README.md": ("examples",),
     "decisions/language-native-rules.md": ("compiler",),
@@ -309,6 +309,8 @@ SHARED_READERS = {
     "tests/fixtures/turns/": ("checker", "edge/publisher"),
     # The verb bar of the slip (decisions/viewer-slip.md): its contract test and the page tests read it.
     "packs/std-view/": ("contracts", "tests/slip"),
+    # Bitemporal staircase reading of std-time (decisions/bitemporal-staircase-reading.md).
+    "packs/std-time/": ("tests/slip",),
     "viewer/slip/": ("compiler", "examples", "tests/slip"),
     "viewer/messages/": ("compiler", "examples", "tests/slip"),
     "tests/conformance/": ("checker", "compiler", "edge/publisher", "rezono"),
