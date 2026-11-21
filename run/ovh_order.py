@@ -23,8 +23,9 @@ def _provider_terms() -> tuple[pack.Pack, rules.Program, dict[str, list[tuple]]]
     model = pack.read(_PACK_DIR)
     program = rules.load(model.rules)
     states = scenarios.fact_states(model, _PACK_DIR, diagnostics=False)
-    pack_facts = states[0][3] if states else {}
-    return model, program, pack_facts
+    if not states:
+        raise ValueError("provider-terms pack must provide fact states")
+    return model, program, states[0][3]
 
 
 def _price(value: object, label: str) -> tuple[str, int]:
@@ -149,9 +150,16 @@ def guarantee(
     inputs = scenarios.rule_rows(model, program, merged)
     with closing(batch.connect(program, inputs)) as connection:
         batch.compute(connection, program)
-        guarantees = batch.read(connection, program, ["order_guarantee"])["order_guarantee"]
+        derived = batch.read(connection, program, ["order_guarantee", "no_guarantee"])
+    guarantees = derived["order_guarantee"]
+    refusals = derived["no_guarantee"]
+    if refusals:
+        reasons = sorted({reason for order_ref, reason in refusals if order_ref == order_key})
+        if reasons:
+            raise ValueError(f"provider terms gave no guarantee: {', '.join(reasons)}")
+        raise ValueError("provider terms gave no guarantee")
     if not guarantees:
-        raise ValueError("usage-billed order detail gives no guarantee")
+        raise ValueError("provider terms gave no guarantee")
     if len(guarantees) != 1:
         raise ValueError("provider terms derived ambiguous order guarantee")
     (_, mode, expires_us_text), = guarantees

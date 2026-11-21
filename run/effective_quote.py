@@ -35,7 +35,9 @@ def _quote_pack() -> tuple[pack.Pack, rules.Program, dict[str, list[tuple]], str
     model = pack.read(_QUOTE_PACK)
     program = rules.load(model.rules)
     states = scenarios.fact_states(model, _QUOTE_PACK, diagnostics=False)
-    pack_facts = states[0][3] if states else {}
+    if not states:
+        raise ValueError("exact-quote pack must provide fact states")
+    pack_facts = states[0][3]
     quote_currencies = {currency for _, currency in pack_facts.get("quote_currency__currency", ())}
     if len(quote_currencies) != 1:
         raise ValueError("exact-quote pack must declare a single quote currency")
