@@ -59,15 +59,15 @@ cluster_power_receipt(c) :-
 
 .decl power_separation_claimed(cluster: symbol, other: symbol)
 power_separation_claimed(c, o) :-
-    power_separation_claim__first(_, d1),
-    power_separation_claim__second(_, d2),
+    power_separation_claim__first(claim, d1),
+    power_separation_claim__second(claim, d2),
     cluster_reaches_domain(c, d1),
     cluster_reaches_domain(o, d2),
     !equivalent(d1, d2),
     c != o.
 power_separation_claimed(c, o) :-
-    power_separation_claim__first(_, d1),
-    power_separation_claim__second(_, d2),
+    power_separation_claim__first(claim, d1),
+    power_separation_claim__second(claim, d2),
     cluster_reaches_domain(c, d2),
     cluster_reaches_domain(o, d1),
     !equivalent(d1, d2),
