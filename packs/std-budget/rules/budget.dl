@@ -22,6 +22,11 @@ has_base_observed(b, c) :- budget_observed(b, c, "base", _).
 .decl has_head_observed(budget: symbol, cell: symbol)
 has_head_observed(b, c) :- budget_observed(b, c, "head", _).
 
+// Any cell known from a ceiling (base or head) or an observation (base or head).
+.decl budget_cell(budget: symbol, cell: symbol)
+budget_cell(b, c) :- budget_ceiling(b, c, _, _).
+budget_cell(b, c) :- budget_observed(b, c, _, _).
+
 // Head ceiling exceeds base ceiling (an absent base ceiling is treated as 0).
 .decl budget_raised(budget: symbol, cell: symbol)
 budget_raised(b, c) :- budget_ceiling(b, c, "base", bc), budget_ceiling(b, c, "head", hc), hc > bc.
@@ -38,9 +43,18 @@ budget_exceeded(b, c) :- budget_observed(b, c, "head", obs), !has_head_ceiling(b
 budget_ratchet_violation(b, c) :- budget_observed(b, c, "base", bo), budget_observed(b, c, "head", ho), ho > bo.
 budget_ratchet_violation(b, c) :- budget_observed(b, c, "head", ho), !has_base_observed(b, c), ho > 0.
 
+// Cell has a ceiling or base observation but no head BudgetReading (fail closed; absence is never 0).
+.decl budget_missing_head(budget: symbol, cell: symbol)
+budget_missing_head(b, c) :- budget_cell(b, c), !has_head_observed(b, c).
+
 // Head observed count is strictly below a non-raised head ceiling (an advisory hint to lower the ceiling).
+// Requires an explicit head observation; a missing head reading is never treated as 0.
 .decl budget_slack(budget: symbol, cell: symbol)
 budget_slack(b, c) :- budget_ceiling(b, c, "head", hc), budget_observed(b, c, "head", ho), ho < hc, !budget_raised(b, c).
-budget_slack(b, c) :- budget_ceiling(b, c, "head", hc), !has_head_observed(b, c), hc > 0, !budget_raised(b, c).
 
-.output budget_raised, budget_exceeded, budget_ratchet_violation, budget_slack
+// Cell has an explicit head observation and satisfies all budget invariants (fail closed).
+.decl budget_within(budget: symbol, cell: symbol)
+budget_within(b, c) :- has_head_observed(b, c),
+    !budget_raised(b, c), !budget_exceeded(b, c), !budget_ratchet_violation(b, c).
+
+.output budget_raised, budget_exceeded, budget_ratchet_violation, budget_missing_head, budget_slack, budget_within

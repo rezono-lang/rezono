@@ -125,14 +125,6 @@ def _eval_provider_terms(runtime_data: dict[str, list[dict[str, object]]]) -> di
     return {name: set(rows) for name, rows in out.items()}
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "extra: decisions/code-does-not-decide.md: run/ovh_order.py, run/ovh_renewal.py, and "
-        "run/ovh_order_status.py must fail closed when scenarios.fact_states returns [] instead "
-        "of falling back to {}"
-    ),
-)
 def test_ovh_modules_fail_closed_on_empty_fact_states(monkeypatch):
     from rezono_compiler import batch, scenarios
 
@@ -171,13 +163,6 @@ def test_ovh_modules_fail_closed_on_empty_fact_states(monkeypatch):
     assert connect_calls == [], "ovh_order must fail closed before running rules with empty pack facts"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "extra: decisions/code-does-not-decide.md: run/effective_quote.py must fail closed when "
-        "scenarios.fact_states returns [] instead of falling back to {}"
-    ),
-)
 def test_effective_quote_fails_closed_on_empty_fact_states(monkeypatch):
     from rezono_compiler import scenarios
 
@@ -192,14 +177,6 @@ def test_effective_quote_fails_closed_on_empty_fact_states(monkeypatch):
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "extra: decisions/code-does-not-decide.md: run/packs/provider-terms must derive "
-        "no_guarantee(order, reason) and run/ovh_order.py must read the derived reason instead "
-        "of inventing 'usage-billed' in Python"
-    ),
-)
 def test_order_no_guarantee_reason_comes_from_provider_terms(monkeypatch):
     from rezono_compiler import batch, pack, rules
 

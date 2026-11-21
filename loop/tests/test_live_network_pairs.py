@@ -7,6 +7,7 @@ import subprocess
 
 import pytest
 
+from flow_evidence import assess
 from wire_fixtures import entry, fixture
 
 
@@ -111,7 +112,6 @@ def test_live_network_pairs(monkeypatch):
     assert run.isdecimal() and attempt.isdecimal(), "Requires the real disposable workflow run"
     events, nodes = _recorded_network(run, attempt)
     cases = fixture("network")["cases"]
-    assess = entry(monkeypatch, "flow_evidence", "assess")
     findings = entry(monkeypatch, "isolation_findings", "findings")
 
     assert events and all(

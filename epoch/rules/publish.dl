@@ -20,26 +20,36 @@ epoch_step_tool(run, step, tool_record) :-
     epoch_tool__run(tool_record, run),
     epoch_tool__step(tool_record, step),
     epoch_tool__tool(tool_record, _),
-    epoch_tool__version(tool_record, _),
-    epoch_tool__sha256(tool_record, _).
+    epoch_tool__version(tool_record, version),
+    epoch_tool__sha256(tool_record, sha256),
+    version != "",
+    sha256 != "".
 
 epoch_pinned_engine(run, pin) :-
     epoch_engine_pin__run(pin, run),
-    epoch_engine_pin__version(pin, _),
-    epoch_engine_pin__wheel_sha256(pin, _),
-    epoch_engine_pin__commit(pin, _).
+    epoch_engine_pin__version(pin, version),
+    epoch_engine_pin__wheel_sha256(pin, wheel_sha256),
+    epoch_engine_pin__commit(pin, commit),
+    version != "",
+    wheel_sha256 != "",
+    commit != "".
 
 epoch_compiled_definition(run, definition) :-
     epoch_definition__run(definition, run),
-    epoch_definition__definition_sha256(definition, _),
-    epoch_definition__compiler_sha256(definition, _).
+    epoch_definition__definition_sha256(definition, definition_sha256),
+    epoch_definition__compiler_sha256(definition, compiler_sha256),
+    definition_sha256 != "",
+    compiler_sha256 != "".
 
 epoch_role_planned_form(run, role, form) :-
     epoch_role_form__run(form, run),
     epoch_role_form__role(form, role),
-    epoch_role_form__snapshots_sha256(form, _),
-    epoch_role_form__sources_sha256(form, _),
-    epoch_role_form__objects_sha256(form, _).
+    epoch_role_form__snapshots_sha256(form, snapshots_sha256),
+    epoch_role_form__sources_sha256(form, sources_sha256),
+    epoch_role_form__objects_sha256(form, objects_sha256),
+    snapshots_sha256 != "",
+    sources_sha256 != "",
+    objects_sha256 != "".
 
 epoch_role_check_green(run, role, check, record) :-
     epoch_role_check__run(record, run),
@@ -101,10 +111,13 @@ epoch_allowed(run, epoch, source) :-
     epoch_run__epoch(run, epoch),
     epoch_all_roles_allowed(run),
     epoch_pack_facts__run(facts, run),
-    epoch_pack_facts__pack_sha256(facts, _),
+    epoch_pack_facts__pack_sha256(facts, pack_sha256),
     epoch_source__run(source, run),
-    epoch_source__source(source, _),
-    epoch_source__position(source, _).
+    epoch_source__source(source, source_name),
+    epoch_source__position(source, position),
+    pack_sha256 != "",
+    source_name != "",
+    position != "".
 
 // write-forms is permitted only when every role of the run is in publish_allowed.
 effect_permitted(run, "write-forms", plan, reason) :-
