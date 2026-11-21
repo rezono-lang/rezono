@@ -255,7 +255,7 @@ def test_single_effect_watchdog_shared_form():
 @pytest.mark.xfail(
     strict=True,
     raises=AssertionError,
-    reason="extra: decisions/tooling-does-not-decide.md: Form 5 who-may-change-what in packs/std-review + std-access",
+    reason="extra: decisions/tooling-does-not-decide.md: Form 5 who-may-change-what in packs/std-review + std-access. Blocked on test fixture: the synthetic consumer pack omits channels.yaml and labels/en.yaml, so pack.read(consumer) raises CompileError even when std-review derives change_member_unauthorized and change_authorized.",
 )
 def test_who_may_change_what_shared_form(tmp_path):
     """Form 5: packs/std-review + packs/std-access derive change_member_unauthorized and change_authorized."""
