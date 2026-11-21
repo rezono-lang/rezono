@@ -22,16 +22,6 @@ def _strip_of(entry: dict) -> dict:
     return {k: v for k, v in entry.items() if k != "of"}
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "extra: decisions/fact-origin-required.md: examples/platform/facts/core.sources.yaml must "
-        "keep an honest default (never pack/scenario/synthetic or self-citing facts/core.yaml, and "
-        "for kind='git' citing an existing decisions/*.md file) and must not repeat default "
-        "entries verbatim or duplicate record selectors in records"
-    ),
-)
 def test_core_sources_has_honest_default_without_duplicate_records():
     core_sources_yaml = FACTS / "core.sources.yaml"
 
