@@ -39,7 +39,9 @@ def graph(rows, proof, complete, program):
     for calc in (False, True):
         for w in proof.get("calc_witnesses" if calc else "witnesses", ()):
             head = row(w["conclusion"])
-            assert head in rows and head not in edges, head
+            assert head in rows, head
+            if calc:
+                assert head not in edges, head
             parents = set()
             for premise in w["premises"]:
                 child = row(premise if calc else premise["row"])
@@ -59,7 +61,7 @@ def graph(rows, proof, complete, program):
                 members = {r for r in rows if r[0] == rel and all(r[1][i] == v for i, v in fixed)}
                 assert len(members) == a["count"]
                 parents.update(members)
-            edges[head] = parents
+            edges.setdefault(head, set()).update(parents)
     return edges
 
 
