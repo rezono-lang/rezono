@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from contextlib import AbstractContextManager, nullcontext
+from functools import cache
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -16,6 +18,17 @@ from rezono_compiler import batch, emit, modules, pack, rules as ir, standard_pa
 
 REPO = Path(__file__).resolve().parents[2]
 WRITE_FORM = REPO / "rezono/src/write-form.ts"
+LEGACY_HELPERS_PATH = REPO / "examples" / "fixtures" / "rezono-1-legacy" / "helpers.py"
+
+
+@cache
+def legacy_helpers():
+    """Load the shared legacy-pack archive helper module."""
+    spec = importlib.util.spec_from_file_location("rezono_1_legacy_helpers", LEGACY_HELPERS_PATH)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 class MissingCandidatePack(AssertionError):
@@ -64,14 +77,17 @@ def verify_candidate_forms(pack_dir: Path, modules: tuple[str, ...], tmp_path: P
 
 
 def isolated_standard_pack(pack_dir: Path, tmp_path: Path, form: str, module_name: str, layer: str = "facts") -> Path:
-    """Build an isolated copy of a standard pack in either its legacy or staged candidate form."""
-    target = tmp_path / form / pack_dir.name
-    shutil.copytree(pack_dir, target, ignore=shutil.ignore_patterns("candidate"))
+    """Build an isolated copy of a standard pack in either its archived legacy or staged candidate form."""
+    pack_rel = pack_dir.resolve().relative_to(REPO.resolve()).as_posix()
+    root = tmp_path / form
+    legacy_helpers().materialize_legacy_packs(root, (pack_rel,))
+    target = root / pack_rel
     if form == "legacy":
         return target
     verify_candidate_forms(pack_dir, (module_name,), tmp_path)
     shutil.rmtree(target / "schema", ignore_errors=True)
     shutil.rmtree(target / "rules", ignore_errors=True)
+    shutil.rmtree(target / "rezono", ignore_errors=True)
     shutil.copytree(pack_dir / "candidate", target / "rezono")
     meta_path = target / "pack.yaml"
     meta = yaml.safe_load(meta_path.read_bytes())
