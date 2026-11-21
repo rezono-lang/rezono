@@ -67,11 +67,23 @@ PREDICATE_TYPE = "https://rezono.org/epoch-statement/v1"
 FORMAT = "rezono.epoch-statement/1"
 PREDICATE_TYPE_V2 = "https://rezono.org/epoch-statement/v2"
 FORMAT_V2 = "rezono.epoch-statement/2"
+PREDICATE_TYPE_V3 = "https://rezono.org/epoch-statement/v3"
+FORMAT_V3 = "rezono.epoch-statement/3"
 LEGACY_STATEMENT_TYPES = (("https://rede.dev/epoch-statement/v1", "rede.epoch-statement/1"),)
-ACCEPTED_STATEMENT_TYPES = ((PREDICATE_TYPE, FORMAT), (PREDICATE_TYPE_V2, FORMAT_V2), *LEGACY_STATEMENT_TYPES)
+ACCEPTED_STATEMENT_TYPES = (
+    (PREDICATE_TYPE, FORMAT),
+    (PREDICATE_TYPE_V2, FORMAT_V2),
+    (PREDICATE_TYPE_V3, FORMAT_V3),
+    *LEGACY_STATEMENT_TYPES,
+)
 NAME = "statement.json"  # its name under the role's prefix, beside the form's objects
 DIFF_NAME = "diff.json"  # the role-scoped epoch diff beside statement.json on chained epochs
 DIFF_FORMAT = "rezono.role-diff/1"
+ALLOWED = "allowed.json"  # the role's proof of publish_allowed beside statement.json in v3
+ALLOWED_FORMAT = "rezono.epoch-allowed/1"
+ALLOWED_RELATION = "publish_allowed"
+ALLOWED_DOC_KEYS = ("format", "relation", "row", "proof", "rows", "definition", "rules", "engine")
+ENGINE_PIN_KEYS = ("version", "wheel_sha256", "commit")
 SIGNATURE = "statement.sigstore.json"  # cosign's Sigstore bundle over the statement's bytes, beside it
 ARTIFACT = "application/vnd.rezono.epoch-statement.v1"  # the two as a referrer of the role's seal
 LEGACY_ARTIFACTS = ("application/vnd.rede.epoch-statement.v1",)
@@ -84,12 +96,15 @@ DIGEST_KEYS = ("sha256",)
 PREDICATE_KEYS = ("format", "pack", "role", "manifest", "epoch", "knowledge_time", "definition", "role_manifest",
                   "snapshots", "schema", "dataset", "annotation", "roots", "inclusion")
 CHAIN_KEYS = ("previous", "diff")
+ALLOWED_KEYS = ("allowed",)
 SNAPSHOT_KEYS = ("relation", "sha256")
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+_COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 
-__all__ = ["NAME", "DIFF_NAME", "DIFF_FORMAT", "SIGNATURE", "PREDICATE_TYPE_V2", "FORMAT_V2", "PREDICATE_KEYS",
-           "CHAIN_KEYS", "tree_root", "roots", "inclusion_hash", "compute_role_diff", "apply_role_diff", "make",
-           "dumps", "verify", "verify_signature", "trust_of", "referrer", "attach", "verify_sealed"]
+__all__ = ["NAME", "DIFF_NAME", "DIFF_FORMAT", "ALLOWED", "ALLOWED_FORMAT", "SIGNATURE", "PREDICATE_TYPE_V2",
+           "FORMAT_V2", "PREDICATE_TYPE_V3", "FORMAT_V3", "PREDICATE_KEYS", "CHAIN_KEYS", "ALLOWED_KEYS",
+           "tree_root", "roots", "inclusion_hash", "compute_role_diff", "apply_role_diff", "make", "dumps",
+           "verify", "verify_signature", "trust_of", "referrer", "attach", "verify_sealed"]
 
 
 def _sha256(data: bytes) -> bytes:
@@ -260,34 +275,112 @@ def apply_role_diff(before: dict[str, bytes], diff_doc: dict) -> dict[str, set[t
     return out
 
 
+def _check_allowed_doc(allowed_bytes: bytes, *, role: str, epoch: str) -> list[str]:
+    """Validate `allowed.json` bytes against canonical `rezono.epoch-allowed/1` shape and statement role/epoch."""
+    problems: list[str] = []
+    try:
+        doc = json.loads(allowed_bytes)
+        if canonical_bytes(doc) != allowed_bytes:
+            problems.append(f"{ALLOWED} is not in canonical form")
+    except (ValueError, CanonError) as err:
+        return [f"{ALLOWED} is not canonical JSON: {err}"]
+    if not isinstance(doc, dict) or set(doc) != set(ALLOWED_DOC_KEYS):
+        return problems + [f"{ALLOWED} does not have exact keys {list(ALLOWED_DOC_KEYS)}"]
+    if doc["format"] != ALLOWED_FORMAT:
+        problems.append(f"{ALLOWED} format is not {ALLOWED_FORMAT}")
+    if doc["relation"] != ALLOWED_RELATION:
+        problems.append(f"{ALLOWED} relation is not {ALLOWED_RELATION}")
+
+    row = doc["row"]
+    row_ok = isinstance(row, list) and len(row) == 4 and all(isinstance(part, str) for part in row)
+    if not row_ok:
+        problems.append(f"{ALLOWED} row must be a 4-element list of text")
+    else:
+        if row[1] != epoch:
+            problems.append(f"{ALLOWED} row epoch {row[1]!r} does not match statement epoch {epoch!r}")
+        if row[2] != role:
+            problems.append(f"{ALLOWED} row role {row[2]!r} does not match statement role {role!r}")
+
+    proof = doc["proof"]
+    if not isinstance(proof, dict):
+        problems.append(f"{ALLOWED} proof is not an object")
+    else:
+        root = proof.get("root")
+        if not isinstance(root, dict) or root.get("relation") != ALLOWED_RELATION or not isinstance(root.get("key"), str):
+            problems.append(f"{ALLOWED} proof root must name relation {ALLOWED_RELATION} and a text key")
+        elif row_ok:
+            try:
+                key_parts = json.loads(root["key"])
+            except ValueError:
+                problems.append(f"{ALLOWED} proof root key is not JSON")
+            else:
+                if key_parts != row:
+                    problems.append(f"{ALLOWED} proof root key does not match row")
+        if not isinstance(proof.get("manifest_id"), str) or not proof["manifest_id"]:
+            problems.append(f"{ALLOWED} proof manifest_id must be non-empty text")
+        if "witnesses" in proof and not isinstance(proof["witnesses"], list):
+            problems.append(f"{ALLOWED} proof witnesses must be a list")
+
+    if not isinstance(doc["rows"], dict):
+        problems.append(f"{ALLOWED} rows is not an object")
+    for field in ("definition", "rules"):
+        val = doc[field]
+        if not isinstance(val, str) or not _SHA256_RE.match(val):
+            problems.append(f"{ALLOWED} {field} is not a sha256")
+    engine = doc["engine"]
+    if not isinstance(engine, dict) or set(engine) != set(ENGINE_PIN_KEYS):
+        problems.append(f"{ALLOWED} engine must have exact keys {list(ENGINE_PIN_KEYS)}")
+    else:
+        if not isinstance(engine["version"], str) or not engine["version"]:
+            problems.append(f"{ALLOWED} engine version must be non-empty text")
+        if not isinstance(engine["wheel_sha256"], str) or not _SHA256_RE.match(engine["wheel_sha256"]):
+            problems.append(f"{ALLOWED} engine wheel_sha256 is not a sha256")
+        if not isinstance(engine["commit"], str) or not _COMMIT_RE.match(engine["commit"]):
+            problems.append(f"{ALLOWED} engine commit is not a 40-hex commit id")
+    return problems
+
+
 def make(index: dict, objects: dict[str, bytes], schema: dict, rows: list, *,
          version: int = 1, previous: str | None = None, diff: str | None = None) -> dict:
     """The statement of the role whose form index and objects these are. `objects` are every object the index
     names except the statement; `schema` and `rows` are the form's own, as `rezono_publication.publication.form` made
     them (or as the L0 reader reads them back from those objects). Version 1 is preserved untouched for existing
-    callers and fixtures; version 2 adds optional paired `previous` and `diff` for chained epochs."""
-    if version == 1:
+    callers and fixtures; version 2 adds optional paired `previous` and `diff` for chained epochs; a form holding
+    `allowed.json` gets version 3, which keeps version 2's chain fields and adds `allowed`."""
+    if version not in (1, 2, 3):
+        raise ValueError(f"unsupported epoch statement version: {version!r}")
+    has_allowed = ALLOWED in objects
+    effective_version = 3 if has_allowed else version
+    if effective_version == 1:
         if previous is not None or diff is not None:
             raise ValueError("epoch statement v1 does not carry previous or diff")
         pred_type, fmt = PREDICATE_TYPE, FORMAT
-    elif version == 2:
+    else:
+        if effective_version == 3 and not has_allowed:
+            raise ValueError(f"epoch statement v3 requires {ALLOWED} in objects")
         if (previous is None) != (diff is None):
-            raise ValueError("epoch statement v2 requires both previous and diff, or neither")
+            raise ValueError(f"epoch statement v{effective_version} requires both previous and diff, or neither")
         if previous is not None:
             if not isinstance(previous, str) or not _SHA256_RE.match(previous):
                 raise ValueError(f"previous is not a sha256: {previous!r}")
             if not isinstance(diff, str) or not _SHA256_RE.match(diff):
                 raise ValueError(f"diff is not a sha256: {diff!r}")
             if DIFF_NAME not in objects:
-                raise ValueError(f"chained epoch statement v2 requires {DIFF_NAME} in objects")
+                raise ValueError(f"chained epoch statement v{effective_version} requires {DIFF_NAME} in objects")
             if hashlib.sha256(objects[DIFF_NAME]).hexdigest() != diff:
                 raise ValueError(f"diff sha256 does not match {DIFF_NAME} bytes")
         elif DIFF_NAME in objects:
-            raise ValueError(f"initial epoch statement v2 must not include {DIFF_NAME}")
-        pred_type, fmt = PREDICATE_TYPE_V2, FORMAT_V2
-    else:
-        raise ValueError(f"unsupported epoch statement version: {version!r}")
+            raise ValueError(f"initial epoch statement v{effective_version} must not include {DIFF_NAME}")
+        pred_type, fmt = (PREDICATE_TYPE_V3, FORMAT_V3) if effective_version == 3 else (PREDICATE_TYPE_V2, FORMAT_V2)
     m = index["manifest"]
+    epoch_text = _text(m["epoch"])
+    role_text = index["role"]
+    allowed_hash = None
+    if effective_version == 3:
+        allowed_problems = _check_allowed_doc(objects[ALLOWED], role=role_text, epoch=epoch_text)
+        if allowed_problems:
+            raise ValueError("; ".join(allowed_problems))
+        allowed_hash = hashlib.sha256(objects[ALLOWED]).hexdigest()
     h = hashes(schema, rows)
     if h["schema"] != index["schema"] or h["dataset"] != index["dataset"]:
         raise ValueError("the index does not name the dataset of these rows")
@@ -295,9 +388,9 @@ def make(index: dict, objects: dict[str, bytes], schema: dict, rows: list, *,
     predicate = {
         "format": fmt,
         "pack": index["pack"],
-        "role": index["role"],
+        "role": role_text,
         "manifest": _text(m["id"]),
-        "epoch": _text(m["epoch"]),
+        "epoch": epoch_text,
         "knowledge_time": _text(m["knowledge_time"]),
         "definition": _text(m["definition_sha256"]),
         "role_manifest": H(m),
@@ -311,6 +404,8 @@ def make(index: dict, objects: dict[str, bytes], schema: dict, rows: list, *,
     if previous is not None and diff is not None:
         predicate["previous"] = previous
         predicate["diff"] = diff
+    if allowed_hash is not None:
+        predicate["allowed"] = allowed_hash
     return {
         "_type": STATEMENT_TYPE,
         "subject": [{"name": n, "digest": {"sha256": hashlib.sha256(objects[n]).hexdigest()}} for n in sorted(objects)],
@@ -359,8 +454,8 @@ def _shape(st) -> list[str]:
         if not problems and names != sorted(set(names)):
             problems.append("the subjects are not sorted by name, one each")
     p = st["predicate"]
-    is_v2 = st.get("predicateType") == PREDICATE_TYPE_V2
-    if is_v2 and isinstance(p, dict):
+    ptype = st.get("predicateType")
+    if ptype in (PREDICATE_TYPE_V2, PREDICATE_TYPE_V3) and isinstance(p, dict):
         has_prev = "previous" in p
         has_diff = "diff" in p
         if has_prev and has_diff:
@@ -370,8 +465,11 @@ def _shape(st) -> list[str]:
         else:
             expected_keys = PREDICATE_KEYS + CHAIN_KEYS
             problems.append("the predicate must carry both previous and diff, or neither")
+        if ptype == PREDICATE_TYPE_V3:
+            expected_keys = expected_keys + ALLOWED_KEYS
         problems += _keys("the predicate", p, expected_keys)
-        for k in CHAIN_KEYS:
+        sha_keys = CHAIN_KEYS + ALLOWED_KEYS if ptype == PREDICATE_TYPE_V3 else CHAIN_KEYS
+        for k in sha_keys:
             if k in p and (not isinstance(p[k], str) or not _SHA256_RE.match(p[k])):
                 problems.append(f"the predicate {k} is not a sha256")
     else:
@@ -483,6 +581,18 @@ def _verify_chain(
     return problems
 
 
+def _verify_allowed(p: dict, subjects: dict[str, str], held: dict[str, bytes]) -> list[str]:
+    """Verify v3 `allowed` invariants: subject agreement, canonical `allowed.json` shape, and role/epoch match."""
+    problems: list[str] = []
+    if ALLOWED not in subjects:
+        problems.append(f"{ALLOWED} is missing from subjects on a v3 statement")
+    elif subjects[ALLOWED] != p["allowed"]:
+        problems.append(f"{ALLOWED} subject sha256 does not match predicate allowed")
+    if ALLOWED in held:
+        problems.extend(_check_allowed_doc(held[ALLOWED], role=p["role"], epoch=p["epoch"]))
+    return problems
+
+
 def verify(
     statement_bytes: bytes,
     index: dict,
@@ -513,7 +623,7 @@ def verify(
         return problems + shape
     p = st["predicate"]
     if (st["predicateType"], p["format"]) not in ACCEPTED_STATEMENT_TYPES:
-        want_fmt = FORMAT_V2 if st["predicateType"] == PREDICATE_TYPE_V2 else FORMAT
+        want_fmt = dict(ACCEPTED_STATEMENT_TYPES)[st["predicateType"]]
         return [f"predicate format is not {want_fmt}"]
 
     listed = {o["name"]: o["sha256"] for o in index.get("objects", [])}
@@ -584,7 +694,7 @@ def verify(
                 problems.append("hashes.json is not the hashes of the rows")
         except ValueError:
             problems.append("hashes.json is not JSON")
-    if st["predicateType"] == PREDICATE_TYPE_V2:
+    if st["predicateType"] in (PREDICATE_TYPE_V2, PREDICATE_TYPE_V3):
         problems.extend(_verify_chain(
             p, subjects, held,
             previous_statement=previous_statement,
@@ -593,6 +703,10 @@ def verify(
         ))
     elif any(x is not None for x in (previous_statement, previous_snapshots, current_snapshots)):
         problems.append("predecessor chain inputs were given for a v1 statement")
+    if st["predicateType"] == PREDICATE_TYPE_V3:
+        problems.extend(_verify_allowed(p, subjects, held))
+    elif ALLOWED in subjects:
+        problems.append(f"{ALLOWED} is a subject without a v3 predicate allowed")
     return problems
 
 
