@@ -1,0 +1,134 @@
+rezono 0
+pack std-loop
+
+schema std_loop_watchdog
+  iri "https://rezono.org/std-loop/watchdog"
+  import "linkml:types"
+  default range Text
+  description "Single-effect inactivity watchdog targets, activity readings and open effects (decisions/tooling-does-not-decide.md)."
+  annotation layer = "facts"
+
+enum WatchdogWorkPending world closed = yes | no
+
+kind WatchdogTarget world closed
+  description "A watchdog evaluation target at an observation cut with a window and pending-work flag."
+  run: Text
+  cut_tick: Int
+  window_seconds: Int
+  work_pending: WatchdogWorkPending
+  receipt: Text?
+    description "The identity of the loop sweep receipt verifying this cut."
+
+kind WatchdogActivity world closed
+  description "An observed activity tick for a watchdog target."
+  target: WatchdogTarget
+  activity_tick: Int
+
+kind WatchdogActiveEffect world closed
+  description "An existing open watchdog effect recorded for a target."
+  target: WatchdogTarget
+  created_at: Int
+
+rules watchdog
+  | // Single-effect inactivity watchdog (decisions/tooling-does-not-decide.md, Form 4).
+  | // Fail-closed: no trigger or resolve fires without a matching LoopSweepReceipt on the same run
+  | // and event_time == cut_tick, and at most one active effect is maintained per target.
+  | .decl watchdog_target_spec(target: symbol, run: symbol, cut_tick: number, window_seconds: number, work_pending: symbol)
+  | .decl watchdog_receipted(run: symbol, target: symbol)
+  | .decl watchdog_activity_reading(target: symbol, activity_tick: number)
+  | .decl watchdog_has_activity(target: symbol)
+  | .decl watchdog_latest_activity(target: symbol, latest_tick: number)
+  | .decl watchdog_has_active_effect(target: symbol)
+  | .decl watchdog_trigger(run: symbol, target: symbol, reason: symbol)
+  | .decl watchdog_resolve(run: symbol, target: symbol, effect: symbol, reason: symbol)
+  | .decl watchdog_resolved(run: symbol, target: symbol)
+  | .decl watchdog_hold(run: symbol, target: symbol, reason: symbol)
+  | 
+  | watchdog_target_spec(target, run, cut_tick, window_seconds, work_pending) :-
+  |     watchdog_target(target),
+  |     watchdog_target__run(target, run),
+  |     watchdog_target__cut_tick(target, cut_tick),
+  |     watchdog_target__window_seconds(target, window_seconds),
+  |     watchdog_target__work_pending(target, work_pending).
+  | 
+  | // Fail-closed receipt check: the target must name a LoopSweepReceipt of the same run with event_time == cut_tick.
+  | watchdog_receipted(run, target) :-
+  |     watchdog_target_spec(target, run, cut_tick, _, _),
+  |     watchdog_target__receipt(target, receipt),
+  |     receipt != "",
+  |     loop_sweep_receipt__run(receipt, run),
+  |     loop_sweep_receipt__event_time(receipt, cut_tick).
+  | 
+  | watchdog_activity_reading(target, tick) :-
+  |     watchdog_activity(activity),
+  |     watchdog_activity__target(activity, target),
+  |     watchdog_activity__activity_tick(activity, tick).
+  | 
+  | watchdog_has_activity(target) :-
+  |     watchdog_activity_reading(target, _).
+  | 
+  | watchdog_latest_activity(target, latest) :-
+  |     watchdog_has_activity(target),
+  |     latest = max tick : { watchdog_activity_reading(target, tick) }.
+  | 
+  | watchdog_has_active_effect(target) :-
+  |     watchdog_active_effect(effect),
+  |     watchdog_active_effect__target(effect, target),
+  |     watchdog_active_effect__created_at(effect, _).
+  | 
+  | // Trigger when receipted, work is pending, no active effect is open, and either no activity was observed
+  | // or latest activity + window_seconds <= cut_tick.
+  | watchdog_trigger(run, target, "no-activity-observed") :-
+  |     watchdog_target_spec(target, run, _, _, "yes"),
+  |     watchdog_receipted(run, target),
+  |     !watchdog_has_active_effect(target),
+  |     !watchdog_has_activity(target).
+  | 
+  | watchdog_trigger(run, target, "inactivity-window-elapsed") :-
+  |     watchdog_target_spec(target, run, cut_tick, window_seconds, "yes"),
+  |     watchdog_receipted(run, target),
+  |     !watchdog_has_active_effect(target),
+  |     watchdog_latest_activity(target, latest),
+  |     expires_at = latest + window_seconds,
+  |     expires_at <= cut_tick.
+  | 
+  | // Resolve an open effect when receipted and an activity reading was observed strictly after created_at.
+  | watchdog_resolve(run, target, effect, "activity-after-effect") :-
+  |     watchdog_target_spec(target, run, _, _, _),
+  |     watchdog_receipted(run, target),
+  |     watchdog_active_effect(effect),
+  |     watchdog_active_effect__target(effect, target),
+  |     watchdog_active_effect__created_at(effect, created_at),
+  |     watchdog_activity_reading(target, tick),
+  |     tick > created_at.
+  | 
+  | watchdog_resolved(run, target) :-
+  |     watchdog_resolve(run, target, _, _).
+  | 
+  | // Explicit hold reasons explaining why no effect fires (fail-closed on missing or mismatched receipt).
+  | watchdog_hold(run, target, "receipt-missing") :-
+  |     watchdog_target_spec(target, run, _, _, _),
+  |     !watchdog_receipted(run, target).
+  | 
+  | watchdog_hold(run, target, "no-pending-work") :-
+  |     watchdog_target_spec(target, run, _, _, "no"),
+  |     watchdog_receipted(run, target),
+  |     !watchdog_resolved(run, target).
+  | 
+  | watchdog_hold(run, target, "effect-already-open") :-
+  |     watchdog_target_spec(target, run, _, _, "yes"),
+  |     watchdog_receipted(run, target),
+  |     watchdog_has_active_effect(target),
+  |     !watchdog_resolved(run, target).
+  | 
+  | watchdog_hold(run, target, "within-window") :-
+  |     watchdog_target_spec(target, run, cut_tick, window_seconds, "yes"),
+  |     watchdog_receipted(run, target),
+  |     !watchdog_has_active_effect(target),
+  |     watchdog_latest_activity(target, latest),
+  |     expires_at = latest + window_seconds,
+  |     expires_at > cut_tick.
+  | 
+  | .output watchdog_trigger
+  | .output watchdog_resolve
+  | .output watchdog_hold

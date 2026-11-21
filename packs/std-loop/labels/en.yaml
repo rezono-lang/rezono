@@ -153,3 +153,28 @@ flow_case_pair: independent witness pair for a flow case
 flow_case_verdict: flow case verdict
 flow_case_decided: flow case with a verdict
 flow_case_incomplete: flow case with incomplete evidence
+watchdog_work_pending: pending work flag
+watchdog_work_pending.yes: "yes"
+watchdog_work_pending.no: "no"
+watchdog_target: watchdog target
+watchdog_target.run: observed run
+watchdog_target.cut_tick: observation cut tick
+watchdog_target.window_seconds: inactivity window in seconds
+watchdog_target.work_pending: pending work state
+watchdog_target.receipt: sweep receipt
+watchdog_activity: watchdog activity
+watchdog_activity.target: watchdog target
+watchdog_activity.activity_tick: activity tick
+watchdog_active_effect: open watchdog effect
+watchdog_active_effect.target: watchdog target
+watchdog_active_effect.created_at: effect creation tick
+watchdog_target_spec: watchdog target specification
+watchdog_receipted: receipted watchdog target
+watchdog_activity_reading: watchdog activity reading
+watchdog_has_activity: watchdog target with observed activity
+watchdog_latest_activity: latest watchdog activity tick
+watchdog_has_active_effect: watchdog target with an open effect
+watchdog_trigger: watchdog trigger
+watchdog_resolve: watchdog resolve
+watchdog_resolved: resolved watchdog target
+watchdog_hold: watchdog hold

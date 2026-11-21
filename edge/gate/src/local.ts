@@ -7,6 +7,7 @@ import { canonicalJson } from '../../../viewer/src/lib/canon.ts';
 import { ask as trace, AskError, calcSteps, memoryGraph, parseAfter, questionOf, stepsOf, type RuleDoc, type Sources, type SourcesOf } from './ask.ts';
 import { catalogueQueryScope } from './catalogue-query.ts';
 import { roleBundle } from './catalogue.ts';
+import { readPublishedVariantDifference, scenarioAnswer, type DifferenceCursor } from './difference.ts';
 import { ask as evaluate, roleSchema, type Asking } from './expr.ts';
 import { compareKey, pageByKey, type KeyRange } from './pieces.ts';
 import { rowQueryScope, type RowSelection } from './row-query.ts';
@@ -15,7 +16,7 @@ import {
 	standingHeaders, withdrawalBody, WithdrawnError, type WithdrawalRecord
 } from './standing.ts';
 import { fileStore, StoreLimit, type Store } from './store.ts';
-import { completeScope, readPublishedSweep, sweepAnswer, type SweepStart } from './sweep.ts';
+import { completeScope, readPublishedSweep, readPublishedVariant, sweepAnswer, type SweepStart } from './sweep.ts';
 
 const LIMIT = 1000;
 const REQUEST_BYTES = 16 * 1024;
@@ -341,6 +342,40 @@ async function readSweepChecked(
 	return published;
 }
 
+async function readVariantDifferenceChecked(
+	current: Current,
+	withdrawals: readonly WithdrawalRecord[],
+	pack: string,
+	role: string,
+	variantId: string,
+	page: { limit: number; after?: DifferenceCursor }
+) {
+	let withdrawn: WithdrawalRecord | undefined;
+	const checkedView = {
+		...current,
+		range: async (relation: string, at: KeyRange): Promise<Page> => {
+			const all = await current.rows(relation);
+			withdrawn = earlierWithdrawal(
+				withdrawn,
+				rowsWithdrawal(withdrawals, current.manifest.id, relation, rangeMatchingRows(all, at))
+			);
+			return pageByKey(all, at);
+		}
+	};
+	const variant = await readPublishedVariant(checkedView, pack, role, variantId);
+	if (!variant) return undefined;
+	const published = await readPublishedVariantDifference(checkedView, pack, role, variant, page);
+	if (!published) return undefined;
+	if (withdrawals.some((entry) => entry.rows.length > 0)) {
+		for (const relation of current.snaps.keys()) {
+			const rows = await current.rows(relation);
+			withdrawn = earlierWithdrawal(withdrawn, rowsWithdrawal(withdrawals, current.manifest.id, relation, rows));
+		}
+	}
+	if (withdrawn) throw new WithdrawnError(withdrawn);
+	return published;
+}
+
 function isManifestRoute(method: string, parts: readonly string[], search: URLSearchParams, manifestId: string): boolean {
 	const [, id, route] = parts;
 	if (parts.length === 2 && (id === 'head' || id === 'bundle')) {
@@ -514,6 +549,32 @@ export async function openLocalGate(root: string, role: string): Promise<Handle>
 						const published = await readSweepChecked(current, withdrawals, pack, role, name, start);
 						if (!published || await source.latest() !== headKey(pack, current.manifest.epoch)) return missing();
 						return json(sweepAnswer(item, name, id, published.series, published.start), 200, standing);
+					}
+					if (q?.start === 'delta' && q.answer === 'overlay'
+						&& q.steps.length === 1 && q.steps[0]?.suppose?.delta === 'given') {
+						const variant = url.searchParams.get('variant');
+						const proposal = url.searchParams.get('proposal');
+						if (proposal !== null) {
+							if (variant !== null) throw new AskError(400, 'give one of proposal or variant');
+							throw new AskError(501, 'this named question needs a publication index');
+						}
+						if (variant === null) throw new AskError(400, 'a delta question needs a variant');
+						const limit = Math.min(limitOf(url.searchParams.get('limit')), q.limit);
+						const rawAfter = parseAfter(url.searchParams.get('after'));
+						let after: DifferenceCursor | undefined;
+						if (rawAfter) {
+							if (rawAfter.distance === 0) {
+								const key = textList(rawAfter.ref.key);
+								if (!key || !key.length) throw new AskError(400, 'expected a JSON key array');
+								after = { distance: 0, relation: rawAfter.ref.relation, key };
+							} else {
+								after = { distance: rawAfter.distance, relation: rawAfter.ref.relation };
+							}
+						}
+						if (!variant || view !== current) return missing();
+						const published = await readVariantDifferenceChecked(current, withdrawals, pack, role, variant, { limit, after });
+						if (!published || await source.latest() !== headKey(pack, current.manifest.epoch)) return missing();
+						return json(scenarioAnswer(item, id, variant, published), 200, standing);
 					}
 					return json(await named(view, withdrawals, role, item, url.searchParams), 200, standing);
 				}

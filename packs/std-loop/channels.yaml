@@ -19,6 +19,9 @@ kinds:
   - {kind: loop_expected_difference, shape: rect}
   - {kind: loop_flow_case, shape: rect}
   - {kind: loop_flow_witness, shape: rect}
+  - {kind: watchdog_target, shape: rect}
+  - {kind: watchdog_activity, shape: rect}
+  - {kind: watchdog_active_effect, shape: rect}
 arrows:
   - {arrow: loop_completion.step, dash: none}
   - {arrow: loop_requirement.step, dash: none}
@@ -26,3 +29,5 @@ arrows:
   - {arrow: loop_batch_deferral.step, dash: none}
   - {arrow: loop_deadline.step, dash: none}
   - {arrow: loop_deadline.start, dash: none}
+  - {arrow: watchdog_activity.target, dash: none}
+  - {arrow: watchdog_active_effect.target, dash: none}

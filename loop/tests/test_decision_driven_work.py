@@ -299,19 +299,6 @@ def test_red_guard_refuses_new_or_edited_red_mark_without_headed_decision_and_sh
     assert res_good.returncode == 0, f"CLI should allow headed decision citation: {res_good.stdout}\n{res_good.stderr}"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingDecisionStatusRules,
-    reason=(
-        "extra: decisions/decision-driven-work.md: section 2. Waits for loop/tests/test_build_decision_rules.py--"
-        "test_uncited_decision_in_force_is_a_warning (BuildDecisionCitation in build/schema/decision_rules.yaml). "
-        "Derive build_decision_open(run, decision), build_decision_open_test(run, decision, test), "
-        "build_decision_untested(run, decision) and build_decision_done(run, decision) in "
-        "build/rules/decision_rules.dl over BuildCitationScan, BuildDecisionCitation, BuildRedCitation, "
-        "BuildTestFile and std-decision in_force_on; emit no rows when the cut scan is absent, and add labels "
-        "in build/labels/en.yaml."
-    ),
-)
 def test_build_pack_derives_decision_open_untested_done_and_keeps_missing_scan_unknown(tmp_path):
     kinds = {"BuildCitationScan", "BuildDecisionCitation", "BuildRedCitation"}
     if not kinds <= _declared_kinds():

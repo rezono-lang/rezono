@@ -74,6 +74,9 @@ export interface RoleBundleResponse {
 
 export interface GroundsNode extends RowRef {
 	distance: number;
+	outside?: boolean;
+	change?: string;
+	was?: string;
 	sources?: Source[];
 }
 
@@ -85,18 +88,58 @@ export interface GroundsStep {
 	value?: string;
 }
 
-export interface GroundsAnswer {
+export interface GapPremiseLike {
+	distance: number;
+	node: RowRef;
+	rule: string;
+	item: number;
+	kind: string;
+	index: number;
+	relation?: string;
+	outside?: boolean;
+	more?: boolean;
+	overflow?: boolean;
+}
+
+export interface GapCandidateLike {
+	change: string;
+	relation: string;
+	key: string;
+	status: string;
+	premise: number;
+}
+
+export interface ExplainAnswer {
 	format: string;
 	question: string;
 	manifest_id: string;
 	start?: RowRef;
 	nodes: GroundsNode[];
-	steps: GroundsStep[];
-	witnesses: Witness[];
+	steps?: GroundsStep[];
+	witnesses?: Witness[];
 	calc_witnesses?: CalcWitness[];
 	next?: string;
 	more?: RowRef[];
+	gap?: {
+		premises: GapPremiseLike[];
+		candidates?: GapCandidateLike[];
+		cut: boolean;
+	};
+	difference?: {
+		counts: Array<{ relation: string; added: number; removed: number; changed: number }>;
+		entries?: Array<{ relation: string; key: string; change: string; was?: string }>;
+	};
+	series?: Array<{
+		index: number;
+		value: string;
+		status: string;
+		manifest?: string;
+		diagnosis?: string;
+		counts?: Array<{ relation: string; added: number; removed: number; changed: number }>;
+	}>;
 }
+
+export type GroundsAnswer = ExplainAnswer;
 
 export interface StdVerb {
 	verb: string;
@@ -128,6 +171,42 @@ export interface StdPacks {
 	statuses: StdStatus[];
 }
 
+export interface SignInfo {
+	name: string;
+	glyph: string;
+	label: string;
+	form?: string;
+}
+
+export interface LineVerb {
+	verb: string;
+	label: string;
+	key: string;
+	question: string;
+	answerShape: string;
+	primary?: boolean;
+}
+
+export interface AnswerTableCell {
+	text: string;
+	sign?: SignInfo;
+}
+
+export interface AnswerTableRow {
+	depth?: number;
+	cells: AnswerTableCell[];
+}
+
+export interface AnswerTable {
+	question: string;
+	shape: string;
+	heading: string;
+	headers: string[];
+	rows: AnswerTableRow[];
+	cutMessage?: string;
+	moreLabel?: string;
+}
+
 export interface RowSelection {
 	relation: string;
 	key: string[];
@@ -147,11 +226,15 @@ export interface SlipLine {
 	depth: number;
 	polarity: 'positive' | 'negative';
 	part?: 'total';
+	path?: string;
 	label: string;
 	value: string;
 	state: ValueState;
 	reason: string;
+	valueSign?: SignInfo;
 	origin: string;
+	originSign?: SignInfo;
+	verbs: LineVerb[];
 }
 
 export interface SlipSeal {
@@ -159,12 +242,14 @@ export interface SlipSeal {
 	witnessCheck?: WitnessCheckStatus;
 	manifestLabel: string;
 	readerHashesLabel: string;
+	sealSign?: SignInfo;
 }
 
 export interface SlipView {
 	kind: 'slip' | 'relations';
 	lang: string;
 	pack: string;
+	manifestId: string;
 	row?: RowSelection;
 	sentence: SentenceSegment[];
 	lines: SlipLine[];
@@ -174,10 +259,19 @@ export interface SlipView {
 		line: string;
 		value: string;
 		origin: string;
+		verbs: string;
 	};
+	legendHeaders: {
+		title: string;
+		sign: string;
+		meaning: string;
+	};
+	signCatalog: SignInfo[];
 	labels: {
 		relationsHeading: string;
+		closeAnswer: string;
 	};
+	answersByKey: Record<string, AnswerTable>;
 }
 
 export type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
