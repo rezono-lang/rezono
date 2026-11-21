@@ -18,6 +18,7 @@ steps:
 witnesses:
   - conclusion: {relation: path, key: '["a","b"]'}
     rule_id: path0
+    iri: https://example.org/paths/witness/17bedfb6cd603d1f29a55f7be4fbe0af3d199af442afab6b9cb11ad3d2755261
     bindings: [{variable: "?x", value: a}, {variable: "?y", value: b}]
     premises:
       - {row: {relation: e, key: '["a","b"]'}, polarity: positive, stratum: 0}

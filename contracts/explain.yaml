@@ -235,8 +235,8 @@ classes:
       delta: {range: DeltaStart, inlined: true, description: "The delta or sweep the question starts from; absent for a row."}
       nodes: {range: AnswerNode, multivalued: true, inlined_as_list: true, required: true, description: "The nodes on this page; the start, at distance 0, on the first."}
       steps: {range: AnswerStep, multivalued: true, inlined_as_list: true, description: "The edges that reach a node on this page, from a node the answer shows (on this page or an earlier one); by conclusion, how, position and premise."}
-      witnesses: {range: Witness, multivalued: true, inlined_as_list: true, description: "The chosen witness of each conclusion on this page, in page order: the captions."}
-      calc_witnesses: {range: CalcWitness, multivalued: true, inlined_as_list: true, description: "The witness of each calculated row on this page, in page order: its version, definition and steps, unchanged. Each premise is also an edge of the answer (positive, at its index in premises); absent when the page has none."}
+      witnesses: {range: AnswerWitness, multivalued: true, inlined_as_list: true, description: "The chosen witness of each conclusion on this page, in page order, with its canonical IRI: the captions."}
+      calc_witnesses: {range: AnswerCalcWitness, multivalued: true, inlined_as_list: true, description: "The witness of each calculated row on this page, in page order: its version, definition and steps, unchanged, with its canonical IRI. Each premise is also an edge of the answer (positive, at its index in premises); absent when the page has none."}
       next: {description: "The cursor of the next page, <distance>,<relation>,<key> (the query parameter after); absent on the last page."}
       more: {range: RowRef, multivalued: true, inlined_as_list: true, description: "The nodes on this page where the walk stopped before its depth, to stay within the limit: each continues with the same question from that node."}
       gap: {range: GapAnswer, inlined: true, description: "For a question through the rules (gap): the failing premises and the candidates."}
@@ -435,6 +435,20 @@ classes:
       key: {required: true, description: "Canonical key text of the row's key columns; a column the user still chooses is null."}
       status: {range: CandidateStatus, required: true}
       premise: {range: integer, minimum_value: 0, required: true, description: "The premise it answers, by its place in premises."}
+  AnswerWitness:
+    is_a: Witness
+    description: >-
+      The chosen witness of a conclusion as an answer shows it: the role's published witness, unchanged, and its
+      canonical IRI (decisions/publication-conclusion-addresses.md section 2).
+    attributes:
+      iri: {required: true, pattern: "^[a-z][a-z0-9+.-]*://\\S+/witness/[0-9a-f]{64}$", description: "<base>witness/<H>: the base of the role's publication schema and H the canonical sha256 of the witness without this member (docs/contracts.md#canonical-hash)."}
+  AnswerCalcWitness:
+    is_a: CalcWitness
+    description: >-
+      The witness of a calculated row as an answer shows it: the role's published calculation witness, unchanged,
+      and its canonical IRI (decisions/publication-conclusion-addresses.md section 2).
+    attributes:
+      iri: {required: true, pattern: "^[a-z][a-z0-9+.-]*://\\S+/witness/[0-9a-f]{64}$", description: "<base>witness/<H>, as for AnswerWitness."}
   AnswerStep:
     description: One edge of the role's proof graph (the relation step), between nodes of an answer.
     attributes:

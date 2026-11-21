@@ -328,6 +328,8 @@ SHARED_READERS = {
     "compiler/rezono_compiler/": ("rezono",),
     "run/packs/": ("compiler", "loop"),
     "contracts/fixtures/": ("edge/publisher", "examples"),
+    # The canonical IRI vectors: publication/tests/iri_vectors.py writes them, the gate runs them too.
+    "contracts/fixtures/iri/": ("edge/gate", "publication"),
     # compiler/tests/test_domain_free.py scans the readers' sources and tests for domain words.
     "edge/gate/": ("compiler",),
     "tests/slip/": ("compiler",),

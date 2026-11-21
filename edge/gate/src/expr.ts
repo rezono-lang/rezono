@@ -81,6 +81,13 @@ export interface View {
 	reads: Set<string>;
 	/** The kinds of a tree with a subkind (§2.1 `parent`): in the schema, and not yet read by a question. */
 	trees: Set<string>;
+	/**
+	 * Per kind of the schema, the IRI space of its rows (§3.4; decisions/publication-conclusion-addresses.md §1),
+	 * as `rdf.element_space` gives it over the role's publication schema: the `iri` of the root of the kind's tree,
+	 * else `<base><Root>`, also when the role does not read the root; a derived relation's is `<base><Name>`.
+	 * Set by `roleSchema`.
+	 */
+	spaces?: Map<string, string>;
 }
 
 const pascal = (name: string): string =>
@@ -95,15 +102,15 @@ const pascal = (name: string): string =>
  */
 const notYet = (what: string): AskError => new AskError(501, `${what}: no Rezono Data form yet, so no question is answered over this pack`);
 
+/** The pack's own base (§2.1), as the publication form takes it: a pack.yaml that declares no `iri:` gets the default. */
+export function schemaBase(bundle: Bundle): string {
+	return bundle.pack.base || `https://rezono.example/${bundle.pack.id}/`;
+}
+
 /**
  * The schema of a role and where its rows are. A kind, a slot or a derived relation over a relation the role
  * does not read in full is open, and a single-valued slot over one also takes `unknown`.
  */
-/** The pack's own base IRI (§2.1), as the form takes it; a pack.yaml that declares no `iri:` gets the default. */
-export function packBase(bundle: Bundle): string {
-	return bundle.pack.base || `https://rezono.example/${bundle.pack.id}/`;
-}
-
 export function roleSchema(bundle: Bundle, snapshots: Listed[]): View {
 	const reads = new Set<string>();
 	const full = new Set<string>();
@@ -113,8 +120,9 @@ export function roleSchema(bundle: Bundle, snapshots: Listed[]): View {
 		if (s.complete || s.full) full.add(s.relation);
 	}
 	const partial = (relation: string): boolean => !full.has(relation);
-	const base = packBase(bundle);
-	const view: View = { schema: { rezono: '1.0', pack: bundle.pack.id, base, kinds: {} }, kinds: new Map(), slots: new Map(), reads, trees: new Set() };
+	const base = schemaBase(bundle);
+	const spaces = new Map<string, string>();
+	const view: View = { schema: { rezono: '1.0', pack: bundle.pack.id, base, kinds: {} }, kinds: new Map(), slots: new Map(), reads, trees: new Set(), spaces };
 	const { kinds } = view.schema;
 	const types: Record<string, TypeDef> = {};
 	const usedEnums = new Set<string>();
@@ -141,6 +149,9 @@ export function roleSchema(bundle: Bundle, snapshots: Listed[]): View {
 		if (k.iri !== undefined && k.iri !== `${base}${k.class}`) kinds[k.class].iri = k.iri;
 		if (k.parent && reads.has(k.parent)) kinds[k.class].parent = byAll.get(k.parent)!.class;
 		classOf.set(k.id, k.class);
+		// One element has one IRI, whatever kind of its tree names it: the space of the root (rdf.element_space).
+		const root = byAll.get(chain(k.id).at(-1)!)!;
+		spaces.set(k.class, root.iri || `${base}${root.class}`);
 		view.kinds.set(k.class, { relation: k.id });
 		view.slots.set(k.class, new Map());
 		family.set(k.class, visible.filter((x) => chain(x.id).includes(k.id)).map((x) => x.class));
@@ -258,6 +269,7 @@ export function roleSchema(bundle: Bundle, snapshots: Listed[]): View {
 		};
 		view.kinds.set(name, { relation: r.id, columns });
 		view.slots.set(name, new Map());
+		spaces.set(name, `${base}${name}`);
 	}
 	if (Object.keys(types).length) view.schema.types = types;
 	const enums = (bundle.enums ?? []).filter((e) => usedEnums.has(e.id) || reads.has(e.id));

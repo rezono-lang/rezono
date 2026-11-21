@@ -90,7 +90,9 @@ _KIND = re.compile(r"[A-Z][A-Za-z0-9]*")
 _CODE = re.compile(r"[a-z][a-z0-9_]*")
 _SID = re.compile(r"s-[0-9a-f]{64}")
 _DID = re.compile(r"d-[0-9a-f]{64}")
-_MID = re.compile(r"m-[0-9]+")
+# A manifest id `m-<epoch>`, `<epoch>` a natural number in its decimal spelling (§1): `m-01` names no epoch.
+_EPOCH = r"m-(?:0|[1-9][0-9]*)"
+_MID = re.compile(_EPOCH)
 _INT = re.compile(r"0|-?[1-9][0-9]*")
 _DECIMAL = re.compile(r"-?(0|[1-9][0-9]*)(\.[0-9]*[1-9])?")  # shortest: no trailing zero
 _RATIO = re.compile(r"(-?(0|[1-9][0-9]*))(/([1-9][0-9]*))?")
