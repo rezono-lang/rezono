@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import base64
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 import hashlib
 import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 from tempfile import TemporaryDirectory
 import time
 from typing import Any
@@ -18,11 +19,18 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 
-from examples.rules_support import State
 from management_recorder import ManagementCluster, ROOT, run
-from rezono_compiler import calc, facts, pack, rules
+
+for _extra in (ROOT / "examples", ROOT / "examples" / "platform" / "proof_cases"):
+    _text = str(_extra)
+    if _text not in sys.path:
+        sys.path.insert(0, _text)
+
+from management_probes import _committed, compiled  # noqa: E402
+from rezono_compiler import facts  # noqa: E402
 
 FEATURE = "certificates"
+PLATFORM_PACK = ROOT / "examples" / "platform"
 TLS_IMAGE = "docker.io/library/rezono-tls-fixture:local"
 EXPECTED_NAME = "renewed.example.org"
 CALLER = "client"
@@ -223,8 +231,8 @@ def _write_secret_file(path: Path, content: bytes) -> None:
 
 def _build_ca(
     common_name: str,
-    now: datetime,
-    days_valid: int,
+    not_valid_before: datetime,
+    not_valid_after: datetime,
     path_length: int,
     issuer_cert: x509.Certificate | None = None,
     issuer_key: ec.EllipticCurvePrivateKey | None = None,
@@ -250,8 +258,8 @@ def _build_ca(
         .issuer_name(issuer_name)
         .public_key(key.public_key())
         .serial_number(x509.random_serial_number())
-        .not_valid_before(now - timedelta(days=1))
-        .not_valid_after(now + timedelta(days=days_valid))
+        .not_valid_before(not_valid_before)
+        .not_valid_after(not_valid_after)
         .add_extension(x509.BasicConstraints(ca=True, path_length=path_length), critical=True)
         .add_extension(
             x509.KeyUsage(
@@ -276,8 +284,8 @@ def _build_ca(
 
 def _build_leaf(
     dns_name: str,
-    now: datetime,
-    days_valid: int,
+    not_valid_before: datetime,
+    not_valid_after: datetime,
     issuer_cert: x509.Certificate,
     issuer_key: ec.EllipticCurvePrivateKey,
 ) -> tuple[ec.EllipticCurvePrivateKey, x509.Certificate]:
@@ -290,8 +298,8 @@ def _build_leaf(
         .issuer_name(issuer_cert.subject)
         .public_key(key.public_key())
         .serial_number(x509.random_serial_number())
-        .not_valid_before(now - timedelta(days=1))
-        .not_valid_after(now + timedelta(days=days_valid))
+        .not_valid_before(not_valid_before)
+        .not_valid_after(not_valid_after)
         .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
         .add_extension(
             x509.KeyUsage(
@@ -424,42 +432,96 @@ def _run_client_probe(
         if phase in {"Succeeded", "Failed"}:
             break
         time.sleep(1)
-    if phase != "Succeeded":
+    logs = ""
+    try:
+        logs = run(*cluster.namespaced(namespace, "logs", pod_name, "-c", "probe"), limit=25).strip()
+    except subprocess.SubprocessError:
+        logs = ""
+    observation: dict[str, Any] = {}
+    if logs:
         try:
-            logs = run(*cluster.namespaced(namespace, "logs", pod_name, "-c", "probe"), limit=25).strip()
-        except subprocess.SubprocessError:
-            logs = "<no container logs>"
-        raise RuntimeError(f"Client probe pod {pod_name} ended in phase {phase or 'unknown'}: {logs}")
-    logs = run(*cluster.namespaced(namespace, "logs", pod_name, "-c", "probe"), limit=25)
-    observation = json.loads(logs.strip())
-    if observation.pop("banner", None) != "ok\n":
-        raise RuntimeError(f"Client probe pod {pod_name} did not receive TLS application banner")
-    if not observation.get("verified_chain") or observation.get("verified_dns_name") != EXPECTED_NAME:
-        raise RuntimeError(f"Client probe pod {pod_name} failed TLS verification: {observation}")
+            parsed = json.loads(logs)
+            if isinstance(parsed, dict):
+                observation = parsed
+        except json.JSONDecodeError:
+            observation = {"error": logs}
+    banner = observation.pop("banner", None)
+    raw_complete = observation.get("complete")
+    if isinstance(raw_complete, bool):
+        complete = phase == "Succeeded" and raw_complete
+    else:
+        complete = phase == "Succeeded" and banner == "ok\n" and bool(observation.get("leaf_sha256"))
+    observation["complete"] = complete
     return observation
 
 
-def _evaluate_management_rules(after: dict[str, Any], eval_day: str) -> tuple[list[list[str]], list[list[str]]]:
-    records = {
-        "tls_requirement": [{"id": "renewed", "caller": CALLER, "name": EXPECTED_NAME, "transport": "tls"}],
-        "tls_clock": [{"id": "policy", "day": eval_day, "warning_days": 7}],
-        "tls_root": [{"id": "client-trust", "caller": CALLER, "authority": after["issuer_root_sha256"]}],
-        "tls_issuer": [{"id": after["issuer_sha256"], "issuer": after["issuer_root_sha256"]}],
-        "tls_read": [{"id": "read-after", "service": "renewed", "complete": True}],
-        "tls_leaf": [{
+def _pack_warning_days() -> int:
+    """Read the TLS warning window in days from the platform pack's admitted facts."""
+    model = _committed()
+    values: list[int] = []
+    for path in facts.files(PLATFORM_PACK):
+        rows = facts.load(model, path)
+        for _, val in rows.get("tls_clock__warning_days", ()):
+            if type(val) is int:
+                values.append(val)
+    if len(values) != 1:
+        raise RuntimeError(f"Expected exactly one tls_clock__warning_days pack fact, got {values!r}")
+    return values[0]
+
+
+def _observed_dns_name(observation: dict[str, Any]) -> str:
+    """Return the first non-empty observed leaf SAN DNS name from a probe observation."""
+    for key in ("dns_names", "san_dns_names"):
+        names = observation.get(key)
+        if isinstance(names, list):
+            for name in names:
+                if isinstance(name, str) and name:
+                    return name
+    for key in ("leaf_dns_name", "presented_dns_name", "dns_name", "verified_dns_name"):
+        val = observation.get(key)
+        if isinstance(val, str) and val:
+            return val
+    return ""
+
+
+def _evaluate_management_rules(
+    after: dict[str, Any],
+    eval_day: str,
+    trusted_root_sha256: str,
+    warning_days: int,
+) -> tuple[list[list[str]], list[list[str]]]:
+    complete = bool(after.get("complete"))
+    issuer_sha256 = str(after.get("issuer_sha256") or "")
+    issuer_root_sha256 = str(after.get("issuer_root_sha256") or "")
+    begins = str(after.get("begins") or "")
+    ends = str(after.get("ends") or "")
+    dns_name = _observed_dns_name(after)
+
+    tls_issuer: list[dict[str, str]] = []
+    if issuer_sha256 and issuer_root_sha256 and issuer_sha256 != issuer_root_sha256:
+        tls_issuer.append({"id": issuer_sha256, "issuer": issuer_root_sha256})
+
+    tls_leaf: list[dict[str, str]] = []
+    if issuer_sha256 and begins and ends:
+        tls_leaf.append({
             "id": "leaf-after",
             "service": "renewed",
             "read": "read-after",
-            "dns_name": after["verified_dns_name"],
-            "issuer": after["issuer_sha256"],
-            "begins": after["begins"],
-            "ends": after["ends"],
-        }],
+            "dns_name": dns_name,
+            "issuer": issuer_sha256,
+            "begins": begins,
+            "ends": ends,
+        })
+
+    records: dict[str, list[dict[str, Any]]] = {
+        "tls_requirement": [{"id": "renewed", "caller": CALLER, "name": EXPECTED_NAME, "transport": "tls"}],
+        "tls_clock": [{"id": "policy", "day": eval_day, "warning_days": warning_days}],
+        "tls_root": [{"id": "client-trust", "caller": CALLER, "authority": trusted_root_sha256}],
+        "tls_issuer": tls_issuer,
+        "tls_read": [{"id": "read-after", "service": "renewed", "complete": complete}],
+        "tls_leaf": tls_leaf,
     }
-    model = pack.read(ROOT / "examples" / "platform")
-    program = rules.load(model.rules)
-    calculation = calc.build(model, model.calc) if program.calc_inputs() else None
-    state = State(model, program, "management", facts.rows_of(model, records), calculation)
+    _, state = compiled(records)
     findings = sorted(list(row) for row in state.derived.get("managed_tls_finding", set()))
     unknowns = sorted(list(row) for row in state.derived.get("managed_tls_unknown", set()))
     return findings, unknowns
@@ -471,22 +533,41 @@ def record_certificates() -> None:
     trial_ns = f"rezono-cert-trial-{cluster.run}-{cluster.attempt}"
     cluster.wait("deployment/coredns", "--for=condition=Available", "--timeout=90s", namespace="kube-system", limit=95)
 
+    warning_days = _pack_warning_days()
     now = datetime.now(timezone.utc)
     eval_day = now.strftime("%Y-%m-%d")
+    ca_begins = datetime(now.year - 1, 1, 1, tzinfo=timezone.utc)
+    ca_ends = datetime(now.year + 2, 12, 31, tzinfo=timezone.utc)
+    inter_ends = datetime(now.year + 2, 6, 30, tzinfo=timezone.utc)
+    leaf_begins = datetime(now.year, 1, 1, tzinfo=timezone.utc)
+    leaf1_ends = datetime(now.year + 1, 6, 30, tzinfo=timezone.utc)
+    leaf2_ends = datetime(now.year + 1, 12, 31, tzinfo=timezone.utc)
 
     with TemporaryDirectory(dir=cluster.temp, prefix="rezono-tls-pki-") as directory:
         work_dir = Path(directory)
-        root_key, root_cert = _build_ca("Rezono Fixture Root CA", now, days_valid=365, path_length=1)
+        root_key, root_cert = _build_ca("Rezono Fixture Root CA", ca_begins, ca_ends, path_length=1)
         inter_key, inter_cert = _build_ca(
             "Rezono Fixture Intermediate CA",
-            now,
-            days_valid=180,
+            ca_begins,
+            inter_ends,
             path_length=0,
             issuer_cert=root_cert,
             issuer_key=root_key,
         )
-        leaf1_key, leaf1_cert = _build_leaf(EXPECTED_NAME, now, days_valid=60, issuer_cert=inter_cert, issuer_key=inter_key)
-        leaf2_key, leaf2_cert = _build_leaf(EXPECTED_NAME, now, days_valid=90, issuer_cert=inter_cert, issuer_key=inter_key)
+        leaf1_key, leaf1_cert = _build_leaf(
+            EXPECTED_NAME,
+            leaf_begins,
+            leaf1_ends,
+            issuer_cert=inter_cert,
+            issuer_key=inter_key,
+        )
+        leaf2_key, leaf2_cert = _build_leaf(
+            EXPECTED_NAME,
+            leaf_begins,
+            leaf2_ends,
+            issuer_cert=inter_cert,
+            issuer_key=inter_key,
+        )
 
         # Keep local PKI material in the temporary directory with owner-only permissions; never log keys.
         _write_secret_file(work_dir / "root.key", _key_pem(root_key))
@@ -519,8 +600,6 @@ def record_certificates() -> None:
             _deploy_tls_server(cluster, trial_ns)
 
             before_obs = _run_client_probe(cluster, trial_ns, "tls-probe-before", target_addr)
-            if before_obs["leaf_sha256"] != leaf1_sha256 or before_obs["issuer_root_sha256"] != root_sha256:
-                raise RuntimeError("Initial TLS handshake did not present the expected leaf and root anchor")
             before_event = cluster.make_event(
                 FEATURE,
                 "tls-peer-observed",
@@ -544,8 +623,6 @@ def record_certificates() -> None:
             )
 
             after_obs = _run_client_probe(cluster, trial_ns, "tls-probe-after", target_addr)
-            if after_obs["leaf_sha256"] != leaf2_sha256 or after_obs["issuer_root_sha256"] != root_sha256:
-                raise RuntimeError("Renewed TLS handshake did not present the expected renewed leaf and root anchor")
             after_event = cluster.make_event(
                 FEATURE,
                 "tls-peer-observed",
@@ -557,9 +634,7 @@ def record_certificates() -> None:
         finally:
             cluster.delete("namespace", trial_ns, "--wait=true", "--timeout=60s", limit=70)
 
-    findings, unknowns = _evaluate_management_rules(after_obs, eval_day)
-    if findings or unknowns:
-        raise RuntimeError(f"Expected clean certificate evaluation after renewal, got findings={findings} unknowns={unknowns}")
+    findings, unknowns = _evaluate_management_rules(after_obs, eval_day, root_sha256, warning_days)
 
     judgement_event = cluster.make_event(
         FEATURE,

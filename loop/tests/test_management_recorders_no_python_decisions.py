@@ -269,13 +269,6 @@ def _event_row_tuples(event: dict[str, Any]) -> set[tuple[str, ...]]:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="M2: decisions/code-does-not-decide.md: record_management_certificates.py must supply the generated root "
-    "hash and observed leaf SAN, observe read completeness, read warning_days from pack facts with date validity, "
-    "and record derived findings instead of raising in Python.",
-)
 def test_certificates_recorder_lets_pack_decide_from_observed_tls_inputs(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -478,12 +471,6 @@ def test_certificates_recorder_lets_pack_decide_from_observed_tls_inputs(
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="M2: decisions/code-does-not-decide.md: record_management_health.py must submit raw observed http_status "
-    "and let the platform pack rule classify healthy/unhealthy instead of classifying in Python.",
-)
 def test_health_recorder_records_http_status_and_lets_pack_classify(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -1,9 +1,23 @@
+.decl health_probe_classified_status(probe: symbol, status: symbol)
+health_probe_classified_status(probe, status) :-
+    health_probe__status(probe, status), health_probe_status(status).
+health_probe_classified_status(probe, "healthy") :-
+    health_probe__http_status(probe, code), code >= 200, code < 300.
+health_probe_classified_status(probe, "unhealthy") :-
+    health_probe__http_status(probe, code), code >= 100, code < 200.
+health_probe_classified_status(probe, "unhealthy") :-
+    health_probe__http_status(probe, code), code >= 300, code <= 599.
+health_probe_classified_status(probe, "unknown") :-
+    health_probe__http_status(probe, code), code < 100.
+health_probe_classified_status(probe, "unknown") :-
+    health_probe__http_status(probe, code), code > 599.
+
 .decl managed_health_reading(step: symbol, status: symbol, probe: symbol)
 managed_health_reading(step, status, probe) :-
     health_step__service(step, service), health_probe__service(probe, service),
     health_step__run(step, run), health_probe__run(probe, run),
     health_step__token(step, token), health_probe__token(probe, token),
-    health_probe__status(probe, status), health_probe_status(status).
+    health_probe_classified_status(probe, status).
 
 .decl managed_health_observed(step: symbol)
 managed_health_observed(step) :- managed_health_reading(step, _, _).

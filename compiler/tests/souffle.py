@@ -280,7 +280,7 @@ def _functional_rules(prog, rel):
     val_type = TYPE[rel.value.type]
     sentinel = _functional_sentinel(rel.value.type)
     empty_state = rel.empty_state or "unknown"
-    empty_reason = rel.empty_reason or ("empty" if empty_state == "not_applicable" else "no_value")
+    empty_reason = rel.empty_reason or "no_match"
 
     dom_terms = key_vars + ["_"] * len(dom.values)
     lines = [
@@ -860,6 +860,8 @@ def pack_source(prog, pack_dir):
 
 def run(prog, data, workdir=None, program_text=None):
     """Evaluate with Soufflé: {relation: set of tuples of str} for every derived relation."""
+    if workdir is not None:
+        Path(workdir).mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=workdir) as d:
         d = Path(d)
         (d / "facts").mkdir()
