@@ -24,8 +24,8 @@ def _is_self_citing_git(src: dict) -> bool:
     pos = str(src.get("position", "")).partition("#")[0].partition(":")[0]
     if not pos:
         return False
-    resolved = (ROOT / pos).resolve()
-    return resolved == ROLES_YAML.resolve() or resolved == (BUILD / pos).resolve() == ROLES_YAML.resolve()
+    target = ROLES_YAML.resolve()
+    return (ROOT / pos).resolve() == target or (BUILD / pos).resolve() == target
 
 
 def _is_honest_origin(src: dict) -> bool:
