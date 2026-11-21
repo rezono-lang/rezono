@@ -64,7 +64,13 @@ def _importers():
         "coupling schema rules from packs/std-decision (and its staged candidate), "
         "make ReferenceDate.date required, remove *_day / ReferenceDate.day fields "
         "from std-decision consumer facts and re-pin every importing pack.yaml. "
-        "Waits for compiler/tests/test_std_decision_dates.py--test_std_decision_rules_read_dates."
+        "Waits for compiler/tests/test_std_decision_dates.py--test_std_decision_rules_read_dates, "
+        "examples/subsidy/test_subsidy_dates.py--test_subsidy_schema_has_no_day_numbers, "
+        "examples/platform/test_platform_release_dates.py--test_runs_orders_releases_by_their_sourced_date "
+        "and examples/platform/test_support_window_dates.py--test_support_query_retires_as_of_day_for_native_date, "
+        "and for a preparatory planner PR that removes *_day and the four coupling-rule "
+        "assertions from protected tests (such as compiler/tests/test_std_decision.py and "
+        "loop/tests/test_build_decision_capture.py) before step 6 lifts this mark."
     ),
 )
 def test_std_decision_retires_day_numbers_and_coupling_rules(tmp_path):

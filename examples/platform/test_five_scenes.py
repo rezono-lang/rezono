@@ -239,11 +239,7 @@ def test_scene_decisions_are_std_decision_facts(tmp_path):
                 f"Decision {did!r} must record at least one decider"
             )
             _iso_day(row.get("decided_on"), f"decision {did!r} decided_on")
-            valid_from = _iso_day(row.get("valid_from"), f"decision {did!r} valid_from")
-            expected_day = int(valid_from.replace("-", ""))
-            assert row.get("valid_from_day") == expected_day, (
-                f"Decision {did!r} valid_from_day must equal {expected_day}"
-            )
+            _iso_day(row.get("valid_from"), f"decision {did!r} valid_from")
 
     in_force_areas: dict[str, set[str]] = {}
     for binding in bindings:

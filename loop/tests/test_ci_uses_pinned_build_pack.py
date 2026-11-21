@@ -223,11 +223,9 @@ def _prepare_fixture_repo(tmp_path: Path, pinned_sha: str) -> tuple[Path, str, s
     _git(fixture, "update-ref", "refs/remotes/origin/main", base_sha)
     _git(fixture, "checkout", "-q", "-b", "fixture/pinned-engine-change")
 
-    target = fixture / "docs" / "compiler" / "pack.md"
-    target.parent.mkdir(parents=True, exist_ok=True)
-    existing = target.read_text(encoding="utf-8") if target.is_file() else ""
-    target.write_text(existing + "\n<!-- fixture candidate change -->\n", encoding="utf-8")
-    _git(fixture, "add", "docs/compiler/pack.md")
+    target = fixture / "fixture-candidate-change.txt"
+    target.write_text("fixture candidate change\n", encoding="utf-8")
+    _git(fixture, "add", "fixture-candidate-change.txt")
     _git(fixture, "commit", "-qm", "Fixture candidate change")
     head_sha = _git(fixture, "rev-parse", "HEAD")
 
@@ -529,7 +527,8 @@ def _matrix_suite_folders(outputs: dict[str, str]) -> set[str]:
     strict=True,
     raises=AssertionError,
     reason="M2: decisions/build-reconciliation.md: .github/workflows/ci.yml discover matrix step "
-           "must execute build/ on the pinned earlier main engine commit read from build/engine-pin.yaml, "
+           "must execute build/ on the pinned earlier main engine commit read from build/engine-pin.yaml "
+           "(invoking Python without `-I` so editable packages and sitecustomize tracing work), "
            "derive the CI matrix via loop/build_cutover.py (select_suites) without calling "
            "components.py ci-matrix, and fail closed into safe_mode selecting every suite when "
            "the pinned engine SHA equals the candidate HEAD SHA.",
@@ -561,6 +560,10 @@ def test_ci_workflow_executes_build_pack_on_pinned_engine_without_components_ci_
     matrix_step = next((step for step in steps if step.get("id") == "matrix"), None)
     assert isinstance(matrix_step, dict) and isinstance(matrix_step.get("run"), str) and matrix_step["run"].strip(), (
         ".github/workflows/ci.yml discover job must define an executable step with id: matrix"
+    )
+    assert not re.search(r"\bpython3?\s+(?:-[A-Za-z]*I|--isolated)\b", matrix_step["run"]), (
+        ".github/workflows/ci.yml discover matrix step must not pass `-I` / `--isolated` to Python "
+        "(it breaks editable package resolution and sitecustomize runtime tracing)"
     )
 
     # 2. The discover workflow's invoked production scripts must wire read_engine_pin,
