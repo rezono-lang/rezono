@@ -25,7 +25,10 @@ WINDOWS = (("2026-02-01", 26), ("2026-02-01", 27), ("2026-02-28", 0), ("2026-03-
            "replace it with a required native `date` slot `as_of`, and make "
            "examples/platform/rules/support_window.dl compute the inclusive support window from "
            "`support_query__as_of` via `@days` instead of reading an integer day number "
-           "(decisions/no-green-by-cheapest-route.md). "
+           "(decisions/no-green-by-cheapest-route.md). Per section 1.4 step 2, a planner must first "
+           "prepare examples/platform/acceptance/test_support_window.py and "
+           "examples/platform/test_platform_support_window_runs.py for `as_of` before a worker "
+           "removes SupportQuery.as_of_day. "
            "Waits for compiler/tests/test_std_decision_dates.py--test_std_decision_rules_read_dates.",
 )
 def test_support_query_retires_as_of_day_for_native_date():

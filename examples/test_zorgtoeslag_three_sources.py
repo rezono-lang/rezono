@@ -1,10 +1,11 @@
 """Three-source healthcare allowance slice (`examples/zorgtoeslag-slice/`): three independent source packs
 glued along one shared `Persoon` pack, Rezono-only rules (`toeslagpartner`, `insured`, `joint_income`) with
-zero `.dl` files, inline versioned `param` declarations, native `date` and `Cents` types (zero `*_day` /
-`YYYYMMDD` stopgaps), structured statutory citations in compiled rules, `ir/calc.json` and proof witnesses,
-17 cases (S01–S15 preserved + Case A S16 + Case B S17) against the independently extended stdlib-only
-`reference.py`, the silent-merge counterexample, retirement of the transitional legacy Household branch,
-and discoverability in `examples/README.md`
+zero `.dl` files and zero `calc/*.yaml` files, inline versioned `param` declarations, native `date` and
+`Cents` types (zero `*_day` / `YYYYMMDD` stopgaps), structured statutory citations in compiled
+`bundle/schema-bundle.json` rules, the lowered `rezono.calc/1` program (`model.calc` / `calc.Program`),
+rule proof witnesses and `calc_sql.witnesses`, 17 cases (S01–S15 preserved + Case A S16 + Case B S17)
+against the independently extended stdlib-only `reference.py`, the silent-merge counterexample,
+retirement of the transitional legacy Household branch, and discoverability in `examples/README.md`
 (decisions/healthcare-allowance-three-sources.md, decisions/no-green-by-cheapest-route.md).
 """
 
@@ -221,22 +222,17 @@ def _assert_inline_versioned_params(model) -> None:
         )
 
 
-def _calc_override_reasons(calc_ir: dict, rule_name: str) -> dict[str, set[str]]:
-    """Map each definition id/name of `rule_name` in compiled `ir/calc.json` to its structured override reasons."""
+def _calc_override_reasons(program, rule_name: str) -> dict[str, set[str]]:
+    """Map each compiled `Definition` (`d.id`, `(version, name)`, and `d.name`) of `rule_name` in
+    `calc.Program` (lowered from `rezono.calc/1` / `model.calc`) to its structured override reasons."""
     reasons_by_def: dict[str, set[str]] = {}
-    for entry in calc_ir.get("rules") or []:
-        if entry.get("rule") != rule_name:
-            continue
-        for defn in entry.get("definitions") or []:
-            reasons = {
-                str(ov["reason"])
-                for ov in defn.get("overrides") or []
-                if isinstance(ov, dict) and ov.get("reason")
-            }
-            if defn.get("name"):
-                reasons_by_def.setdefault(str(defn["name"]), set()).update(reasons)
-            if defn.get("id"):
-                reasons_by_def.setdefault(str(defn["id"]), set()).update(reasons)
+    for vid in program.rules.get(rule_name) or []:
+        ver = program.versions[vid]
+        for defn in ver.definitions:
+            reasons = {str(reason) for reason in defn.reasons if reason}
+            reasons_by_def.setdefault(defn.id, set()).update(reasons)
+            reasons_by_def.setdefault(defn.name, set()).update(reasons)
+            reasons_by_def.setdefault(f"{ver.version}#{defn.name}", set()).update(reasons)
     return reasons_by_def
 
 
@@ -244,21 +240,31 @@ def _calc_override_reasons(calc_ir: dict, rule_name: str) -> dict[str, set[str]]
     strict=True,
     raises=AssertionError,
     reason="extra: decisions/healthcare-allowance-three-sources.md: Expand examples/zorgtoeslag-slice/ into "
-           "four Rezono packs (shared Persoon + civil, tax, insurer sources) with zero .dl files, zero *_day "
-           "or YYYYMMDD slots, distinct civil.Partner and tax.Partner kinds, Polis with soort basis|aanvullend, "
-           "no stored partner:Bool or insured:Bool, inline versioned param declarations with valid/known/@ sources, "
-           "Rezono rules for toeslagpartner/insured/joint_income under rezono/, synthetic person keys, and "
-           "structured statutory citations (awr#art-5a, awir#art-3, wzt#art-2.1, wzt#art-2.2) in compiled "
-           "bundle/schema-bundle.json and ir/calc.json (decisions/no-green-by-cheapest-route.md). "
+           "four Rezono packs (shared Persoon + civil, tax, insurer sources) with zero .dl files, zero "
+           "calc/*.yaml files, zero *_day or YYYYMMDD slots, distinct civil.Partner and tax.Partner kinds, "
+           "Polis with soort basis|aanvullend, no stored partner:Bool or insured:Bool, inline versioned "
+           "param declarations with valid/known/@ sources, Rezono rules for toeslagpartner/insured/"
+           "joint_income under rezono/, synthetic person keys, and structured statutory citations "
+           "(awr#art-5a, awir#art-3, wzt#art-2.1, wzt#art-2.2) in compiled bundle/schema-bundle.json and "
+           "the lowered rezono.calc/1 program (`model.calc` / `calc.Program`) "
+           "(decisions/no-green-by-cheapest-route.md). "
            "Waits for compiler/tests/rezono/test_lower_rule_sentence.py--test_lower_rule_sentence and "
            "compiler/tests/rezono/test_zorgtoeslag_slice.py--test_published_slice_gives_the_oracle.",
 )
 def test_three_source_packs_and_schema_drop_stored_partner_and_insured(tmp_path: Path):
     assert PACK.is_file(), f"{PACK.relative_to(ROOT).as_posix()} does not exist yet"
 
-    # Strict Rezono-only rule & fact policy: zero .dl files and zero YAML fact files anywhere under the slice.
+    # Strict Rezono-only rule, calc & fact policy: zero .dl, zero calc/*.yaml, zero YAML fact files under the slice.
     dl_files = [p.relative_to(ROOT).as_posix() for p in sorted(SLICE.rglob("*.dl"))]
     assert not dl_files, f"examples/zorgtoeslag-slice must use Rezono under rezono/, never .dl: {dl_files}"
+    calc_yamls = [
+        p.relative_to(ROOT).as_posix()
+        for p in sorted(SLICE.rglob("*"))
+        if p.is_file() and p.suffix in {".yaml", ".yml"} and "calc" in p.relative_to(SLICE).parts
+    ]
+    assert not calc_yamls and not (SLICE / "calc").exists(), (
+        f"examples/zorgtoeslag-slice must author calculations in rezono/*.rezono, never calc/*.yaml: {calc_yamls}"
+    )
     yaml_facts = [
         p.relative_to(ROOT).as_posix()
         for p in sorted(SLICE.rglob("*"))
@@ -282,7 +288,7 @@ def test_three_source_packs_and_schema_drop_stored_partner_and_insured(tmp_path:
     assert set(SOURCE_PACKS.values()) <= imported_names, imported_names
     assert slice_meta.get("rezono"), "examples/zorgtoeslag-slice/pack.yaml must declare Rezono modules under rezono/"
 
-    from rezono_compiler import pack
+    from rezono_compiler import calc, pack
     from support import compile_dir
 
     try:
@@ -292,8 +298,10 @@ def test_three_source_packs_and_schema_drop_stored_partner_and_insured(tmp_path:
         raise AssertionError(f"examples/zorgtoeslag-slice failed to compile: {error}") from error
 
     bundle = json.loads(compiled["bundle/schema-bundle.json"])
-    assert "ir/calc.json" in compiled, "examples/zorgtoeslag-slice must emit ir/calc.json"
-    calc_ir = json.loads(compiled["ir/calc.json"])
+    assert model.calc is not None and "ir/calc.json" in compiled, (
+        "examples/zorgtoeslag-slice must lower a rezono.calc/1 calculation program and emit ir/calc.json"
+    )
+    program = calc.build(model, model.calc)
 
     kinds_by_pack: dict[str, list[dict]] = {}
     for kind in bundle["kinds"]:
@@ -345,7 +353,7 @@ def test_three_source_packs_and_schema_drop_stored_partner_and_insured(tmp_path:
 
     # toeslagpartner, insured and joint_income are authored in Rezono under rezono/*.rezono (never rules/*.dl).
     bundle_rules = bundle.get("rules") or []
-    calc_rule_names = {entry.get("rule") for entry in calc_ir.get("rules") or []}
+    calc_rule_names = set(program.rules)
     tp_rules = [r for r in bundle_rules if r.get("relation") == "toeslagpartner"]
     assert tp_rules, "compiled bundle/schema-bundle.json must contain Rezono rules for `toeslagpartner`"
     for rule in tp_rules:
@@ -365,23 +373,24 @@ def test_three_source_packs_and_schema_drop_stored_partner_and_insured(tmp_path:
             f"`{derived_name}` must be compiled from examples/zorgtoeslag-slice/rezono/"
         )
 
-    # Structured statutory citations in compiled bundle rules and ir/calc.json overrides (never raw source text).
+    # Structured statutory citations in compiled bundle rules and calc.Program overrides (never raw source text).
     tp_sources = {r.get("source") for r in tp_rules if r.get("source")}
     assert "awr#art-5a" in tp_sources, f"compiled toeslagpartner rules missing structured source awr#art-5a: {tp_sources}"
     assert "awir#art-3" in tp_sources, f"compiled toeslagpartner rules missing structured source awir#art-3: {tp_sources}"
 
     allowance_overrides = {
         reason
-        for reasons in _calc_override_reasons(calc_ir, "allowance").values()
+        for reasons in _calc_override_reasons(program, "allowance").values()
         for reason in reasons
     }
     assert {"wzt#art-2.1", "wzt#art-2.2"} <= allowance_overrides, (
-        f"compiled ir/calc.json allowance overrides missing wzt#art-2.1 / wzt#art-2.2: {allowance_overrides}"
+        f"compiled calc.Program allowance overrides missing wzt#art-2.1 / wzt#art-2.2: {allowance_overrides}"
     )
 
     # Monetary calculation outputs keep exact Cents unit (no floating point).
-    allowance_entries = [entry for entry in calc_ir.get("rules") or [] if entry.get("rule") == "allowance"]
-    assert allowance_entries and all(entry.get("unit") == "Cents" for entry in allowance_entries), allowance_entries
+    allowance_versions = [program.versions[vid] for vid in program.rules.get("allowance") or []]
+    assert allowance_versions and all(ver.unit == "Cents" for ver in allowance_versions), allowance_versions
+    assert program.result("allowance").unit == "Cents"
 
     _assert_no_bsn_like_identifiers(SLICE)
 
@@ -394,12 +403,15 @@ def test_three_source_packs_and_schema_drop_stored_partner_and_insured(tmp_path:
            "living apart with divorce petition -> 13500) and Case B (S17: unmarried, same address, joint child -> "
            "11600), preserve S01–S15 exactly, match the compiled three-source Rezono pack against the oracle on all "
            "17 cases, and prove statutory citations (awr#art-5a, awir#art-3, wzt#art-2.1, wzt#art-2.2) in actual "
-           "proof and calculation witnesses (decisions/no-green-by-cheapest-route.md). "
+           "rule proof witnesses and calc_sql.witnesses linked to calc.Program (decisions/no-green-by-cheapest-route.md). "
            "Waits for examples/test_zorgtoeslag_three_sources.py--test_three_source_packs_and_schema_drop_stored_partner_and_insured.",
 )
 def test_three_source_allowance_matches_extended_oracle_for_all_17_cases():
     assert PACK.is_file(), f"{PACK.relative_to(ROOT).as_posix()} does not exist yet"
     assert not list(SLICE.rglob("*.dl")), "examples/zorgtoeslag-slice must contain zero .dl files"
+    assert not (SLICE / "calc").exists() and not list(SLICE.rglob("calc/*.yaml")), (
+        "examples/zorgtoeslag-slice must author calculations in rezono/*.rezono, never calc/*.yaml"
+    )
 
     cases = yaml.safe_load(CASES_FILE.read_text(encoding="utf-8"))["cases"]
     by_id = {case["id"]: case for case in cases}
@@ -443,8 +455,7 @@ def test_three_source_allowance_matches_extended_oracle_for_all_17_cases():
     rule_prog = ir.load(model.rules)
     bundle = emit.bundle(model, [], rule_prog)
     rule_by_id = {rule["id"]: rule for rule in bundle.get("rules") or []}
-    calc_ir = calc.to_doc(program)
-    allowance_override_map = _calc_override_reasons(calc_ir, "allowance")
+    allowance_override_map = _calc_override_reasons(program, "allowance")
 
     # Directly verify the compiled engine's derived relations and proof witnesses on (2026-02-01, 2026-02-10).
     feb_rows = _load_pack_rows(model, SLICE, feb, cut)
@@ -488,7 +499,7 @@ def test_three_source_allowance_matches_extended_oracle_for_all_17_cases():
     assert "p-hal" not in ji_map, f"p-hal has no 2026 income and must stay unknown: {ji_map}"
 
     # Evaluate every case S01–S17 on its own (as_of, known) date through DuckDB + calcoracle + checker,
-    # and verify exception override citations in calculation witnesses for S05, S10 and S14.
+    # and verify exception override citations in calc_sql.witnesses linked to calc.Program for S05, S10 and S14.
     expected_exception_citations = {
         "S05": "wzt#art-2.2",
         "S10": "wzt#art-2.1",
@@ -517,13 +528,16 @@ def test_three_source_allowance_matches_extended_oracle_for_all_17_cases():
                 and json.loads(w["conclusion"]["key"])[0] == claimant
             ]
             assert len(witnesses) == 1, (cid, witnesses)
+            winning_ver = str(witnesses[0]["version"])
             winning_def = str(witnesses[0]["definition"])
-            def_reasons = allowance_override_map.get(winning_def, set()) | allowance_override_map.get(
-                winning_def.rpartition("#")[2], set()
+            def_reasons = (
+                allowance_override_map.get(winning_def, set())
+                | allowance_override_map.get(f"{winning_ver}#{winning_def}", set())
+                | allowance_override_map.get(winning_def.rpartition("#")[2], set())
             )
             assert expected_exception_citations[cid] in def_reasons, (
-                f"{cid}: calculation witness definition {winning_def!r} must carry structured override citation "
-                f"{expected_exception_citations[cid]!r}, got {def_reasons}"
+                f"{cid}: calculation witness ({winning_ver}, {winning_def!r}) must carry structured override "
+                f"citation {expected_exception_citations[cid]!r}, got {def_reasons}"
             )
 
 
@@ -579,11 +593,12 @@ def test_silently_merging_civil_and_tax_partner_gives_wrong_toeslagpartner_outco
     strict=True,
     raises=AssertionError,
     reason="extra: decisions/no-green-by-cheapest-route.md: Retire the transitional legacy single-source "
-           "Household branch in examples/zorgtoeslag-slice/reference.py, examples/zorgtoeslag-slice/facts.rezono "
-           "and compiler/tests/rezono/test_zorgtoeslag_slice.py once the three-source slice publishes. "
+           "Household branch in examples/zorgtoeslag-slice/facts.rezono and examples/zorgtoeslag-slice/reference.py "
+           "once the three-source slice publishes (cleanup of the protected compiler/tests/rezono/test_zorgtoeslag_slice.py "
+           "happens in a separate planner PR per scripts/red_guard.py). "
            "Waits for examples/test_zorgtoeslag_three_sources.py--test_three_source_allowance_matches_extended_oracle_for_all_17_cases.",
 )
-def test_retire_legacy_single_source_household_branch_in_zorgtoeslag_slice():
+def test_retire_legacy_single_source_household_branch_in_zorgtoeslag_slice(tmp_path: Path):
     assert PACK.is_file(), f"{PACK.relative_to(ROOT).as_posix()} does not exist yet"
     assert not (SLICE / "facts.rezono").exists(), (
         "transitional single-source examples/zorgtoeslag-slice/facts.rezono must be retired"
@@ -592,6 +607,34 @@ def test_retire_legacy_single_source_household_branch_in_zorgtoeslag_slice():
     assert not hasattr(oracle, "_is_legacy_household_source"), (
         "transitional _is_legacy_household_source branch in reference.py must be retired"
     )
+
+    # Substantive check: no legacy `household` fact branch remains in reference.py's AST.
+    oracle_strings = {
+        node.value.lower()
+        for node in ast.walk(ast.parse(ORACLE.read_text(encoding="utf-8")))
+        if isinstance(node, ast.Constant) and isinstance(node.value, str)
+    }
+    assert "household" not in oracle_strings, (
+        "examples/zorgtoeslag-slice/reference.py still contains a legacy 'household' branch"
+    )
+
+    # Behavioral counter-case: a legacy single-source Household `.rezono` file must be refused by reference.py.
+    legacy = tmp_path / "legacy-household.rezono"
+    legacy.write_text(
+        "rezono 0\n"
+        "pack zorgtoeslag-slice\n\n"
+        "fact Household\n"
+        "  | id  | partner |\n"
+        "  | ann | false   |\n\n"
+        "fact household ann, valid 2020-01-01.., known 2020-01-05\n"
+        "  insured = true\n"
+        "fact household ann, valid 2026-01-01..<2027-01-01, known 2025-12-01\n"
+        "  joint_income = 2500000\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    with pytest.raises(ValueError):
+        oracle.allowance(legacy, "ann", datetime.date(2026, 2, 1), datetime.date(2026, 2, 10))
 
 
 @pytest.mark.xfail(
