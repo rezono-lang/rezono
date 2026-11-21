@@ -48,7 +48,8 @@ def claim_records(leases):
         "task/earlier-listing": (t - 1, None, t - 10 * LEASE, [(t, "none")]),
     }
     records = {
-        "reference_date": [{"id": "policy-day", "title": "Observed reference day", "day": 20270115}],
+        "reference_date": [{"id": "policy-day", "title": "Observed reference day",
+                            "date": "2027-01-15", "day": 20270115}],
         "build_policy_date": [{"id": "policy-cut", "run": "current", "reference": "policy-day", "observed_at": t}],
         "decision": [
             {"id": f"lease-{index}", "title": f"Claim lease {index}", "state": "in_force",

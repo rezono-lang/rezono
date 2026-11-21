@@ -12,6 +12,10 @@ offer: offer
 offer.product: product
 offer.function: function
 offer.port: port
+port_decision: port decision
+port_decision.product: product
+port_decision.function: function
+port_decision.port: port
 demand: demand
 demand.product: product
 demand.function: function
@@ -44,6 +48,12 @@ signature_scan: signature scan
 signature_scan.covers: covers
 provides: provides
 provider: provider
+port_decided: port decided
+release_names: release names
+transport_series: transport series
+transport_series_multiple: multiple transport series
+port_known: port known
+port_unknown: port unknown
 asks: asks
 provider_chosen: provider chosen
 providers: providers
@@ -115,6 +125,12 @@ cluster_worker_node: cluster worker node
 cluster_worker_node.owner: owner cluster
 cluster_worker_node.endpoint: worker endpoint
 cluster_worker_node.same_cluster: the worker endpoint belongs to the owner cluster
+platform_startup_target: platform startup target
+platform_startup_target.target: target
+platform_startup_target.completion_step: completion step
+platform_startup_target.completion_token: completion token
+platform_startup_target.required_step: required step
+platform_startup_target.required_token: required token
 restore_dataset_binding: restore dataset binding
 restore_dataset_binding.trial: trial
 restore_dataset_binding.dataset: dataset

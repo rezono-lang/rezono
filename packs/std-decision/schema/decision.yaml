@@ -278,6 +278,9 @@ classes:
         required: true
         slot_uri: rdfs:label
         description: The day as people write it.
+      date:
+        range: date
+        description: The day as a calendar date.
       day:
         range: integer
         required: true

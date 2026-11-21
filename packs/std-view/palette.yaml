@@ -12,6 +12,7 @@ palettes:
       - {role: status.changed, value: "#9a5a00"}
       - {role: status.warning, value: "#9a5a00"}
       - {role: status.violated, value: "#b3261e"}
+      - {role: status.invalid, value: "#b3261e"}
       - {role: status.unknown, value: "#5c5a55"}
       # Text in this colour reads at 4.5:1 or more on the paper (WCAG 1.4.3): 4.86:1.
       - {role: status.not_applicable, value: "#706d66"}
@@ -26,6 +27,7 @@ palettes:
       - {role: status.changed, value: "#e8a640"}
       - {role: status.warning, value: "#e8a640"}
       - {role: status.violated, value: "#ff8a80"}
+      - {role: status.invalid, value: "#ff8a80"}
       - {role: status.unknown, value: "#b0ada6"}
       # 4.96:1 on the dark paper (WCAG 1.4.3).
       - {role: status.not_applicable, value: "#8a8781"}
@@ -40,6 +42,7 @@ palettes:
       - {role: status.changed, value: "#6e4000"}
       - {role: status.warning, value: "#6e4000"}
       - {role: status.violated, value: "#8c1a14"}
+      - {role: status.invalid, value: "#8c1a14"}
       - {role: status.unknown, value: "#404040"}
       - {role: status.not_applicable, value: "#606060"}
   # System colours: in forced-colors, the glyph and label convey status.
@@ -54,5 +57,6 @@ palettes:
       - {role: status.changed, value: CanvasText}
       - {role: status.warning, value: CanvasText}
       - {role: status.violated, value: CanvasText}
+      - {role: status.invalid, value: CanvasText}
       - {role: status.unknown, value: GrayText}
       - {role: status.not_applicable, value: GrayText}

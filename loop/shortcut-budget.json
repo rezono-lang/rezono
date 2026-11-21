@@ -1,0 +1,16 @@
+{
+  "day_number_fields": {
+    "examples/platform": 2,
+    "examples/subsidy": 5,
+    "packs/std-decision": 3,
+    "packs/std-review": 3
+  },
+  "duplicate_source_blocks": {
+    "examples/platform/facts/cluster_flow.sources.yaml": 4,
+    "examples/platform/facts/core.sources.yaml": 7,
+    "examples/subsidy/facts/credentials.sources.yaml": 4
+  },
+  "rezono_pack_dl_regression": {
+    "examples/subsidy-scheme": 4
+  }
+}

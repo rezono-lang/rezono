@@ -21,6 +21,7 @@ The compiler derives three things the gate needs and must not work out again:
 
 from __future__ import annotations
 
+import datetime
 import re
 
 from .rules import Atom, const_type, days, is_var
@@ -29,8 +30,8 @@ from .rules_sql import UTC_PATTERN, UTC_WHOLE
 FORMAT = "rezono.gap/1"
 KINDS = ("positive", "negative", "condition", "assignment", "aggregate")
 OPS = {"eq": "=", "ne": "!=", "lt": "<", "le": "<=", "gt": ">", "ge": ">=", "add": "+", "sub": "-", "mul": "*", "div": "/"}
-# Soufflé has no boolean column. The reference uses the two canonical symbols.
-TYPE = {"string": "symbol", "integer": "number", "boolean": "symbol"}
+# Soufflé has no boolean or date column. The reference uses their canonical symbols.
+TYPE = {"string": "symbol", "integer": "number", "boolean": "symbol", "date": "symbol"}
 _UTC = re.compile(r"([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})(?:[.]([0-9]+))?Z", re.ASCII)
 
 
@@ -335,6 +336,8 @@ def prefix_program(prog, relation, bound) -> str:
 def _value(v, typ):
     if typ == "boolean" and type(v) is bool:
         return "true" if v else "false"
+    if typ == "date" and type(v) is datetime.date:
+        return v.isoformat()
     return int(v) if typ == "integer" else str(v)
 
 

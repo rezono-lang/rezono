@@ -12,7 +12,8 @@ A reader takes one conclusion, sees what it rests on, moves a fact, and checks t
 The slip is the sheet that does this for one derived row.
 It shows the sentence, the lines the row rests on, and a seal that says who checked what.
 It needs no positions and no layout engine, so it does not wait for the drawing views or for the first release.
-[Vision](../docs/vision.md) · [EPL-2.0 and generic views](runtime-epl-and-generic-views.md) · [View contract](../contracts/view.yaml) · [Proof contract](../contracts/proof.yaml) · [Explanation contract](../contracts/explain.yaml)
+On 2026-11-21 the owner moved the browser slip page to `rezono-lang/cartouche` (`packages/slip`, consumed at a pinned version) while keeping the data side and screenless readers in `rezono-lang/rezono` (see [Repository boundary](#repository-boundary)).
+[Vision](../docs/vision.md) · [EPL-2.0 and generic views](runtime-epl-and-generic-views.md) · [View contract](../contracts/view.yaml) · [Proof contract](../contracts/proof.yaml) · [Explanation contract](../contracts/explain.yaml) · [Release 1 scope](release-1-scope.md)
 
 ## Name
 
@@ -25,6 +26,22 @@ The sheet is named `Slip`.
 2. The page has no answer of its own to any question. It asks the reader, and shows a verb only when the reader answers that verb's question for that line.
 3. The page's code holds no reader text. Every word comes from a message catalogue: the pack's for its own sentences, `std-view` and `std-explain` for the words of the sheet, in English and in Dutch.
 4. The page knows no word of any pack. Its folder and its tests are guarded by the domain-free test.
+
+## Repository boundary
+
+On 2026-11-21 the owner set the boundary between `rezono-lang/rezono` and `rezono-lang/cartouche` for reading:
+
+- **What stays in `rezono-lang/rezono` (Release 1 reading is the data side):**
+  - the contracts (`contracts/`) and `packs/std-view`;
+  - per-role bundles, head status (`witness_check`), and manifest hash (`manifest_sha256`);
+  - the key of signs in every schema bundle;
+  - sweeps and turning points;
+  - message formatting and canonical helpers (`viewer/messages/src/fill.ts` and `viewer/src/lib/canon.ts`);
+  - screenless readers (REPL, MCP, and CLI).
+- **What moves to `rezono-lang/cartouche`:**
+  - the browser slip page (`packages/slip` in `rezono-lang/cartouche`, consumed at a pinned version), tested against the same conformance requirements in this decision and against Rezono's fixtures;
+  - once the slip tests are green on `rezono-lang/cartouche`'s `main`, `viewer/slip/` and the DOM slip tests leave `rezono-lang/rezono`, while all data-side tests remain in `rezono-lang/rezono`.
+- **CI independence:** `rezono-lang/rezono`'s CI does **not** depend on `rezono-lang/cartouche`'s CI.
 
 ## Steps
 
@@ -99,7 +116,7 @@ A line is one row: its label, its value with its state, its sign from the key, a
 - A completeness row is a positive premise like any other.
 - A line that is itself a conclusion opens to its own slip, in place.
 - Where an answer stopped at its limit, the slip shows the continuation the answer names.
-- A value whose state is not `known` shows the sign of its state and the message of its reason, and no digit. A total above it shows the state the publication gives that total.
+- A value whose state is not `known` shows the sign of its state and the message of its reason, and no digit. A total above it shows the state the publication gives that total. In particular, an `invalid` value shows the `invalid` status sign (`!`, distinct from `violated` `✕` and `unknown` `▨`) per [the `invalid` status sign decision](std-view-invalid-sign.md).
 
 ## The seal
 
@@ -133,7 +150,7 @@ The viewer build takes `std-view` in; no pack publishes it.
 
 ## The page and how it gets its answers
 
-- The page lives in `viewer/slip/`, with its own `package.json`, outside `viewer/src/lib`.
+- During the transition the page lives in `viewer/slip/`, with its own `package.json`, outside `viewer/src/lib`. Under the [repository boundary](#repository-boundary), the browser slip page moves to `packages/slip` in `rezono-lang/cartouche` (consumed at a pinned version), and `viewer/slip/` leaves `rezono-lang/rezono` once the slip tests are green on Cartouche's `main`.
 - In step 1 a local command, `node viewer/slip/bin/serve.ts --store <directory> --role <role>`, opens the local reader for the role its caller chooses, as the REPL does. It serves the page and the reader's routes on the loopback address only, while the command runs, and refuses a request whose `Host` is another name. This is local use: no gate and no hosting.
 - In a test the page gets the reader's handler directly, without a server. `viewer/slip/bin/render.ts` reads one JSON request on standard input and writes one JSON result on standard output:
   - request: `store` (a directory the publisher wrote), `role`, `pack`, `lang`, optionally `row` (`relation` and `key`, else the slip opens as above), optionally `keys` (actions on the line with the given index, in order: a key press as `{"line": n, "key": "w"}`, or the control of a sweep moved to a stop as `{"line": n, "stop": i}`, which the arrow keys do one stop at a time), and optionally `reader` (the path of a module whose default export takes the reader's handler and returns another; a test uses it to add or remove a question);
@@ -143,7 +160,7 @@ The viewer build takes `std-view` in; no pack publishes it.
 
 ### Generated contract types
 
-Both `viewer/messages/` and `viewer/slip/` import their generated TypeScript contract types (`import type`) directly from `contracts/typescript/generated/`, the directory `contracts/gen-types.sh` already writes for `edge/gate/` and `tools/repl/`.
+`viewer/messages/` (and `viewer/slip/` while it remains in `rezono-lang/rezono` during the transition) import their generated TypeScript contract types (`import type`) directly from `contracts/typescript/generated/`, the directory `contracts/gen-types.sh` already writes for `edge/gate/` and `tools/repl/`.
 Neither package writes into or reads generated types from `viewer/src/lib/contract/generated/`, and `contracts/gen-types.sh` does not write into `viewer/src/lib/` for them: every file under `viewer/src/lib/` is an input of a kept view's build hash (`edge/publisher/rezono_publisher/view_build.py`), so generated output for the slip and message filler stays outside `viewer/src/lib/`.
 
 ### Marks in the drawn page
@@ -248,6 +265,8 @@ Positions and the drawing views. Hosting, and a gate with sign-in. Signing a sta
 
 Each test below is a red test first, with its expectation written by hand in a fixture or computed by an oracle in the test.
 The tests of the page use `tests/fixtures/slip`, a small pack with two roles, and name no example pack.
+Under the [repository boundary](#repository-boundary), `tests/fixtures/slip` and the data-side tests (`verb-bar-in-std-view`, `role-part-of-bundle`, `role-bundle-type-fields`, `head-status-and-hash`, `message-filled`, `several-sweeps`, `variant-difference-local`, `turning-points`, `turn-unknown-neighbour`) remain in `rezono-lang/rezono`.
+The DOM slip tests (`slip-rule-row`, `slip-calculated-row`, `unknown-shows-no-digit`, `verbs-that-answer`, `tables-and-legend`, `unserved-publication`, `one-build-every-claim`, `no-pack-word`, `stops-only`) are conformance tests for `packages/slip` in `rezono-lang/cartouche` against Rezono's fixtures; they remain in `rezono-lang/rezono` until the slip tests are green on Cartouche's `main`, after which `viewer/slip/` and the DOM slip tests leave `rezono-lang/rezono`.
 
 Step 1: `verb-bar-in-std-view`, `role-part-of-bundle`, `role-bundle-type-fields`, `head-status-and-hash`, `message-filled`, `slip-rule-row`, `slip-calculated-row`, `unknown-shows-no-digit`, `verbs-that-answer`, `tables-and-legend`, `unserved-publication`, `one-build-every-claim`, `no-pack-word`.
 

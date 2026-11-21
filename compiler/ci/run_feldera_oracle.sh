@@ -119,10 +119,12 @@ selectors=(
   compiler/tests/test_calc.py::test_feldera_gives_what_duckdb_gives
   compiler/tests/test_bound.py::test_the_check_view_on_feldera_holds_the_rows_past_the_bound
   compiler/tests/test_boolean_rule_inputs.py::test_native_boolean_rule_inputs
+  compiler/tests/test_recorded_dates.py::test_independent_date_equality
   compiler/tests/test_rules_properties.py::test_feldera_runs_generated_programs_as_duckdb_does
   compiler/tests/test_ordered_rule_scalars_engines.py::test_feldera_orders_typed_values
   examples/test_feldera.py::test_feldera_accepts_the_sql_and_finds_the_errors
   examples/test_feldera_rules.py::test_incremental_on_feldera_equals_batch
+  examples/test_calculation_engine_parity.py::test_feldera_calculations_match_duckdb_and_checker
   examples/test_platform_incremental_proof.py::test_platform_incremental_delta_and_witnesses_match_batch
 )
 suite=(python -u -m pytest --rootdir="$PWD" -o empty_parameter_set_mark=fail_at_collect)

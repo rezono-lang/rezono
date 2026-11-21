@@ -1,24 +1,107 @@
 <script lang="ts">
-	import type { AnswerTable, SignInfo, SlipLine, SlipView } from './types.ts';
+	import type { AnswerTable, LineFold, SignInfo, SlipLine, SlipView } from './types.ts';
 
-	let { view }: { view: SlipView } = $props();
+	let {
+		view,
+		onPending,
+	}: {
+		view: SlipView;
+		onPending?: (promise: Promise<unknown>) => void;
+	} = $props();
 
 	let activeAnswer = $state<AnswerTable | undefined>(undefined);
 	let focusedLine = $state<number | undefined>(undefined);
+	let openSweepLine = $state<number | undefined>(undefined);
+	let selectedStop = $state<number | undefined>(undefined);
+	let activeFolds = $state<Record<number, LineFold>>({});
+	let selectionSeq = 0;
 	let rootEl: HTMLElement | undefined;
 
-	function activateVerb(lineIndex: number, verbName: string): void {
-		const found = view.answersByKey[`${lineIndex}:${verbName}`];
-		if (!found) return;
-		activeAnswer = found;
-		focusedLine = lineIndex;
+	function focusLine(lineIndex: number): void {
 		queueMicrotask(() => {
 			const rowEl = rootEl?.querySelector<HTMLElement>(`tr[data-line="${lineIndex}"]`);
 			rowEl?.focus();
 		});
 	}
 
+	function activateVerb(lineIndex: number, verbName: string): void {
+		if (verbName === 'suppose') {
+			const line = view.lines[lineIndex];
+			if (!line?.sweep) return;
+			selectionSeq += 1;
+			if (openSweepLine === lineIndex) {
+				openSweepLine = undefined;
+				selectedStop = undefined;
+				activeFolds = {};
+			} else {
+				openSweepLine = lineIndex;
+				selectedStop = undefined;
+				activeFolds = {};
+			}
+			focusedLine = lineIndex;
+			focusLine(lineIndex);
+			return;
+		}
+		const found = view.answersByKey[`${lineIndex}:${verbName}`];
+		if (!found) return;
+		activeAnswer = found;
+		focusedLine = lineIndex;
+		focusLine(lineIndex);
+	}
+
+	function selectStop(lineIndex: number, stopIndex: number): void {
+		const line = view.lines[lineIndex];
+		const sweep = line?.sweep;
+		if (!sweep) return;
+		const stop = sweep.stops.find((entry) => entry.index === stopIndex);
+		if (!stop) return;
+		openSweepLine = lineIndex;
+		selectedStop = stop.index;
+		focusedLine = lineIndex;
+		const seq = ++selectionSeq;
+
+		if (
+			(stop.status !== 'green' && stop.status !== 'warning') ||
+			!stop.manifest ||
+			!view.loadVariantFolds
+		) {
+			activeFolds = {};
+			return;
+		}
+
+		const task = view.loadVariantFolds(stop.manifest).then(
+			(folds) => {
+				if (seq !== selectionSeq) return;
+				activeFolds = folds;
+			},
+			() => {
+				if (seq !== selectionSeq) return;
+				activeFolds = {};
+			},
+		);
+		onPending?.(task);
+	}
+
 	function handleLineKeydown(event: KeyboardEvent, line: SlipLine): void {
+		if (
+			openSweepLine === line.index &&
+			line.sweep &&
+			line.sweep.stops.length > 0 &&
+			(event.key === 'ArrowRight' || event.key === 'ArrowLeft')
+		) {
+			event.preventDefault();
+			const stops = line.sweep.stops;
+			const currentPos =
+				selectedStop === undefined
+					? -1
+					: stops.findIndex((entry) => entry.index === selectedStop);
+			const nextPos =
+				event.key === 'ArrowRight'
+					? Math.min(stops.length - 1, currentPos < 0 ? 0 : currentPos + 1)
+					: Math.max(0, currentPos < 0 ? stops.length - 1 : currentPos - 1);
+			selectStop(line.index, stops[nextPos].index);
+			return;
+		}
 		const pressed = event.key.toLowerCase();
 		const matched = line.verbs.find((verb) => verb.key.toLowerCase() === pressed);
 		if (!matched) return;
@@ -29,18 +112,20 @@
 	function closeAnswer(): void {
 		activeAnswer = undefined;
 		if (focusedLine !== undefined) {
-			const target = focusedLine;
-			queueMicrotask(() => {
-				const rowEl = rootEl?.querySelector<HTMLElement>(`tr[data-line="${target}"]`);
-				rowEl?.focus();
-			});
+			focusLine(focusedLine);
 		}
 	}
 
 	const legendEntries = $derived.by((): SignInfo[] => {
 		const drawn = new Set<string>();
 		for (const line of view.lines) {
-			if (line.valueSign) drawn.add(line.valueSign.name);
+			const fold = activeFolds[line.index];
+			if (fold) {
+				if (view.supposedSign) drawn.add(view.supposedSign.name);
+				if (fold.newSign) drawn.add(fold.newSign.name);
+			} else if (line.valueSign) {
+				drawn.add(line.valueSign.name);
+			}
 			if (line.originSign) drawn.add(line.originSign.name);
 		}
 		if (activeAnswer) {
@@ -80,6 +165,7 @@
 			</thead>
 			<tbody>
 				{#each view.lines as line (line.index)}
+					{@const fold = activeFolds[line.index]}
 					<tr
 						id="line-{line.index}"
 						tabindex="0"
@@ -98,10 +184,28 @@
 						<td data-part="label">{line.label}</td>
 						<td
 							data-part="value"
-							data-state={line.state}
-							data-reason={line.state !== 'known' && line.reason ? line.reason : undefined}
+							data-state={fold ? fold.newState : line.state}
+							data-reason={fold
+								? fold.newState !== 'known' && fold.newReason
+									? fold.newReason
+									: undefined
+								: line.state !== 'known' && line.reason
+									? line.reason
+									: undefined}
 						>
-							{#if line.state === 'known'}
+							{#if fold}
+								<span data-sign={view.supposedSign?.name}>
+									<del>{fold.oldValue}</del>
+									<ins>
+										{#if fold.newSign}
+											<span data-sign={fold.newSign.name} aria-hidden="true">
+												{fold.newSign.glyph}
+											</span>
+										{/if}
+										{fold.newValue}
+									</ins>
+								</span>
+							{:else if line.state === 'known'}
 								{line.value}
 							{:else}
 								{#if line.valueSign}
@@ -132,6 +236,41 @@
 									{verb.label}
 								</button>
 							{/each}
+							{#if openSweepLine === line.index && line.sweep}
+								<div
+									data-part="sweep"
+									data-sweep={line.sweep.name}
+									role="group"
+									aria-label={line.sweep.samplesNote}
+								>
+									{#if line.sweep.unavailable && line.sweep.unavailableNote}
+										<span data-part="sweep-note">{line.sweep.unavailableNote}</span>
+									{/if}
+									{#each line.sweep.stops as stop (stop.index)}
+										<button
+											type="button"
+											data-stop={String(stop.index)}
+											data-status={stop.status}
+											data-turn={stop.turn}
+											data-selected={selectedStop === stop.index ? 'true' : undefined}
+											aria-pressed={selectedStop === stop.index ? 'true' : 'false'}
+											onclick={() => selectStop(line.index, stop.index)}
+										>
+											<span data-part="stop-value">{stop.value}</span>
+											<span data-part="stop-status">{stop.statusLabel}</span>
+											{#if stop.status === 'red' && stop.checks && stop.checks.length > 0}
+												<span data-part="stop-checks">
+													{#each stop.checks as check (check.name)}
+														<span data-check={check.name} data-status={check.status}>
+															{check.name}
+														</span>
+													{/each}
+												</span>
+											{/if}
+										</button>
+									{/each}
+								</div>
+							{/if}
 						</td>
 					</tr>
 				{/each}
@@ -272,6 +411,40 @@
 		display: flex;
 		gap: 6px;
 		flex-wrap: wrap;
+	}
+
+	[data-part='sweep'] {
+		display: flex;
+		gap: 6px;
+		flex-wrap: wrap;
+		align-items: center;
+		flex-basis: 100%;
+		margin-top: 4px;
+	}
+
+	[data-stop] {
+		display: inline-flex;
+		gap: 4px;
+		align-items: center;
+		padding: 2px 6px;
+		border: 1px solid #d0d7de;
+		background: transparent;
+		font-variant-numeric: tabular-nums;
+	}
+
+	[data-stop][data-selected='true'] {
+		border-color: #24292f;
+		font-weight: 600;
+	}
+
+	td[data-part='value'] del {
+		text-decoration: line-through;
+		margin-right: 6px;
+	}
+
+	td[data-part='value'] ins {
+		text-decoration: none;
+		font-weight: 600;
 	}
 
 	section[data-part='answer'],

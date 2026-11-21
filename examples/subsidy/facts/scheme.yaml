@@ -32,7 +32,7 @@ exception:
 # horizon: an amount that ends within ninety days of it is one to decide about now (a design choice of this
 # example). std-time reads it as its reference point (views.yaml); there is one day, not two.
 evaluation_day:
-  - {"id": "2026-11-10", "title": "10 November 2026", "day": 20261110, "calendar": "civil", "horizon": 90}
+  - {"id": "2026-11-10", "title": "10 November 2026", "date": "2026-11-10", "day": 20261110, "calendar": "civil", "horizon": 90}
 # The calendar whose days the scheme counts (a design choice of this example: the civil calendar).
 calendar:
   - {"id": "civil", "title": "Civil calendar, in days"}

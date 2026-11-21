@@ -1,8 +1,8 @@
 """One run vocabulary in std-loop: claims, effects and derived refusals have one home (decisions/loop-engine-epoch.md).
 
 The expectations are worked by hand from sections 2 and 5 of the decision and from the formal Effect and Claims
-models: an attempt consumes its plan's key, the first readback after an effective attempt settles it, and a
-refusal that an importing pack derives makes the refused step stuck with that pack's witness.
+models: an attempt consumes its plan's key, the first settling readback strictly after the latest recorded attempt
+settles it, and a refusal that an importing pack derives makes the refused step stuck with that pack's witness.
 """
 import json
 import re
@@ -74,22 +74,6 @@ def effect_states():
     return set(yaml.safe_load(EFFECT.read_text(encoding="utf-8"))["enums"]["EffectState"]["permissible_values"])
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingSharedKind,
-    reason=(
-        "extra: decisions/loop-engine-epoch.md: sections 2.2 and 2.3. Declare in packs/std-loop/schema "
-        "LoopEffectPlan {id, run, step: LoopStep, reason}, LoopEffectAttempt {id, run, plan: LoopEffectPlan, "
-        "sent_at: integer, outcome: claimed, sent, refused or unknown, source}, LoopEffectReadback {id, run, plan: "
-        "LoopEffectPlan, observed_at: integer, state: expected, before or other, receipt: LoopSweepReceipt, source}, "
-        "LoopClaim {id, run, subject, generation, observed_at: integer, source}, LoopClaimRenewal {id, claim: "
-        "LoopClaim, generation, at: integer, source} and the enum LoopEffectState with exactly the values of "
-        "EffectState in contracts/effect.yaml. Then run/packs/cleanup-deadline imports std-loop and its Attempt.state "
-        "ranges over LoopEffectState, so no pack outside std-loop declares a copy of those states. Re-pin std-loop "
-        "in build/pack.yaml, examples/platform/pack.yaml and compiler/rezono_compiler/standard_packs.py in the same "
-        "pull request."
-    ),
-)
 def test_effects_and_claims_are_declared_once():
     shared = classes(LOOP / "schema")
     missing = sorted(set(SHARED) - set(shared))
@@ -196,16 +180,6 @@ def gate_records(value):
     }
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingExtension,
-    reason=(
-        "extra: decisions/loop-engine-epoch.md: section 2.2, derived refusal. Declare in packs/std-loop/rules "
-        "`// @extend .decl derived_refusal(run: symbol, step: symbol, reason: symbol)` with no clause of its own, and "
-        "let refusal(run, step, reason) also hold for every derived_refusal row, so an importing pack's derived "
-        "refusal makes the step stuck and not unblocked, with the importing pack's premises in the witness."
-    ),
-)
 def test_a_derived_refusal_makes_its_step_stuck(tmp_path):
     if not extensible(LOOP / "rules", "derived_refusal"):
         raise MissingExtension("packs/std-loop/rules does not declare derived_refusal with // @extend")
@@ -262,19 +236,6 @@ EFFECT_CASES = [
 ]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingExtension,
-    reason=(
-        "extra: decisions/loop-engine-epoch.md: section 5. Waits for "
-        "loop/tests/test_shared_run_vocabulary.py--test_effects_and_claims_are_declared_once. Declare "
-        "`// @extend .decl effect_permitted(run: symbol, step: symbol, plan: symbol, reason: symbol)` in "
-        "packs/std-loop/rules and derive effect_attempted(run, plan), effect_planned(run, step, plan, reason) from "
-        "unblocked and effect_permitted without an attempt, effect_confirmed and effect_discarded from the first "
-        "settling readback, effect_pending(run, plan, reason) with reason still-before or readback-missing, and "
-        "effect_state(run, plan, state, reason) with the journal states of contracts/effect.yaml."
-    ),
-)
 def test_an_effect_is_attempted_once_per_plan(tmp_path):
     if not extensible(LOOP / "rules", "effect_permitted"):
         raise MissingExtension("packs/std-loop/rules does not declare effect_permitted with // @extend")
@@ -289,3 +250,165 @@ def test_an_effect_is_attempted_once_per_plan(tmp_path):
         assert ((RUN, PLAN) in {row[:2] for row in rows.get("effect_discarded", set())}) is discarded, case
         states = {row[2] for row in rows.get("effect_state", set()) if row[:2] == (RUN, PLAN)}
         assert states == {state}, case
+
+
+def test_effect_stale_readback_between_attempts_cannot_settle(tmp_path):
+    """Per decisions/loop-engine-epoch.md section 5, only readbacks strictly after the latest recorded attempt
+    may settle or report still-before; a stale readback between an earlier claimed attempt and a later
+    sent/unknown attempt settles nothing (verified solely through public output relations)."""
+    model = shell(tmp_path, "effect-latest-reader", PERMIT_RULE)
+
+    def records(attempts, readbacks):
+        receipts = sorted({tick for _, tick in readbacks})
+        return {
+            "loop_active_run": [{"id": RUN}],
+            "loop_step": [{"id": "sign"}],
+            "loop_completion": [{"id": "def-sign", "run": RUN, "step": "sign", "token": "signed",
+                                 "reason": "def-sign"}],
+            "loop_expectation": [{"id": "signed", "value": "yes"}],
+            "loop_effect_plan": [{"id": PLAN, "run": RUN, "step": "sign", "reason": "statement"}],
+            "loop_effect_attempt": [
+                {"id": f"attempt-{idx}", "run": RUN, "plan": PLAN, "sent_at": sent_at,
+                 "outcome": outcome, "source": "journal"}
+                for idx, (outcome, sent_at) in enumerate(attempts, start=1)
+            ],
+            "loop_sweep_receipt": [{"id": f"cut-{tick}", "run": RUN, "event_time": tick} for tick in receipts],
+            "loop_effect_readback": [
+                {"id": f"readback-{idx}", "run": RUN, "plan": PLAN, "observed_at": tick,
+                 "state": state, "receipt": f"cut-{tick}", "source": "store"}
+                for idx, (state, tick) in enumerate(readbacks, start=1)
+            ],
+        }
+
+    cases = [
+        # Stale expected readback between claimed@5 and sent@10 must leave the plan pending.
+        ("stale_expected_between_claimed_and_sent",
+         [("claimed", 5), ("sent", 10)], [("expected", 7)],
+         "readback-missing", False, False, "unknown"),
+        # Stale other readback between claimed@5 and unknown@10 must not discard the plan.
+        ("stale_other_between_claimed_and_unknown",
+         [("claimed", 5), ("unknown", 10)], [("other", 7)],
+         "readback-missing", False, False, "unknown"),
+        # Stale before readback between claimed@5 and sent@10 must not report still-before.
+        ("stale_before_between_claimed_and_sent",
+         [("claimed", 5), ("sent", 10)], [("before", 7)],
+         "readback-missing", False, False, "unknown"),
+        # Readback at the exact tick of the latest attempt does not settle it.
+        ("readback_at_latest_attempt_tick",
+         [("claimed", 5), ("sent", 10)], [("expected", 10)],
+         "readback-missing", False, False, "unknown"),
+        # Stale other@7 must not block a fresh expected@12 after sent@10 from confirming.
+        ("stale_other_superseded_by_fresh_expected",
+         [("claimed", 5), ("sent", 10)], [("other", 7), ("expected", 12)],
+         None, True, False, "applied"),
+        # Stale expected@7 must not settle ahead of a fresh other@12 after unknown@10.
+        ("stale_expected_superseded_by_fresh_other",
+         [("claimed", 5), ("unknown", 10)], [("expected", 7), ("other", 12)],
+         None, False, True, "failed"),
+        # Fresh before@12 after sent@10 reports still-before.
+        ("fresh_before_after_latest_attempt",
+         [("claimed", 5), ("sent", 10)], [("before", 12)],
+         "still-before", False, False, "unknown"),
+    ]
+
+    for name, attempts, readbacks, pending, confirmed, discarded, state in cases:
+        _, rows, _ = evaluate(model, records(attempts, readbacks))
+        assert {row[2] for row in rows.get("effect_pending", set()) if row[:2] == (RUN, PLAN)} == (
+            {pending} if pending else set()), name
+        assert ((RUN, PLAN) in {row[:2] for row in rows.get("effect_confirmed", set())}) is confirmed, name
+        assert ((RUN, PLAN) in {row[:2] for row in rows.get("effect_discarded", set())}) is discarded, name
+        states = {row[2] for row in rows.get("effect_state", set()) if row[:2] == (RUN, PLAN)}
+        assert states == {state}, name
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason=(
+        "extra: decisions/loop-engine-epoch.md: section 5. build/rules/claim_release.dl must settle "
+        "and report still-present strictly after the latest recorded delete attempt (matching "
+        "packs/std-loop/rules/effect.dl), never from a stale readback between an earlier attempt "
+        "and a later attempt."
+    ),
+)
+def test_build_claim_release_settles_only_after_latest_attempt():
+    """Per decisions/loop-engine-epoch.md section 5, build/rules/claim_release.dl settles only on
+    receipted ref reads strictly after the latest recorded delete attempt."""
+    from rezono_compiler import pack
+
+    model = pack.read(ROOT / "build")
+    base_sha, head_sha, engine_sha = "1" * 40, "2" * 40, "3" * 40
+    cut_tick = 1_800_000_000
+    gen_target = "a" * 40
+    gen_other = "b" * 40
+
+    def records(branch, attempts, reads):
+        receipt_ticks = sorted({cut_tick, *(tick for _, tick, _ in reads)})
+        return {
+            "build_run": [
+                {"id": RUN, "event": "schedule", "base_sha": base_sha, "head_sha": head_sha,
+                 "engine_sha": engine_sha, "observed_at": cut_tick, "receipt": f"cut-{cut_tick}"},
+            ],
+            "loop_sweep_receipt": [
+                {"id": f"cut-{tick}", "run": RUN, "event_time": tick} for tick in receipt_ticks
+            ],
+            "build_claim_delete": [
+                {"id": f"del-{idx}", "run": RUN, "branch": branch, "generation": gen,
+                 "sent_at": sent_at, "outcome": outcome, "source": "claim-delete"}
+                for idx, (outcome, sent_at, gen) in enumerate(attempts, start=1)
+            ],
+            "build_claim_ref_read": [
+                {"id": f"read-{idx}", "run": RUN, "branch": branch, "observed_at": tick, "state": state,
+                 **({"generation": gen} if gen is not None else {}),
+                 "receipt": f"cut-{tick}", "source": "ref-listing"}
+                for idx, (state, tick, gen) in enumerate(reads, start=1)
+            ],
+        }
+
+    cases = [
+        # Stale absent readback at +20 between unknown@+10 and sent@+30 must NOT release the claim.
+        ("stale_absent_between_attempts",
+         "task/stale-absent",
+         [("unknown", cut_tick + 10, gen_target), ("sent", cut_tick + 30, gen_target)],
+         [("absent", cut_tick + 20, None)],
+         False, False, {"readback-missing"}),
+        # Stale replaced readback at +20 between unknown@+10 and sent@+30 must NOT discard the release.
+        ("stale_replaced_between_attempts",
+         "task/stale-replaced",
+         [("unknown", cut_tick + 10, gen_target), ("sent", cut_tick + 30, gen_target)],
+         [("present", cut_tick + 20, gen_other)],
+         False, False, {"readback-missing"}),
+        # Stale same-generation present readback at +20 between attempts must NOT report still-present.
+        ("stale_present_between_attempts",
+         "task/stale-present",
+         [("unknown", cut_tick + 10, gen_target), ("sent", cut_tick + 30, gen_target)],
+         [("present", cut_tick + 20, gen_target)],
+         False, False, {"readback-missing"}),
+        # Readback at the exact tick of the latest delete attempt does not settle it.
+        ("readback_at_latest_attempt_tick",
+         "task/at-latest",
+         [("unknown", cut_tick + 10, gen_target), ("sent", cut_tick + 30, gen_target)],
+         [("absent", cut_tick + 30, None)],
+         False, False, {"readback-missing"}),
+        # Stale replaced@+20 must not block a fresh absent@+50 after sent@+30 from confirming release.
+        ("stale_replaced_superseded_by_fresh_absent",
+         "task/fresh-absent",
+         [("unknown", cut_tick + 10, gen_target), ("sent", cut_tick + 30, gen_target)],
+         [("present", cut_tick + 20, gen_other), ("absent", cut_tick + 50, None)],
+         True, False, set()),
+        # Fresh present@+50 after sent@+30 reports still-present.
+        ("fresh_present_after_latest_attempt",
+         "task/fresh-present",
+         [("unknown", cut_tick + 10, gen_target), ("sent", cut_tick + 30, gen_target)],
+         [("present", cut_tick + 50, gen_target)],
+         False, False, {"still-present"}),
+    ]
+
+    for name, branch, attempts, reads, released, discarded, pending in cases:
+        _, rows, _ = evaluate(model, records(branch, attempts, reads))
+        got_released = {row[:3] for row in rows.get("build_claim_released", set()) if row[:2] == (RUN, branch)}
+        got_discarded = {row[2] for row in rows.get("build_claim_release_discarded", set()) if row[:2] == (RUN, branch)}
+        got_pending = {row[2] for row in rows.get("build_claim_release_pending", set()) if row[:2] == (RUN, branch)}
+        assert bool(got_released) is released, (name, got_released)
+        assert bool(got_discarded) is discarded, (name, got_discarded)
+        assert got_pending == pending, (name, got_pending)

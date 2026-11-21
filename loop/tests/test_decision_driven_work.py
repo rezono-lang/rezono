@@ -339,7 +339,8 @@ def test_build_pack_derives_decision_open_untested_done_and_keeps_missing_scan_u
             records["loop_sweep_receipt"][0]["event_time"] = OBSERVED_AT - 1
         records.update(
             {
-                "reference_date": [{"id": "policy-day", "title": "Observed reference day", "day": 20270115}],
+                "reference_date": [{"id": "policy-day", "title": "Observed reference day",
+                                    "date": "2027-01-15", "day": 20270115}],
                 "build_policy_date": [
                     {"id": "policy-cut", "run": "current", "reference": "policy-day", "observed_at": OBSERVED_AT}
                 ],

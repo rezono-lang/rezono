@@ -2,25 +2,15 @@ id: https://rezono.org/run/cleanup-deadline
 name: cleanup_deadline
 description: Recorded cleanup deadline and observation watermark for an effect attempt.
 in_language: en
-imports: [linkml:types]
+imports: [linkml:types, "std-loop:effect"]
 default_range: string
 annotations:
   layer: facts
-
-enums:
-  CleanupAttemptState:
-    permissible_values:
-      planned:
-      applying:
-      unknown:
-      applied:
-      failed:
-      cleaned:
 
 classes:
   Attempt:
     attributes:
       id: {identifier: true}
-      state: {range: CleanupAttemptState, required: true}
+      state: {range: LoopEffectState, required: true}
       deadline_us: {range: integer, required: true}
       watermark_us: {range: integer}

@@ -2,14 +2,13 @@
 
 The file is Soufflé syntax, so Soufflé can serve as the oracle. What it may contain:
 
-    .decl relies_on(a: symbol, b: symbol)        derived relation: columns and types (symbol, number, boolean)
+    .decl relies_on(a: symbol, b: symbol)        derived relation: columns and types (symbol, number, boolean, date)
     .input k, k__a  /  .output relies_on         accepted; .input names a table, .output a derived relation
     head(x, y) :- p(x, z), !q(z), n = count : { r(x, _) }, s = sum v : { t(x, _, v) }, n > 1, m = n + 1.
 
 Base predicates are the tables of the schema (M1): `k(id)` per kind and `k__a(id, v)` per arrow or
 attribute, plus the parameter tables (enum values, bounds). A rule reads them by name; a `.decl` for a
-table is optional and must agree with the schema. Columns can hold text, whole numbers or booleans.
-A rule cannot read a date table yet.
+table is optional and must agree with the schema. Columns can hold text, whole numbers, booleans or dates.
 
 A variable inside an aggregate that no positive literal binds is local to the aggregate: it ranges over
 the group, like '_'. The variable after `sum`, `min` or `max` names the column that is aggregated.
@@ -42,9 +41,9 @@ TOKEN = re.compile(r"""
     (?P<ident>[A-Za-z_][A-Za-z0-9_]*) |
     (?P<op>:-|!=|<=|>=|[(),.:{}!=<>+\-*;|&^%/\[\]$@#])
 """, re.X | re.S)
-TYPES = {"symbol": "string", "number": "integer", "boolean": "boolean"}
+TYPES = {"symbol": "string", "number": "integer", "boolean": "boolean", "date": "date"}
 SYMBOLS = {t: s for s, t in TYPES.items()}
-SQL = {"VARCHAR": "string", "BIGINT": "integer", "BOOLEAN": "boolean"}
+SQL = {"VARCHAR": "string", "BIGINT": "integer", "BOOLEAN": "boolean", "DATE": "date"}
 BOOLEAN_LITERALS = {"TRUE": "true", "FALSE": "false"}
 COMPARE = {"=": "eq", "!=": "ne", "<": "lt", "<=": "le", ">": "gt", ">=": "ge"}
 COMPARE_AS = ir.COMPARE_AS  # `binary_text(x) < binary_text(y)`: a comparison type, written on both operands
@@ -85,6 +84,14 @@ class ProtectedTable(RuleError, Diagnosed):
 
     def __init__(self, messages: list[str]):
         Diagnosed.__init__(self, "\n".join(messages), tuple(Diagnostic(self.CODE, message) for message in messages))
+
+
+class DuplicateDerivation(RuleError, Diagnosed):
+    """A functional derivation of a rezono 1 module under the name of a table or of another relation."""
+    CODE = "duplicate_relation"
+
+    def __init__(self, message: str):
+        Diagnosed.__init__(self, message, (Diagnostic(self.CODE, message),))
 
 
 @dataclass(frozen=True)
@@ -294,7 +301,7 @@ def parse_file(text: str, where: str, columns: list | None = None):
                     p.take(":")
                     ty = p.take(kind="ident").text
                     if ty not in TYPES:
-                        p.fail(f"{name}.{c}: type '{ty}' is not supported (symbol, number or boolean)")
+                        p.fail(f"{name}.{c}: type '{ty}' is not supported (symbol, number, boolean or date)")
                     cols.append((c, TYPES[ty]))
                     if not p.at(")"):
                         p.take(",")
@@ -532,6 +539,7 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
         return None, []
     tables = base_tables(pack)
     decls, owners, explains, io, rules_src, errors, warnings = {}, {}, {}, [], [], [], []
+    functional = {}  # name -> (key columns, its domain, value and policies): a rezono 1 functional derivation
     invariants, absences, outcomes = set(), set(), {}
     extensions, declared_in, options, closing = set(), {}, {}, {}
     visible = {root: {root, *imports}}
@@ -624,6 +632,16 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
                     if explain not in ("materialize", "on_demand"):
                         errors.append(f"{where}:{line}: @explain is materialize, on_demand or fold, not '{explain}'")
                     explains[name] = explain
+            elif s[0] == "functional":
+                # A functional derivation of a rezono 1 module (rezono_derived.py): its key columns are its
+                # declaration; a rule's head adds the value, a body reads (key..., state, reason, value).
+                _, name, cols, line, meta = s
+                if name in decls or name in tables or name in calc_inputs:
+                    raise DuplicateDerivation(f"{where}:{line}: {name} is declared twice (also in "
+                                              f"{owners.get(name, 'the schema')})")
+                decls[name], owners[name], declared_in[name] = list(cols), module, source
+                options[name] = (None, False, False, None, None, False)
+                functional[name] = meta
             elif s[0] == "io":
                 io.append((where, source, *s[1:]))
             else:
@@ -661,7 +679,9 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
                 errors.append(f"{where}:{line}: .output {n} is not a derived relation")
 
     def columns(name):
-        """The column types of a relation, or None if it is unknown (reported later)."""
+        """The column types of a relation as a rule reads it, or None if it is unknown (reported later)."""
+        if name in functional:
+            return [t for _, t in decls[name]] + ["string", "string", functional[name]["value"]["type"]]
         if name in decls:
             return [t for _, t in decls[name]]
         if name in tables:
@@ -709,7 +729,9 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
         seen[rel] = seen.get(rel, 0) + 1
         rid = rel if count[rel] == 1 else f"{rel}_{seen[rel]}"
         try:
-            rule = to_rule(rid, module, where, head, body, line, columns)
+            rule = to_rule(rid, module, where, head, body, line, columns,
+                           head_columns=lambda name: ([t for _, t in decls[name]] + [functional[name]["value"]["type"]]
+                                                      if name in functional else columns(name)))
         except RuleError as e:
             errors.append(str(e))
             continue
@@ -733,12 +755,16 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
             continue
         bad = [c for c, t in tables[name] if t is None]
         if bad:
-            errors.append(f"rules: {name} has a column that is not text, a whole number or a boolean; "
+            errors.append(f"rules: {name} has a column that is not text, a whole number, a boolean or a date; "
                           "rules cannot read it yet")
             continue
         relations[name] = {"name": name, "role": "base", "key": [{"name": c, "type": t} for c, t in tables[name]],
                            "world": worlds.get(name, "closed")}
     for name, cols in decls.items():
+        if name in functional:
+            relations[name] = {"name": name, "role": "functional", "module": owners[name],
+                               "key": [{"name": c, "type": t} for c, t in cols], **functional[name]}
+            continue
         if name in PROTECTED:  # admitted rows enter as base rows; an empty relation leaves what needs it unknown
             relations[name] = {"name": name, "role": "base", "key": [{"name": c, "type": t} for c, t in cols],
                                "world": "closed"}
@@ -767,7 +793,7 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
     if errors:
         raise RuleError("\n".join(errors))
     seals = seal_docs(pack)
-    doc = {"format": ir.FORMAT, "pack": pack.meta["name"],
+    doc = {"format": ir.FORMAT_V2 if functional else ir.FORMAT, "pack": pack.meta["name"],
            "relations": sorted(relations.values(), key=lambda r: r["name"]),
            "rules": sorted(rules, key=lambda r: r["id"])}
     if seals:
@@ -778,7 +804,7 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
     except ir.IRError as e:
         raise RuleError(f"rules: {e}") from None
     for name, rel in relations.items():
-        if rel["role"] != "derived":
+        if rel["role"] not in ("derived", "functional"):
             continue
         projecting = [r.id for r in prog.rules_for(name) if r.projects]
         mode = explains.get(name) or ("on_demand" if projecting else "materialize")
@@ -861,10 +887,11 @@ def _terms(item):
     return [item[2], item[3]]
 
 
-def to_rule(rid, module, where, head, body, line, columns=lambda name: None) -> dict:
+def to_rule(rid, module, where, head, body, line, columns=lambda name: None, head_columns=None) -> dict:
     """One parsed rule as an IR rule (without strata and witness; with_strata fills them in).
 
-    Constants keep the type they are written in: "2" is text and 2 a number, also in a comparison."""
+    Constants keep the type they are written in: "2" is text and 2 a number, also in a comparison. `head_columns`
+    gives the columns a head writes where they differ from those a body reads (a functional derivation)."""
     def fail(msg):
         raise RuleError(f"{where}:{line}: {msg}")
 
@@ -889,8 +916,9 @@ def to_rule(rid, module, where, head, body, line, columns=lambda name: None) -> 
         return t[2] if t[0] == "const" else vtypes.get(t[1]) if t[0] == "var" else None
 
     atoms = [head] + [b[2] for b in body if b[0] == "lit"] + [b[4] for b in body if b[0] == "agg"]
-    for name, terms, _ in atoms:
-        for i, (t, ct) in enumerate(zip(terms, columns(name) or [])):
+    for position, (name, terms, _) in enumerate(atoms):
+        typed = (head_columns or columns)(name) if position == 0 else columns(name)
+        for i, (t, ct) in enumerate(zip(terms, typed or [])):
             if t[0] == "const" and t[2] != ct:
                 fail(f"{show(t)} is {t[2]}, but column {i + 1} of {name} is {ct}")
     for b in body:
@@ -901,11 +929,11 @@ def to_rule(rid, module, where, head, body, line, columns=lambda name: None) -> 
             if len(b) > 4 and kinds - {"string"}:
                 fail(f"{b[4]}(…) compares two text variables")
             if len(b) == 4 and b[1] not in ("eq", "ne") and kinds - {"integer"}:
-                fail(f"{show(b[2])} {b[1]} {show(b[3])}: an order comparison needs whole numbers, not text")
+                fail(f"{show(b[2])} {b[1]} {show(b[3])}: an order comparison needs whole numbers, not {next(iter(kinds - {'integer'}))}")
             if len(kinds) > 1:
                 fail(f"{show(b[2])} and {show(b[3])} have different types")
         elif b[0] == "arith" and b[2] == ir.DAYS:
-            if b[3][0] != "var" or typ(b[3]) == "integer":
+            if b[3][0] != "var" or typ(b[3]) not in (None, "string"):
                 fail(f"{b[1]} = @days(…): the first argument is a variable bound by a positive literal to text")
             if b[4][0] != "const" or b[4][2] != "string":
                 fail(f"{b[1]} = @days(…): the origin is a constant ISO date in quotes")

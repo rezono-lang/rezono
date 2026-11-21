@@ -7,6 +7,7 @@ An aggregate over a key column puts the aggregated variable at that position.
 Soufflé has 32-bit numbers by default; the generated programs stay far below that.
 """
 
+import datetime
 import re
 import subprocess
 import tempfile
@@ -15,7 +16,7 @@ from pathlib import Path
 
 from rezono_compiler.rules import COMPARE_AS, DAYS, const_type, is_var
 
-TYPE = {"string": "symbol", "integer": "number", "boolean": "symbol"}
+TYPE = {"string": "symbol", "integer": "number", "boolean": "symbol", "date": "symbol"}
 _BOOL = {"TRUE": "true", "FALSE": "false"}
 INPUT = ("base", "calc")  # what the rules read: a table, and a calculation selection with the rows given
 OPS = {"eq": "=", "ne": "!=", "lt": "<", "le": "<=", "gt": ">", "ge": ">=", "add": "+", "sub": "-", "mul": "*", "div": "/"}
@@ -49,6 +50,8 @@ def _bool_text(value):
 def _fact_cell(value, typ):
     if typ == "boolean" or isinstance(value, bool):
         return _bool_text(value)
+    if isinstance(value, datetime.date):
+        return value.isoformat()
     return str(value)
 
 
@@ -80,15 +83,15 @@ def _decl(rel):
     return f".decl {rel.name}({', '.join(f'{c.name}:{TYPE[c.type]}' for c in cols)})"
 
 
-def _string_candidates(prog, target, extra_literals=()):
-    """Stratum-0 rules feeding every string value that can reach `target` from inputs and rule literals."""
+def _string_candidates(prog, target, extra_literals=(), *, types=("string",)):
+    """Stratum-0 rules feeding every candidate value of `types` that can reach `target` from inputs and rule literals."""
     rules = []
     for rel in sorted(prog.relations.values(), key=lambda r: r.name):
         if rel.role not in INPUT:
             continue
         cols = rel.key + rel.values
         for i, col in enumerate(cols):
-            if col.type != "string":
+            if col.type not in types:
                 continue
             terms = ["x" if j == i else "_" for j in range(len(cols))]
             rules.append(f"{target}(x) :- {rel.name}({', '.join(terms)}).")
@@ -125,7 +128,7 @@ def _day_rules(prog, extra_literals=()):
         ".decl DayFields(x: symbol, y: number, m: number, d: number)",
         ".decl DayOk(x: symbol, y: number, m: number, d: number)",
         ".decl DayNum(x: symbol, n: number)",
-        *_string_candidates(prog, "DayIn", extra_literals),
+        *_string_candidates(prog, "DayIn", extra_literals, types=("string", "date")),
         *(f"DayMonth({month}, {last})." for month, last in enumerate(_MONTH_DAYS, 1)),
         f'DayShape(x) :- DayIn(x), match("{_DAY_SHAPE}", x).',
         ("DayFields(x, Y, M, D) :- DayShape(x), "
@@ -218,6 +221,14 @@ def _rule_body_parts(prog, r, *, include_aggregates=True, include_assignments=Tr
             t = types.get(c.left) or types.get(c.right) or const_type(c.left)
             if any(a.var in (c.left, c.right) for a in r.aggregates) or any(s.var in (c.left, c.right) for s in r.assignments):
                 t = "integer"
+            if t == "date" and c.op not in ("eq", "ne"):
+                left_d, right_d = f"DayCmpL_{idx}_", f"DayCmpR_{idx}_"
+                parts.append(
+                    f"DayNum({_term(c.left, 'date')}, {left_d}), "
+                    f"DayNum({_term(c.right, 'date')}, {right_d}), "
+                    f"{left_d} {OPS[c.op]} {right_d}"
+                )
+                continue
             parts.append(f"{_term(c.left, t)} {OPS[c.op]} {_term(c.right, t)}")
     return parts
 
@@ -253,6 +264,8 @@ def _functional_sentinel(typ):
         return "0"
     if typ == "boolean":
         return '"false"'
+    if typ == "date":
+        return '"1970-01-01"'
     return '""'
 
 
@@ -411,6 +424,19 @@ def _functional_rules(prog, rel):
     return lines
 
 
+def _uses_date_order(prog):
+    for r in prog.rules.values():
+        types = {}
+        for b in r.body:
+            if b.polarity == "positive":
+                for t, c in zip(b.atom.terms, prog.relations[b.atom.relation].row_columns):
+                    types.setdefault(t, c.type)
+        for c in r.conditions:
+            if c.compare_as is None and c.op not in ("eq", "ne") and (types.get(c.left) == "date" or types.get(c.right) == "date"):
+                return True
+    return False
+
+
 def program(prog):
     lines = []
     for rel in sorted(prog.relations.values(), key=lambda r: r.name):
@@ -422,7 +448,7 @@ def program(prog):
     for rel in sorted(prog.relations.values(), key=lambda r: r.name):
         if rel.role == "functional":
             lines += _functional_rules(prog, rel)
-    if any(s.op == DAYS for r in prog.rules.values() for s in r.assignments):
+    if any(s.op == DAYS for r in prog.rules.values() for s in r.assignments) or _uses_date_order(prog):
         lines += _day_rules(prog)
     modes = {c.compare_as for r in prog.rules.values() for c in r.conditions if c.compare_as}
     if "utc_instant" in modes:
@@ -437,7 +463,7 @@ _TOKEN = re.compile(r'//[^\n]*|/\*.*?\*/|"(?:[^"\\]|\\.)*"|[A-Za-z_][A-Za-z0-9_]
 _NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
 COMPARE = ("=", "!=", "<", "<=", ">", ">=")
 _DECL = re.compile(r"\.decl\s+([a-z0-9_]+)\s*\(([^)]*)\)")
-_DECL_BOOL = re.compile(r":\s*boolean\b")
+_DECL_SYMBOL = re.compile(r":\s*(?:boolean|date)\b")
 VIEW = "views.yaml"  # the origin of a rule the compiler lowers a view to (view_rules.bind): it is in no rule file
 
 
@@ -676,6 +702,80 @@ def _rewrite_source(text, counter):
     return "".join(toks), modes, has_days, literals
 
 
+def _rewrite_date_orders(text, counter, rel_types):
+    """Rewrite native date order comparisons (`<`, `<=`, `>`, `>=`) in rule text to `DayNum` comparisons."""
+    toks, code = _code(text)
+    has_days = False
+    for s in _rules(toks, code):
+        sep = next((p for p, i in enumerate(s) if toks[i] == ":-"), None)
+        if sep is None:
+            continue
+        date_vars = set()
+        brace = 0
+        p = sep + 1
+        while p < len(s):
+            t = toks[s[p]]
+            if t == "{":
+                brace += 1
+            elif t == "}":
+                brace -= 1
+            elif (brace == 0 and p + 1 < len(s) and _NAME.match(t) and toks[s[p + 1]] == "("
+                  and not (p > sep + 1 and toks[s[p - 1]] in ("!", "@")) and t not in COMPARE_AS):
+                col_types = rel_types.get(t)
+                depth, arg_idx, arg_tokens = 1, 0, []
+                q = p + 2
+                while q < len(s) and depth > 0:
+                    qt = toks[s[q]]
+                    if qt == "(":
+                        depth += 1
+                        arg_tokens.append(qt)
+                    elif qt == ")":
+                        depth -= 1
+                        if depth == 0:
+                            if col_types and arg_idx < len(col_types) and col_types[arg_idx] == "date" and len(arg_tokens) == 1 and _var(arg_tokens[0]):
+                                date_vars.add(arg_tokens[0])
+                        else:
+                            arg_tokens.append(qt)
+                    elif qt == "," and depth == 1:
+                        if col_types and arg_idx < len(col_types) and col_types[arg_idx] == "date" and len(arg_tokens) == 1 and _var(arg_tokens[0]):
+                            date_vars.add(arg_tokens[0])
+                        arg_idx += 1
+                        arg_tokens = []
+                    else:
+                        arg_tokens.append(qt)
+                    q += 1
+                p = q
+                continue
+            p += 1
+        if not date_vars:
+            continue
+        brace = 0
+        paren = 0
+        for p in range(sep + 1, len(s)):
+            t = toks[s[p]]
+            if t == "{":
+                brace += 1
+            elif t == "}":
+                brace -= 1
+            elif t == "(":
+                paren += 1
+            elif t == ")":
+                paren -= 1
+            elif (brace == 0 and paren == 0 and t in ("<", "<=", ">", ">=")
+                  and p >= sep + 2 and p + 1 < len(s)
+                  and toks[s[p - 2]] in (",", ":-")
+                  and (p + 2 == len(s) or toks[s[p + 2]] == ",")
+                  and toks[s[p - 1]] in date_vars and toks[s[p + 1]] in date_vars):
+                left, right = toks[s[p - 1]], toks[s[p + 1]]
+                n = next(counter)
+                left_d, right_d = f"DayL_{n}_", f"DayR_{n}_"
+                toks[s[p - 1]] = f"DayNum({left}, {left_d}), DayNum({right}, {right_d}), {left_d} {t} {right_d}"
+                for j in range(s[p - 1] + 1, s[p + 1] + 1):
+                    toks[j] = ""
+                has_days = True
+    return "".join(toks), has_days
+
+
 def source(prog, texts):
     """Rule files as one Soufflé program: declarations and inputs for the tables they read (from the IR, as
     the compiler binds them), the files as written, and an output per derived relation. So the oracle also
@@ -684,6 +784,7 @@ def source(prog, texts):
     again (`// @extend`, with the same columns) is declared once; any other second declaration stays, and
     Soufflé refuses it."""
     lines, columns, kept, modes, has_days, literals, counter = [], {}, [], set(), False, set(), count()
+    rel_types = {name: tuple(c.type for c in rel.row_columns) for name, rel in prog.relations.items()}
     for text in texts:
         earlier = dict(columns)  # what the files before this one declare
 
@@ -692,11 +793,12 @@ def source(prog, texts):
             columns.setdefault(name, cols)
             if earlier.get(name) == cols:
                 return ""
-            return f".decl {name}({_DECL_BOOL.sub(': symbol', m.group(2))})"
+            return f".decl {name}({_DECL_SYMBOL.sub(': symbol', m.group(2))})"
         rewritten, found, found_days, lits = _rewrite_source(_DECL.sub(once, text), counter)
+        rewritten, found_date_order = _rewrite_date_orders(rewritten, counter, rel_types)
         kept.append(rewritten)
         modes |= found
-        has_days = has_days or found_days
+        has_days = has_days or found_days or found_date_order
         literals |= lits
     if any("UtcKey(" in text for text in kept):
         modes.add("utc_instant")

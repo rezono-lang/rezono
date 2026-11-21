@@ -72,19 +72,6 @@ def published(allowed: bytes | None) -> tuple[bytes, dict, dict[str, bytes]]:
     return data, index, objects
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingAllowedField,
-    reason=(
-        "extra: decisions/loop-engine-epoch.md: section 4. Waits for edge/publisher/tests/test_role_epoch_diffs.py--"
-        "test_role_epoch_diff_is_empty_and_statement_changes_only_chain_fields_on_other_role_change. Then version 3 "
-        "of the epoch statement (https://rezono.org/epoch-statement/v3, rezono.epoch-statement/3) keeps every field "
-        "of version 2 and adds the Sha256 field allowed to EpochPredicate in contracts/statement.yaml; "
-        "rezono_publication.statement names it ALLOWED = 'allowed.json', make writes version 3 with allowed = the "
-        "SHA-256 of that object when the form holds it and leaves a form without it unchanged, and verify holds "
-        "allowed to the subject's digest and the proved row to the statement's role and epoch."
-    ),
-)
 def test_the_statement_names_why_it_exists():
     if getattr(st, "ALLOWED", None) != ALLOWED:
         raise MissingAllowedField("rezono_publication.statement has no ALLOWED = 'allowed.json'")

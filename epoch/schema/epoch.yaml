@@ -1,0 +1,159 @@
+id: https://rezono.org/engine-epoch
+name: engine_epoch
+description: Observations, gates and planned role forms for one engine epoch run (decisions/loop-engine-epoch.md).
+imports: [linkml:types, "std-loop:loop_inputs"]
+default_range: string
+annotations:
+  layer: facts
+
+enums:
+  EpochRoleStage:
+    description: Per-role distribution stage of an engine epoch run.
+    permissible_values:
+      sign:
+        description: Sign the role's epoch statement.
+      distribute:
+        description: Push the sealed role form with its statement and signature.
+  EpochSurfaceClass:
+    description: Public surface compatibility change class from surface.compatibility.
+    permissible_values:
+      patch:
+        description: Backwards-compatible fix with no public surface change.
+      minor:
+        description: Backwards-compatible addition to the public surface.
+      major:
+        description: Breaking change to the public surface.
+  EpochCheckOutcome:
+    description: Normalized verdict of a run-scoped or role-scoped check.
+    permissible_values:
+      green:
+        description: The check passed with no refusal.
+      red:
+        description: The check found violations or errors.
+      unknown:
+        description: The check did not reach a definitive green or red verdict.
+  EpochCheckScope:
+    description: Whether a required check applies to the whole run or to each filtered role.
+    permissible_values:
+      run:
+        description: One verdict required for the run.
+      role:
+        description: One verdict required per filtered role of the run.
+
+classes:
+  EpochRun:
+    description: One engine epoch run of one pack, keyed by its LoopActiveRun id.
+    attributes:
+      id: {identifier: true}
+      pack: {required: true}
+      epoch: {range: integer, required: true}
+      commit: {required: true}
+      profile: {required: true}
+  EpochRole:
+    description: A filtered role from the deploy profile that receives a form, statement and distribution.
+    attributes:
+      id: {identifier: true}
+      run: {required: true}
+      name: {required: true}
+  EpochRoleStep:
+    description: Binds a per-role sign or distribute step to its EpochRole.
+    attributes:
+      id: {identifier: true}
+      run: {required: true}
+      step: {range: LoopStep, required: true}
+      role: {range: EpochRole, required: true}
+      stage: {range: EpochRoleStage, required: true}
+  EpochEnginePin:
+    description: The pinned earlier released engine that evaluates this epoch run's loop.
+    attributes:
+      id: {identifier: true}
+      run: {required: true}
+      version: {required: true}
+      wheel_sha256: {required: true}
+      commit: {required: true}
+  EpochTool:
+    description: The compiler, engine, comparison, checker, publisher or signer build that ran one step.
+    attributes:
+      id: {identifier: true}
+      run: {required: true}
+      step: {range: LoopStep, required: true}
+      tool: {required: true}
+      version: {required: true}
+      sha256: {required: true}
+  EpochDefinition:
+    description: The compiled pack definition digest and compiler digest recorded by the compile step.
+    attributes:
+      id: {identifier: true}
+      run: {required: true}
+      definition_sha256: {required: true}
+      compiler_sha256: {required: true}
+  EpochSurface:
+    description: Public surface comparison against an earlier main manifest and both packs' semantic versions.
+    attributes:
+      id: {identifier: true}
+      run: {required: true}
+      against: {required: true}
+      class: {range: EpochSurfaceClass, required: true}
+      before_major: {range: integer, minimum_value: 0, required: true}
+      before_minor: {range: integer, minimum_value: 0, required: true}
+      before_patch: {range: integer, minimum_value: 0, required: true}
+      after_major: {range: integer, minimum_value: 0, required: true}
+      after_minor: {range: integer, minimum_value: 0, required: true}
+      after_patch: {range: integer, minimum_value: 0, required: true}
+  EpochCheck:
+    description: A run-scoped check verdict copied by a step adapter.
+    attributes:
+      id: {identifier: true}
+      run: {required: true}
+      step: {range: LoopStep, required: true}
+      check: {required: true}
+      outcome: {range: EpochCheckOutcome, required: true}
+      violations: {range: integer, minimum_value: 0, required: true}
+      source: {required: true}
+  EpochRoleCheck:
+    description: A role-scoped check verdict copied by a step adapter.
+    attributes:
+      id: {identifier: true}
+      run: {required: true}
+      step: {range: LoopStep, required: true}
+      role: {range: EpochRole, required: true}
+      check: {required: true}
+      outcome: {range: EpochCheckOutcome, required: true}
+      violations: {range: integer, minimum_value: 0, required: true}
+      source: {required: true}
+  EpochRequiredCheck:
+    description: Plan fact naming a check that must have a verdict once its step is done.
+    attributes:
+      id: {identifier: true}
+      step: {range: LoopStep, required: true}
+      check: {required: true}
+      scope: {range: EpochCheckScope, required: true}
+  EpochRoleForm:
+    description: Planned hashes of one role's form before write-forms writes anything.
+    attributes:
+      id: {identifier: true}
+      run: {required: true}
+      role: {range: EpochRole, required: true}
+      snapshots_sha256: {required: true}
+      sources_sha256: {required: true}
+      objects_sha256: {required: true}
+  EpochPackFacts:
+    description: Complete-only digest of the compiled pack bytes including facts.
+    attributes:
+      id: {identifier: true}
+      run: {required: true}
+      pack_sha256: {required: true}
+  EpochSource:
+    description: Complete-only position of one fact source in the run.
+    attributes:
+      id: {identifier: true}
+      run: {required: true}
+      source: {required: true}
+      position: {required: true}
+  EpochCheckDetail:
+    description: Complete-only first error and full report digest of a check.
+    attributes:
+      id: {identifier: true}
+      check: {required: true}
+      first: {}
+      report_sha256: {required: true}

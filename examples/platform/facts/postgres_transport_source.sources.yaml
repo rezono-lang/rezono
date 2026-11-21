@@ -1,5 +1,15 @@
-default:
-  kind: git
-  name: rezono-lang/rezono
-  revision: 90b056e6ef1d1034bb53ccac8620961150545b0f
-  position: examples/platform/acceptance/product-evidence.json#/postgresql
+records:
+  - of: {kind: vendor_default_transport_source, id: postgresql-16-connection-settings}
+    kind: tool
+    name: Vendor transport inspection
+    revision: '16'
+    position: L254
+    url: 'https://www.postgresql.org/docs/16/runtime-config-connection.html'
+    fragment_sha256: 7da43fad66a9a5b04a7751ae09025a490910b99e12baa23ef708fa4fa0b8141d
+  - of: {kind: vendor_default_transport_source, id: postgresql-17-connection-settings}
+    kind: tool
+    name: Vendor transport inspection
+    revision: '17'
+    position: L254
+    url: 'https://www.postgresql.org/docs/17/runtime-config-connection.html'
+    fragment_sha256: 7da43fad66a9a5b04a7751ae09025a490910b99e12baa23ef708fa4fa0b8141d

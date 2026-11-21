@@ -173,16 +173,6 @@ def _lowered_rezono_doc() -> dict:
     return rezono_calc.lower_module(PACK, mod, {"item": set()})
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=FourValuedAndOrParityError,
-    reason="M1: decisions/four-valued-and-or-parity.md: Align compiler/rezono_compiler/calc_sql.py (DuckDB and "
-           "Feldera SQL), checker/rezono_checker/calc.py, and compiler/tests/calcoracle.py with "
-           "docs/rezono/expressions.md Appendix A.1 (`false and invalid = false`, `true or invalid = true`, "
-           "symmetric and multi-arity) and Appendix A.4 (commutative UTF-8 byte-order least reason selection in "
-           "`and`, `or`, and strict operators), matching tests/conformance/value-tt-and-false-invalid.yaml and "
-           "tests/conformance/value-tt-or-true-invalid.yaml.",
-)
 def test_calc_sql_checker_and_feldera_follow_four_valued_and_or_conformance():
     and_case = _load_case("value-tt-and-false-invalid")
     or_case = _load_case("value-tt-or-true-invalid")

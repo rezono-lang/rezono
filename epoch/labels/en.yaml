@@ -1,0 +1,103 @@
+epoch_run: Epoch run
+epoch_run.pack: Pack
+epoch_run.epoch: Epoch
+epoch_run.commit: Commit
+epoch_run.profile: Deploy profile
+epoch_role: Filtered role
+epoch_role.run: Run
+epoch_role.name: Role name
+epoch_role_step: Role step
+epoch_role_step.run: Run
+epoch_role_step.step: Step
+epoch_role_step.role: Role
+epoch_role_step.stage: Stage
+epoch_role_stage: Role stage
+epoch_role_stage.sign: Sign
+epoch_role_stage.distribute: Distribute
+epoch_engine_pin: Pinned loop engine
+epoch_engine_pin.run: Run
+epoch_engine_pin.version: Version
+epoch_engine_pin.wheel_sha256: Wheel digest
+epoch_engine_pin.commit: Commit
+epoch_tool: Step tool build
+epoch_tool.run: Run
+epoch_tool.step: Step
+epoch_tool.tool: Tool
+epoch_tool.version: Version
+epoch_tool.sha256: Build digest
+epoch_definition: Compiled pack definition
+epoch_definition.run: Run
+epoch_definition.definition_sha256: Definition digest
+epoch_definition.compiler_sha256: Compiler digest
+epoch_surface: Public surface comparison
+epoch_surface.run: Run
+epoch_surface.against: Previous manifest
+epoch_surface.class: Change class
+epoch_surface.before_major: Previous major version
+epoch_surface.before_minor: Previous minor version
+epoch_surface.before_patch: Previous patch version
+epoch_surface.after_major: New major version
+epoch_surface.after_minor: New minor version
+epoch_surface.after_patch: New patch version
+epoch_surface_class: Surface change class
+epoch_surface_class.patch: Patch
+epoch_surface_class.minor: Minor
+epoch_surface_class.major: Major
+epoch_check: Run-scoped check verdict
+epoch_check.run: Run
+epoch_check.step: Step
+epoch_check.check: Check
+epoch_check.outcome: Outcome
+epoch_check.violations: Violations
+epoch_check.source: Source
+epoch_role_check: Role-scoped check verdict
+epoch_role_check.run: Run
+epoch_role_check.step: Step
+epoch_role_check.role: Role
+epoch_role_check.check: Check
+epoch_role_check.outcome: Outcome
+epoch_role_check.violations: Violations
+epoch_role_check.source: Source
+epoch_check_outcome: Check outcome
+epoch_check_outcome.green: Green
+epoch_check_outcome.red: Red
+epoch_check_outcome.unknown: Unknown
+epoch_required_check: Required check
+epoch_required_check.step: Step
+epoch_required_check.check: Check
+epoch_required_check.scope: Scope
+epoch_check_scope: Check scope
+epoch_check_scope.run: Run
+epoch_check_scope.role: Role
+epoch_role_form: Planned role form
+epoch_role_form.run: Run
+epoch_role_form.role: Role
+epoch_role_form.snapshots_sha256: Snapshots digest
+epoch_role_form.sources_sha256: Sources digest
+epoch_role_form.objects_sha256: Objects digest
+epoch_pack_facts: Complete pack facts digest
+epoch_pack_facts.run: Run
+epoch_pack_facts.pack_sha256: Pack digest
+epoch_source: Complete fact source position
+epoch_source.run: Run
+epoch_source.source: Source
+epoch_source.position: Position
+epoch_check_detail: Complete check error detail
+epoch_check_detail.check: Check
+epoch_check_detail.first: First error
+epoch_check_detail.report_sha256: Report digest
+epoch_has_run_check: Run check recorded
+epoch_has_role_check: Role check recorded
+epoch_stable_surface: Stable pack surface comparison
+epoch_step_tool: Step tool observation
+epoch_pinned_engine: Pinned engine observation
+epoch_compiled_definition: Compiled definition observation
+epoch_role_planned_form: Role planned form observation
+epoch_role_check_green: Green role check
+epoch_run_refused: Run refused
+publish_allowed: Role publication allowed
+epoch_role_allowed: Role allowed
+epoch_role_not_allowed: Role not allowed
+epoch_has_allowed_role: Has allowed role
+epoch_all_roles_allowed: All roles allowed
+epoch_allowed: Complete epoch publication allowed

@@ -55,6 +55,22 @@ def varchar(expr: str) -> str:
     return f"CAST({expr} AS VARCHAR)"
 
 
+EMPTY_TEXT = varchar("''")
+
+
+def _least_reason(dyn: list["Cell"]) -> str:
+    """UTF-8 byte-order least reason among dynamic arguments in the highest severity state."""
+    if len(dyn) == 1:
+        return varchar(dyn[0].c("r"))
+    arms = []
+    for i, a in enumerate(dyn[:-1]):
+        as_, ar = a.c("s"), varchar(a.c("r"))
+        beats = [f"({as_} > {b.c('s')} OR ({as_} = {b.c('s')} AND {ar} <= {varchar(b.c('r'))}))"
+                 for b in dyn[i + 1:]]
+        arms.append(f"WHEN {' AND '.join(beats)} THEN {ar}")
+    return f"CASE {' '.join(arms)} ELSE {varchar(dyn[-1].c('r'))} END"
+
+
 def date(s: str) -> str:
     return f"DATE '{s}'"
 
@@ -151,7 +167,7 @@ class Lowering:
 
     def constant(self, typ: str, value: dict[str, str]) -> Cell:
         cell = Cell(len(self.cells), typ, 0)
-        cell.lit = dict(value, s=str(KNOWN), r="''")
+        cell.lit = dict(value, s=str(KNOWN), r=EMPTY_TEXT)
         self.cells.append(cell)
         return cell
 
@@ -216,7 +232,7 @@ class Lowering:
             # Whether a derived relation holds for the subject: known either way (negation as failure).
             a = self.join(("fact", fid), lambda a: f"LEFT JOIN (SELECT DISTINCT {q(f.key)} AS id FROM {q(f.table)}) {a} ON {a}.id = s.id")
             cell = self.leaf(BOOLEAN, {"b": f"({a}.id IS NOT NULL)"}, "", "")
-            cell.lit.update(s=str(KNOWN), r="''")
+            cell.lit.update(s=str(KNOWN), r=EMPTY_TEXT)
             return cell
         col = q(f.column)
         v = col if number else f"CASE WHEN {col} THEN 1 ELSE 0 END"
@@ -245,7 +261,7 @@ class Lowering:
         cases += [(f"{a}.k = {k}", s, r.format(what=what)) for k, (s, r) in CHOICE_STATES.items()]
         cases.append((f"{a}.v < -{BOUND}", INVALID, f"{what} does not fit 64 bits"))
         state = "CASE " + " ".join(f"WHEN {c} THEN {s}" for c, s, _ in cases) + f" ELSE {KNOWN} END"
-        reason = "CASE " + " ".join(f"WHEN {c} THEN {literal(r)}" for c, _, r in cases) + " ELSE '' END"
+        reason = "CASE " + " ".join(f"WHEN {c} THEN {varchar(literal(r))}" for c, _, r in cases) + f" ELSE {EMPTY_TEXT} END"
         cell = self.leaf(NUMBER, {"n": f"COALESCE({a}.v, {big(0)})", "e": f"COALESCE({a}.e, '')"}, state, reason)
         cell.lit["d"] = big(1)
         return cell
@@ -258,7 +274,7 @@ class Lowering:
         else:
             value = {"b": f"(COALESCE({a}.v, 0) = 1)"}
         state = "CASE " + " ".join(f"WHEN {c} THEN {s}" for c, s, _ in cases) + f" ELSE {KNOWN} END"
-        reason = "CASE " + " ".join(f"WHEN {c} THEN {literal(r)}" for c, _, r in cases) + " ELSE '' END"
+        reason = "CASE " + " ".join(f"WHEN {c} THEN {varchar(literal(r))}" for c, _, r in cases) + f" ELSE {EMPTY_TEXT} END"
         cell = self.leaf(NUMBER if number else BOOLEAN, value, state, reason)
         if number:
             cell.lit["d"] = big(1)
@@ -270,29 +286,50 @@ class Lowering:
         typ = self.prog.types[name]
         value = ({"n": f"COALESCE({a}.n, {big(0)})", "d": f"COALESCE({a}.d, {big(1)})"} if typ == NUMBER
                  else {"b": f"COALESCE({a}.b, FALSE)"})
-        missing = literal(f"rule {name} has no value")
+        missing = varchar(literal(f"rule {name} has no value"))
         return self.leaf(typ, value, state_code(f"{a}.state"), f"COALESCE({a}.reason, {missing})")
 
     # --- operators
+    def worst_of(self, dyn: list[Cell], owner: Cell) -> tuple[str, str]:
+        """The highest severity state in `dyn` and the UTF-8 byte-order least reason among arguments
+        in that state (Appendix A.4). Uses balanced helper cells above 4 arguments so SQL stays O(k)."""
+        cur = list(dyn)
+        while len(cur) > 4:
+            nxt = []
+            for i in range(0, len(cur), 2):
+                pair = cur[i:i + 2]
+                if len(pair) == 1:
+                    nxt.append(pair[0])
+                else:
+                    h = self.cell(BOOLEAN, pair)
+                    h.state = f"GREATEST({pair[0].c('s')}, {pair[1].c('s')})"
+                    h.reason = _least_reason(pair)
+                    nxt.append(h)
+            cur = nxt
+        owner.height = max(owner.height, 1 + max(a.height for a in cur))
+        if len(cur) == 1:
+            return cur[0].c("s"), varchar(cur[0].c("r"))
+        worst = f"GREATEST({', '.join(a.c('s') for a in cur)})"
+        return worst, _least_reason(cur)
+
     def strict(self, cell: Cell, args: list[Cell], own: list[tuple[str, int, str]]) -> None:
-        """The most severe state of the arguments (invalid, unknown, not_applicable), with the reason of
-        the first argument that has it; then the operator's own conditions (condition, state, reason), in order."""
+        """The most severe state of the arguments (invalid, unknown, not_applicable), with the UTF-8
+        byte-order least reason among arguments in that state (Appendix A.4); then the operator's own
+        conditions (condition, state, reason), in order."""
         dyn = [a for a in args if not a.certain]
         if not dyn and not own:
-            cell.lit.update(s=str(KNOWN), r="''")
+            cell.lit.update(s=str(KNOWN), r=EMPTY_TEXT)
             return
         ws, wr = [], []
         if dyn:
-            worst = dyn[0].c("s") if len(dyn) == 1 else f"GREATEST({', '.join(a.c('s') for a in dyn)})"
-            first = (dyn[0].c("r") if len(dyn) == 1 else
-                     "CASE " + " ".join(f"WHEN {a.c('s')} = {worst} THEN {a.c('r')}" for a in dyn) + " ELSE '' END")
+            worst, least = self.worst_of(dyn, cell)
             ws.append(f"WHEN {worst} > {KNOWN} THEN {worst}")
-            wr.append(f"WHEN {worst} > {KNOWN} THEN {first}")
+            wr.append(f"WHEN {worst} > {KNOWN} THEN {least}")
         for cond, state, reason in own:
             ws.append(f"WHEN {cond} THEN {state}")
-            wr.append(f"WHEN {cond} THEN {literal(reason)}")
+            wr.append(f"WHEN {cond} THEN {varchar(literal(reason))}")
         cell.state = "CASE " + " ".join(ws) + f" ELSE {KNOWN} END"
-        cell.reason = "CASE " + " ".join(wr) + " ELSE '' END"
+        cell.reason = "CASE " + " ".join(wr) + f" ELSE {EMPTY_TEXT} END"
 
     def binary(self, fn: str, a: Cell, b: Cell, raw: bool = True) -> Cell:
         cell = self.cell(NUMBER, [a, b], raw)
@@ -363,7 +400,7 @@ class Lowering:
         parts = ("n", "d") if a.typ == NUMBER else ("b",)
         cell.value = {p: f"CASE WHEN {cond} THEN {a.c(p)} ELSE {b.c(p)} END" for p in parts}
         if c.certain and a.certain and b.certain:
-            cell.lit.update(s=str(KNOWN), r="''")
+            cell.lit.update(s=str(KNOWN), r=EMPTY_TEXT)
             return cell
         head_s = f"WHEN {c.c('s')} > {KNOWN} THEN {c.c('s')} " if not c.certain else ""
         head_r = f"WHEN {c.c('s')} > {KNOWN} THEN {c.c('r')} " if not c.certain else ""
@@ -372,8 +409,9 @@ class Lowering:
         return cell
 
     def logic(self, op: str, args: list[Cell]) -> Cell:
-        """and: false as soon as one argument is a known false; or: true as soon as one is a known
-        true. Invalid still blocks first; then unknown, then not_applicable."""
+        """Appendix A.1 & A.4: a decisive known operand (`false` for `and`, `true` for `or`) wins
+        even over `invalid`, `unknown`, or `not_applicable`; otherwise the highest severity state
+        (`invalid` > `unknown` > `not_applicable`) with its UTF-8 byte-order least reason."""
         decisive = "NOT " if op == "and" else ""
         cell = self.cell(BOOLEAN, args)
         hits = [f"({a.c('s')} = {KNOWN} AND {decisive}{a.c('b')})" for a in args]
@@ -381,13 +419,11 @@ class Lowering:
         cell.value = {"b": f"(NOT {any_hit})" if op == "and" else any_hit}
         dyn = [a for a in args if not a.certain]
         if not dyn:
-            cell.lit.update(s=str(KNOWN), r="''")
+            cell.lit.update(s=str(KNOWN), r=EMPTY_TEXT)
             return cell
-        worst = dyn[0].c("s") if len(dyn) == 1 else f"GREATEST({', '.join(a.c('s') for a in dyn)})"
-        first = (dyn[0].c("r") if len(dyn) == 1 else
-                 "CASE " + " ".join(f"WHEN {a.c('s')} = {worst} THEN {a.c('r')}" for a in dyn) + " ELSE '' END")
-        cell.state = f"CASE WHEN {worst} = {INVALID} THEN {INVALID} WHEN {any_hit} THEN {KNOWN} ELSE {worst} END"
-        cell.reason = f"CASE WHEN {worst} = {INVALID} THEN {first} WHEN {any_hit} THEN '' WHEN {worst} > {KNOWN} THEN {first} ELSE '' END"
+        worst, least = self.worst_of(dyn, cell)
+        cell.state = f"CASE WHEN {any_hit} THEN {KNOWN} ELSE {worst} END"
+        cell.reason = f"CASE WHEN {any_hit} THEN {EMPTY_TEXT} WHEN {worst} > {KNOWN} THEN {least} ELSE {EMPTY_TEXT} END"
         return cell
 
     def compare(self, op: str, a: Cell, b: Cell) -> Cell:
@@ -404,7 +440,7 @@ class Lowering:
         cell = self.cell(BOOLEAN, [a])
         cell.value = {"b": f"(NOT {a.c('b')})"}
         if a.certain:
-            cell.lit.update(s=str(KNOWN), r="''")
+            cell.lit.update(s=str(KNOWN), r=EMPTY_TEXT)
         else:
             cell.state, cell.reason = a.c("s"), a.c("r")
         return cell
@@ -622,7 +658,7 @@ def parameter_values(prog: Program) -> list[tuple[str, str]]:
 
 
 def relations(prog: Program) -> list[tuple[str, str, bool]]:
-    """(engine name, select, is a rule's output) in dependency order."""
+    """(engine name, select, materialized on Feldera) in dependency order."""
     out = [(name, body, False) for name, body in input_views(prog) + parameter_values(prog)]
     if prog.choice:
         out.append((PARAMETER, choice_sql(prog), False))
@@ -630,7 +666,7 @@ def relations(prog: Program) -> list[tuple[str, str, bool]]:
         if kind == "version":
             v = prog.versions[key]
             witness, version = Lowering(prog, v).sql(witness_name(v))
-            out += [(witness_name(v), witness, False), (v.engine, version, False)]
+            out += [(witness_name(v), witness, True), (v.engine, version, True)]
         else:
             out.append((prog.engine[key], selection_sql(prog, key), True))
     return out
@@ -673,11 +709,11 @@ AS_OF_TABLE = f"CREATE TABLE {q(AS_OF)} (id VARCHAR NOT NULL, valid_at DATE NOT 
 
 
 def feldera(prog: Program) -> str:
-    """engine/calc.sql: the UDF declarations, the evaluation-date table and one view per rule version
-    and per rule (materialized, so it can be read)."""
+    """engine/calc.sql: the UDF declarations, the evaluation-date table and one materialized view
+    per rule, per rule version and per version witness, so Feldera can be queried for them."""
     out = [HEADER, feldera_functions(), AS_OF_TABLE]
-    for name, body, output in relations(prog):
-        kind = "CREATE MATERIALIZED VIEW" if output else "CREATE VIEW"
+    for name, body, materialized in relations(prog):
+        kind = "CREATE MATERIALIZED VIEW" if materialized else "CREATE VIEW"
         out.append(f"{kind} {q(name)} AS\n{body};\n")
     return feldera_names.render("".join(out))
 

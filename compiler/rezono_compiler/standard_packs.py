@@ -17,11 +17,11 @@ PREFIX = "std-"
 
 TABLE: dict[str, str] = {
     "std-access": "8e004b9bd062be365acfb3db30d9bb26fe393c3b979bd77e8d69fc60aae111e6",
-    "std-budget": "544caa9bfd0dce236640427c3cbce9216122d5f20121c9a38e935ffdd4d6f945",
-    "std-decision": "2fd4cc60cc4f1c7dca42da2f5368a08a992de39df7cd7db205b9118dd1b8fe5a",
+    "std-budget": "8f46da8b6706b1ceb089c1cab7b5b2ec49d9e85854ab2c855861cfbe59986787",
+    "std-decision": "4a0207fd27a016c932844705df813adc1037c7258ef819ae57e1642862e04a31",
     "std-explain": "72e2897cd9baaa4962cf2235f83a332262b4da1e6d34e82d5f64d8335e27be0b",
     "std-identity": "129e5321602dea3b58ea5220103c4d313237d0dbf5e640c677b24fc98e5d265b",
-    "std-loop": "20808ce966d574b02e11e814f755d6be0539cef3bec1ed5be1bcba69c11b3919",
+    "std-loop": "1512bdc4315125b60d28488378adc81ef4cae45b1cff71e5f12d8fe546979f70",
     "std-order": "6c56982cfaa6535835b594be2fb280655795a96f0308d8e5d423c6040f923495",
     "std-part": "207f4f097f68e6dade792b714754e0f279ce2c948be8adce82108a3abc18cca9",
     "std-review": "ad0a9b9c585ff348f96b7a57c3cbe5ba70e811fcd5d2796e4bc894668c0091ea",

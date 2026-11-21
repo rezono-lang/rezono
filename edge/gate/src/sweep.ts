@@ -3,7 +3,7 @@ import type { ArchivedFile, Manifest, Snapshot } from '../../../contracts/typesc
 import type { Bundle } from '../../../contracts/typescript/generated/bundle.ts';
 import type { RowRef } from '../../../contracts/typescript/generated/proof.ts';
 import { canonicalJson } from '../../../viewer/src/lib/canon.ts';
-import { ANSWER } from './ask.ts';
+import { ANSWER, AskError } from './ask.ts';
 import { roleCatalogue } from './catalogue.ts';
 import type { Read } from './expr.ts';
 import { compareKey } from './pieces.ts';
@@ -23,6 +23,11 @@ export type SweepSeriesCell = SeriesCell & { row?: RowRef; turn?: TurnStatus; ca
 export interface SweepStart {
 	relation: string;
 	key: string[];
+}
+export interface SweepCellLocation {
+	kind: string;
+	table: string;
+	key: string;
 }
 
 const TURN_CAUSES = new Set<TurnCause>([
@@ -44,7 +49,7 @@ interface Grid {
 	count: number;
 }
 
-interface View {
+export interface SweepView {
 	manifest: Manifest;
 	bundle: Bundle;
 	snaps: ReadonlyMap<string, Snapshot>;
@@ -54,6 +59,17 @@ interface View {
 	rows(relation: string): Promise<Keyed[]>;
 	range: Read;
 }
+
+export interface PublishedVariant {
+	id: string;
+	sweep: string;
+	index: number;
+	value: string;
+	sha256: string;
+	snapshots: Map<string, Snapshot>;
+}
+
+type View = SweepView;
 
 interface Point {
 	cell: BoundSweepCell;
@@ -86,7 +102,19 @@ function sameTuple(a: readonly string[], b: readonly string[]): boolean {
 	return a.length === b.length && a.every((part, i) => part === b[i]);
 }
 
-function publishedGrid(text: string): Grid | undefined {
+const MAX_SWEEPS = 4;
+
+function parseGrid(grid: unknown): Grid | undefined {
+	if (!record(grid)) return undefined;
+	const { name, kind, key, slot, min, max, step, count } = grid;
+	if (typeof name !== 'string' || !NAME.test(name)
+		|| typeof kind !== 'string' || typeof key !== 'string' || typeof slot !== 'string'
+		|| typeof min !== 'bigint' || typeof max !== 'bigint' || typeof step !== 'bigint' || typeof count !== 'bigint'
+		|| step <= 0n || max < min || count > 64n || (max - min) / step + 1n !== count) return undefined;
+	return { name, kind, key, slot, min, max, step, count: Number(count) };
+}
+
+function publishedGrids(text: string): Grid[] | undefined {
 	const document: unknown = JSON.parse(text, (_key, value: unknown, context?: {source?: string}) => {
 		if (typeof value !== 'number') return value;
 		const decimal = context?.source;
@@ -95,15 +123,16 @@ function publishedGrid(text: string): Grid | undefined {
 		throw new TypeError('sweep grid needs exact whole numbers');
 	});
 	if (!record(document) || document.format !== 'rezono.sweeps/1' || !Array.isArray(document.sweeps)
-		|| document.sweeps.length !== 1) return undefined;
-	const grid: unknown = document.sweeps[0];
-	if (!record(grid)) return undefined;
-	const { name, kind, key, slot, min, max, step, count } = grid;
-	if (typeof name !== 'string' || !NAME.test(name)
-		|| typeof kind !== 'string' || typeof key !== 'string' || typeof slot !== 'string'
-		|| typeof min !== 'bigint' || typeof max !== 'bigint' || typeof step !== 'bigint' || typeof count !== 'bigint'
-		|| step <= 0n || max < min || count > 64n || (max - min) / step + 1n !== count) return undefined;
-	return { name, kind, key, slot, min, max, step, count: Number(count) };
+		|| document.sweeps.length < 1 || document.sweeps.length > MAX_SWEEPS) return undefined;
+	const grids: Grid[] = [];
+	const seen = new Set<string>();
+	for (const raw of document.sweeps) {
+		const grid = parseGrid(raw);
+		if (!grid || seen.has(grid.name)) return undefined;
+		seen.add(grid.name);
+		grids.push(grid);
+	}
+	return grids;
 }
 
 function roleList(value: unknown): value is string[] {
@@ -118,7 +147,7 @@ function checkedStatuses(checks: unknown): checks is Check[] {
 		&& typeof check.name === 'string' && typeof check.status === 'string' && ['green', 'warning', 'red'].includes(check.status));
 }
 
-async function readableCell(view: View, grid: Grid): Promise<boolean> {
+async function readableCell(view: View, grid: Grid): Promise<string | undefined> {
 	const scoped = roleCatalogue(view.bundle, [...view.snaps.values()]);
 	const byId = new Map(scoped.kinds.map((kind) => [kind.id, kind]));
 	const seen = new Set<string>();
@@ -127,17 +156,17 @@ async function readableCell(view: View, grid: Grid): Promise<boolean> {
 		seen.add(kind.id);
 		const slot = scoped.attributes.find((entry) => entry.kind === kind!.id && entry.name === grid.slot);
 		if (slot) {
-			if (slot.multivalued || slot.type !== 'integer') return false;
+			if (slot.multivalued || slot.type !== 'integer' || !view.snaps.has(grid.kind) || !view.snaps.has(slot.table)) return undefined;
 			const member = await view.range(grid.kind, { prefix: [grid.key], limit: 2 });
 			if (member.rows.length !== 1 || !record(member.rows[0]) || !Array.isArray(member.rows[0].key)
-				|| member.rows[0].key.length !== 1) return false;
+				|| member.rows[0].key.length !== 1) return undefined;
 			const value = await view.range(slot.table, { prefix: [grid.key], limit: 2 });
 			return value.rows.length === 1 && record(value.rows[0]) && Array.isArray(value.rows[0].key)
-				&& value.rows[0].key.length === 2;
+				&& value.rows[0].key.length === 2 ? slot.table : undefined;
 		}
 		kind = kind.parent ? byId.get(kind.parent) : undefined;
 	}
-	return false;
+	return undefined;
 }
 
 export function completeScope(view: View): boolean {
@@ -220,25 +249,68 @@ async function variantRows(view: View, body: Record<string, unknown>, role: stri
 	}
 }
 
-function pairRow(mainRows: readonly Keyed[], stopRows: readonly Keyed[], startKey: readonly string[], isCalc: boolean): string[] | undefined {
-	const exact = stopRows.find((row) => sameTuple(row.key, startKey));
-	if (exact) return exact.key;
-	if (isCalc) {
-		if (startKey.length !== 4) return undefined;
-		const subject = startKey[0];
-		const mainCount = mainRows.filter((row) => row.key.length === 4 && row.key[0] === subject).length;
-		if (mainCount !== 1) return undefined;
-		const stopMatches = stopRows.filter((row) => row.key.length === 4 && row.key[0] === subject);
-		return stopMatches.length === 1 ? stopMatches[0].key : undefined;
+type PairMode =
+	| { kind: 'calc' }
+	| { kind: 'functional'; keyArity: number }
+	| { kind: 'default' };
+
+type PairResult =
+	| { kind: 'paired'; key: string[] }
+	| { kind: 'absent' }
+	| { kind: 'ambiguous' };
+
+function functionalKeyArity(rulesDoc: unknown, relation: string): number | 'invalid' | undefined {
+	if (!record(rulesDoc) || !Array.isArray(rulesDoc.relations)) return 'invalid';
+	if (rulesDoc.format !== 'rezono.rules/1' && rulesDoc.format !== 'rezono.rules/2') return 'invalid';
+	if (rulesDoc.format !== 'rezono.rules/2') return undefined;
+	let matched: number | undefined;
+	let seen = false;
+	for (const rel of rulesDoc.relations) {
+		if (!record(rel) || typeof rel.name !== 'string') return 'invalid';
+		if (rel.name !== relation) continue;
+		if (seen) return 'invalid';
+		seen = true;
+		if (rel.role === 'functional') {
+			if (!Array.isArray(rel.key) || rel.key.length < 1
+				|| !rel.key.every((col) => record(col) && typeof col.name === 'string')) return 'invalid';
+			matched = rel.key.length;
+		}
 	}
-	if (startKey.length <= 1) return undefined;
+	return matched;
+}
+
+function pairRow(
+	mainRows: readonly Keyed[],
+	stopRows: readonly Keyed[],
+	startKey: readonly string[],
+	mode: PairMode
+): PairResult {
+	if (mode.kind === 'calc' || mode.kind === 'functional') {
+		const prefixLength = mode.kind === 'calc' ? 1 : mode.keyArity;
+		const expectedLength = mode.kind === 'calc' ? 4 : mode.keyArity + 3;
+		if (prefixLength < 1 || startKey.length !== expectedLength) return { kind: 'ambiguous' };
+		const samePrefix = (key: readonly string[]) =>
+			key.length === expectedLength && key.slice(0, prefixLength).every((part, i) => part === startKey[i]);
+		const mainCount = mainRows.filter((row) => samePrefix(row.key)).length;
+		if (mainCount !== 1) return { kind: 'ambiguous' };
+		const stopMatches = stopRows.filter((row) => samePrefix(row.key));
+		if (stopMatches.length === 0) return { kind: 'absent' };
+		if (stopMatches.length > 1) return { kind: 'ambiguous' };
+		return { kind: 'paired', key: stopMatches[0].key };
+	}
+	if (startKey.length < 1) return { kind: 'ambiguous' };
+	const exact = stopRows.find((row) => sameTuple(row.key, startKey));
+	if (exact) return { kind: 'paired', key: exact.key };
+	if (startKey.length === 1) return { kind: 'absent' };
 	const prefix = startKey.slice(0, -1);
 	const samePrefix = (key: readonly string[]) =>
 		key.length === startKey.length && prefix.every((part, i) => key[i] === part);
-	const mainCount = mainRows.filter((row) => samePrefix(row.key)).length;
-	if (mainCount !== 1) return undefined;
 	const stopMatches = stopRows.filter((row) => samePrefix(row.key));
-	return stopMatches.length === 1 ? stopMatches[0].key : undefined;
+	if (stopMatches.length === 0) return { kind: 'absent' };
+	if (stopMatches.length > 1) return { kind: 'ambiguous' };
+	const mainCount = mainRows.filter((row) => samePrefix(row.key)).length;
+	if (mainCount !== 1) return { kind: 'ambiguous' };
+	return { kind: 'paired', key: stopMatches[0].key };
 }
 
 async function readTurns(
@@ -297,41 +369,93 @@ async function readTurns(
 	return map;
 }
 
-export async function readPublishedSweep(view: View, pack: string, role: string, named?: string, start?: SweepStart):
-	Promise<{listing: BoundSweepList; series: SweepSeriesCell[]; start?: RowRef} | undefined> {
+async function loadGrids(view: View): Promise<Grid[] | undefined> {
 	const ref = view.compiled('ir/sweeps.json');
 	if (!ref) return undefined;
-	let grid: Grid | undefined;
-	try { grid = await view.object(ref, 'bundles', publishedGrid) as Grid | undefined; }
+	try { return await view.object(ref, 'bundles', publishedGrids) as Grid[] | undefined; }
 	catch (error) {
 		if (error instanceof StoreLimit) throw error;
 		return undefined;
 	}
-	if (!grid || (named !== undefined && grid.name !== named) || !await readableCell(view, grid)) return undefined;
-	let startRef: RowRef | undefined;
-	let mainRows: Keyed[] | undefined;
-	let isCalc = false;
-	if (start) {
-		if (!view.snaps.has(start.relation)) return undefined;
-		mainRows = await view.rows(start.relation);
-		if (!mainRows.some((row) => compareKey(row.key, start.key) === 0)) return undefined;
-		startRef = { relation: start.relation, key: canonicalJson(start.key) };
-		const relMeta = view.bundle.relations?.find((rel) => rel.id === start.relation);
-		isCalc = typeof relMeta?.calc === 'string' && relMeta.calc.length > 0;
-	}
-	const full = completeScope(view);
+}
+
+async function boundPoints(view: View, pack: string, role: string, grid: Grid, full: boolean): Promise<Point[]> {
 	const points: Point[] = [];
 	for (let index = 0; index < grid.count; index++) {
 		const value = (grid.min + BigInt(index) * grid.step).toString();
 		points.push(full ? await publishedPoint(view, pack, role, grid, index, value)
 			: { cell: { index, value, status: 'unavailable' } });
 	}
-	const listing: BoundSweep = { name: grid.name, cell: { kind: grid.kind, id: grid.key, slot: grid.slot },
-		min: String(grid.min), max: String(grid.max), step: String(grid.step), cells: points.map(({ cell }) => cell) };
+	return points;
+}
+
+export async function readPublishedSweeps(view: View, pack: string, role: string):
+	Promise<{ listing: BoundSweepList; cells: SweepCellLocation[] } | undefined> {
+	const grids = await loadGrids(view);
+	if (!grids) return undefined;
+	const full = completeScope(view);
+	const sweeps: BoundSweep[] = [];
+	const cells: SweepCellLocation[] = [];
+	for (const grid of grids) {
+		const table = await readableCell(view, grid);
+		if (!table) continue;
+		const points = await boundPoints(view, pack, role, grid, full);
+		sweeps.push({
+			name: grid.name,
+			cell: { kind: grid.kind, id: grid.key, slot: grid.slot },
+			min: String(grid.min),
+			max: String(grid.max),
+			step: String(grid.step),
+			cells: points.map(({ cell }) => cell)
+		});
+		cells.push({ kind: grid.kind, table, key: grid.key });
+	}
+	if (!sweeps.length) return undefined;
+	return { listing: { manifest_id: view.manifest.id, sweeps }, cells };
+}
+
+export async function readPublishedSweep(view: View, pack: string, role: string, named: string, start?: SweepStart):
+	Promise<{ series: SweepSeriesCell[]; start?: RowRef; cell: SweepCellLocation } | undefined> {
+	if (!NAME.test(named)) return undefined;
+	const grids = await loadGrids(view);
+	if (!grids) return undefined;
+	const grid = grids.find((entry) => entry.name === named);
+	if (!grid) return undefined;
+	const table = await readableCell(view, grid);
+	if (!table) return undefined;
+	const cell: SweepCellLocation = { kind: grid.kind, table, key: grid.key };
+	let startRef: RowRef | undefined;
+	let mainRows: Keyed[] | undefined;
+	let mode: PairMode = { kind: 'default' };
+	if (start) {
+		if (!view.snaps.has(start.relation)) return undefined;
+		mainRows = await view.rows(start.relation);
+		if (!mainRows.some((row) => compareKey(row.key, start.key) === 0)) return undefined;
+		startRef = { relation: start.relation, key: canonicalJson(start.key) };
+		const relMeta = view.bundle.relations?.find((rel) => rel.id === start.relation);
+		if (typeof relMeta?.calc === 'string' && relMeta.calc.length > 0) {
+			mode = { kind: 'calc' };
+		} else {
+			const rulesRef = view.compiled('ir/rules.json');
+			if (rulesRef) {
+				let rulesDoc: unknown;
+				try { rulesDoc = await view.object(rulesRef, 'bundles'); }
+				catch (error) {
+					if (error instanceof StoreLimit) throw error;
+					return undefined;
+				}
+				const keyArity = functionalKeyArity(rulesDoc, start.relation);
+				if (keyArity === 'invalid') return undefined;
+				if (keyArity !== undefined) mode = { kind: 'functional', keyArity };
+			}
+		}
+	}
+	const full = completeScope(view);
+	const points = await boundPoints(view, pack, role, grid, full);
 	if (!start || !mainRows || !startRef) {
-		const series = points.map(({ cell, diagnosis }) => ({ index: cell.index, value: cell.value, status: cell.status,
-			...(cell.manifest && { manifest: cell.manifest }), ...(diagnosis && { diagnosis }) }));
-		return { listing: { manifest_id: view.manifest.id, sweeps: [listing] }, series };
+		const series = points.map(({ cell: pointCell, diagnosis }) => ({ index: pointCell.index, value: pointCell.value, status: pointCell.status,
+			...(pointCell.manifest && { manifest: pointCell.manifest }), ...(diagnosis && { diagnosis }) }));
+		return { series, cell };
 	}
 
 	const pairedKeys: Array<string | undefined> = [];
@@ -341,10 +465,17 @@ export async function readPublishedSweep(view: View, pack: string, role: string,
 		if (full && point.manifestBody) {
 			const stopRows = await variantRows(view, point.manifestBody, role, start.relation);
 			if (stopRows !== undefined) {
-				const paired = pairRow(mainRows, stopRows, start.key, isCalc);
-				pairedKeys.push(paired ? canonicalJson(paired) : undefined);
-				rowValid.push(true);
-				continue;
+				const paired = pairRow(mainRows, stopRows, start.key, mode);
+				if (paired.kind === 'paired') {
+					pairedKeys.push(canonicalJson(paired.key));
+					rowValid.push(true);
+					continue;
+				}
+				if (paired.kind === 'absent') {
+					pairedKeys.push(undefined);
+					rowValid.push(true);
+					continue;
+				}
 			}
 		}
 		pairedKeys.push(undefined);
@@ -353,12 +484,12 @@ export async function readPublishedSweep(view: View, pack: string, role: string,
 
 	const series: SweepSeriesCell[] = [];
 	for (let i = 0; i < points.length; i++) {
-		const { cell, diagnosis } = points[i];
+		const { cell: pointCell, diagnosis } = points[i];
 		const entry: SweepSeriesCell = {
-			index: cell.index,
-			value: cell.value,
-			status: cell.status,
-			...(cell.manifest && { manifest: cell.manifest }),
+			index: pointCell.index,
+			value: pointCell.value,
+			status: pointCell.status,
+			...(pointCell.manifest && { manifest: pointCell.manifest }),
 			...(diagnosis && { diagnosis })
 		};
 		if (pairedKeys[i] !== undefined) {
@@ -395,7 +526,93 @@ export async function readPublishedSweep(view: View, pack: string, role: string,
 		}
 		series.push(entry);
 	}
-	return { listing: { manifest_id: view.manifest.id, sweeps: [listing] }, series, start: startRef };
+	return { series, start: startRef, cell };
+}
+
+export async function readPublishedVariant(
+	view: SweepView,
+	pack: string,
+	role: string,
+	variantId: string
+): Promise<PublishedVariant | undefined> {
+	if (!SAFE.test(variantId) || variantId.includes('..')) return undefined;
+	if (!completeScope(view)) return undefined;
+	const ref = view.compiled('ir/sweeps.json');
+	if (!ref) return undefined;
+	const grids = await view.object(ref, 'bundles', publishedGrids) as Grid[] | undefined;
+	if (!grids) return undefined;
+	const epoch = view.manifest.epoch + 1;
+	if (!Number.isSafeInteger(epoch)) return undefined;
+	let matched: { grid: Grid; index: number; value: string } | undefined;
+	for (const grid of grids) {
+		const prefix = 'v-' + grid.name + '-';
+		const suffix = '-' + epoch;
+		if (!variantId.startsWith(prefix) || !variantId.endsWith(suffix)) continue;
+		const rawIndex = variantId.slice(prefix.length, variantId.length - suffix.length);
+		if (!/^[0-9]{2}$/.test(rawIndex)) continue;
+		const index = Number(rawIndex);
+		if (index < 0 || index >= grid.count) continue;
+		matched = { grid, index, value: (grid.min + BigInt(index) * grid.step).toString() };
+		break;
+	}
+	if (!matched || !await readableCell(view, matched.grid)) return undefined;
+
+	const pointer = await view.read(pack + '/epochs/' + epoch + '/manifests/' + variantId + '.json', undefined, true);
+	if (pointer === undefined) return undefined;
+	if (!record(pointer) || pointer.format !== 'rezono.pointer/1' || pointer.id !== variantId
+		|| typeof pointer.sha256 !== 'string' || !SHA256.test(pointer.sha256)) {
+		throw new AskError(500, 'invalid publication');
+	}
+	const diagPointer = await view.read(pack + '/epochs/' + epoch + '/diagnoses/' + variantId + '.json', undefined, true);
+	if (diagPointer !== undefined) return undefined;
+
+	const body = await view.read(pack + '/manifests/' + variantId + '.json', pointer.sha256, false);
+	if (!record(body) || body.id !== variantId || body.epoch !== epoch || !record(body.variant)
+		|| body.proposal || body.access_semantics !== 2 || !checkedStatuses(body.checks)) {
+		throw new AskError(500, 'invalid publication');
+	}
+	if (body.base_manifest !== view.manifest.id || body.checks.some((check) => check.status === 'red')) {
+		return undefined;
+	}
+	const { readers, status_readers } = body.variant;
+	if (body.variant.sweep !== matched.grid.name || body.variant.index !== matched.index
+		|| body.variant.value !== matched.value
+		|| !roleList(readers) || !roleList(status_readers)
+		|| !status_readers.every((entry) => readers.includes(entry))) {
+		throw new AskError(500, 'invalid publication');
+	}
+	if (!readers.includes(role) || !status_readers.includes(role)) return undefined;
+
+	if (!Array.isArray(body.snapshots)) throw new AskError(500, 'invalid publication');
+	const snapshots = new Map<string, Snapshot>();
+	for (const entry of body.snapshots) {
+		if (!record(entry) || typeof entry.role !== 'string' || typeof entry.relation !== 'string'
+			|| !SAFE.test(entry.relation) || entry.relation.includes('..')) {
+			throw new AskError(500, 'invalid publication');
+		}
+		if (entry.role !== role) continue;
+		if (entry.format !== 'json' || typeof entry.uri !== 'string'
+			|| typeof entry.sha256 !== 'string' || !SHA256.test(entry.sha256)
+			|| typeof entry.complete !== 'boolean'
+			|| (entry.full !== undefined && typeof entry.full !== 'boolean')
+			|| snapshots.has(entry.relation)) {
+			throw new AskError(500, 'invalid publication');
+		}
+		snapshots.set(entry.relation, entry as unknown as Snapshot);
+	}
+	if (!snapshots.size || !snapshots.has(matched.grid.kind)) return undefined;
+	const variantComplete = [...snapshots.values()].every((entry) => entry.complete || entry.full === true)
+		&& body.snapshots.every((entry: unknown) => record(entry) && typeof entry.relation === 'string' && snapshots.has(entry.relation));
+	if (!variantComplete) return undefined;
+
+	return {
+		id: variantId,
+		sweep: matched.grid.name,
+		index: matched.index,
+		value: matched.value,
+		sha256: pointer.sha256,
+		snapshots
+	};
 }
 
 export function sweepAnswer(term: string, name: string, manifest: string, series: SweepSeriesCell[], start?: RowRef): Answer {

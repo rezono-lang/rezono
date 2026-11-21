@@ -3,11 +3,14 @@ import type { CalcStep } from '../../../contracts/typescript/generated/proof.ts'
 import type {
 	AnswerTable,
 	AnswerTableRow,
+	BoundSweepListResponse,
 	ExplainAnswer,
 	FetchLike,
 	GroundsNode,
 	GroundsStep,
 	HeadResponse,
+	LineFold,
+	LineSweep,
 	LineVerb,
 	RoleBundleResponse,
 	RowSelection,
@@ -16,6 +19,9 @@ import type {
 	SlipLine,
 	SlipView,
 	StdPacks,
+	SweepStop,
+	SweepStopStatus,
+	SweepTurnStatus,
 	ValueState,
 } from './types.ts';
 
@@ -942,12 +948,369 @@ export function buildRuleSlipView(
 		headers: buildHeaders(lang, stdPacks),
 		legendHeaders: buildLegendHeaders(lang, stdPacks),
 		signCatalog: catalog,
+		supposedSign: signByName(catalog, 'supposed'),
 		labels: {
 			relationsHeading: viewMessage(stdPacks, lang, 'row.relations'),
 			closeAnswer: viewMessage(stdPacks, lang, 'answer.close'),
 		},
 		answersByKey: {},
 	};
+}
+
+function resolveSweepTable(
+	bundle: RoleBundleResponse,
+	kindId: string,
+	slotName: string,
+): string | undefined {
+	const byId = new Map(bundle.kinds.map((k) => [k.id, k]));
+	const seen = new Set<string>();
+	let current = byId.get(kindId);
+	while (current && !seen.has(current.id)) {
+		seen.add(current.id);
+		const slot = bundle.attributes.find((a) => a.kind === current!.id && a.name === slotName);
+		if (slot) return slot.table;
+		current = current.parent ? byId.get(current.parent) : undefined;
+	}
+	return undefined;
+}
+
+const VALID_STOP_STATUSES = new Set<SweepStopStatus>([
+	'green',
+	'warning',
+	'red',
+	'not_computed',
+	'unavailable',
+]);
+
+const VALID_TURN_STATUSES = new Set<SweepTurnStatus>(['turns', 'same', 'unknown']);
+
+interface DifferenceEntryLike {
+	relation: string;
+	key: string;
+	change: string;
+	was?: string;
+}
+
+async function fetchVariantDifference(
+	fetchFn: FetchLike,
+	pack: string,
+	manifestId: string,
+	deltaTerm: string,
+	variantId: string,
+): Promise<DifferenceEntryLike[] | undefined> {
+	const entries: DifferenceEntryLike[] = [];
+	let after: string | undefined;
+	const MAX_PAGES = 50;
+	for (let page = 0; page < MAX_PAGES; page++) {
+		let path =
+			`/${encodeURIComponent(pack)}/${encodeURIComponent(manifestId)}` +
+			`/ask/${encodeURIComponent(deltaTerm)}` +
+			`?variant=${encodeURIComponent(variantId)}`;
+		if (after !== undefined) {
+			path += `&after=${encodeURIComponent(after)}`;
+		}
+		const res = await fetchJson<ExplainAnswer>(fetchFn, path);
+		if (res.status !== 200 || !res.body?.difference) {
+			return undefined;
+		}
+		for (const entry of res.body.difference.entries ?? []) {
+			entries.push(entry);
+		}
+		if (!res.body.next) {
+			break;
+		}
+		after = res.body.next;
+	}
+	return entries;
+}
+
+function computeFoldsForLines(
+	bundle: RoleBundleResponse,
+	stdPacks: StdPacks,
+	lang: string,
+	catalog: readonly SignInfo[],
+	lines: readonly SlipLine[],
+	entries: readonly DifferenceEntryLike[],
+): Record<number, LineFold> {
+	const folds: Record<number, LineFold> = {};
+	const calcRelations = new Set(
+		bundle.relations.filter((rel) => typeof rel.calc === 'string' && rel.calc.length > 0).map((r) => r.id),
+	);
+
+	for (const line of lines) {
+		if (line.part === 'total') continue;
+
+		const changed = entries.find(
+			(e) => e.change === 'changed' && e.relation === line.relation && e.was === line.key,
+		);
+		if (changed) {
+			const newParts = parseKey(changed.key);
+			const wasParts = parseKey(line.key);
+			if (line.path !== undefined && wasParts.length === newParts.length && newParts.length >= 2) {
+				const parsed = parseStateValue(newParts[newParts.length - 1]);
+				const newValue =
+					parsed.state === 'known'
+						? parsed.value
+						: formatNonKnownText(bundle, stdPacks, lang, parsed.state, parsed.reason);
+				folds[line.index] = {
+					oldValue: line.value,
+					newValue,
+					newState: parsed.state,
+					newReason: parsed.reason,
+					newSign: stateSign(catalog, parsed.state),
+				};
+			} else {
+				const formatted = formatLineValue(
+					bundle,
+					lang,
+					stdPacks,
+					catalog,
+					line.relation,
+					newParts,
+					'positive',
+					undefined,
+				);
+				folds[line.index] = {
+					oldValue: line.value,
+					newValue: formatted.value,
+					newState: formatted.state,
+					newReason: formatted.reason,
+					newSign: formatted.valueSign,
+				};
+			}
+			continue;
+		}
+
+		if (calcRelations.has(line.relation)) {
+			const removed = entries.find(
+				(e) => e.change === 'removed' && e.relation === line.relation && e.key === line.key,
+			);
+			if (removed) {
+				const subject = parseKey(line.key)[0];
+				const addedMatches = entries.filter(
+					(e) =>
+						e.change === 'added' &&
+						e.relation === line.relation &&
+						parseKey(e.key)[0] === subject,
+				);
+				if (addedMatches.length === 1) {
+					const parts = parseKey(addedMatches[0].key);
+					if (parts.length === 4) {
+						const state = parts[2] as ValueState;
+						const reason = state === 'known' ? '' : parts[3];
+						const newValue =
+							state === 'known'
+								? parts[1]
+								: formatNonKnownText(bundle, stdPacks, lang, state, reason);
+						folds[line.index] = {
+							oldValue: line.value,
+							newValue,
+							newState: state,
+							newReason: reason,
+							newSign: stateSign(catalog, state),
+						};
+						continue;
+					}
+				}
+			}
+		}
+
+		if (line.polarity === 'positive') {
+			const removed = entries.find(
+				(e) => e.change === 'removed' && e.relation === line.relation && e.key === line.key,
+			);
+			if (removed) {
+				folds[line.index] = {
+					oldValue: line.value,
+					newValue: formatNonKnownText(bundle, stdPacks, lang, 'absent', ''),
+					newState: 'absent',
+					newReason: '',
+					newSign: stateSign(catalog, 'absent'),
+				};
+			}
+		} else {
+			const added = entries.find(
+				(e) => e.change === 'added' && e.relation === line.relation && e.key === line.key,
+			);
+			if (added) {
+				const newParts = parseKey(added.key);
+				const formatted = formatLineValue(
+					bundle,
+					lang,
+					stdPacks,
+					catalog,
+					line.relation,
+					newParts,
+					'positive',
+					undefined,
+				);
+				folds[line.index] = {
+					oldValue: line.value,
+					newValue: formatted.value,
+					newState: formatted.state,
+					newReason: formatted.reason,
+					newSign: formatted.valueSign,
+				};
+			}
+		}
+	}
+
+	return folds;
+}
+
+async function populateLineSweeps(
+	fetchFn: FetchLike,
+	bundle: RoleBundleResponse,
+	stdPacks: StdPacks,
+	view: SlipView,
+): Promise<string | undefined> {
+	const sweepQuestion = bundle.questions.find((q) => q.start === 'sweep' && q.answer === 'series');
+	const supposeVerb = stdPacks.verbs.find((v) => v.verb === 'suppose');
+	if (!sweepQuestion || !supposeVerb) {
+		return undefined;
+	}
+
+	const sweepsRes = await fetchJson<BoundSweepListResponse>(
+		fetchFn,
+		`/${encodeURIComponent(view.pack)}/sweeps?m=${encodeURIComponent(view.manifestId)}`,
+	);
+	if (
+		sweepsRes.status !== 200 ||
+		!sweepsRes.body ||
+		sweepsRes.body.manifest_id !== view.manifestId ||
+		!Array.isArray(sweepsRes.body.sweeps) ||
+		sweepsRes.body.sweeps.length === 0
+	) {
+		return undefined;
+	}
+
+	const startRelation = view.row?.relation;
+	const startKey = view.row ? canonicalKey(view.row.key) : undefined;
+	const samplesNote = viewMessage(stdPacks, view.lang, 'scale.samples');
+	const unavailableNote = viewMessage(stdPacks, view.lang, 'scale.unavailable');
+
+	await Promise.all(
+		sweepsRes.body.sweeps.map(async (sweep) => {
+			const table = resolveSweepTable(bundle, sweep.cell.kind, sweep.cell.slot);
+			if (!table) return;
+
+			const matchedLines = view.lines.filter((line) => {
+				if (line.part === 'total' || line.polarity !== 'positive') return false;
+				if (line.path !== undefined && line.relation === startRelation && line.key === startKey) {
+					return false;
+				}
+				if (line.relation !== table) return false;
+				const parts = parseKey(line.key);
+				return parts.length >= 2 && parts[0] === sweep.cell.id;
+			});
+			if (matchedLines.length === 0) return;
+
+			let sweepPath =
+				`/${encodeURIComponent(view.pack)}/${encodeURIComponent(view.manifestId)}` +
+				`/ask/${encodeURIComponent(sweepQuestion.term)}` +
+				`?sweep=${encodeURIComponent(sweep.name)}`;
+			if (startRelation && startKey) {
+				sweepPath +=
+					`&relation=${encodeURIComponent(startRelation)}` +
+					`&key=${encodeURIComponent(startKey)}`;
+			}
+			const seriesRes = await fetchJson<ExplainAnswer>(fetchFn, sweepPath);
+			if (seriesRes.status !== 200 || !seriesRes.body?.series) {
+				return;
+			}
+			const seriesByIndex = new Map(seriesRes.body.series.map((cell) => [cell.index, cell]));
+
+			const stops: SweepStop[] = sweep.cells.map((cell) => {
+				const status: SweepStopStatus = VALID_STOP_STATUSES.has(cell.status)
+					? cell.status
+					: 'unavailable';
+				const seriesCell = seriesByIndex.get(cell.index);
+				let turn: SweepTurnStatus | undefined;
+				let causes: string[] | undefined;
+				if (seriesCell?.turn && VALID_TURN_STATUSES.has(seriesCell.turn)) {
+					if (status === 'unavailable') {
+						turn = 'unknown';
+					} else {
+						turn = seriesCell.turn;
+						if (turn === 'turns' && Array.isArray(seriesCell.causes)) {
+							causes = [...seriesCell.causes];
+						}
+					}
+				}
+				const manifest =
+					(status === 'green' || status === 'warning') &&
+					typeof cell.manifest === 'string' &&
+					cell.manifest.length > 0
+						? cell.manifest
+						: undefined;
+				const checks =
+					status === 'red' && Array.isArray(cell.checks)
+						? cell.checks.map((c) => ({ name: c.name, status: c.status }))
+						: undefined;
+				return {
+					index: cell.index,
+					value: cell.value,
+					status,
+					statusLabel: viewMessage(stdPacks, view.lang, `scale.${status}`),
+					...(turn !== undefined ? { turn } : {}),
+					...(causes !== undefined ? { causes } : {}),
+					...(manifest !== undefined ? { manifest } : {}),
+					...(checks !== undefined ? { checks } : {}),
+				};
+			});
+
+			const allUnavailable = stops.length > 0 && stops.every((s) => s.status === 'unavailable');
+			const lineSweep: LineSweep = {
+				name: sweep.name,
+				stops,
+				unavailable: allUnavailable,
+				...(allUnavailable ? { unavailableNote } : {}),
+				samplesNote,
+			};
+			for (const line of matchedLines) {
+				line.sweep = lineSweep;
+			}
+		}),
+	);
+
+	const deltaQuestion =
+		bundle.questions.find(
+			(q) =>
+				q.start === 'delta' &&
+				q.answer === 'overlay' &&
+				q.steps.length === 1 &&
+				q.steps[0]?.suppose?.delta === 'given',
+		) ?? bundle.questions.find((q) => q.start === 'delta' && q.answer === 'overlay');
+
+	if (deltaQuestion) {
+		const foldCache = new Map<string, Promise<Record<number, LineFold>>>();
+		view.loadVariantFolds = (variantId: string) => {
+			let pending = foldCache.get(variantId);
+			if (!pending) {
+				pending = fetchVariantDifference(
+					fetchFn,
+					view.pack,
+					view.manifestId,
+					deltaQuestion.term,
+					variantId,
+				).then((entries) => {
+					if (!entries) return {};
+					return computeFoldsForLines(
+						bundle,
+						stdPacks,
+						view.lang,
+						view.signCatalog,
+						view.lines,
+						entries,
+					);
+				});
+				foldCache.set(variantId, pending);
+			}
+			return pending;
+		};
+	}
+
+	return sweepQuestion.term;
 }
 
 async function fetchJson<T>(fetchFn: FetchLike, url: string): Promise<{ status: number; body?: T }> {
@@ -980,6 +1343,7 @@ async function populateLineVerbs(
 	bundle: RoleBundleResponse,
 	stdPacks: StdPacks,
 	view: SlipView,
+	sweepQuestionTerm?: string,
 ): Promise<void> {
 	const startRelation = view.row?.relation;
 	const startKey = view.row ? canonicalKey(view.row.key) : undefined;
@@ -992,20 +1356,27 @@ async function populateLineVerbs(
 			if (line.path !== undefined && line.relation === startRelation && line.key === startKey) {
 				return;
 			}
-			const candidates = stdPacks.verbs
-				.map((verb) => {
+			const results = await Promise.all(
+				stdPacks.verbs.map(async (verb) => {
+					if (verb.verb === 'suppose') {
+						if (!line.sweep || !sweepQuestionTerm) return undefined;
+						const lineVerb: LineVerb = {
+							verb: verb.verb,
+							label: viewMessage(stdPacks, view.lang, verb.label_message),
+							key: verb.key,
+							question: sweepQuestionTerm,
+							answerShape: 'series',
+							primary: verb.primary,
+						};
+						return { lineVerb, table: undefined as AnswerTable | undefined };
+					}
 					if (!verb.question) return undefined;
 					const question = questionsByTerm.get(verb.question);
 					if (!question) return undefined;
 					if (question.start === 'present' && line.polarity !== 'positive') return undefined;
 					if (question.start === 'absent' && line.polarity !== 'negative') return undefined;
 					if (question.start !== 'present' && question.start !== 'absent') return undefined;
-					return { verb, question };
-				})
-				.filter((entry): entry is NonNullable<typeof entry> => entry !== undefined);
 
-			const results = await Promise.all(
-				candidates.map(async ({ verb, question }) => {
 					const path =
 						`/${encodeURIComponent(view.pack)}/${encodeURIComponent(view.manifestId)}` +
 						`/ask/${encodeURIComponent(question.term)}` +
@@ -1039,7 +1410,9 @@ async function populateLineVerbs(
 			for (const result of results) {
 				if (!result) continue;
 				verbs.push(result.lineVerb);
-				view.answersByKey[`${line.index}:${result.lineVerb.verb}`] = result.table;
+				if (result.table) {
+					view.answersByKey[`${line.index}:${result.lineVerb.verb}`] = result.table;
+				}
 			}
 			line.verbs = verbs;
 		}),
@@ -1110,6 +1483,7 @@ export async function loadSlip(
 	}
 
 	const view = buildRuleSlipView(pack, lang, head, bundle, selectedRow, routeRes.body, stdPacks);
-	await populateLineVerbs(fetchFn, bundle, stdPacks, view);
+	const sweepQuestionTerm = await populateLineSweeps(fetchFn, bundle, stdPacks, view);
+	await populateLineVerbs(fetchFn, bundle, stdPacks, view, sweepQuestionTerm);
 	return view;
 }

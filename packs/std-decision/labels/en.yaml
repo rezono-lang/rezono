@@ -25,6 +25,7 @@ subject: subject
 subject.title: title
 reference_date: reference date
 reference_date.title: name
+reference_date.date: date
 reference_date.day: day number
 replaces: replaces
 supersession_cycle: cycle of superseded decisions

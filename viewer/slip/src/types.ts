@@ -135,8 +135,68 @@ export interface ExplainAnswer {
 		status: string;
 		manifest?: string;
 		diagnosis?: string;
+		row?: RowRef;
+		turn?: SweepTurnStatus;
+		causes?: string[];
 		counts?: Array<{ relation: string; added: number; removed: number; changed: number }>;
 	}>;
+}
+
+export type SweepStopStatus = 'green' | 'warning' | 'red' | 'not_computed' | 'unavailable';
+export type SweepTurnStatus = 'turns' | 'same' | 'unknown';
+
+export interface SweepCheckInfo {
+	name: string;
+	status: 'green' | 'warning' | 'red' | 'unavailable';
+}
+
+export interface BoundSweepCellResponse {
+	index: number;
+	value: string;
+	status: SweepStopStatus;
+	checks?: SweepCheckInfo[];
+	manifest?: string;
+}
+
+export interface BoundSweepResponse {
+	name: string;
+	cell: { kind: string; id: string; slot: string };
+	min: string;
+	max: string;
+	step: string;
+	cells: BoundSweepCellResponse[];
+}
+
+export interface BoundSweepListResponse {
+	manifest_id: string;
+	sweeps: BoundSweepResponse[];
+}
+
+export interface SweepStop {
+	index: number;
+	value: string;
+	status: SweepStopStatus;
+	statusLabel: string;
+	turn?: SweepTurnStatus;
+	causes?: string[];
+	manifest?: string;
+	checks?: SweepCheckInfo[];
+}
+
+export interface LineSweep {
+	name: string;
+	stops: SweepStop[];
+	unavailable: boolean;
+	unavailableNote?: string;
+	samplesNote: string;
+}
+
+export interface LineFold {
+	oldValue: string;
+	newValue: string;
+	newState: ValueState;
+	newReason: string;
+	newSign?: SignInfo;
 }
 
 export type GroundsAnswer = ExplainAnswer;
@@ -235,6 +295,7 @@ export interface SlipLine {
 	origin: string;
 	originSign?: SignInfo;
 	verbs: LineVerb[];
+	sweep?: LineSweep;
 }
 
 export interface SlipSeal {
@@ -267,11 +328,13 @@ export interface SlipView {
 		meaning: string;
 	};
 	signCatalog: SignInfo[];
+	supposedSign?: SignInfo;
 	labels: {
 		relationsHeading: string;
 		closeAnswer: string;
 	};
 	answersByKey: Record<string, AnswerTable>;
+	loadVariantFolds?: (variantId: string) => Promise<Record<number, LineFold>>;
 }
 
 export type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;

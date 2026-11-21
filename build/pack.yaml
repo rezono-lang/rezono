@@ -7,7 +7,7 @@ imports:
     sha256: 8e004b9bd062be365acfb3db30d9bb26fe393c3b979bd77e8d69fc60aae111e6
   - name: std-decision
     path: ../packs/std-decision
-    sha256: 2fd4cc60cc4f1c7dca42da2f5368a08a992de39df7cd7db205b9118dd1b8fe5a
+    sha256: 4a0207fd27a016c932844705df813adc1037c7258ef819ae57e1642862e04a31
   - name: std-loop
     path: ../packs/std-loop
-    sha256: 20808ce966d574b02e11e814f755d6be0539cef3bec1ed5be1bcba69c11b3919
+    sha256: 1512bdc4315125b60d28488378adc81ef4cae45b1cff71e5f12d8fe546979f70
