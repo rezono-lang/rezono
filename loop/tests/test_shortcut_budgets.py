@@ -22,7 +22,9 @@ import ast
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
+import sys
 
 import pytest
 import yaml
@@ -483,8 +485,82 @@ def test_rezono_pack_dl_regression_budget_only_shrinks_and_counts_offboard(tmp_p
     assert ("rezono_pack_dl_regression", "examples/hybrid") in verdict_ratchet["budget_ratchet_violation"]
 
 
-def test_ci_workflow_runs_base_shortcut_budgets_with_base_revision():
-    """CI executes the base revision's copy of loop/shortcut_budgets.py with --base on PRs and merge_group."""
+def _find_bash() -> str:
+    if os.name == "nt":
+        git_exe = shutil.which("git")
+        if git_exe:
+            git_bash = Path(git_exe).resolve().parents[1] / "bin" / "bash.exe"
+            if git_bash.is_file():
+                return str(git_bash)
+    bash = shutil.which("bash")
+    assert bash, "bash executable not found on PATH"
+    return bash
+
+
+def _python_bin_for_ci_step(tmp_path: Path) -> tuple[str, dict[str, str]]:
+    """Return `(bin_dir, extra_env)` so `python -I` in ci.yml finds `yaml` and `rezono_compiler`.
+
+    In CI (or any editable venv) `sys.executable -I` already resolves both packages and is used
+    directly; only when running locally via `PYTHONPATH`/user-site does a small test shim forward
+    to `sys.executable` with the current `sys.path`.
+    """
+    probe = subprocess.run(
+        [sys.executable, "-I", "-c", "import yaml, rezono_compiler"],
+        capture_output=True,
+    )
+    if probe.returncode == 0:
+        return str(Path(sys.executable).parent), {}
+    shim_dir = tmp_path / "python-shim"
+    shim_dir.mkdir()
+    exe_posix = Path(sys.executable).as_posix()
+    shim = shim_dir / "python"
+    shim.write_text(
+        "#!/usr/bin/env bash\n"
+        'if [[ "${1:-}" == "-I" ]]; then shift; fi\n'
+        f'exec "{exe_posix}" "$@"\n',
+        encoding="utf-8",
+        newline="\n",
+    )
+    shim.chmod(0o755)
+    return str(shim_dir), {"PYTHONPATH": os.pathsep.join(p for p in sys.path if p)}
+
+
+WEAKENED_STD_BUDGET_DL = """// Weakened candidate std-budget stub that compiles cleanly yet never blocks any cell.
+.decl budget_ceiling(budget: symbol, cell: symbol, revision: symbol, ceiling: number)
+budget_ceiling(b, c, r, n) :- budget_entry(e), budget_entry__budget(e, b), budget_entry__cell(e, c),
+    budget_entry__revision(e, r), budget_entry__ceiling(e, n).
+.decl budget_observed(budget: symbol, cell: symbol, revision: symbol, observed: number)
+budget_observed(b, c, r, n) :- budget_reading(x), budget_reading__budget(x, b), budget_reading__cell(x, c),
+    budget_reading__revision(x, r), budget_reading__observed(x, n).
+.decl has_base_ceiling(budget: symbol, cell: symbol)
+has_base_ceiling(b, c) :- budget_ceiling(b, c, "base", _).
+.decl has_head_ceiling(budget: symbol, cell: symbol)
+has_head_ceiling(b, c) :- budget_ceiling(b, c, "head", _).
+.decl has_base_observed(budget: symbol, cell: symbol)
+has_base_observed(b, c) :- budget_observed(b, c, "base", _).
+.decl has_head_observed(budget: symbol, cell: symbol)
+has_head_observed(b, c) :- budget_observed(b, c, "head", _).
+.decl budget_cell(budget: symbol, cell: symbol)
+budget_cell(b, c) :- budget_ceiling(b, c, _, _).
+budget_cell(b, c) :- budget_observed(b, c, _, _).
+.decl budget_raised(budget: symbol, cell: symbol)
+budget_raised(b, c) :- budget_cell(b, c), b = "__never__".
+.decl budget_exceeded(budget: symbol, cell: symbol)
+budget_exceeded(b, c) :- budget_cell(b, c), b = "__never__".
+.decl budget_ratchet_violation(budget: symbol, cell: symbol)
+budget_ratchet_violation(b, c) :- budget_cell(b, c), b = "__never__".
+.decl budget_missing_head(budget: symbol, cell: symbol)
+budget_missing_head(b, c) :- budget_cell(b, c), b = "__never__".
+.decl budget_slack(budget: symbol, cell: symbol)
+budget_slack(b, c) :- budget_cell(b, c), b = "__never__".
+.decl budget_within(budget: symbol, cell: symbol)
+budget_within(b, c) :- budget_cell(b, c).
+.output budget_raised, budget_exceeded, budget_ratchet_violation, budget_missing_head, budget_slack, budget_within
+"""
+
+
+def test_ci_workflow_runs_base_shortcut_budgets_with_base_revision(tmp_path: Path):
+    """CI executes the base revision's loop/shortcut_budgets.py AND packs/std-budget with --base on PRs and merge_group."""
     workflow = yaml.safe_load(CI_WORKFLOW.read_text(encoding="utf-8"))
     discover_steps = workflow["jobs"]["discover"]["steps"]
     env_index, = [
@@ -511,17 +587,107 @@ def test_ci_workflow_runs_base_shortcut_budgets_with_base_revision():
     assert "github.sha" in policy_expr, f"POLICY env must fall back to github.sha: {policy_expr!r}"
     assert "github.event.before" in base_expr, f"BASE env must cover push github.event.before: {base_expr!r}"
 
-    run_script = step["run"]
-    assert 'git show "$POLICY:loop/shortcut_budgets.py"' in run_script, (
-        "CI must run loop/shortcut_budgets.py from $POLICY so a candidate cannot weaken its own gate"
-    )
-    assert '--base "$BASE"' in run_script, "CI must invoke loop/shortcut_budgets.py with --base \"$BASE\""
-
     python_steps = workflow["jobs"]["python"]["steps"]
     check_step, = [s for s in python_steps if "components.py run-shard" in (s.get("run") or "")]
     sb_base_expr = str((check_step.get("env") or {}).get("SHORTCUT_BUDGET_BASE") or "")
     assert "github.event.pull_request.base.sha" in sb_base_expr, sb_base_expr
     assert "github.event.merge_group.base_sha" in sb_base_expr, sb_base_expr
+
+    # Execute the actual ci.yml step script against a temporary fixture repository.
+    run_script = step["run"]
+    repo = tmp_path / "ci-shortcut-budget-repo"
+    (repo / "loop").mkdir(parents=True)
+    shutil.copy2(SHORTCUT_BUDGETS_PY, repo / "loop" / "shortcut_budgets.py")
+    shutil.copytree(STD_BUDGET, repo / "packs" / "std-budget")
+    _write(repo / "packs" / "p-legacy" / "pack.yaml", "name: p-legacy\nversion: 0.1.0\ndefault_language: en\n")
+    _write(
+        repo / "packs" / "p-legacy" / "schema" / "dates.yaml",
+        "id: https://rezono.org/test/p-legacy\nname: p_legacy\nclasses:\n  Item:\n    attributes:\n"
+        "      id: {identifier: true}\n      valid_from_day: {range: integer}\n",
+    )
+    _write_budget_json(repo, {"day_number_fields": {"packs/p-legacy": 1}})
+    _git(repo, "init", "-q")
+    _git(repo, "config", "core.autocrlf", "false")
+    base_sha = _commit(repo, "base with real shortcut_budgets.py and packs/std-budget")
+
+    bash = _find_bash()
+    python_bin_dir, extra_env = _python_bin_for_ci_step(tmp_path)
+    step_env = {
+        **os.environ,
+        **extra_env,
+        "PATH": python_bin_dir + os.pathsep + os.environ.get("PATH", ""),
+        "POLICY": base_sha,
+        "BASE": base_sha,
+    }
+
+    # 1. Clean candidate matching base passes and cleans up .shortcut-budget-base.
+    clean = subprocess.run([bash, "-c", run_script], cwd=repo, env=step_env, capture_output=True, text=True, encoding="utf-8")
+    assert clean.returncode == 0, f"CI step failed on clean fixture repo:\n{clean.stdout}\n{clean.stderr}"
+    assert not (repo / ".shortcut-budget-base").exists(), "CI step did not clean up .shortcut-budget-base"
+
+    # 2. Candidate grows day_number_fields, raises its ceiling, AND weakens packs/std-budget
+    #    (renaming pack.yaml away from the reserved standard name so compiler hash pinning alone
+    #    would not block a weakened candidate pack).
+    _write(
+        repo / "packs" / "p-legacy" / "schema" / "dates.yaml",
+        "id: https://rezono.org/test/p-legacy\nname: p_legacy\nclasses:\n  Item:\n    attributes:\n"
+        "      id: {identifier: true}\n      valid_from_day: {range: integer}\n      valid_until_day: {range: integer}\n",
+    )
+    _write_budget_json(repo, {"day_number_fields": {"packs/p-legacy": 2}})
+    _write(
+        repo / "packs" / "std-budget" / "pack.yaml",
+        "name: weakened-budget\nversion: 0.1.0\ndefault_language: en\nimports: []\n",
+    )
+    _write(repo / "packs" / "std-budget" / "rules" / "budget.dl", WEAKENED_STD_BUDGET_DL)
+
+    # Positive control: running directly against the candidate's weakened packs/std-budget would silently pass.
+    control_cmd = [sys.executable, str(repo / "loop" / "shortcut_budgets.py"), "--root", str(repo), "--base", base_sha]
+    if not extra_env:
+        control_cmd.insert(1, "-I")
+    control = subprocess.run(
+        control_cmd,
+        cwd=repo,
+        env={**os.environ, **extra_env},
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    assert control.returncode == 0, (
+        f"positive control expected weakened candidate packs/std-budget to pass locally, got rc={control.returncode}: "
+        f"{control.stdout}\n{control.stderr}"
+    )
+
+    # Actual CI step must fail because it evaluates packs/std-budget from $POLICY, not from the candidate tree.
+    weakened_pack = subprocess.run(
+        [bash, "-c", run_script],
+        cwd=repo,
+        env=step_env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    assert weakened_pack.returncode != 0, (
+        f"weakened candidate packs/std-budget bypassed the CI step!\nstdout:\n{weakened_pack.stdout}\nstderr:\n{weakened_pack.stderr}"
+    )
+    assert "budget_raised" in weakened_pack.stdout, weakened_pack.stdout
+    assert "budget_ratchet_violation" in weakened_pack.stdout, weakened_pack.stdout
+    assert not (repo / ".shortcut-budget-base").exists(), "CI step did not clean up .shortcut-budget-base on failure"
+
+    # 3. Candidate also weakens loop/shortcut_budgets.py to exit 0; CI step still fails from $POLICY.
+    _write(repo / "loop" / "shortcut_budgets.py", "raise SystemExit(0)\n")
+    weakened_script = subprocess.run(
+        [bash, "-c", run_script],
+        cwd=repo,
+        env=step_env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    assert weakened_script.returncode != 0, (
+        f"weakened candidate loop/shortcut_budgets.py bypassed the CI step!\nstdout:\n{weakened_script.stdout}\nstderr:\n{weakened_script.stderr}"
+    )
+    assert "budget_raised" in weakened_script.stdout, weakened_script.stdout
+    assert "budget_ratchet_violation" in weakened_script.stdout, weakened_script.stdout
 
 
 def test_shortcut_budgets_refuses_missing_base_and_detects_raised_ceiling(tmp_path: Path, capsys):
@@ -590,39 +756,25 @@ def test_shortcut_budgets_refuses_missing_base_and_detects_raised_ceiling(tmp_pa
 def test_day_number_field_counter_uses_compiler_model_not_regex(tmp_path: Path):
     sb, _ = _load_shortcut_budgets()
 
-    # 1. Structural check: forbid bespoke regex/.rezono line-scanner helpers in loop/shortcut_budgets.py.
+    # 1. Structural AST check: forbid regex-based parsing of .rezono declarations/slots in loop/shortcut_budgets.py.
     source = SHORTCUT_BUDGETS_PY.read_text(encoding="utf-8")
     tree = ast.parse(source, filename=str(SHORTCUT_BUDGETS_PY))
-    defined_names = {
-        node.name
-        for node in tree.body
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
-    }
-    assigned_names = {
-        target.id
-        for node in tree.body
-        if isinstance(node, ast.Assign)
-        for target in node.targets
-        if isinstance(target, ast.Name)
-    }
-    forbidden_helpers = {"_REZONO_BLOCK_HEADER", "_REZONO_SLOT_DECL", "_strip_rezono_comment"}
-    still_present = sorted((defined_names | assigned_names) & forbidden_helpers)
-    assert not still_present, (
-        f"loop/shortcut_budgets.py still defines bespoke .rezono regex/line-scanner helpers: {still_present}"
-    )
-
-    # Any re.compile matching kind/extend/derived declarations is a bespoke Rezono parser.
+    regex_funcs = {"compile", "match", "search", "fullmatch", "findall", "finditer", "sub"}
     regex_patterns = [
         node.args[0].value
         for node in ast.walk(tree)
         if isinstance(node, ast.Call)
         and isinstance(node.func, ast.Attribute)
-        and node.func.attr == "compile"
+        and node.func.attr in regex_funcs
         and node.args
         and isinstance(node.args[0], ast.Constant)
         and isinstance(node.args[0].value, str)
     ]
-    rezono_regexes = [pat for pat in regex_patterns if "kind" in pat or "extend" in pat or "derived" in pat]
+    rezono_regexes = [
+        pat
+        for pat in regex_patterns
+        if any(token in pat for token in ("kind", "extend", "derived", r"\s*:"))
+    ]
     assert not rezono_regexes, (
         f"loop/shortcut_budgets.py must not parse .rezono declarations with regexes: {rezono_regexes}"
     )
@@ -630,7 +782,12 @@ def test_day_number_field_counter_uses_compiler_model_not_regex(tmp_path: Path):
     # Confirm the day-number counting path imports rezono_compiler (not only evaluate_shortcut_budget).
     non_eval_compiler_imports = []
     for node in tree.body:
-        if isinstance(node, ast.FunctionDef) and node.name in {"_load_std_budget", "evaluate_shortcut_budget"}:
+        if isinstance(node, ast.FunctionDef) and node.name == "evaluate_shortcut_budget":
+            continue
+        if isinstance(node, ast.FunctionDef) and any(
+            isinstance(sub, ast.Constant) and isinstance(sub.value, str) and "std-budget" in sub.value
+            for sub in ast.walk(node)
+        ):
             continue
         for sub in ast.walk(node):
             if isinstance(sub, ast.ImportFrom) and (sub.module or "").startswith("rezono_compiler"):
