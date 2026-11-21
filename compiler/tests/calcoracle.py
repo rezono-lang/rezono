@@ -200,7 +200,7 @@ class Oracle:
             return None if path is None else f"{path}/{k}"
 
         if "op" not in e or e.get("op") is None:
-            (k, v), = [(k, v) for k, v in e.items() if v is not None]
+            (k, v), = [(k, v) for k, v in e.items() if v is not None and k != "unit"]
             if k == "integer":
                 return known(Fraction(int(v)))
             if k == "boolean":

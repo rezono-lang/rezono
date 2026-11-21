@@ -314,7 +314,11 @@ def assert_legacy_archive_integrity(
 
 
 def assert_legacy_packs_match_archive(pack_rels: set[str] | tuple[str, ...]) -> None:
-    """Byte-for-byte live drift guard (CRLF -> LF normalized) for every pack in `pack_rels` that is still legacy.
+    """Byte-for-byte live drift check (CRLF -> LF normalized) for planner refreshes of `legacy-packs.tar.gz`.
+
+    Intended for explicit planner archive refreshes immediately before converting a pack to `rezono 1`,
+    not for green PR integrity tests: `legacy-packs.tar.gz` is protected by `scripts/red_guard.py`, so
+    worker PRs must remain able to improve unconverted legacy packs without modifying the archive.
 
     Once a pack converts to native `rezono 1` (`pack_is_rezono_1`), its archived snapshot stays frozen as the
     equivalence baseline and is skipped here. For still-legacy packs, every definition file (`.dl`, schemas,

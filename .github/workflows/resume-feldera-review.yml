@@ -3,12 +3,15 @@ on:
   workflow_run:
     workflows: [Live Feldera oracle, Review test evidence]
     types: [completed]
-permissions:
-  contents: read
-  pull-requests: read
-  actions: write
+permissions: {}
 jobs:
+  # Reruns a blocked policy job once its evidence passed, or dispatches the live oracle on a
+  # same-repository branch whose head has no queued, running or passed run.
   resume:
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: write
     if: >-
       (github.event.workflow_run.event == 'workflow_dispatch' &&
        github.event.workflow_run.path == '.github/workflows/feldera-oracle.yml' &&

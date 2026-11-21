@@ -495,14 +495,6 @@ def _run_derived_case(tmp_path: Path, name: str, source: str, facts: str) -> tup
     return files, doc, batch.read(con, prog)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "M3: decisions/language-rezono-1.md: sections 2, 3.2, and 5.6; rezono 1 derivations using "
-        "unit, versions, unless, table, or standing in a module with as of must lower to rezono.rules/2 "
-        "functional relations without falling back to rezono.calc/1 or legacy multi-relation table desugaring."
-    ),
-)
 def test_rezono_1_derived_retires_calc_fallback(tmp_path):
     item_facts = """\
 item:

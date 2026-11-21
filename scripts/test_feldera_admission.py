@@ -1,5 +1,6 @@
 """Exercise native dispatch admission and its event-driven retry without a GitHub token."""
 
+from contextlib import redirect_stdout
 import io
 import os
 from pathlib import Path
@@ -158,6 +159,72 @@ class Admission(unittest.TestCase):
             pr["head"]["sha"] = "c" * 40
             gate.resume(RUN)
             self.assertEqual(requests, [])
+
+    def test_a_blocked_head_of_this_repository_starts_its_live_run_once(self):
+        # Recorded inputs: pull request 4 at HEAD, its policy run whose job failed at the Feldera step,
+        # and the dispatched oracle runs GitHub lists for the branch.
+        pr = {"number": 4, "head": {"sha": HEAD, "repo": {"full_name": REPO}}}
+        policy = {"id": 20, "path": gate.POLICY, "status": "completed", "conclusion": "failure",
+                  "display_title": f"policy pull_request_target 4 {HEAD} false"}
+        job = {"id": 33, "name": "Inspect test evidence", "conclusion": "failure",
+               "started_at": "2026-01-12T01:00:00Z", "steps": [{"name": gate.STEP, "conclusion": "failure"}]}
+        event = dict(RUN, event="pull_request_target", path=gate.POLICY, conclusion="failure")
+        dispatch = "actions/workflows/feldera-oracle.yml/dispatches"
+        listed, requests = [], []
+
+        def api(path, *, post=False, **fields):
+            if post:
+                requests.append((path, fields))
+                if path == dispatch:
+                    # GitHub queues the dispatched run at the branch head.
+                    listed.append(dict(RUN, id=72, status="queued", conclusion=None))
+                return b""
+            self.assertIn("base=main", path)
+            return [pr]
+
+        def records(path, key, **filters):
+            if path == "actions/workflows/red-policy.yml/runs":
+                return [policy]
+            if path == "actions/workflows/feldera-oracle.yml/runs":
+                return list(listed)
+            return [job]
+
+        def resume(event, runs):
+            listed[:] = runs
+            requests.clear()
+            gate.resume(event)
+            return list(requests)
+
+        with patch.dict(os.environ, GITHUB_REPOSITORY=REPO), patch.object(gate, "api", api), \
+             patch.object(gate, "records", records), patch.object(gate, "proof", return_value=None):
+            self.assertEqual(resume(event, []), [(dispatch, {"ref": BRANCH})])
+            # A re-run of the policy job finds the queued run and dispatches nothing more.
+            gate.resume(event)
+            self.assertEqual(requests, [(dispatch, {"ref": BRANCH})])
+            for status in ("queued", "in_progress", "waiting", "requested", "pending"):
+                with self.subTest(status=status):
+                    self.assertEqual(resume(event, [dict(RUN, status=status, conclusion=None)]), [])
+            self.assertEqual(resume(event, [RUN]), [])
+            for other in ({"status": "completed", "conclusion": "failure"},
+                          {"status": "completed", "conclusion": "cancelled"},
+                          {"status": "in_progress", "conclusion": None, "head_sha": "b" * 40},
+                          {"status": "in_progress", "conclusion": None, "head_branch": "other"},
+                          {"status": "in_progress", "conclusion": None, "event": "schedule"},
+                          {"status": "in_progress", "conclusion": None, "path": ".github/workflows/ci.yml"},
+                          {"status": "in_progress", "conclusion": None,
+                           "head_repository": {"full_name": "fork/project"}}):
+                with self.subTest(run=other):
+                    self.assertEqual(resume(event, [dict(RUN, **other)]), [(dispatch, {"ref": BRANCH})])
+            fork = {"full_name": "fork/project"}
+            self.assertEqual(resume(dict(event, head_repository=fork), []), [])
+            pr["head"]["repo"] = fork
+            self.assertEqual(resume(event, []), [])
+
+            output = io.StringIO()
+            with patch.object(gate, "changed", return_value=["udf/udf.rs"]), redirect_stdout(output):
+                self.assertFalse(gate.review("base", HEAD, BRANCH, "fork/project"))
+            self.assertEqual(output.getvalue(), f"Run the live Feldera workflow on this source branch at {HEAD}; "
+                                                "a passing report is required.\n")
 
     def test_only_a_daily_scheduler_replacement_can_skip_dispatch(self):
         def git(*args, payload=None):
