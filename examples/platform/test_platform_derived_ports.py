@@ -8,7 +8,9 @@ from the files themselves.
 
 from __future__ import annotations
 
+import ast
 import json
+import runpy
 from pathlib import Path
 
 import pytest
@@ -48,11 +50,13 @@ def _decision_file(source: dict) -> bool:
 
 
 @pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "M2: decisions/platform-facts-not-conclusions.md: section 3. Derive provides from the PortDecision for the "
-    "product and function where one exists, else from each vendor_default_transport_source statement whose series "
-    "is the version or series of the release the service runs, else from the product's one stated series, and add "
-    "port_unknown; choice_evidence.dl and unique_evidence.dl read provides instead of offer__port. Keep Offer.port: "
-    "a planner retires it."))
+    "M2: decisions/platform-facts-not-conclusions.md: section 3. Derive provides in rules/core.dl from the "
+    "PortDecision for the product and function where one exists, else from each vendor_default_transport_source "
+    "statement whose series is the version or series of the release the service runs, else from the product's one "
+    "stated series, and add port_unknown. Keep Offer.port, the two forgejo git offers, and choice_evidence.dl / "
+    "unique_evidence.dl unchanged in step 2: a planner retires Offer.port, merges duplicate (product, function) "
+    "offers into one per pair, and switches choice_evidence.dl and unique_evidence.dl off offer__port atomically "
+    "in step 3 (Retire) so no cross-port ghost rows arise."))
 def test_service_port_follows_the_vendor_statement_unless_decided():
     from rezono_compiler import sources
 
@@ -109,10 +113,28 @@ def test_service_port_follows_the_vendor_statement_unless_decided():
     assert reg == {("reg", "registry", p) for p in default}
 
 
+def _oracle_reads_offer_port(oracle_path: Path) -> list[int]:
+    """Return line numbers where oracle.py reads a 'port' key from FACTS['offer'] / offers."""
+    tree = ast.parse(oracle_path.read_text(encoding="utf-8"), filename=str(oracle_path))
+    lines: list[int] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign) and any(
+            isinstance(t, ast.Name) and t.id == "offers" for t in node.targets
+        ):
+            for child in ast.walk(node.value):
+                if isinstance(child, ast.Constant) and child.value == "port":
+                    lines.append(getattr(child, "lineno", node.lineno))
+    return sorted(set(lines))
+
+
 @pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
     "M2: decisions/platform-facts-not-conclusions.md: section 3 (Retire). Remove Offer.port from "
     "schema/core.yaml, all port fields on offer rows in facts/core.yaml, and the offer.port label "
-    "in labels/en.yaml once the rules step has landed. "
+    "in labels/en.yaml; merge duplicate (product, function) offers in facts/core.yaml (o-git-https "
+    "and o-git-ssh -> one offer) and switch choice_evidence.dl and unique_evidence.dl off offer__port "
+    "atomically; update examples/platform/oracle.py to derive provides from PortDecision and vendor "
+    "transport statements instead of reading r['port'] on offers; and include the planner step "
+    "removing offer__port from examples/test_platform_incremental_proof.py. "
     "Waits for examples/platform/test_platform_derived_ports.py--test_service_port_follows_the_vendor_statement_unless_decided."))
 def test_offer_port_is_retired():
     schema = yaml.safe_load((PLATFORM / "schema/core.yaml").read_text(encoding="utf-8"))
@@ -122,6 +144,14 @@ def test_offer_port_is_retired():
     with_port = [row["id"] for row in core.get("offer", []) if "port" in row]
     assert not with_port, f"offer rows in facts/core.yaml still carry port: {with_port}"
 
+    by_pair: dict[tuple[str, str], list[str]] = {}
+    for row in core.get("offer", []):
+        by_pair.setdefault((row["product"], row["function"]), []).append(row["id"])
+    duplicate_offers = {pair: ids for pair, ids in by_pair.items() if len(ids) > 1}
+    assert not duplicate_offers, (
+        f"facts/core.yaml must have at most one Offer per (product, function): {duplicate_offers}"
+    )
+
     model, prog, _, rows = _rows()
     assert "port" not in model.kinds["offer"].slots, "Offer.port slot is still present in the compiled model"
     assert "offer__port" not in rows, "offer__port rows are still present in the platform facts"
@@ -129,3 +159,19 @@ def test_offer_port_is_retired():
 
     labels = yaml.safe_load((PLATFORM / "labels/en.yaml").read_text(encoding="utf-8"))
     assert "offer.port" not in labels, "offer.port label is still present in labels/en.yaml"
+
+    oracle_path = PLATFORM / "oracle.py"
+    port_reads = _oracle_reads_offer_port(oracle_path)
+    assert not port_reads, f"examples/platform/oracle.py still reads offer port on line(s) {port_reads}"
+    try:
+        oracle_ns = runpy.run_path(str(oracle_path))
+    except KeyError as exc:
+        raise AssertionError(f"examples/platform/oracle.py failed without Offer.port: {exc!r}") from None
+    reference = {
+        tuple(map(str, row))
+        for row in json.loads((PLATFORM / "oracle-rows.json").read_text(encoding="utf-8"))["provides"]
+    }
+    oracle_provides = {tuple(map(str, row)) for row in oracle_ns["RELATIONS"]["provides"]}
+    assert oracle_provides == reference, (
+        f"examples/platform/oracle.py provides mismatch after retiring Offer.port: {oracle_provides ^ reference}"
+    )

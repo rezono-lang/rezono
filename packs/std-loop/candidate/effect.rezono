@@ -74,6 +74,7 @@ rules effect
   | 
   | .decl effect_attempt(run: symbol, plan: symbol, sent_at: number, outcome: symbol)
   | .decl effect_attempted(run: symbol, plan: symbol)
+  | .decl effect_latest_attempt(run: symbol, plan: symbol, sent_at: number)
   | .decl effect_effective_attempt(run: symbol, plan: symbol, sent_at: number)
   | .decl effect_has_effective_attempt(run: symbol, plan: symbol)
   | .decl effect_submitted_attempt(run: symbol, plan: symbol)
@@ -105,6 +106,11 @@ rules effect
   | 
   | effect_attempted(run, plan) :-
   |     effect_attempt(run, plan, _, _).
+  | 
+  | // Only readbacks strictly after the latest recorded attempt of a plan can settle it.
+  | effect_latest_attempt(run, plan, latest) :-
+  |     effect_attempted(run, plan),
+  |     latest = max sent_at : { effect_attempt(run, plan, sent_at, _) }.
   | 
   | // A claimed, sent or unknown attempt may have changed the target, so only a later receipted readback settles it.
   | effect_effective_attempt(run, plan, sent_at) :- effect_attempt(run, plan, sent_at, "claimed").
@@ -139,15 +145,18 @@ rules effect
   | effect_readback_before(run, plan, tick) :- effect_readback(run, plan, tick, "before").
   | effect_readback_other(run, plan, tick) :- effect_readback(run, plan, tick, "other").
   | 
-  | // A settling readback is a later receipted readback of the same run with an unambiguous expected or other state.
+  | // A settling readback is a receipted readback of the same run strictly after the latest attempt
+  | // with an unambiguous expected or other state.
   | effect_settling_readback(run, plan, sent_at, tick, "confirmed") :-
-  |     effect_effective_attempt(run, plan, sent_at),
+  |     effect_has_effective_attempt(run, plan),
+  |     effect_latest_attempt(run, plan, sent_at),
   |     effect_readback_expected(run, plan, tick),
   |     tick > sent_at,
   |     !effect_readback_before(run, plan, tick),
   |     !effect_readback_other(run, plan, tick).
   | effect_settling_readback(run, plan, sent_at, tick, "discarded") :-
-  |     effect_effective_attempt(run, plan, sent_at),
+  |     effect_has_effective_attempt(run, plan),
+  |     effect_latest_attempt(run, plan, sent_at),
   |     effect_readback_other(run, plan, tick),
   |     tick > sent_at,
   |     !effect_readback_expected(run, plan, tick),
@@ -158,30 +167,35 @@ rules effect
   |     effect_settling_readback(run, plan, sent_at, earlier, _),
   |     earlier < tick.
   | 
-  | // The first settling readback after an effective attempt decides.
+  | // The first settling readback after the latest attempt decides.
   | effect_first_settling(run, plan, sent_at, outcome) :-
   |     effect_settling_readback(run, plan, sent_at, tick, outcome),
   |     !effect_settled_earlier(run, plan, sent_at, tick).
   | 
-  | // Discard when the first settling readback shows another state, or when only a refused attempt exists.
+  | // Discard when the first settling readback after the latest attempt shows another state,
+  | // or when only a refused attempt exists.
   | effect_discarded(run, plan, "readback-other") :-
-  |     effect_first_settling(run, plan, _, "discarded").
+  |     effect_latest_attempt(run, plan, sent_at),
+  |     effect_first_settling(run, plan, sent_at, "discarded").
   | effect_discarded(run, plan, "attempt-refused") :-
   |     effect_attempt(run, plan, _, "refused"),
   |     !effect_has_effective_attempt(run, plan).
   | effect_discarded_at(run, plan) :-
   |     effect_discarded(run, plan, _).
   | 
-  | // Confirm when the first settling readback shows the expected state and nothing discarded the plan.
+  | // Confirm when the first settling readback after the latest attempt shows the expected state
+  | // and nothing discarded the plan.
   | effect_confirmed(run, plan, "expected-after-attempt") :-
-  |     effect_first_settling(run, plan, _, "confirmed"),
+  |     effect_latest_attempt(run, plan, sent_at),
+  |     effect_first_settling(run, plan, sent_at, "confirmed"),
   |     !effect_discarded_at(run, plan).
   | 
   | effect_settled(run, plan) :- effect_confirmed(run, plan, _).
   | effect_settled(run, plan) :- effect_discarded(run, plan, _).
   | 
   | effect_still_before(run, plan) :-
-  |     effect_effective_attempt(run, plan, sent_at),
+  |     effect_has_effective_attempt(run, plan),
+  |     effect_latest_attempt(run, plan, sent_at),
   |     effect_readback_before(run, plan, tick),
   |     tick > sent_at.
   | 
