@@ -199,7 +199,9 @@ def _prov_witnesses(g: Graph, schema: dict | None = None) -> dict:
                     sub.add(t)
         for c in g.subjects(PROV.wasGeneratedBy, a):
             sub.add((c, PROV.wasGeneratedBy, a))
-        out[str(a)] = rdf.prov_to_witness(sub, schema=schema)
+        out[str(a)] = rdf.prov_to_witness(
+            sub, schema=None if str(a).startswith(rdf.REZONO + "w/") else schema
+        )
     return out
 
 
