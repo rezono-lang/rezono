@@ -820,16 +820,19 @@ def test_empty_managed_scope_reads_loop_expectation_for_managed_scope():
     cut = "empty"
     opening_step = (run, cut, "protect-entry")
 
-    # 1. An absent observation on an unrelated token must NOT open the empty-managed-scope boundary.
-    unrelated_empty, unrelated_frontier = _eval_empty_scope_case(
-        expected_scope_value="empty",
-        observed_token="restore-bad/network-probe",
-        observed_value="missing",
-    )
-    assert unrelated_empty == set() and opening_step not in unrelated_frontier, (
-        "absent observation on unrelated token 'restore-bad/network-probe' must not open "
-        f"the empty-managed-scope boundary; empty_scope={unrelated_empty}, frontier={unrelated_frontier}"
-    )
+    # 1. An absent observation on an unrelated token must NOT open the empty-managed-scope boundary,
+    #    even when its observed value matches that unrelated token's own LoopExpectation ("denied").
+    for unrelated_value in ("missing", "denied"):
+        unrelated_empty, unrelated_frontier = _eval_empty_scope_case(
+            expected_scope_value="empty",
+            observed_token="restore-bad/network-probe",
+            observed_value=unrelated_value,
+        )
+        assert unrelated_empty == set() and opening_step not in unrelated_frontier, (
+            f"absent observation on unrelated token 'restore-bad/network-probe' (value={unrelated_value!r}) "
+            "must not open the empty-managed-scope boundary; "
+            f"empty_scope={unrelated_empty}, frontier={unrelated_frontier}"
+        )
 
     # 2. Matching LoopExpectation for platform/managed-scope opens the boundary.
     matched_empty, matched_frontier = _eval_empty_scope_case(

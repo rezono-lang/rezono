@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import re
 
+import pytest
 import yaml
 
 from case_support import ROOT
@@ -119,8 +120,6 @@ def test_core_sources_has_honest_default_without_duplicate_records():
     ),
 )
 def test_platform_startup_target_has_honest_synthetic_or_fixture_origin():
-    from rezono_compiler import pack as compiler_pack, sources as compiler_sources
-
     standard_order_data = yaml.safe_load((FACTS / "standard-order.yaml").read_text(encoding="utf-8")) or {}
     startup_targets = standard_order_data.get("platform_startup_target") or []
 
