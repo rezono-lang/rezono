@@ -7,6 +7,7 @@ from rdflib.namespace import PROV, RDF
 
 from rezono_canon import canonical_sha256
 from rezono_publication import l0, rdf
+from rezono_publication import publication
 from rezono_publication.hash import hashes
 
 SCHEMA = {
@@ -145,3 +146,79 @@ def test_conclusion_and_witness_iris_resolve_to_one_row_and_match_rdf_and_prov()
         rdf.resolve_iri(SCHEMA, rows, rdf.conclusion_iri(SCHEMA, "ItemScore", "missing"))
     with pytest.raises(l0.L0Error):
         rdf.resolve_iri(SCHEMA, rows, f"https://rezono.example/sample/witness/{'0' * 64}", witnesses=[w1, w2])
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason=(
+        "extra: decisions/publication-conclusion-addresses.md: Pass schema doc to witness_uri in "
+        "publication/rezono_publication/publication.py:328 (and align edge/publisher/rezono_publisher/forms.py, "
+        "export_index.py, and edge/plugins/connectors/accept.py) so $why in row_json and publication.form "
+        "emits the full canonical <base>witness/<H> IRI matching the gate instead of rezono:w/<H>."
+    ),
+)
+def test_publication_row_json_and_form_emit_canonical_witness_iri_in_why():
+    """One witness, one IRI: row_json and publication.form emit `<base>witness/<H>` in `$why`
+    (never `rezono:w/<H>`), following the schema's `base` and resolving back to the single row."""
+    witness = {
+        "conclusion": {"relation": "item_flag", "key": '["item-1","ready"]'},
+        "rule_id": "rule.item_flag",
+        "premises": [
+            {"row": {"relation": "item", "key": '["item-1"]'}, "polarity": "positive", "stratum": 0},
+        ],
+    }
+    digest = canonical_sha256(witness)
+    legacy_uri = f"rezono:w/{digest}"
+    raw_rows = {"item": [("item-1",)], "item_flag": [("item-1", "ready")]}
+    manifest = {
+        "id": "m-1",
+        "epoch": 1,
+        "knowledge_time": "2026-01-01T00:00:00Z",
+        "definition_sha256": "a" * 64,
+    }
+
+    for pack_id, base_iri in (
+        ("sample", "https://rezono.example/sample/"),
+        ("other", "https://other.example/alt/"),
+    ):
+        bundle = {
+            "pack": {"id": pack_id, "base": base_iri},
+            "kinds": [{"id": "item", "class": "Item", "world": "closed"}],
+            "attributes": [],
+            "arrows": [],
+            "relations": [
+                {
+                    "id": "item_flag",
+                    "world": "closed",
+                    "columns": [
+                        {"name": "item", "type": "string"},
+                        {"name": "status", "type": "string"},
+                    ],
+                }
+            ],
+        }
+        doc, plan = publication.schema_document(bundle, full=None)
+        assert doc["base"] == base_iri
+        expected_iri = f"{base_iri}witness/{digest}"
+        assert expected_iri == rdf.canonical_witness_iri(doc, witness)
+
+        out = publication.row_json(doc, plan, {"rows": raw_rows, "witnesses": [witness], "sources": []})
+        derived_row = next(r for r in out if r["$kind"] == "ItemFlag")
+        why_iri = derived_row["$why"]["$id"]
+        assert why_iri == expected_iri, f"expected full canonical witness IRI {expected_iri!r}, got {why_iri!r}"
+        assert why_iri != legacy_uri and not why_iri.startswith("rezono:w/"), why_iri
+
+        # publication.form produces the same canonical witness IRI and passes L0 validation.
+        built = publication.form(manifest, bundle, raw_rows, None, [witness], [], "reader")
+        l0.read_rows(built["schema"], built["rows"])
+        form_row = next(r for r in built["rows"] if r["$kind"] == "ItemFlag")
+        assert form_row["$why"]["$id"] == expected_iri
+
+        # RDF view binds rd:why to the canonical witness IRI (never rezono:w/<H>), and resolve_iri finds the row.
+        g_rdf = rdf.to_graph(doc, out)
+        why_objects = set(g_rdf.objects(None, rdf.RD.why))
+        assert URIRef(expected_iri) in why_objects
+        assert URIRef(legacy_uri) not in why_objects
+        assert rdf.resolve_iri(doc, out, why_iri, witnesses=[witness]) == derived_row
+

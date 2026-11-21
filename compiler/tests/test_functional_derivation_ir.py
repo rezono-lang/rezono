@@ -333,15 +333,6 @@ def _bound_program(fmt: str, value_type: str, rule_doc: dict) -> dict:
     }
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "M3: decisions/language-rezono-1-refinements.md: section 3.4C.3; compiler/rezono_compiler/rules.py "
-        "must enforce symmetric BOUND = 2^63 - 1 at rezono.rules/2 IR load, refusing -2^63 "
-        "(-9223372036854775808) in integer and rational constant positions while accepting -(2^63 - 1) "
-        "and keeping rezono.rules/1 backwards-compatible."
-    ),
-)
 def test_rules_v2_refuses_min_int64_constant_and_accepts_symmetric_bound():
     min_i64 = "-9223372036854775808"
     max_i64_plus_1 = "9223372036854775808"

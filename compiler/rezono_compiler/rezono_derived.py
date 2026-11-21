@@ -67,16 +67,7 @@ def is_module_derived(decl: object) -> bool:
     return isinstance(decl, dict) and isinstance(decl.get("derived"), str)
 
 
-@dataclass(frozen=True)
-class Note:
-    """The sentence and the source written on a derivation, and where its `means` stands."""
-
-    means: str | None
-    source: str | None
-    where: str
-    line: int
-    column: int
-    at: str
+Note = rules_dl.RuleNote
 
 
 @dataclass
@@ -753,9 +744,13 @@ def merged(native: tuple[rules_dl.NativeSource, ...], derived: tuple[rules_dl.Na
         if (own := by_module.get((source.pack, source.stem))) is None:
             by_module[source.pack, source.stem] = source
         else:
+            merged_notes = (
+                (own.notes or (None,) * len(own.columns)) + (source.notes or (None,) * len(source.columns))
+                if own.notes or source.notes else ()
+            )
             by_module[source.pack, source.stem] = rules_dl.NativeSource(
                 own.pack, own.stem, own.file, own.text, own.statements + source.statements,
-                own.columns + source.columns, own.semantics)
+                own.columns + source.columns, own.semantics, merged_notes)
     return tuple(by_module.values())
 
 
@@ -770,32 +765,59 @@ def message_line(key: str, text: str) -> str:
     return f"{key} = {{{{{escaped}}}}}\n"
 
 
-def notes(pack, pack_dir, meta: dict, lowered: Lowered) -> list[str]:
-    """Give every rule of a derivation the source written after `@` (pack.rule_sources) and return the message lines
-    of their sentences, in the default language (language-readable-rules.md section 2). A sentence that the message
-    file of the default language also gives is refused: a sentence has one source."""
+def notes(
+    pack,
+    pack_dir,
+    meta: dict,
+    lowered: Lowered,
+    *,
+    packs: Mapping[str, object] | None = None,
+    rule_notes: Mapping[str, tuple[str, Note]] | None = None,
+) -> dict[str, list[str]]:
+    """Give every rule of a clause or derivation the source written after `@` (pack.rule_sources) and return the
+    message lines of their sentences per owning pack, in each pack's default language (language-readable-rules.md
+    section 2). A sentence that the message file of its pack's default language also gives is refused: a sentence
+    has one source."""
     from . import rezono_reason
     from .pack import CompileError
 
-    if not lowered.notes or not pack.rules:
-        return []
-    catalog = rezono_reason.defined_in_catalog(pack_dir, meta.get("default_language"))
-    lines, refused = [], []
+    if (not lowered.notes and not rule_notes) or not pack.rules:
+        return {}
+    root = meta["name"]
+    catalogs: dict[tuple, set[str]] = {}
+    lines: dict[str, list[str]] = {}
+    refused: list[Diagnostic] = []
     for rule in sorted(pack.rules["rules"], key=lambda r: r["id"]):
-        note = lowered.notes.get(rule["head"]["relation"])
-        if note is None:
+        rid = rule["id"]
+        if rule_notes and rid in rule_notes:
+            owner, note = rule_notes[rid]
+        elif (derived_note := lowered.notes.get(rule["head"]["relation"])) is not None:
+            owner, note = root, derived_note
+        else:
             continue
         if note.source is not None:
-            pack.rule_sources[rule["id"]] = note.source
+            pack.rule_sources[rid] = note.source
         if note.means is None:
             continue
-        key = f"rule.{rule['id']}"
-        if key in catalog:
-            refused.append(Diagnostic("R000", f"{note.where}:{note.line}: the sentence of {rule['head']['relation']} "
-                                              f"is also given as {key} in messages/{meta.get('default_language')}.mf2; "
-                                              "a sentence has one source", f"{note.where}#{note.at}",
-                                      (note.where, note.line, note.column)))
-        lines.append(message_line(key, note.means))
+        if owner == root:
+            directory, default_lang = pack_dir, meta.get("default_language")
+        else:
+            imported = (packs or {})[owner]
+            directory, default_lang = imported.dir, imported.meta.get("default_language")
+        catalog_key = (directory, default_lang)
+        if catalog_key not in catalogs:
+            catalogs[catalog_key] = rezono_reason.defined_in_catalog(directory, default_lang)
+        key = f"rule.{rid}"
+        if key in catalogs[catalog_key]:
+            refused.append(Diagnostic(
+                "R000",
+                f"{note.where}:{note.line}: the sentence of {rule['head']['relation']} "
+                f"is also given as {key} in messages/{default_lang}.mf2; "
+                "a sentence has one source",
+                f"{note.where}#{note.at}",
+                (note.where, note.line, note.column),
+            ))
+        lines.setdefault(owner, []).append(message_line(key, note.means))
     if refused:
         raise CompileError("\n".join(map(str, refused)), refused)
     return lines

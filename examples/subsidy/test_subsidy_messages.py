@@ -1,15 +1,16 @@
-"""Verify that examples/subsidy/messages/en.mf2 aligns with rules/access.dl and drops std-explain duplicates."""
+"""Verify that examples/subsidy/messages/en.mf2 aligns with subsidy's may_read rules and drops std-explain duplicates."""
 
 from __future__ import annotations
 
 import re
 from pathlib import Path
 
+from rezono_compiler import pack
+from rezono_compiler import rules as ir
+
 HERE = Path(__file__).parent
-ACCESS_DL = HERE / "rules" / "access.dl"
 EN_MF2 = HERE / "messages" / "en.mf2"
 
-MAY_READ_CLAUSE = re.compile(r'^\s*may_read\(\s*(r|"[^"]+")\s*,\s*"([^"]+)"\s*,\s*x\s*\)\s*:-')
 MF2_ENTRY = re.compile(r"^([A-Za-z0-9_.-]+)\s*=\s*(.+)$")
 MF2_VAR = re.compile(r"\{\$([A-Za-z0-9_]+)\}")
 
@@ -53,13 +54,14 @@ KIND_OBJECT = {
 }
 
 
-def _access_clauses() -> list[tuple[str, str]]:
-    clauses: list[tuple[str, str]] = []
-    for raw in ACCESS_DL.read_text(encoding="utf-8").splitlines():
-        line = raw.split("//", 1)[0]
-        if match := MAY_READ_CLAUSE.match(line):
-            clauses.append((match.group(1), match.group(2)))
-    return clauses
+def _access_clauses() -> list[tuple[str, str, str]]:
+    prog = ir.load(pack.read(HERE).rules)
+    clauses: list[tuple[str, str, str]] = []
+    for rule in prog.rules_for("may_read"):
+        role_raw, kind = rule.head.terms[0], rule.head.terms[1]
+        role_term = "r" if isinstance(role_raw, str) and role_raw.startswith("?") else f'"{role_raw}"'
+        clauses.append((rule.id, role_term, str(kind)))
+    return sorted(clauses, key=lambda item: int(item[0].removeprefix("may_read_")))
 
 
 def _mf2_entries() -> dict[str, str]:
@@ -86,11 +88,11 @@ def test_may_read_messages_match_access_dl_clauses():
     clauses = _access_clauses()
     entries = _mf2_entries()
     may_read_keys = sorted(k for k in entries if k.startswith("rule.may_read_"))
-    expected_keys = sorted(f"rule.may_read_{i}" for i in range(1, len(clauses) + 1))
+    expected_keys = sorted(f"rule.{rule_id}" for rule_id, _, _ in clauses)
     assert may_read_keys == expected_keys
 
-    for idx, (role_term, kind) in enumerate(clauses, start=1):
-        key = f"rule.may_read_{idx}"
+    for rule_id, role_term, kind in clauses:
+        key = f"rule.{rule_id}"
         text = entries[key]
         prefix, expected_vars = ROLE_PREFIX[role_term]
         expected_text = prefix + KIND_OBJECT[kind]

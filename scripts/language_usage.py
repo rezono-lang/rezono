@@ -204,7 +204,7 @@ MODULE_SYNTAX = {
     "scalar-alias": r"^type\b", "composite-key": r"^\s+unique\b", "path-equation": r"^\s+equal\b",
     "module-import": r"^use\b", "fact-table": r"^\s*fact\b", "named-dataset": r"^dataset\b",
     "dated-fact": r"^\s*fact\b.*\b(?:valid|known)\b", "fact-provenance": r"^\s*fact\b.* @ ",
-    "parameters": r"^param\b", "units": r"^(?:unit|rounding)\b", "calculation": r"^\s*derived\b",
+    "parameters": r"^param\b", "units": r"^(?:unit|rounding)\b", "calculation": r"^(?:\s*derived|as\s+of)\b",
     "exceptions": r"^\s*unless\b", "decision-table": r"^\s*table\b", "table-policy": r"^\s*table\s+(?!unique\b)\w+", "conditional-check": r"^(?:check|require|warn)\b",
     "relational-rule": r"^rules\b", "native-rule": r"^rule\b",
     "intermediate-invariant": r"^rule\b(?:(?!\bwhen\b).)*\binvariant\s+intermediate\b",

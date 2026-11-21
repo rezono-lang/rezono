@@ -44,9 +44,6 @@ def test_management_firewall_bidirectional():
 
 
 @pytest.mark.cluster
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "M2: Depends on the disposable router reader, shared router renderer and test_management_firewall_bidirectional. "
-    "Read decisions/platform-management-firewall.md and compare an actual complete table read to the intended rows."))
 def test_management_firewall_readback(monkeypatch):
     from case_support import ROOT
     from management_probes import live_events

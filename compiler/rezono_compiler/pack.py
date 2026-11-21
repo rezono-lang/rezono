@@ -347,7 +347,7 @@ class Pack:
     rule_spans: dict[str, tuple | None] = field(default_factory=dict)
     # Per derived relation name, the SemanticType of each column when richer than its physical rule type.
     rule_semantics: dict[str, tuple[dict | None, ...]] = field(default_factory=dict)
-    # Per rule id, the optional source reference carried by a native rule clause (`@ <source>`).
+    # Per rule id, the optional source reference carried by a native rule clause or derivation (`@ <source>`).
     rule_sources: dict[str, str] = field(default_factory=dict)
     # Per relation `<k>_<d>` of a rezono 1 derived property: its kind and property (language-rezono-1.md section 2).
     rule_properties: dict[str, tuple[str, str]] = field(default_factory=dict)
@@ -915,7 +915,7 @@ def read(pack_dir: str | Path) -> Pack:
         except CompileError as e:
             errors.append(str(e))
             typed[str(e)] = e.diagnostics
-    generated, rule_sentences = [], []
+    generated, rule_sentences = [], {}
     if not errors:
         from . import rezono_relational, rezono_table  # table lowering reads the pack's model
         forms = {m.rel: m.form for m in mods if m.pack_dir == pack_dir and m.form is not None}
@@ -938,15 +938,18 @@ def read(pack_dir: str | Path) -> Pack:
             pack.intermediate_invariants = tuple(intermediate_invariants)
             pack.steps = tuple(steps)
             derivations = rezono_derived.lower_pack(meta["name"], mods, names, pack)
+            rule_notes: dict[str, tuple[str, rules_dl.RuleNote]] = {}
             pack.rules, rule_warnings = rules_dl.read(pack, pack_dir, ordered, renames, calc_inputs=calc_inputs,
                                                       calc_parts=calc_parts, folds=pack.folds,
                                                       bodies=pack.rule_bodies, spans=pack.rule_spans,
+                                                      rule_notes=rule_notes,
                                                       generated=generated, embedded=rezono_relational.sources(mods),
                                                       native=rezono_derived.merged(native, derivations.sources),
                                                       semantics=pack.rule_semantics)
             pack.warnings += rule_warnings
             pack.rule_properties = derivations.properties
-            rule_sentences = rezono_derived.notes(pack, pack_dir, meta, derivations)
+            rule_sentences = rezono_derived.notes(pack, pack_dir, meta, derivations,
+                                                  packs=ordered, rule_notes=rule_notes)
             if pack.rules:   # a variable or a column that joins two currencies is an error
                 amounts.columns(pack.rules, amounts.tables(pack))
         except (rules_dl.RuleError, CompileError) as e:
@@ -2818,7 +2821,8 @@ def named(values, known: set, where: str, errors: list[str]) -> None:
 
 
 def language(pack: Pack, pack_dir: Path, packs: dict, renames: dict, errors: list[str], *,
-             reasons: dict[str, list[tuple[str, str]]] | None = None, sentences: list[str] | None = None) -> None:
+             reasons: dict[str, list[tuple[str, str]]] | None = None,
+             sentences: dict[str, list[str]] | None = None) -> None:
     """Labels (facts per language) and message resources (MessageFormat 2, carried as text).
     Imported packs' labels come first, a dependency before the pack that imports it, under this pack's names;
     the pack's own labels win."""
@@ -2863,12 +2867,12 @@ def language(pack: Pack, pack_dir: Path, packs: dict, renames: dict, errors: lis
         if text and (not sep or f"@locale {lang}" not in head.splitlines()):
             errors.append(f"messages/{lang}.mf2: a resource starts with '@locale {lang}' and a '---' line")
         extra = reasons.get(pack.meta["name"], []) if reasons and lang == default else []
-        lines = sentences if sentences and lang == default else []
+        lines = sentences.get(pack.meta["name"], []) if sentences and lang == default else []
         if (extra or lines) and (not text or sep):
             if not sep:
                 head, sep = f"@locale {lang}", "\n---\n"
             body = rezono_reason.append_entries(body, extra)
-            if lines:  # the sentences of rezono 1 derivations (`means`): written once, in the default language
+            if lines:  # the sentences of rule clauses and rezono 1 derivations (`means`): written once, in the default language
                 body = (body + "\n" if body and not body.endswith("\n") else body) + "".join(lines)
             text = f"{head}{sep}{body}"
         # An imported pack's messages come first, a dependency before the pack that imports it; an entry of
@@ -2884,6 +2888,8 @@ def language(pack: Pack, pack_dir: Path, packs: dict, renames: dict, errors: lis
                     continue
             if reasons and lang == p.meta.get("default_language") and name in reasons:
                 ibody = rezono_reason.append_entries(ibody, reasons[name])
+            if sentences and lang == p.meta.get("default_language") and name in sentences:
+                ibody = (ibody + "\n" if ibody and not ibody.endswith("\n") else ibody) + "".join(sentences[name])
             if ibody:
                 imported.update({mid: block for mid, block in entries(ibody) if mid not in own})
         ids = own | set(imported)

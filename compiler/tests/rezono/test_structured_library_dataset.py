@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 import yaml
 
+from model_parity import legacy_file_bytes
 from rezono_compiler import facts, pack
 
 
@@ -33,7 +34,7 @@ def test_structured_library_dataset(tmp_path):
     }}
     path = tmp_path / "sample.json"
     path.write_text(json.dumps(form), encoding="utf-8")
-    oracle = yaml.safe_load((LIBRARY / "facts/valid.yaml").read_bytes())
+    oracle = yaml.safe_load(legacy_file_bytes("examples/library/facts/valid.yaml"))
     expected = {"branch": [oracle["branch"][1]], "work": [
         *oracle["work"], {"id": "w3", "title": "Empty", "category": "c1", "authors": []},
     ]}

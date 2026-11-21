@@ -10,6 +10,7 @@ import shutil
 import pytest
 import yaml
 
+from model_parity import legacy_helpers
 from rezono_compiler import emit, facts, pack
 from support import text, violations
 
@@ -19,16 +20,13 @@ DATASETS = {"valid", "errors"}
 
 
 def isolated(tmp_path, form):
-    directory = tmp_path / form / "library"
-    directory.mkdir(parents=True)
-    for name in ("channels.yaml", "pack.yaml"):
-        shutil.copy(LIBRARY / name, directory / name)
-    for name in ("labels", "messages"):
-        shutil.copytree(LIBRARY / name, directory / name)
-    if form == "legacy":
-        for name in ("schema", "facts"):
-            shutil.copytree(LIBRARY / name, directory / name)
-    else:
+    root = tmp_path / form
+    legacy_helpers().materialize_legacy_packs(root, ("examples/library",))
+    directory = root / "examples/library"
+    if form != "legacy":
+        shutil.rmtree(directory / "schema", ignore_errors=True)
+        shutil.rmtree(directory / "facts", ignore_errors=True)
+        shutil.rmtree(directory / "rezono", ignore_errors=True)
         # The candidate stages outside the pack's own rezono/ (decisions/language-library-acceptance.md).
         authored = LIBRARY / "candidate"
         modules = ["library", *sorted(DATASETS)]

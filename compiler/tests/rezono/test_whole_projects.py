@@ -20,6 +20,7 @@ from support import text, violations
 from candidate_pack import (
     MissingCandidatePack,
     REPO,
+    legacy_helpers,
     unplaced,
     verify_candidate_forms,
 )
@@ -31,16 +32,13 @@ MODULES = ("projects", *DATASETS)
 
 
 def isolated(tmp_path: Path, form: str) -> Path:
-    directory = tmp_path / form / "projects"
-    directory.mkdir(parents=True)
-    for name in ("channels.yaml", "pack.yaml"):
-        shutil.copy(PROJECTS / name, directory / name)
-    for name in ("labels", "messages"):
-        shutil.copytree(PROJECTS / name, directory / name)
-    if form == "legacy":
-        for name in ("schema", "facts"):
-            shutil.copytree(PROJECTS / name, directory / name)
-    else:
+    root = tmp_path / form
+    legacy_helpers().materialize_legacy_packs(root, ("examples/projects",))
+    directory = root / "examples/projects"
+    if form != "legacy":
+        shutil.rmtree(directory / "schema", ignore_errors=True)
+        shutil.rmtree(directory / "facts", ignore_errors=True)
+        shutil.rmtree(directory / "rezono", ignore_errors=True)
         verify_candidate_forms(PROJECTS, MODULES, tmp_path)
         shutil.copytree(PROJECTS / "candidate", directory / "rezono")
         meta_path = directory / "pack.yaml"
