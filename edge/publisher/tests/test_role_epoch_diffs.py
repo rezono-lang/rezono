@@ -81,21 +81,6 @@ def _read_role_publication(st: store.FileStore, manifest_id: str, role: str) -> 
     return json.loads(index_bytes), stmt_bytes, json.loads(stmt_bytes), diff_bytes
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "extra: decisions/publication-role-diffs.md: Compute role-scoped epoch diffs strictly from each filtered "
-        "role's own previous and current snapshots (`diff.json`, format `rezono.role-diff/1`), verify them with "
-        "`rezono_checker.difference.changes`, and emit epoch statement v2 (`contracts/statement.yaml`, "
-        "`publication/rezono_publication/statement.py`, `edge/publisher/rezono_publisher/forms.py`) recording "
-        "`previous` (prior role statement sha256) and `diff` (role diff sha256). "
-        "Planner note: lines 171 and 178 require all `statement.subject` hashes to stay identical across m-1/m-2/m-3, "
-        "which conflicts with protected tests requiring manifest-pinned artifacts (`exports.index.json`, "
-        "`contract.odcs.yaml`, `dcat.ttl`, `prov.ttl`, `table.*.arrow`, `table.*.parquet`) to embed `manifest` "
-        "while `statement.subject` must cover every object in `index.json`."
-    ),
-)
 def test_role_epoch_diff_is_empty_and_statement_changes_only_chain_fields_on_other_role_change(tmp_path: Path):
     st = store.FileStore(tmp_path / "store")
 
