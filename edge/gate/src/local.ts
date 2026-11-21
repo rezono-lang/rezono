@@ -11,6 +11,7 @@ import { readPublishedVariantDifference, scenarioAnswer, type DifferenceCursor }
 import { ask as evaluate, roleSchema, type Asking } from './expr.ts';
 import { compareKey, pageByKey, type KeyRange } from './pieces.ts';
 import { rowQueryScope, type RowSelection } from './row-query.ts';
+import { readStaircase } from './staircase.ts';
 import {
 	earlierWithdrawal, epochWithdrawal, hasSortedKey, loadWithdrawals, rangeMatchingRows, rowsWithdrawal, rowWithdrawal,
 	standingHeaders, withdrawalBody, WithdrawnError, type WithdrawalRecord
@@ -424,7 +425,8 @@ function isManifestRoute(method: string, parts: readonly string[], search: URLSe
 	}
 	if (parts.length === 3 && id === 'manifests' && route === manifestId) return true;
 	if (id !== manifestId) return false;
-	if (parts.length === 4 && (route === 'snapshots' || route === 'rows' || route === 'ask')) return true;
+	if (parts.length === 4 && (route === 'snapshots' || route === 'rows' || route === 'ask'
+		|| (route === 'readings' && parts[3] === 'staircase'))) return true;
 	if (parts.length === 3 && route === 'rows') return true;
 	if (method === 'POST' && parts.length === 3 && route === 'ask') return true;
 	return false;
@@ -636,6 +638,21 @@ export async function openLocalGate(root: string, role: string): Promise<Handle>
 						return json(scenarioAnswer(item, id, variant, published), 200, standing);
 					}
 					return json(await named(view, withdrawals, role, item, url.searchParams), 200, standing);
+				}
+				if (parts.length === 4 && route === 'readings' && item === 'staircase') {
+					const staircase = await readStaircase({
+						pack,
+						role,
+						targetView: view,
+						currentView: current,
+						withdrawals,
+						subject: url.searchParams.get('subject'),
+						reading: url.searchParams.get('reading'),
+						loadEpoch: (mid) => source.current(mid),
+						stillReadable
+					});
+					if (!staircase || await source.latest() !== headKey(pack, current.manifest.epoch)) return missing();
+					return json(staircase, 200, standing);
 				}
 				if (req.method === 'POST' && route === 'ask') {
 					const body = await bodyOf(req);
