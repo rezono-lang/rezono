@@ -38,6 +38,7 @@ EXPECTED = {
     "subsidy": [
         "examples/test_feldera_rules.py::test_incremental_on_feldera_equals_batch[subsidy]",
         "examples/test_calculation_engine_parity.py::test_feldera_calculations_match_duckdb_and_checker[subsidy]",
+        "examples/test_rule_witness_engine_parity.py::test_feldera_rule_witnesses_match_batch[subsidy]",
     ],
 }
 
@@ -65,11 +66,10 @@ def evidence(tmp_path):
 
 
 @pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "M3: compiler/ci/feldera_shards.py does not yet route "
-    "compiler/tests/test_recorded_dates.py::test_independent_date_equality (compiler-bound shard) and "
-    "examples/test_calculation_engine_parity.py::test_feldera_calculations_match_duckdb_and_checker[subsidy] (subsidy shard). "
-    "Lift this mark in the pull request that routes the last of the two, with its selector in "
-    "compiler/ci/run_feldera_oracle.sh; the other leaves it."))
+    "M3: decisions/live-feldera-ci.md: compiler/ci/feldera_shards.py does not yet route "
+    "examples/test_rule_witness_engine_parity.py::test_feldera_rule_witnesses_match_batch[subsidy] "
+    "(subsidy shard). Lift this mark in the pull request that routes it, with its selector in "
+    "compiler/ci/run_feldera_oracle.sh."))
 @pytest.mark.parametrize("outcome", [None, "failure", "skipped", "error"])
 def test_merge_preserves_all_live_cases_and_outcomes(evidence, outcome):
     inputs, output = evidence
@@ -86,7 +86,7 @@ def test_merge_preserves_all_live_cases_and_outcomes(evidence, outcome):
     merged = run("feldera_shards.py", "merge", inputs, output, 5)
     assert merged.returncode == 0, merged.stderr
     report = ET.parse(output / "results.xml")
-    assert len(list(report.iter("testcase"))) == 14
+    assert len(list(report.iter("testcase"))) == sum(len(v) for v in EXPECTED.values())
     if outcome:
         assert report.find(f".//{outcome}").text == "original diagnostic"
     verified = run("verify_feldera_run.py", output / "collected.txt", output / "results.xml")
