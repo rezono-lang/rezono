@@ -56,7 +56,7 @@ def records():
                                  cycle("kp-1.10", "1.10", 200, 500), cycle("kp-1.10-lts", "1.10-lts", 200, 700),
                                  cycle("kp-1.11", "1.11", 250, 290)],
         "reference_point": [{"id": "day-300", "on_axis": "support-days", "position": 300, "horizon": 0}],
-        "reference_date": [{"id": "march", "title": "march", "day": 20260301}],
+        "reference_date": [{"id": "march", "title": "march", "date": "2026-03-01", "day": 20260301}],
         "support_reference": [{"id": REF, "point": "day-300", "standing_on": "march"}],
         "decision": [decision("policy-30")],
         "support_policy": [{"id": "sp-30", "decision": "policy-30", "product": "kp", "warning_days": 30}],

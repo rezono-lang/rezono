@@ -68,6 +68,7 @@ enums:
       integer: {description: BIGINT in the engine; decimal text in JSON.}
       rational: {description: "An exact calculation value or its copy in a derived key. Canonical text: an integer, or a reduced fraction with a positive denominator greater than one."}
       boolean: {description: BOOLEAN in the engine; the canonical text true or false in a term.}
+      date: {description: DATE in the engine; canonical ISO calendar day YYYY-MM-DD in JSON.}
   Polarity:
     permissible_values:
       positive: {}

@@ -171,11 +171,6 @@ def test_commit_pinned_evidence_shared_form():
     }
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="extra: decisions/tooling-does-not-decide.md: Form 3 change-to-target selection in build/",
-)
 def test_change_to_target_selection_shared_form():
     """Form 3: build/ derives build_target_selected and build_target_not_required, failing closed without a receipt."""
     from rezono_compiler import pack, rules
@@ -260,7 +255,7 @@ def test_single_effect_watchdog_shared_form():
 @pytest.mark.xfail(
     strict=True,
     raises=AssertionError,
-    reason="extra: decisions/tooling-does-not-decide.md: Form 5 who-may-change-what in packs/std-review + std-access",
+    reason="extra: decisions/tooling-does-not-decide.md: Form 5 who-may-change-what in packs/std-review + std-access. Waits for compiler/tests/test_std_decision_dates.py::test_std_decision_rules_read_dates (and packs/std-review native date migration per decisions/standard-packs-everywhere.md section 1.4 step 5, since loop/shortcut-budget.json caps day_number_fields for packs/std-review at 3).",
 )
 def test_who_may_change_what_shared_form(tmp_path):
     """Form 5: packs/std-review + packs/std-access derive change_member_unauthorized and change_authorized."""
@@ -275,7 +270,7 @@ def test_who_may_change_what_shared_form(tmp_path):
 
     # Minimal consumer pack granting worker source edits and planner protected-test edits via std-access.
     consumer = tmp_path / "change-auth-probe"
-    for sub in ("schema", "rules"):
+    for sub in ("schema", "rules", "labels"):
         (consumer / sub).mkdir(parents=True)
     (consumer / "pack.yaml").write_text(
         "name: change-auth-probe\nversion: 0.1.0\ndefault_language: en\nimports:\n"
@@ -287,6 +282,14 @@ def test_who_may_change_what_shared_form(tmp_path):
         "id: https://rezono.example/change-auth-probe\nname: change_auth_probe\nimports: [linkml:types]\n"
         "default_range: string\nannotations:\n  layer: facts\nclasses:\n  PathItem:\n    attributes:\n"
         "      id: {identifier: true}\n",
+        encoding="utf-8",
+    )
+    (consumer / "channels.yaml").write_text(
+        "kinds:\n  - {kind: path_item, shape: pill}\n",
+        encoding="utf-8",
+    )
+    (consumer / "labels" / "en.yaml").write_text(
+        "path_item: path item\n",
         encoding="utf-8",
     )
     (consumer / "rules" / "grants.dl").write_text(
@@ -315,10 +318,10 @@ def test_who_may_change_what_shared_form(tmp_path):
             {"id": "c-gpl", "author": "bot-p", "content_sha256": h, "support_sha256": h},
         ],
         "change_proposal": [
-            {"id": "p-ok", "change": "c-ok", "role": "worker", "day": 20261120},
-            {"id": "p-denied", "change": "c-denied", "role": "worker", "day": 20261120},
-            {"id": "p-planner", "change": "c-planner", "role": "planner", "day": 20261120},
-            {"id": "p-gpl", "change": "c-gpl", "role": "planner", "day": 20261120},
+            {"id": "p-ok", "change": "c-ok", "role": "worker", "day": "2026-11-20"},
+            {"id": "p-denied", "change": "c-denied", "role": "worker", "day": "2026-11-20"},
+            {"id": "p-planner", "change": "c-planner", "role": "planner", "day": "2026-11-20"},
+            {"id": "p-gpl", "change": "c-gpl", "role": "planner", "day": "2026-11-20"},
         ],
         "change_member": [
             {"id": "m-ok", "change": "c-ok", "kind": "source", "element": "src.py"},
@@ -348,7 +351,7 @@ def test_build_selected_job_derives_graph_from_pack_facts_not_components_py(monk
 
     model = pack.read(BUILD)
     required_kinds = {"BuildFileConsumer", "BuildSharedReader", "BuildFullSelectionPath", "BuildJobInput"}
-    missing_kinds = required_kinds - set(model.kinds)
+    missing_kinds = required_kinds - {k.cls for k in model.kinds.values()}
     assert not missing_kinds, f"build/ schema is missing graph fact kinds: {sorted(missing_kinds)}"
     assert (BUILD / "facts").is_dir() and any((BUILD / "facts").glob("*.yaml")), (
         "build/facts/ must carry the component/test graph facts"
@@ -378,13 +381,25 @@ def test_build_selected_job_derives_graph_from_pack_facts_not_components_py(monk
             {"id": "fs-1", "prefix": "config/global.yml"},
         ],
     }
+
+    def receipt_members(receipt: str, paths: tuple[str, ...]) -> set[tuple[str, str, int, str]]:
+        members: set[tuple[str, str, int, str]] = set()
+        for idx, path in enumerate(paths, start=1):
+            members.update({
+                (receipt, f"m-path-{idx}", 0, "changed-path"),
+                (receipt, f"m-path-{idx}", 1, path),
+                (receipt, f"m-readers-direct-{idx}", 0, "path-readers"),
+                (receipt, f"m-readers-direct-{idx}", 1, path),
+                (receipt, f"m-readers-direct-{idx}", 2, "direct"),
+                (receipt, f"m-readers-transitive-{idx}", 0, "path-readers"),
+                (receipt, f"m-readers-transitive-{idx}", 1, path),
+                (receipt, f"m-readers-transitive-{idx}", 2, "transitive"),
+            })
+        return members
+
     verified = {
         "verified_receipt": {("rcpt", "build-capture", "build-selection", "1800000000", "inv", "cnt")},
-        "verified_member": {
-            ("rcpt", "m-path-1", 0, "changed-path"), ("rcpt", "m-path-1", 1, "alpha/engine.py"),
-            ("rcpt", "m-path-2", 0, "changed-path"), ("rcpt", "m-path-2", 1, "shared/cases.yaml"),
-            ("rcpt", "m-path-3", 0, "changed-path"), ("rcpt", "m-path-3", 1, "profiles/epsilon.json"),
-        },
+        "verified_member": receipt_members("rcpt", ("alpha/engine.py", "shared/cases.yaml", "profiles/epsilon.json")),
     }
     data = {
         **graph_facts,
@@ -401,11 +416,17 @@ def test_build_selected_job_derives_graph_from_pack_facts_not_components_py(monk
         ],
     }
     _, rows, _ = evaluate(model, data, verified=verified)
+    assert not any(row[0] == "r1" for row in rows["build_full_selection"])
     selected = {row[1] for row in rows["build_selected_job"] if row[0] == "r1"}
     # Transitive file-consumer edge alpha -> beta -> gamma, plus shared reader delta and job input epsilon.
     assert {"alpha", "beta", "gamma", "delta", "epsilon"} <= selected
 
-    # Changing a full-selection path declared in pack facts derives build_full_selection.
+    # Changing a full-selection path declared in pack facts derives build_full_selection
+    # even with a valid admitted selection receipt.
+    full_verified = {
+        "verified_receipt": {("rcpt2", "build-capture", "build-selection", "1800000000", "inv", "cnt")},
+        "verified_member": receipt_members("rcpt2", ("config/global.yml",)),
+    }
     full_data = {
         **graph_facts,
         "build_run": [
@@ -418,7 +439,7 @@ def test_build_selected_job_derives_graph_from_pack_facts_not_components_py(monk
             {"id": "p-global", "run": "r2", "path": "config/global.yml", "coverage": "mapped"},
         ],
     }
-    _, full_rows, _ = evaluate(model, full_data)
+    _, full_rows, _ = evaluate(model, full_data, verified=full_verified)
     assert any(row[0] == "r2" for row in full_rows["build_full_selection"])
 
 
@@ -441,8 +462,10 @@ def test_check_pinned_reads_exceptions_from_pack_facts():
     assert "pip" not in literals, "scripts/check-pinned.py still hardcodes pip"
 
     model = pack.read(BUILD)
-    assert "BuildPinException" in model.kinds, "build/ schema must declare BuildPinException facts"
-    required = {"build_pin_exception", "build_unpinned_package"}
+    assert "BuildPinException" in {k.cls for k in model.kinds.values()}, (
+        "build/ schema must declare BuildPinException facts"
+    )
+    required = {"build_pin_exempt", "build_unpinned_package"}
     missing = required - set(rules.load(model.rules).derived())
     assert not missing, f"build/ does not derive {sorted(missing)}"
 

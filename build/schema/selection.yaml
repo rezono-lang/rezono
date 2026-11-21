@@ -33,6 +33,10 @@ enums:
     permissible_values:
       manifest:
       file_reader:
+  TargetRuleKind:
+    permissible_values:
+      direct:
+      full_fallback:
 
 classes:
   BuildRun:
@@ -90,3 +94,11 @@ classes:
       component: {range: BuildComponent, required: true}
       kind: {range: ReaderKind, required: true}
       source: {required: true}
+  BuildTargetRule:
+    description: A rule mapping a changed path prefix or full-selection fallback to an auxiliary build target.
+    attributes:
+      id: {identifier: true}
+      target: {required: true}
+      path_prefix: {required: true}
+      kind: {range: TargetRuleKind, required: true}
+      upper_bound: {}

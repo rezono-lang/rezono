@@ -130,14 +130,6 @@ def _assert_uses_std_budget_fail_closed(sb, monkeypatch, budget_name: str, cell:
     _clear_module_caches(sb)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="extra: decisions/no-green-by-cheapest-route.md: Implement the monotonically shrinking "
-           "`day_number_fields` budget in loop/shortcut_budgets.py and loop/shortcut-budget.json "
-           "evaluated through packs/std-budget (fail-closed, no Python fallback) so integer *_day / "
-           "YYYYMMDD schema fields can only shrink and growth or a new cell is refused.",
-)
 def test_day_number_schema_fields_budget_only_shrinks(tmp_path: Path, monkeypatch):
     sb, budget = _load_shortcut_budgets()
     assert sb.BUDGET_PATH == "loop/shortcut-budget.json"
@@ -253,14 +245,6 @@ def test_day_number_schema_fields_budget_only_shrinks(tmp_path: Path, monkeypatc
     assert ("day_number_fields", "examples/p-new") in grew["budget_ratchet_violation"]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="extra: decisions/no-green-by-cheapest-route.md: Implement the monotonically shrinking "
-           "`duplicate_source_blocks` budget in loop/shortcut_budgets.py and loop/shortcut-budget.json "
-           "evaluated through packs/std-budget (fail-closed, no Python fallback) so repeated identical "
-           "source blocks inside .sources.yaml files can only shrink and growth or a new cell is refused.",
-)
 def test_duplicate_source_blocks_budget_only_shrinks(tmp_path: Path, monkeypatch):
     sb, budget = _load_shortcut_budgets()
     assert "duplicate_source_blocks" in budget and isinstance(budget["duplicate_source_blocks"], dict)
@@ -391,15 +375,6 @@ def test_duplicate_source_blocks_budget_only_shrinks(tmp_path: Path, monkeypatch
     assert ("duplicate_source_blocks", "examples/alpha/facts/clean.sources.yaml") in raised["budget_raised"]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="extra: decisions/no-green-by-cheapest-route.md: Implement the monotonically shrinking "
-           "`rezono_pack_dl_regression` budget in loop/shortcut_budgets.py and loop/shortcut-budget.json "
-           "evaluated through packs/std-budget (fail-closed, no Python fallback) so packs with "
-           "rezono/*.rezono can never add .dl files while .dl files in packs without a rezono/ module "
-           "are visibly counted as off-board migration work.",
-)
 def test_rezono_pack_dl_regression_budget_only_shrinks_and_counts_offboard(tmp_path: Path, monkeypatch):
     sb, budget = _load_shortcut_budgets()
     assert "rezono_pack_dl_regression" in budget and isinstance(budget["rezono_pack_dl_regression"], dict)

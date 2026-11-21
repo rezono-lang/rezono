@@ -14,6 +14,7 @@ from __future__ import annotations
 import ast
 import datetime
 import importlib.util
+import inspect
 import json
 from pathlib import Path
 import re
@@ -125,6 +126,40 @@ def _load_pack_rows(model, pack_dir: Path, as_of: datetime.date, known: datetime
         for table, table_rows in facts.load(model, path, as_of=as_of_iso, known=known_iso).items():
             rows.setdefault(table, []).extend(table_rows)
     return rows
+
+
+def _derived_insured_map(
+    derived: dict[str, list[tuple]], calc_results: dict[str, dict]
+) -> dict[str, bool | tuple[str, str]]:
+    """Read derived `insured` per person from M3 calculation rules or binary M2 derived relations."""
+    if "insured" in calc_results:
+        out: dict[str, bool | tuple[str, str]] = {}
+        for subject, (state, val, reason, *_rest) in calc_results["insured"].items():
+            if state == "known":
+                assert val in {"true", "false"} and reason == "", (subject, state, val, reason)
+                out[str(subject)] = val == "true"
+            else:
+                assert val == "", (subject, state, val, reason)
+                out[str(subject)] = (str(state), str(reason))
+        return out
+    if "insured" in derived:
+        out = {}
+        for row in derived["insured"]:
+            assert len(row) == 2, (
+                f"derived `insured` must carry (person, bool) to distinguish false from unknown: {row!r}"
+            )
+            raw = row[1]
+            if isinstance(raw, bool):
+                out[str(row[0])] = raw
+            elif str(raw).lower() in {"true", "false"}:
+                out[str(row[0])] = str(raw).lower() == "true"
+            else:
+                raise AssertionError(f"unexpected `insured` value in derived relation: {row!r}")
+        return out
+    raise AssertionError(
+        f"pack must derive `insured` as a calculation rule or derived relation, "
+        f"found relations {sorted(derived)} and rules {sorted(calc_results)}"
+    )
 
 
 def _derived_joint_income_map(derived: dict[str, list[tuple]], calc_results: dict[str, dict]) -> dict[str, int]:
@@ -488,9 +523,16 @@ def test_three_source_allowance_matches_extended_oracle_for_all_17_cases():
             f"proof witness for toeslagpartner{pair} must cite {expected_citation!r}, got {witness_sources}"
         )
 
-    assert any("insured" in name for name in set(feb_derived) | set(feb_got)), (
-        f"pack must derive `insured`, found relations {sorted(feb_derived)} and rules {sorted(feb_got)}"
-    )
+    insured_map = _derived_insured_map(feb_derived, feb_got)
+    for person in ("p-ann", "p-bob", "p-fay", "p-gus", "p-hal", "p-kim", "p-leo", "p-noa"):
+        assert insured_map.get(person) is True, (person, insured_map)
+    for person in ("p-dex", "p-eve"):
+        assert insured_map.get(person) is False, (person, insured_map)
+    if "insured" in feb_got:
+        assert insured_map.get("p-ivy") == ("unknown", "no_version_applies"), insured_map
+    else:
+        assert "p-ivy" not in insured_map, f"p-ivy has no Polis on 2026-02-01 and must stay unknown: {insured_map}"
+
     ji_map = _derived_joint_income_map(feb_derived, feb_got)
     assert ji_map.get("p-leo") == 2600000, ji_map
     assert ji_map.get("p-noa") == 4200000, ji_map
@@ -516,9 +558,9 @@ def test_three_source_allowance_matches_extended_oracle_for_all_17_cases():
         claimant = _claimant_id(case)
         state, value, reason, *_ = got["allowance"][claimant]
         if isinstance(want, int):
-            assert state == "known" and int(value) == want, (cid, state, value, reason, want)
+            assert (state, value, reason) == ("known", str(want), ""), (cid, state, value, reason, want)
         else:
-            assert state == want[0] and reason, (cid, state, value, reason, want)
+            assert (state, value, reason) == (want[0], "", want[1]), (cid, state, value, reason, want)
 
         if cid in expected_exception_citations:
             witnesses = [
@@ -693,3 +735,59 @@ def test_zorgtoeslag_slice_readme_and_examples_learning_ladder():
         f"examples/README.md learning ladder should order library -> subsidy -> zorgtoeslag-slice -> platform, "
         f"got {positions}"
     )
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason="extra: decisions/healthcare-allowance-three-sources.md: "
+           "examples/zorgtoeslag-slice/reference.py must fail closed when no reference date "
+           "(as_of, known) is supplied instead of silently falling back to a hardcoded fixed date.",
+)
+def test_reference_oracle_fails_closed_without_reference_date():
+    oracle = _load_oracle()
+    sample_data = {
+        "persoon": {"p-ann": {"id": "p-ann"}},
+        "adres": [],
+        "civil_partner": [],
+        "ouder": [],
+        "inkomen": [
+            {
+                "id": "inc-ann-2026",
+                "persoon": "p-ann",
+                "bedrag": 2500000,
+                "valid_from": datetime.date(2026, 1, 1),
+                "valid_until": datetime.date(2027, 1, 1),
+                "known_from": datetime.date(2025, 12, 1),
+            }
+        ],
+        "tax_partner": [],
+        "polis": [],
+    }
+
+    # No public oracle entry point may carry a hardcoded fixed default date for as_of or known.
+    for fn_name in ("rules", "allowance", "toeslagpartner", "insured", "joint_income"):
+        fn = getattr(oracle, fn_name, None)
+        if not callable(fn):
+            continue
+        sig = inspect.signature(fn)
+        for param_name in ("as_of", "known"):
+            if param_name in sig.parameters:
+                default = sig.parameters[param_name].default
+                assert default is inspect.Parameter.empty or default is None, (
+                    f"reference.{fn_name}({param_name}=...) must not default to a fixed date: {default!r}"
+                )
+
+    # Omitting reference dates (or passing None) must fail closed, never evaluate on a silent hardcoded date.
+    for call_desc, kwargs in (("omitted dates", {}), ("None dates", {"as_of": None, "known": None})):
+        try:
+            outcome = oracle.rules(sample_data, **kwargs)
+        except (TypeError, ValueError):
+            continue
+        raise AssertionError(
+            f"reference.rules(data) with {call_desc} must fail closed (TypeError/ValueError), got {outcome!r}"
+        )
+
+    # Supplying explicit native ISO reference dates continues to evaluate deterministically.
+    explicit = oracle.rules(sample_data, as_of=datetime.date(2026, 2, 1), known=datetime.date(2026, 2, 10))
+    assert explicit["joint_income"] == [("p-ann", 2500000)], explicit

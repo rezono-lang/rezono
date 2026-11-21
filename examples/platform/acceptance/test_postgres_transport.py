@@ -8,17 +8,28 @@ from rezono_compiler import batch, pack, rules, sources
 from rules_support import states
 
 from query_fixture import ROOT
-from transport_support import published_for
+from transport_support import INSPECTION, published_for
 
 RELATION = "published_default_transport"
 SOURCE = "vendor_default_transport_source"
 FIELDS = ("product", "series", "protocol", "port", "source_url", "source_sha256")
 UNVERIFIED = ("unregistered-product", "0", "UDP", 1234, "https://example.org/transport", "0" * 64)
+SERIES_RECORDS = (
+    ("postgresql-16-connection-settings", "postgresql-16"),
+    ("postgresql-17-connection-settings", "postgresql"),
+)
 
 
-def _expected_transport():
-    evidence = json.loads(Path(__file__).with_name("product-evidence.json").read_text(encoding="utf-8"))["postgresql"]
-    return ("postgresql", *(evidence[key] for key in ("series", "protocol", "port", "url", "sha256")))
+def _evidence():
+    return json.loads(Path(__file__).with_name("product-evidence.json").read_text(encoding="utf-8"))
+
+
+def _expected_transports():
+    evidence = _evidence()
+    return [
+        (source_id, ("postgresql", *(evidence[key][field] for field in ("series", "protocol", "port", "url", "sha256"))))
+        for source_id, key in SERIES_RECORDS
+    ]
 
 
 def _slots(relation, identifier, values):
@@ -35,8 +46,9 @@ def _published(program, rows):
 
 
 def test_postgres_transport():
-    # Other products publish their own defaults; PostgreSQL publishes exactly its pinned one.
-    assert published_for("postgresql") == {tuple(map(str, _expected_transport()))}
+    # Other products publish their own defaults; PostgreSQL publishes exactly its pinned 16 and 17 series.
+    want = {tuple(map(str, expected)) for _, expected in _expected_transports()}
+    assert published_for("postgresql") == want
 
 
 def test_unverified_transport_does_not_publish():
@@ -50,52 +62,59 @@ def test_unverified_transport_does_not_publish():
 
 def test_published_transport_requires_the_product_and_pinned_source():
     model, program, (state,) = states(ROOT)
-    expected = _expected_transport()
-    source_id = "postgresql-17-connection-settings"
-    rows = {
-        "product": [(expected[0],)],
-        SOURCE: [(source_id,)],
-        **_slots(SOURCE, source_id, expected),
-    }
-    conclusion = tuple(map(str, expected))
-    assert _published(program, rows) == {conclusion}
-    for relation in rows:
-        incomplete = {name: records for name, records in rows.items() if name != relation}
-        assert _published(program, incomplete) == set(), relation
-    # One pinned statement: a forged product publishes nothing, any other forged value publishes exactly that value.
-    forged_slots = _slots(SOURCE, source_id, UNVERIFIED)
-    for index, (relation, forged) in enumerate(forged_slots.items()):
-        changed = (*conclusion[:index], str(UNVERIFIED[index]), *conclusion[index + 1:])
-        want = set() if FIELDS[index] == "product" else {changed}
-        assert _published(program, rows | {relation: forged}) == want, relation
-
-    proof = state.proof(RELATION, conclusion)
     manifest, read = state.manifest()
     checker_rules = load_rules(model.rules)
-    report = check(proof, manifest, checker_rules, read)
-    assert report["valid"] and not report["findings"], report["findings"]
-    witness, = proof["witnesses"]
-    premises = {(item["row"]["relation"], tuple(json.loads(item["row"]["key"]))) for item in witness["premises"]}
-    assert premises == {(relation, tuple(map(str, records[0]))) for relation, records in rows.items()}
+    for source_id, expected in _expected_transports():
+        rows = {
+            "product": [(expected[0],)],
+            SOURCE: [(source_id,)],
+            **_slots(SOURCE, source_id, expected),
+        }
+        conclusion = tuple(map(str, expected))
+        assert _published(program, rows) == {conclusion}, source_id
+        for relation in rows:
+            incomplete = {name: records for name, records in rows.items() if name != relation}
+            assert _published(program, incomplete) == set(), (source_id, relation)
+        # One pinned statement: a forged product publishes nothing, any other forged value publishes exactly that value.
+        forged_slots = _slots(SOURCE, source_id, UNVERIFIED)
+        for index, (relation, forged) in enumerate(forged_slots.items()):
+            changed = (*conclusion[:index], str(UNVERIFIED[index]), *conclusion[index + 1:])
+            want = set() if FIELDS[index] == "product" else {changed}
+            assert _published(program, rows | {relation: forged}) == want, (source_id, relation)
 
-    for relation in (SOURCE, *forged_slots):
-        damaged = deepcopy(proof)
-        altered, = damaged["witnesses"]
-        altered["premises"] = [item for item in altered["premises"] if item["row"]["relation"] != relation]
-        assert not check(damaged, manifest, checker_rules, read)["valid"], relation
-    for relation, (forged,) in forged_slots.items():
-        damaged = deepcopy(proof)
-        altered, = damaged["witnesses"]
-        row, = [item["row"] for item in altered["premises"] if item["row"]["relation"] == relation]
-        row["key"] = json.dumps(list(map(str, forged)), separators=(",", ":"))
-        assert not check(damaged, manifest, checker_rules, read)["valid"], relation
+        proof = state.proof(RELATION, conclusion)
+        report = check(proof, manifest, checker_rules, read)
+        assert report["valid"] and not report["findings"], report["findings"]
+        witness, = proof["witnesses"]
+        premises = {(item["row"]["relation"], tuple(json.loads(item["row"]["key"]))) for item in witness["premises"]}
+        assert premises == {(relation, tuple(map(str, records[0]))) for relation, records in rows.items()}
 
-    entries = sources.file_entries(model, ROOT / "facts/postgres_transport_source.yaml")
-    assert len(entries) == 1 + len(FIELDS)
-    for entry in entries:
-        assert entry["sources"] == [{
-            "kind": "git",
-            "name": "rezono-lang/rezono",
-            "revision": "90b056e6ef1d1034bb53ccac8620961150545b0f",
-            "position": "examples/platform/acceptance/product-evidence.json#/postgresql",
+        for relation in (SOURCE, *forged_slots):
+            damaged = deepcopy(proof)
+            altered, = damaged["witnesses"]
+            altered["premises"] = [item for item in altered["premises"] if item["row"]["relation"] != relation]
+            assert not check(damaged, manifest, checker_rules, read)["valid"], (source_id, relation)
+        for relation, (forged,) in forged_slots.items():
+            damaged = deepcopy(proof)
+            altered, = damaged["witnesses"]
+            row, = [item["row"] for item in altered["premises"] if item["row"]["relation"] == relation]
+            row["key"] = json.dumps(list(map(str, forged)), separators=(",", ":"))
+            assert not check(damaged, manifest, checker_rules, read)["valid"], (source_id, relation)
+
+    evidence = _evidence()
+    expected_sources = {
+        source_id: [{
+            "kind": "tool",
+            "name": INSPECTION,
+            "revision": evidence[key]["series"],
+            "position": f"L{evidence[key]['line']}",
+            "url": evidence[key]["url"],
+            "fragment_sha256": evidence[key]["fragmentSha256"],
         }]
+        for source_id, key in SERIES_RECORDS
+    }
+    entries = sources.file_entries(model, ROOT / "facts/postgres_transport_source.yaml")
+    assert len(entries) == len(SERIES_RECORDS) * (1 + len(FIELDS))
+    for entry in entries:
+        record_id = json.loads(entry["row"]["key"])[0]
+        assert entry["sources"] == expected_sources[record_id], entry["row"]

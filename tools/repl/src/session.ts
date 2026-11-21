@@ -196,9 +196,19 @@ export class Session {
 		const head = await this.head(pin.pack);
 		const params = new URLSearchParams({ m: pin.manifest });
 		const index = await this.read<BoundSweepList>(`/${encoded(pin.pack)}/sweeps?${params}`);
-		if (index.manifest_id !== pin.manifest || !Array.isArray(index.sweeps) || index.sweeps.length !== 1 || this.selected !== pin)
+		if (index.manifest_id !== pin.manifest || !Array.isArray(index.sweeps) || index.sweeps.length === 0 || this.selected !== pin)
 			throw new ReplError(NOT_FOUND);
-		return this.namedAt(pin, 'sweep', { sweep: index.sweeps[0].name }, head);
+		const names = index.sweeps
+			.map((entry) => entry?.name)
+			.filter((entry): entry is string => typeof entry === 'string' && /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/.test(entry));
+		if (names.length !== index.sweeps.length)
+			throw new ReplError(NOT_FOUND);
+		if (names.length > 1) {
+			if (!sameHead(await this.head(pin.pack), head) || this.selected !== pin)
+				throw new ReplError('the publication changed during the question; ask again');
+			throw new ReplError(`several sweeps are available (${names.join(', ')}); give a name with :sweep <name>`);
+		}
+		return this.namedAt(pin, 'sweep', { sweep: names[0] }, head);
 	}
 
 	async search(relation: string, prefix: string): Promise<string[]> {

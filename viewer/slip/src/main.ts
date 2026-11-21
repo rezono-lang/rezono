@@ -11,7 +11,24 @@ export interface MountOptions {
 	fetch?: FetchLike;
 }
 
+const pending = new Set<Promise<unknown>>();
+
+function trackPending(promise: Promise<unknown>): void {
+	pending.add(promise);
+	void promise.finally(() => {
+		pending.delete(promise);
+	});
+}
+
 export function flush(): void {
+	flushSync();
+}
+
+export async function whenIdle(): Promise<void> {
+	while (pending.size > 0) {
+		await Promise.allSettled([...pending]);
+		flushSync();
+	}
 	flushSync();
 }
 
@@ -25,7 +42,7 @@ export async function renderSlip(target: HTMLElement, options: MountOptions): Pr
 	target.innerHTML = '';
 	const instance = mount(Slip, {
 		target,
-		props: { view },
+		props: { view, onPending: trackPending },
 	});
 	flushSync();
 	return () => {

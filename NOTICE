@@ -23,6 +23,7 @@ Licence by path:
   - deploy/
   - Dockerfile
   - edge/
+  - epoch/
   - examples/**/*.py
   - formal/
   - k8s-admission/

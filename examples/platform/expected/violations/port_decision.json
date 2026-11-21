@@ -1,0 +1,22 @@
+{
+  "port_decision__function__reference": [
+    ["pd-dns", "dns"],
+    ["pd-git-https", "git"],
+    ["pd-git-ssh", "git"],
+    ["pd-gitops", "gitops"],
+    ["pd-lb-ingress", "ingress"],
+    ["pd-reg", "registry"],
+    ["pd-s3", "object-storage"],
+    ["pd-sign", "signing"]
+  ],
+  "port_decision__product__reference": [
+    ["pd-dns", "coredns"],
+    ["pd-git-https", "forgejo"],
+    ["pd-git-ssh", "forgejo"],
+    ["pd-gitops", "argocd"],
+    ["pd-lb-ingress", "loadbalancer"],
+    ["pd-reg", "registry"],
+    ["pd-s3", "ceph"],
+    ["pd-sign", "signer"]
+  ]
+}

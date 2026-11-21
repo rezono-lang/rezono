@@ -51,12 +51,15 @@ def check(proof: dict, manifest: dict, rules: dict, read_bytes, role: str | None
     rows, groups = _rows(snapshots, findings), {}
     proof = {**proof, "witnesses": _well_formed(proof.get("witnesses", []), findings)}
     domains = set()
+    functionals = getattr(rules, "functionals", {})
     for i, w in enumerate(proof["witnesses"]):
         if w is not None:
             _check_witness(i, w, rules, rows, findings, groups)
             if (rule := rules.get(w["rule_id"])) is not None:
                 domains.update(aggregate.atom.relation for aggregate in rule.aggregates)
-                if (func := getattr(rules, "functionals", {}).get(rule.head.relation)) is not None:
+                if functionals:
+                    domains.update(b.atom.relation for b in rule.body if b.polarity != "positive")
+                if (func := functionals.get(rule.head.relation)) is not None:
                     domains.add(rule.head.relation)
                     domains.add(func.domain)
                     for r_item in rules.values():
@@ -65,7 +68,10 @@ def check(proof: dict, manifest: dict, rules: dict, read_bytes, role: str | None
                             domains.update(a.atom.relation for a in r_item.aggregates)
     _check_graph(proof, rules, findings)
     if domains and not any(f["reason"] not in WARNINGS for f in findings):
+        scope = closure.dependencies(rules, domains)
         findings.extend(closure.check(rules, lambda relation: rows(relation, None), domains=domains))
+        for relation in sorted(scope & functionals.keys()):
+            _check_functional_relation(relation, functionals[relation], rules, rows, findings, groups)
     return _report(proof, role, readable, findings)
 
 
@@ -182,26 +188,30 @@ def _functional_value_ok(value: str, value_type: str) -> bool:
     return isinstance(value, str)
 
 
-def _functional_state_ok(func, all_vals: set[str], state: str, reason: str, val: str) -> bool:
+def _functional_state_ok(func, all_vals: set[str], state: str, reason: str, val: str,
+                         prop_states: set[str] | frozenset[str] = frozenset()) -> bool:
     if state not in FUNCTIONAL_STATES:
         return False
-    if state == "known":
-        return reason == "" and len(all_vals) == 1 and val in all_vals and _functional_value_ok(val, func.value_type)
-    if val != "" or not REASON.fullmatch(reason):
-        return False
-    if state == "invalid":
-        return len(all_vals) > 1
-    if len(all_vals) != 0 or state != func.empty_state:
-        return False
-    return func.empty_reason is None or reason == func.empty_reason
+    if "invalid" in prop_states or len(all_vals) > 1:
+        return state == "invalid" and val == "" and bool(REASON.fullmatch(reason))
+    if "unknown" in prop_states:
+        return state == "unknown" and val == "" and bool(REASON.fullmatch(reason))
+    if "not_applicable" in prop_states:
+        return state == "not_applicable" and val == "" and bool(REASON.fullmatch(reason))
+    if len(all_vals) == 1:
+        return state == "known" and reason == "" and val in all_vals and _functional_value_ok(val, func.value_type)
+    return (state == func.empty_state and val == "" and bool(REASON.fullmatch(reason))
+            and (func.empty_reason is None or reason == func.empty_reason))
 
 
 def _functional_candidates(rules, func, rows, witness=None, groups=None):
     """Evaluate all rules of a functional relation against the snapshots.
 
-    Returns (values_by_key, rule_instances), cached in `groups` when provided:
-    - values_by_key: {domain_key_tuple: set[str]} of all distinct candidate values across all rules of `func`.
-    - rule_instances: {rule_id: {domain_key_tuple: list[dict[str, str]]}} of firing variable substitutions.
+    Returns (values_by_key, states_by_key, rule_instances, state_instances), cached in `groups` when provided:
+    - values_by_key: {domain_key_tuple: set[str]} of all distinct known candidate values across all rules of `func`.
+    - states_by_key: {domain_key_tuple: set[str]} of propagated non-known aggregate states per domain key.
+    - rule_instances: {rule_id: {domain_key_tuple: list[dict[str, str]]}} of known firing variable substitutions.
+    - state_instances: {rule_id: {domain_key_tuple: list[tuple[dict[str, str], str]]}} of non-known firing substitutions.
     """
     cache_key = ("__functional__", func.name)
     if groups is not None and cache_key in groups:
@@ -214,24 +224,67 @@ def _functional_candidates(rules, func, rows, witness=None, groups=None):
         return ordered[relation]
 
     values_by_key: dict[tuple, set[str]] = {}
+    states_by_key: dict[tuple, set[str]] = {}
     rule_instances: dict[str, dict[tuple, list[dict[str, str]]]] = {}
+    state_instances: dict[str, dict[tuple, list[tuple[dict[str, str], str]]]] = {}
     n = func.key_arity
     for r in sorted(rules.values(), key=lambda x: x.id):
         if r.head.relation != func.name:
             continue
         by_key: dict[tuple, list[dict[str, str]]] = {}
-        variables, found = closure.instances(r, table)
-        for row in found:
-            theta = dict(zip(variables, row))
-            head = tuple(theta[t] if t.startswith("?") else t for t in r.head.terms)
-            dom_key, cand_val = head[:n], head[n]
-            values_by_key.setdefault(dom_key, set()).add(cand_val)
-            by_key.setdefault(dom_key, []).append(theta)
+        by_key_state: dict[tuple, list[tuple[dict[str, str], str]]] = {}
+        variables, found = closure.functional_instances(r, table)
+        for row, row_state in found:
+            theta = {v: x for v, x in zip(variables, row) if x is not None}
+            key_terms = r.head.terms[:n]
+            if any(t.startswith("?") and t not in theta for t in key_terms):
+                continue
+            dom_key = tuple(theta[t] if t.startswith("?") else t for t in key_terms)
+            if row_state == "known":
+                val_term = r.head.terms[n]
+                cand_val = theta[val_term] if val_term.startswith("?") else val_term
+                values_by_key.setdefault(dom_key, set()).add(cand_val)
+                by_key.setdefault(dom_key, []).append(theta)
+            else:
+                states_by_key.setdefault(dom_key, set()).add(row_state)
+                by_key_state.setdefault(dom_key, []).append((theta, row_state))
         rule_instances[r.id] = by_key
-    result = (values_by_key, rule_instances)
+        state_instances[r.id] = by_key_state
+    result = (values_by_key, states_by_key, rule_instances, state_instances)
     if groups is not None:
         groups[cache_key] = result
     return result
+
+
+def _check_functional_relation(relation, func, rules, rows, findings, groups=None) -> None:
+    """Verify totality, uniqueness, state/value accuracy, and conflict_policy for one functional relation."""
+    n = func.key_arity
+    domain_keys = {parts for parts, _ in rows(func.domain, None).values() if len(parts) == n}
+    values_by_key, states_by_key, _, _ = _functional_candidates(rules, func, rows, None, groups)
+    given = {}
+    for key, (parts, _) in sorted(rows(relation, None).items()):
+        if len(parts) != n + 3:  # key..., state, reason, value; checked before any part is read
+            findings.append({"reason": "outcome_state", "relation": relation, "key": key})
+        else:
+            dom_key = parts[:n]
+            if dom_key in domain_keys:
+                given.setdefault(dom_key, []).append(parts)
+            else:
+                findings.append({"reason": "outcome_total", "relation": relation, "key": key})
+    for dom_key in sorted(domain_keys - set(given)):
+        findings.append({"reason": "outcome_total", "relation": relation, "key": encode_key(dom_key)})
+    for dom_key, row_list in sorted(given.items()):
+        if len(row_list) != 1:
+            findings.append({"reason": "outcome_state", "relation": relation, "key": encode_key(dom_key)})
+            continue
+        (parts,) = row_list
+        state, reason, val = parts[n:]
+        if not _functional_state_ok(func, values_by_key.get(dom_key, set()), state, reason, val,
+                                    states_by_key.get(dom_key, frozenset())):
+            findings.append({"reason": "outcome_state", "relation": relation, "key": encode_key(dom_key)})
+        elif state == "invalid" and func.conflict_policy == "block":
+            findings.append({"reason": "functional_invalid", "relation": relation,
+                             "key": encode_key(parts), "detail": reason})
 
 
 def _check_obligations(rules, rows, findings, groups=None) -> None:
@@ -262,32 +315,7 @@ def _check_obligations(rules, rows, findings, groups=None) -> None:
             if state not in OUTCOME_STATES or not reasons_ok:
                 findings.append({"reason": "outcome_state", "relation": relation, "key": encode_key([element])})
     for relation, func in sorted(getattr(rules, "functionals", {}).items()):
-        n = func.key_arity
-        domain_keys = {parts for parts, _ in rows(func.domain, None).values() if len(parts) == n}
-        values_by_key, _ = _functional_candidates(rules, func, rows, None, groups)
-        given = {}
-        for key, (parts, _) in sorted(rows(relation, None).items()):
-            if len(parts) != n + 3:  # key..., state, reason, value; checked before any part is read
-                findings.append({"reason": "outcome_state", "relation": relation, "key": key})
-            else:
-                dom_key = parts[:n]
-                if dom_key in domain_keys:
-                    given.setdefault(dom_key, []).append(parts)
-                else:
-                    findings.append({"reason": "outcome_total", "relation": relation, "key": key})
-        for dom_key in sorted(domain_keys - set(given)):
-            findings.append({"reason": "outcome_total", "relation": relation, "key": encode_key(dom_key)})
-        for dom_key, row_list in sorted(given.items()):
-            if len(row_list) != 1:
-                findings.append({"reason": "outcome_state", "relation": relation, "key": encode_key(dom_key)})
-                continue
-            (parts,) = row_list
-            state, reason, val = parts[n:]
-            if not _functional_state_ok(func, values_by_key.get(dom_key, set()), state, reason, val):
-                findings.append({"reason": "outcome_state", "relation": relation, "key": encode_key(dom_key)})
-            elif state == "invalid" and func.conflict_policy == "block":
-                findings.append({"reason": "functional_invalid", "relation": relation,
-                                 "key": encode_key(parts), "detail": reason})
+        _check_functional_relation(relation, func, rules, rows, findings, groups)
 
 
 def _check_calc(witnesses, ir, rows, concluded, derived, full, findings):
@@ -519,15 +547,17 @@ def _check_functional_witness(i, w, rule, func, rules, rows, findings, groups=No
     if dom_key_enc not in rows(func.domain, i):
         find("premise_missing", relation=func.domain, key=dom_key_enc)
 
-    values_by_key, rule_instances = _functional_candidates(rules, func, rows, i, groups)
+    values_by_key, states_by_key, rule_instances, state_instances = _functional_candidates(rules, func, rows, i, groups)
     all_vals = values_by_key.get(key_parts, set())
+    prop_states = states_by_key.get(key_parts, frozenset())
     insts = rule_instances.get(rule.id, {}).get(key_parts, [])
+    prop_insts = state_instances.get(rule.id, {}).get(key_parts, [])
     matching_insts = [
         inst_theta for inst_theta in insts
         if (inst_theta[val_term] if val_term.startswith("?") else val_term) == val
     ]
 
-    if not _functional_state_ok(func, all_vals, state, reason, val):
+    if not _functional_state_ok(func, all_vals, state, reason, val, prop_states):
         find("outcome_state", relation=c["relation"], key=dom_key_enc)
     elif state == "invalid" and func.conflict_policy == "block":
         find("functional_invalid", relation=c["relation"], key=c["key"], detail=reason)
@@ -543,17 +573,40 @@ def _check_functional_witness(i, w, rule, func, rules, rows, findings, groups=No
                 if dom_terms == key_parts:
                     expected_premises.add((b.atom.relation, dom_key_enc, b.polarity, b.stratum))
     if state == "invalid":
-        premise_rules = [(r, rule_instances.get(r.id, {}).get(key_parts, []))
-                         for r in sorted(rules.values(), key=lambda x: x.id) if r.head.relation == func.name]
+        premise_rules = [
+            (r, [
+                *rule_instances.get(r.id, {}).get(key_parts, []),
+                *(t for t, st in state_instances.get(r.id, {}).get(key_parts, []) if st == "invalid"),
+            ])
+            for r in sorted(rules.values(), key=lambda x: x.id) if r.head.relation == func.name
+        ]
+        active_insts = [*insts, *(t for t, st in prop_insts if st == "invalid")]
     elif state == "known":
         premise_rules = [(rule, matching_insts)]
+        active_insts = matching_insts
+    elif state in prop_states:
+        state_matching = [t for t, st in prop_insts if st == state]
+        if not state_matching:
+            find("premise_mismatch", relation=c["relation"], key=c["key"])
+        premise_rules = [(rule, state_matching)]
+        active_insts = state_matching
     else:
         premise_rules = [(rule, [])]
+        active_insts = []
     for r_item, r_insts in premise_rules:
         for inst_theta in r_insts:
             for b in r_item.body:
-                row_key = encode_key(tuple(inst_theta[t] if t.startswith("?") else t for t in b.atom.terms))
-                expected_premises.add((b.atom.relation, row_key, b.polarity, b.stratum))
+                b_vars = {t for t in b.atom.terms if t.startswith("?")}
+                if b_vars <= set(inst_theta):
+                    row_key = encode_key(tuple(inst_theta[t] if t.startswith("?") else t for t in b.atom.terms))
+                    expected_premises.add((b.atom.relation, row_key, b.polarity, b.stratum))
+
+    matched_envs = [inst for inst in active_insts if all(inst.get(k) == v for k, v in theta.items())]
+    if active_insts:
+        if not matched_envs:
+            find("premise_mismatch", relation=c["relation"], key=c["key"])
+    elif set(theta) - key_vars:
+        find("premise_mismatch", relation=c["relation"], key=c["key"])
 
     expected = sorted(expected_premises)
     given = sorted((p["row"]["relation"], p["row"]["key"], p["polarity"], p["stratum"]) for p in w.get("premises", []))
@@ -573,15 +626,20 @@ def _check_functional_witness(i, w, rule, func, rules, rows, findings, groups=No
     if rule.aggregates:
         positioned = {a["position"]: a for a in given_aggs if "position" in a}
         keyed = {(a["relation"], a["group_key"]): a for a in given_aggs if "position" not in a}
-        if (len(positioned) + len(keyed) != len(given_aggs) or len(given_aggs) != len(rule.aggregates)
+        if (active_insts or given_aggs) and (
+                len(positioned) + len(keyed) != len(given_aggs) or len(given_aggs) != len(rule.aggregates)
                 or not set(positioned) <= set(range(len(rule.aggregates)))):
             find("aggregate_mismatch", detail=f"{len(given_aggs)} given, {len(rule.aggregates)} expected")
         for index, spec in enumerate(rule.aggregates):
             spec_vars = {t for t in spec.atom.terms if t.startswith("?")}
-            if spec_vars <= set(theta):
+            if matched_envs:
+                envs = matched_envs
+            elif active_insts:
+                envs = active_insts
+            elif given_aggs and spec_vars <= set(theta) and set(theta) <= key_vars:
                 envs = [theta]
-            elif matching_insts if state == "known" else insts:
-                envs = matching_insts if state == "known" else insts
+            elif not active_insts and not given_aggs and state != "known":
+                continue
             else:
                 for v in sorted(spec_vars - set(theta)):
                     find("unbound_variable", detail=v)
@@ -595,7 +653,7 @@ def _check_functional_witness(i, w, rule, func, rules, rows, findings, groups=No
                     find("aggregate_mismatch", relation=spec.atom.relation, key=group)
                     continue
                 count, contributors, result, invalid = recompute(spec, fixed, rows(spec.atom.relation, i), groups)
-                if invalid:
+                if invalid and state != "invalid":
                     find("invalid_value", relation=spec.atom.relation, key=group)
                 for field, value in (("count", count), ("contributors_sha256", contributors), ("result", result)):
                     if a[field] != value:
@@ -739,7 +797,8 @@ def recompute(spec, fixed, relation_rows, groups=None, fmt=None):
     """
     members = aggregate_members(spec, fixed, relation_rows, groups)
     effective_fmt = spec.format if fmt is None else fmt
-    if spec.function == "count" and (effective_fmt == "rezono.rules/1" or spec.over is None):
+    if spec.function == "count" and (effective_fmt == "rezono.rules/1"
+                                     or (spec.over is None and getattr(spec, "state_key", None) is None)):
         return len(members), sha256_json([[k] for k, _ in members]), f"known:{len(members)}", False
     read = cells(spec, [(strict_json_loads(k), values) for k, values in members])
     contributors = sha256_json([[k, value_text(v)] for (k, _), v in zip(members, read)])

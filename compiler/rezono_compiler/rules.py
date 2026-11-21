@@ -29,7 +29,7 @@ ARITHMETIC = ("add", "sub", "mul", "div")
 # variable), in the proleptic Gregorian calendar. Only a view's reading makes it: no rule file can
 # write it, so hand-written rules still read text and whole numbers (R4).
 DAYS = "days"
-TYPES = ("string", "integer", "rational", "boolean")
+TYPES = ("string", "integer", "rational", "boolean", "date")
 BOOLEAN = {"true": True, "false": False}
 WORLDS = ("closed", "open")
 CONFLICT_POLICIES = ("publish", "block")
@@ -635,6 +635,8 @@ def _check_rule(rule, relations):
             raise IRError("bad_constant", f"{rule.id}: {t!r} is not a canonical rational")
         if col.type == "boolean" and t not in BOOLEAN:
             raise IRError("bad_constant", f"{rule.id}: {t!r} is not a boolean")
+        if col.type == "date":
+            raise IRError("bad_constant", f"{rule.id}: {t!r} is not allowed in a date column")
 
     def fits(t):
         if not BIGINT[0] <= int(t) <= BIGINT[1]:
@@ -743,6 +745,8 @@ def _check_rule(rule, relations):
         for t in (c.left, c.right):
             if not is_var(t) and kinds == {"boolean"} and t not in BOOLEAN:
                 raise IRError("bad_constant", f"{rule.id}: {t!r} is compared with a boolean")
+            if not is_var(t) and kinds == {"date"}:
+                raise IRError("bad_constant", f"{rule.id}: {t!r} is compared with a date")
             if not is_var(t) and kinds == {"integer"} and not INT.match(t):
                 raise IRError("bad_constant", f"{rule.id}: {t!r} is compared with an integer")
             if not is_var(t) and kinds == {"integer"}:

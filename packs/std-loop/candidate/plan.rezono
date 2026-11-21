@@ -11,10 +11,16 @@ rules plan
   |     loop_requirement__run(record, run), loop_requirement__step(record, step),
   |     loop_requirement__token(record, token), loop_requirement__reason(record, reason).
   | 
+  | // A refusal derived by an importing pack's own rules. A declaration alone denotes the empty set.
+  | // @extend
+  | .decl derived_refusal(run: symbol, step: symbol, reason: symbol)
+  | 
   | .decl refusal(run: symbol, step: symbol, reason: symbol)
   | refusal(run, step, reason) :-
   |     loop_refusal__run(record, run), loop_refusal__step(record, step),
   |     loop_refusal__reason(record, reason).
+  | refusal(run, step, reason) :-
+  |     derived_refusal(run, step, reason).
   | 
   | .decl blocked_step(run: symbol, step: symbol)
   | blocked_step(run, step) :- structural_stuck(run, step, _).

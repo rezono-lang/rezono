@@ -7,7 +7,7 @@ instance to the same arithmetic. Values are canonical text: an integer is decima
 import datetime
 import re
 
-from .canon import INTEGER, measure, number, number_text, payload
+from .canon import INTEGER, calc_value, measure, number, number_text, payload
 
 
 def _value(term, theta):
@@ -86,12 +86,23 @@ def _text_key(text):
 
 
 TYPED_KEYS = {"binary_text": _text_key, "utc_instant": _utc_key}
+VALID_STATES = ("known", "unknown", "not_applicable", "invalid")
+
+
+def _rational(text):
+    if not isinstance(text, str) or not calc_value(text, "rational"):
+        return None
+    try:
+        return number(text)
+    except ValueError:
+        return None
 
 
 def _holds(op, left, right, compare_as=None):
-    """A comparison of two canonical values: equality as text, order only between integers. With `compare_as`
-    (decisions/ordered-rule-scalars.md) both operands are read as that type and compared as bytes; an operand
-    that is not of the type decides no comparison, not even `ne`."""
+    """A comparison of two canonical values: equality as text, order between exact canonical numbers
+    (integers and reduced rationals). With `compare_as` (decisions/ordered-rule-scalars.md) both
+    operands are read as that type and compared as bytes; an operand that is not of the type decides
+    no comparison, not even `ne`."""
     if compare_as is not None:
         a, b = TYPED_KEYS[compare_as](left), TYPED_KEYS[compare_as](right)
         if a is None or b is None:
@@ -99,7 +110,7 @@ def _holds(op, left, right, compare_as=None):
         return {"eq": a == b, "ne": a != b, "lt": a < b, "le": a <= b, "gt": a > b, "ge": a >= b}[op]
     if op in ("eq", "ne"):
         return (left == right) == (op == "eq")
-    a, b = _int(left), _int(right)
+    a, b = _rational(left), _rational(right)
     if a is None or b is None:
         return False
     return {"lt": a < b, "le": a <= b, "gt": a > b, "ge": a >= b}[op]
@@ -108,18 +119,25 @@ def _holds(op, left, right, compare_as=None):
 def cells(spec, members) -> list:
     """What each row of a group gives a `sum`, `min` or `max`: its value in the column the aggregate reads, or,
     for a key column the aggregate ranges over, that part of the key as a known value (or its co-located
-    state and value when reading a functional relation's value column). `members` are (key parts, values);
+    state and value when reading a state-bearing relation). `members` are (key parts, values);
     a missing column counts as unknown."""
+    state_key = getattr(spec, "state_key", None)
     if spec.over_key is not None:
-        state_key = getattr(spec, "state_key", None)
         if state_key is not None:
             return [
                 {"state": "known", "value": parts[spec.over_key]}
                 if parts[state_key] == "known"
-                else {"state": parts[state_key]}
+                else {"state": parts[state_key] if parts[state_key] in VALID_STATES else "invalid"}
                 for parts, _ in members
             ]
         return [{"state": "known", "value": parts[spec.over_key]} for parts, _ in members]
+    if state_key is not None:
+        return [
+            {"state": "known", "value": ""}
+            if parts[state_key] == "known"
+            else {"state": parts[state_key] if parts[state_key] in VALID_STATES else "invalid"}
+            for parts, _ in members
+        ]
     return [values.get(spec.over, {"state": "unknown"}) for _, values in members]
 
 

@@ -7,6 +7,7 @@ and DuckDB batch evaluation over representative decision scenarios and counter-c
 
 from __future__ import annotations
 
+from datetime import date
 from pathlib import Path
 import pytest
 
@@ -25,6 +26,10 @@ SCENARIO = {
     "decision__state": [("d1", "in_force"), ("d2", "in_force"), ("d3", "in_force"), ("d4", "proposed")],
     "decision__supersedes": [("d2", "d1")],
     "decision__decider": [("d1", "board"), ("d2", "board")],
+    "decision__valid_from": [("d1", date(2026, 1, 1)), ("d2", date(2026, 2, 1)),
+                             ("d3", date(2026, 3, 1)), ("d4", date(2026, 1, 1))],
+    "decision__valid_until": [("d3", date(2026, 2, 1))],
+    "reference_date__date": [("r1", date(2026, 1, 15)), ("r2", date(2026, 2, 15)), ("r3", date(2026, 4, 1))],
     "decision__valid_from_day": [("d1", 20260101), ("d2", 20260201), ("d3", 20260301), ("d4", 20260101)],
     "decision__valid_until_day": [("d3", 20260201)],
     "reference_date__day": [("r1", 20260115), ("r2", 20260215), ("r3", 20260401)],
