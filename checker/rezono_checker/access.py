@@ -50,7 +50,7 @@ from .access_change import may_change_access as may_change_access
 from .calc import published_views, subject_of, version_of
 from .calc import reads as calc_reads
 from .calc import sources as calc_sources
-from .canon import CalcColumnType, calc_value, encode_key
+from .canon import CalcColumnType, calc_value, encode_key, strict_json_loads
 from .evidence import PROTECTED
 from .check import _check_witness, _rows, shaped
 from .rules import load_rules
@@ -59,6 +59,7 @@ from .variant_access import check_variant_status_readers as check_variant_status
 
 ACCESS = "may_read"
 READ_FULL = "may_read_full"
+PROPOSE = "may_propose"
 ROLE = "role"  # the kind of the roles: `role(r)` in a read rule means every role the pack's facts name
 # A role's generic capabilities (std-access): `role__capability(r, "c")` in a read rule means every role the
 # pack's facts map to capability `c`.
@@ -70,6 +71,25 @@ SLOT_PARAMETER_SUFFIXES = (
     "minimum_cardinality",
     "maximum_cardinality",
 )
+
+
+class _RoleFull(frozenset):
+    """A role's full relations, carrying verified role-scoped may_propose keys without a role-local witness."""
+
+    projected_propose_keys: frozenset[str] = frozenset()
+
+
+def _propose_target_role(key: str) -> str | None:
+    """Return the target role of a canonical 3-column may_propose key, or None if malformed."""
+    try:
+        parts = strict_json_loads(key)
+    except (TypeError, ValueError):
+        return None
+    if (isinstance(parts, list) and len(parts) == 3
+            and all(isinstance(p, str) for p in parts)
+            and encode_key(parts) == key):
+        return parts[0]
+    return None
 
 
 def _non_empty_str(value, what: str) -> str:
@@ -330,7 +350,7 @@ def full_relations(doc: dict, columns: dict, kinds_full: set, relations: set, wi
                 reached.add(x)
                 if x in derived:
                     todo.extend(deps.get(x, ()))
-        return all((x in derived and x not in invalid_functional) or x in base for x in reached)
+        return PROPOSE not in reached and all((x in derived and x not in invalid_functional) or x in base for x in reached)
 
     verdict: dict[str, bool] = {}
 
@@ -558,6 +578,10 @@ def check_role(role: str, complete: dict, snapshots: dict, claimed_full, bundle:
         if len(p) != 3:
             findings.append({"reason": "malformed_snapshot", "relation": ACCESS, "key": key,
                              "detail": f"complete: row has {len(p)} columns, expected 3"})
+    for key, (p, _) in every.get(PROPOSE, {}).items():
+        if len(p) != 3:
+            findings.append({"reason": "malformed_snapshot", "relation": PROPOSE, "key": key,
+                             "detail": f"complete: row has {len(p)} columns, expected 3"})
     allowed = {(p[1], p[2]) for p, _ in every.get(ACCESS, {}).values() if len(p) == 3 and p[0] == role}
 
     def reads(kind: str, id_: str) -> bool:
@@ -575,6 +599,8 @@ def check_role(role: str, complete: dict, snapshots: dict, claimed_full, bundle:
     derived = {r["name"] for r in relations if r.get("role") in ("derived", "functional")}
     functional = {r["name"] for r in relations if r.get("role") == "functional"}
     explicit = any(r["name"] == READ_FULL for r in relations)
+    named = any(p == (role,) for p, _ in every.get(ROLE, {}).values())
+    capabilities = frozenset(p[1] for p, _ in every.get(CAPABILITY, {}).values() if len(p) == 2 and p[0] == role)
     if explicit:
         instances = list(instances)
         valid = [w for w in instances if shaped(w)]
@@ -583,8 +609,6 @@ def check_role(role: str, complete: dict, snapshots: dict, claimed_full, bundle:
         evidence = _witnessed_grants(doc, role, chains, every, valid, derived, findings) if complete_valid else []
         instances = valid
     else:
-        named = any(p == (role,) for p, _ in every.get(ROLE, {}).values())
-        capabilities = frozenset(p[1] for p, _ in every.get(CAPABILITY, {}).values() if len(p) == 2 and p[0] == role)
         evidence = grants(doc, role, chains, named, capabilities)
     granted = {g["kind"] for g in evidence}
     kinds_full = {k for k, chain in chains.items() if granted.intersection(chain)}
@@ -648,20 +672,25 @@ def check_role(role: str, complete: dict, snapshots: dict, claimed_full, bundle:
             deps.update(b["relation"] for b in r.get("body", ()))
             deps.update(a["relation"] for a in r.get("aggregates", ()))
 
-    def usable(w: dict) -> bool:
-        head_rel = w["conclusion"]["relation"]
-        if head_rel in functional and (head_rel in invalid_functional or not (func_deps.get(head_rel, set()) <= full)):
-            return False
-        for p in w.get("premises", ()):
-            rel = p["row"]["relation"]
-            if p["polarity"] != "positive":
-                if rel not in full:
-                    return False
-            elif rel not in derived and p["row"]["key"] not in reads_rows.get(rel, ()):
+    def make_usable(base_rows: dict):
+        def usable(w: dict) -> bool:
+            head_rel = w["conclusion"]["relation"]
+            if head_rel == PROPOSE and _propose_target_role(w["conclusion"]["key"]) != role:
                 return False
-        return all(a["relation"] in full for a in w.get("aggregates", ()))
+            if head_rel in functional and (head_rel in invalid_functional or not (func_deps.get(head_rel, set()) <= full)):
+                return False
+            for p in w.get("premises", ()):
+                rel = p["row"]["relation"]
+                if p["polarity"] != "positive":
+                    if rel not in full:
+                        return False
+                elif rel not in derived and p["row"]["key"] not in base_rows.get(rel, ()):
+                    return False
+            return all(a["relation"] in full for a in w.get("aggregates", ()))
 
-    chosen = select(instances, derived, usable)
+        return usable
+
+    chosen = select(instances, derived, make_usable(reads_rows))
     calc_findings = []
     if calc_ir is not None:
         visible, calc_findings = _calc(calc_ir, views, calc_all, calc_witnesses, set(chosen), full, every, mine,
@@ -673,14 +702,44 @@ def check_role(role: str, complete: dict, snapshots: dict, claimed_full, bundle:
                 reads_rows[rel] = {key for key, (p, _) in every.get(rel, {}).items()
                                    if (rel, key) in visible and len(p) == 4 and p[2:] == ("known", "")
                                    and calc_value(p[1], column_type)}
-            chosen = select(instances, derived, usable)
+            chosen = select(instances, derived, make_usable(reads_rows))
     findings += check_choice(witnesses, chosen)
+    propose_keys = {key for rel, key in chosen if rel == PROPOSE}
+    if PROPOSE in derived and PROPOSE not in functional:
+        extra_role = (
+            {encode_key((role,))}
+            if named and ROLE not in derived and ROLE not in withheld
+            else set()
+        ) - reads_rows.get(ROLE, set())
+        extra_caps = (
+            {encode_key((role, cap)) for cap in capabilities}
+            if CAPABILITY not in derived and CAPABILITY not in withheld
+            else set()
+        ) - reads_rows.get(CAPABILITY, set())
+        if extra_role or extra_caps:
+            self_rows = dict(reads_rows)
+            if extra_role:
+                self_rows[ROLE] = reads_rows.get(ROLE, set()) | extra_role
+            if extra_caps:
+                self_rows[CAPABILITY] = reads_rows.get(CAPABILITY, set()) | extra_caps
+            propose_chosen = select(instances, derived, make_usable(self_rows))
+            propose_keys |= {key for rel, key in propose_chosen if rel == PROPOSE}
+    projected_propose: set[str] = set()
     for rel in sorted(derived & (set(every) | set(mine))):
-        want = {key for key in every.get(rel, {}) if (rel, key) in chosen}
+        if rel == PROPOSE:
+            want = {
+                key for key, (p, _) in every.get(rel, {}).items()
+                if len(p) == 3 and p[0] == role and key in propose_keys
+            }
+            projected_propose = {key for key in want if (PROPOSE, key) not in chosen}
+        else:
+            want = {key for key in every.get(rel, {}) if (rel, key) in chosen}
         got = set(mine.get(rel, {}))
         findings += [{"reason": "not_derivable", "relation": rel, "key": key} for key in sorted(got - want)]
         findings += [{"reason": "derivable_missing", "relation": rel, "key": key} for key in sorted(want - got)]
     findings += calc_findings
     for f in findings:
         f["severity"] = "error"
-    return full, findings
+    role_full = _RoleFull(full)
+    role_full.projected_propose_keys = frozenset(projected_propose)
+    return role_full, findings

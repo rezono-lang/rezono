@@ -167,9 +167,18 @@ def check_epoch(witnesses: list, manifest: dict, rules: dict, read_bytes, *, der
         if calc_ir is not None:
             calc_views = calc.published_views(calc_ir)
     _check_graph(proof, rules, findings, checked_calcs, calc_views)
+    is_role_full = (
+        full is not None
+        and type(full).__module__ == f"{__package__}.access"
+        and type(full).__name__ == "_RoleFull"
+    )
+    raw_projected = getattr(full, "projected_propose_keys", frozenset()) if is_role_full else frozenset()
+    projected_propose = raw_projected if isinstance(raw_projected, frozenset) else frozenset()
     for relation in sorted(derived):
         for key in sorted(rows(relation, None)):
             if (relation, key) not in concluded:
+                if relation == "may_propose" and key in projected_propose:
+                    continue
                 findings.append({"reason": "unproven_row", "relation": relation, "key": key})
     findings.extend(calc_findings)
     return _report(proof, None, set(), findings)
