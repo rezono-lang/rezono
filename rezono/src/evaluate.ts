@@ -905,7 +905,14 @@ function toJson(v: V, slot: SlotDef, doc: AnswerSchema, schema: Schema): unknown
  * stops when it passes that many steps (`OverBudget`): no row and no count, never a part as the whole. `pack`
  * is the pack's whole schema, which the question hash of the output schema's `base` is taken against.
  */
-export async function answer(checked: Checked, schema: Schema, data: Data, budget: { steps?: number } = {}, pack: Schema = schema): Promise<Answer | undefined> {
+export async function answer(
+	checked: Checked,
+	schema: Schema,
+	data: Data,
+	budget: { steps?: number } = {},
+	pack: Schema = schema,
+	domain?: Map<string, V>
+): Promise<Answer | undefined> {
 	const { tree, answer: shape } = checked;
 	if (!tree || !isAsk(tree) || !shape) return undefined;
 	if (data.only && !data.only.has(shape.kind)) throw new NotLoaded(`${shape.kind} is asked and was not loaded`);
@@ -916,7 +923,9 @@ export async function answer(checked: Checked, schema: Schema, data: Data, budge
 	for (const id of idsOf(data, shape.kind)) {
 		const row = known({ id });
 		const binder = { $ref: `${doc.imports.p.pack}@${doc.imports.p.schema}:${shape.kind}/${id}` };
-		const c = read.within(row, ty, () => read.ex(tree.where));
+		const rawC = read.within(row, ty, () => read.ex(tree.where));
+		const d = domain?.get(id);
+		const c = d ? and([d, rawC]) : rawC;
 		if (c.s === 'known') {
 			if (c.v !== true) continue;
 			const shown = shape.shown.map((s, i) => [`c${i + 1}`, toJson(read.within(row, ty, () => read.ex(s.expr)), doc.kinds.Answer.slots[`c${i + 1}`], doc, schema)]);

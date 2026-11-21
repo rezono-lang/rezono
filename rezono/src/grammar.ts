@@ -33,10 +33,12 @@ Rezono {
   Ask = ask (name ":")? AskKind MoreBinder* Context* where Expr Show? Tail*
   AskKind = typeName | name
   MoreBinder = "," name ":" typeName
-  Context = at Atom        -- at
-          | as known Atom  -- as_known
-          | during Atom    -- during
-          | in Atom        -- in
+  Context = at Atom                 -- at
+          | as known on Atom        -- as_known_on
+          | as known Atom           -- as_known
+          | during Atom rangeOp Atom -- during_range
+          | during Atom             -- during
+          | in Atom                 -- in
   Show = show NonemptyListOf<Expr, ",">
   Tail = order by NonemptyListOf<Expr, ",">  -- order
        | group by NonemptyListOf<Expr, ",">  -- group
@@ -134,6 +136,7 @@ ${moduleGrammar}
   at = "at" wordEnd
   as = "as" wordEnd
   by = "by" wordEnd
+  on = "on" wordEnd
   known = "known" wordEnd
   during = "during" wordEnd
   order = "order" wordEnd

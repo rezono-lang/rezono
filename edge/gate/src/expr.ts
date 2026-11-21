@@ -1,11 +1,12 @@
 // Translate the role's schema and bounded snapshot reader to the Rezono question evaluator.
-import { answer, check, isAsk, isError, load, NotEvaluated, page, print, questionHash, type AnswerRow, type AnswerSchema, type Checked, type Cursor, type Diagnostic, type Schema, type SlotDef, type TypeDef, type UndecidedRow, type World } from '../../../rezono/src/index.ts';
-import { NOT_READ_IN_FULL, snake } from '../../../rezono/src/schema.ts';
+import { answer, byteOrder, check, isAsk, isError, load, NotEvaluated, outputSchema, page, print, printContext, questionHash, schemaId, type AnswerRow, type AnswerSchema, type Checked, type Context, type Cursor, type Diagnostic, type Expr, type Schema, type SlotDef, type TypeDef, type UndecidedRow, type World } from '../../../rezono/src/index.ts';
+import { inPart, NOT_READ_IN_FULL, snake } from '../../../rezono/src/schema.ts';
 import { canonicalJson } from '../../../viewer/src/lib/canon.ts';
 import type { Bundle } from '../../../contracts/typescript/generated/bundle.ts';
 import { ANSWER, AskError } from './ask.ts';
-import { NotLoaded, OverBudget } from '../../../rezono/src/evaluate.ts';
-import type { RowRef } from '../../../contracts/typescript/generated/proof.ts';
+import { NotLoaded, OverBudget, type Data, type RowRef as EvalRowRef, type V } from '../../../rezono/src/evaluate.ts';
+import type { CalcWitness, RowRef, Witness } from '../../../contracts/typescript/generated/proof.ts';
+import type { Source } from '../../../contracts/typescript/generated/explain.ts';
 import type { Key } from './pieces.ts';
 
 /** The reason of a value missing from a relation the role does not read in full: one word, the role's Rezono Data form's and the evaluation's (O8). */
@@ -81,6 +82,8 @@ export interface View {
 	reads: Set<string>;
 	/** The kinds of a tree with a subkind (§2.1 `parent`): in the schema, and not yet read by a question. */
 	trees: Set<string>;
+	/** Optional explicit `place_slot` declared on a kind or derived relation in the bundle. */
+	placeSlots?: Map<string, string>;
 }
 
 const pascal = (name: string): string =>
@@ -110,7 +113,7 @@ export function roleSchema(bundle: Bundle, snapshots: Listed[]): View {
 	const partial = (relation: string): boolean => !full.has(relation);
 	// The pack's own base (§2.1), as the form takes it; a pack.yaml that declares no `iri:` gets the default.
 	const base = bundle.pack.base || `https://rezono.example/${bundle.pack.id}/`;
-	const view: View = { schema: { rezono: '1.0', pack: bundle.pack.id, base, kinds: {} }, kinds: new Map(), slots: new Map(), reads, trees: new Set() };
+	const view: View = { schema: { rezono: '1.0', pack: bundle.pack.id, base, kinds: {} }, kinds: new Map(), slots: new Map(), reads, trees: new Set(), placeSlots: new Map() };
 	const { kinds } = view.schema;
 	const types: Record<string, TypeDef> = {};
 	const usedEnums = new Set<string>();
@@ -139,6 +142,8 @@ export function roleSchema(bundle: Bundle, snapshots: Listed[]): View {
 		classOf.set(k.id, k.class);
 		view.kinds.set(k.class, { relation: k.id });
 		view.slots.set(k.class, new Map());
+		const placeSlot = (k as { place_slot?: unknown }).place_slot;
+		if (typeof placeSlot === 'string' && placeSlot.length > 0) view.placeSlots?.set(k.class, placeSlot);
 		family.set(k.class, visible.filter((x) => chain(x.id).includes(k.id)).map((x) => x.class));
 	}
 	// Every kind of a tree that has a subkind: an element of a subkind is an element of each kind above it, which
@@ -254,6 +259,8 @@ export function roleSchema(bundle: Bundle, snapshots: Listed[]): View {
 		};
 		view.kinds.set(name, { relation: r.id, columns });
 		view.slots.set(name, new Map());
+		const placeSlot = (r as { place_slot?: unknown }).place_slot;
+		if (typeof placeSlot === 'string' && placeSlot.length > 0) view.placeSlots?.set(name, placeSlot);
 	}
 	if (Object.keys(types).length) view.schema.types = types;
 	const enums = (bundle.enums ?? []).filter((e) => usedEnums.has(e.id) || reads.has(e.id));
@@ -453,6 +460,16 @@ export async function rowsOf(view: View, want: Map<string, Set<string>>, read: R
 	return out;
 }
 
+/** The active place, valid-time, and knowledge-time restriction of an `ask` answer. */
+export interface AskRestriction {
+	default: boolean;
+	at: string | null;
+	during: string | null;
+	as_known: string | null;
+	resolved_manifest: string | null;
+	knowledge_time: string | null;
+}
+
 /** An undecided row as `rezono.answer/1` carries it (contracts/explain.yaml, UndecidedRow). */
 export interface Undecided {
 	binder: string;
@@ -470,8 +487,12 @@ export interface ExprAnswer {
 	expression: { hash: string; text: string };
 	/** The warnings of the check; an error gives no answer. */
 	diagnostics: Diagnostic[];
+	/** The active restriction (or default scope) and resolved manifest. */
+	restriction: AskRestriction;
 	/** The binder row of each answer row on this page, at distance 0. */
-	nodes: { relation: string; key: string; distance: 0 }[];
+	nodes: { relation: string; key: string; distance: 0; sources?: Source[] }[];
+	witnesses: Witness[];
+	calc_witnesses?: CalcWitness[];
 	output_schema: string;
 	counts: { rows: number; undecided: number; not_applicable: number };
 	undecided: Undecided[];
@@ -487,6 +508,7 @@ export interface Asking {
 	/** The text of one `ask`. */
 	text: string;
 	manifest: string;
+	knowledgeTime?: string | null;
 	view: View;
 	read: Read;
 	/**
@@ -498,6 +520,286 @@ export interface Asking {
 	limit: number;
 	/** The cursor a page before gave in `next`. */
 	after?: string;
+}
+
+const ISO_DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
+const ISO_MONTH_RE = /^(\d{4})-(\d{2})$/;
+const ISO_YEAR_RE = /^(\d{4})$/;
+const NO_VERSION_APPLIES = 'no_version_applies';
+const BEFORE_FIRST_KNOWN = 'before_first_known';
+
+/** Returns `text` when it is a valid ISO-8601 calendar date (`YYYY-MM-DD`), otherwise undefined. */
+export function parseIsoDate(text: string): string | undefined {
+	const m = ISO_DATE_RE.exec(text);
+	if (!m) return undefined;
+	const y = Number(m[1]), mo = Number(m[2]), d = Number(m[3]);
+	if (mo < 1 || mo > 12 || d < 1 || d > 31) return undefined;
+	const dt = new Date(Date.UTC(y, mo - 1, d));
+	dt.setUTCFullYear(y);
+	if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== d) return undefined;
+	return text;
+}
+
+function nextDay(iso: string): string {
+	const [y, mo, d] = iso.split('-').map(Number);
+	const dt = new Date(Date.UTC(y, mo - 1, d + 1));
+	return `${String(dt.getUTCFullYear()).padStart(4, '0')}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}`;
+}
+
+/** Parses an ISO date, month, year, closed range (`..`), or half-open range (`..<`) into `[start, end)`. */
+export function parsePeriodText(text: string): { start: string; end: string } | undefined {
+	const rangeMatch = /^(.+?)(\.\.<|\.\.)(.+)$/.exec(text);
+	if (rangeMatch) {
+		const [, left, op, right] = rangeMatch;
+		const a = parsePeriodText(left.trim());
+		const b = parsePeriodText(right.trim());
+		if (!a || !b) return undefined;
+		const start = a.start;
+		const end = op === '..<' ? b.start : b.end;
+		return start < end ? { start, end } : undefined;
+	}
+	if (parseIsoDate(text)) return { start: text, end: nextDay(text) };
+	const ym = ISO_MONTH_RE.exec(text);
+	if (ym) {
+		const y = Number(ym[1]), mo = Number(ym[2]);
+		if (mo < 1 || mo > 12) return undefined;
+		const start = `${ym[1]}-${ym[2]}-01`;
+		const end = mo === 12
+			? `${String(y + 1).padStart(4, '0')}-01-01`
+			: `${ym[1]}-${String(mo + 1).padStart(2, '0')}-01`;
+		return { start, end };
+	}
+	const yr = ISO_YEAR_RE.exec(text);
+	if (yr) {
+		const y = Number(yr[1]);
+		return { start: `${yr[1]}-01-01`, end: `${String(y + 1).padStart(4, '0')}-01-01` };
+	}
+	return undefined;
+}
+
+/** Extracts the string value of an atom expression (`path` or `lit`) for `at`/`during`/`as known` contexts. */
+export function contextAtomText(e: Expr, what: string): string {
+	if ('path' in e && e.path.length === 1) return e.path[0];
+	if ('lit' in e) {
+		const raw = e.lit;
+		if (raw.startsWith('"') && raw.endsWith('"')) {
+			try {
+				const parsed = JSON.parse(raw);
+				if (typeof parsed === 'string') return parsed;
+			} catch {
+				// fall through
+			}
+		}
+		return raw;
+	}
+	throw new AskError(400, `${what} expects a literal or identifier`);
+}
+
+function parsePeriodExpr(e: Expr): { start: string; end: string } {
+	const parsed = 'range' in e
+		? parsePeriodText(`${contextAtomText(e.range[0], 'during period')}${e.range[1]}${contextAtomText(e.range[2], 'during period')}`)
+		: parsePeriodText(contextAtomText(e, 'during period'));
+	if (!parsed) throw new AskError(400, 'invalid during period');
+	return parsed;
+}
+
+/** Builds the `restriction` summary object for an `ask` response. */
+export function restrictionOf(
+	context: Context | undefined,
+	resolvedManifest: string | null,
+	knowledgeTime: string | null
+): AskRestriction {
+	const at = context?.at ? printContext({ at: context.at })[0].slice('at '.length) : null;
+	const during = context?.during ? printContext({ during: context.during })[0].slice('during '.length) : null;
+	const as_known = context?.as_known ? printContext({ as_known: context.as_known })[0].slice('as known '.length) : null;
+	return {
+		default: at === null && during === null && as_known === null,
+		at,
+		during,
+		as_known,
+		resolved_manifest: resolvedManifest,
+		knowledge_time: knowledgeTime
+	};
+}
+
+interface ResolvedRestrictions {
+	place?: { slot: string; target: string };
+	period?: {
+		query: { start: string; end: string };
+		mode: 'bounds' | 'period';
+		validFromSlot: string;
+		validUntilSlot?: string;
+		periodSlot?: string;
+	};
+}
+
+/** Validates `at` and `during` context clauses against `view` and returns the resolved slot bindings. */
+export function resolveAskRestrictions(checked: Checked, view: View): ResolvedRestrictions {
+	const tree = checked.tree;
+	if (!tree || !isAsk(tree)) return {};
+	const askedKind = checked.answer!.kind;
+	const slots = view.schema.kinds[askedKind]?.slots ?? {};
+	const out: ResolvedRestrictions = {};
+
+	if (tree.context?.at) {
+		const placeSlot = view.placeSlots?.get(askedKind) ?? 'place';
+		const def = slots[placeSlot];
+		if (!def || def.card === '*' || def.card === '+') {
+			throw new AskError(400, `kind ${askedKind} does not support at restriction without a single-valued ${placeSlot} slot`);
+		}
+		out.place = { slot: placeSlot, target: contextAtomText(tree.context.at, 'at place') };
+	}
+
+	if (tree.context?.during) {
+		const query = parsePeriodExpr(tree.context.during);
+		const vf = slots.valid_from;
+		const vu = slots.valid_until;
+		const ps = slots.period;
+		if (vf && vf.card !== '*' && vf.card !== '+') {
+			out.period = {
+				query,
+				mode: 'bounds',
+				validFromSlot: 'valid_from',
+				...(vu && vu.card !== '*' && vu.card !== '+' ? { validUntilSlot: 'valid_until' } : {})
+			};
+		} else if (ps && ps.card !== '*' && ps.card !== '+') {
+			out.period = { query, mode: 'period', validFromSlot: 'period', periodSlot: 'period' };
+		} else {
+			throw new AskError(400, `kind ${askedKind} does not support during restriction without validity bounds`);
+		}
+	}
+
+	return out;
+}
+
+const RANK_STATE: Record<'not_applicable' | 'unknown' | 'invalid', number> = { not_applicable: 1, unknown: 2, invalid: 3 };
+type NonKnownV = Extract<V, { s: 'not_applicable' | 'unknown' | 'invalid' }>;
+
+function worstNonKnown(a: NonKnownV, b: NonKnownV): NonKnownV {
+	if (RANK_STATE[a.s] !== RANK_STATE[b.s]) return RANK_STATE[a.s] > RANK_STATE[b.s] ? a : b;
+	const cmp = byteOrder(a.reason, b.reason) || Number(a.cause !== undefined) - Number(b.cause !== undefined);
+	if (cmp !== 0 || !a.cause || !b.cause) return cmp <= 0 ? a : b;
+	return (byteOrder(a.cause.relation, b.cause.relation) || byteOrder(canonicalJson(a.cause.key), canonicalJson(b.cause.key))) <= 0 ? a : b;
+}
+
+function applyDomainRestrictions(
+	view: View,
+	askedKind: string,
+	data: Data,
+	restrictions: ResolvedRestrictions
+): Map<string, V> | undefined {
+	if (!restrictions.place && !restrictions.period) return undefined;
+	const kindRows = data.kinds.get(askedKind);
+	if (!kindRows) return undefined;
+	const { schema } = view;
+	const of = view.kinds.get(askedKind)!;
+	const slots = schema.kinds[askedKind].slots;
+	const domain = new Map<string, V>();
+
+	const rowCause = (slotName: string, id: string): EvalRowRef =>
+		of.columns
+			? { relation: of.relation, key: JSON.parse(id) as string[] }
+			: { relation: view.slots.get(askedKind)?.get(slotName)?.relation ?? `${snake(askedKind)}__${slotName}`, key: [id] };
+
+	const missingSlotState = (slotName: string, id: string): V => {
+		const slot = slots[slotName];
+		const cause = rowCause(slotName, id);
+		if (inPart(schema, askedKind, slotName)) return { s: 'unknown', reason: NOT_READ_IN_FULL, cause };
+		return { s: slot.card === '?' ? 'not_applicable' : 'unknown', reason: '', cause };
+	};
+
+	const readSingleCell = (cells: Map<string, unknown>, slotName: string, id: string): V => {
+		const raw = cells.get(slotName);
+		if (raw === undefined) return missingSlotState(slotName, id);
+		if (Array.isArray(raw)) return { s: 'invalid', reason: '', cause: rowCause(slotName, id) };
+		return raw as V;
+	};
+
+	for (const [id, cells] of [...kindRows.entries()]) {
+		let placeState: V = { s: 'known', v: true };
+		if (restrictions.place) {
+			const cell = readSingleCell(cells, restrictions.place.slot, id);
+			if (cell.s === 'known') {
+				const placeVal = typeof cell.v === 'string'
+					? cell.v
+					: (typeof cell.v === 'object' && cell.v !== null && 'id' in cell.v ? (cell.v as { id: string }).id : undefined);
+				if (placeVal !== restrictions.place.target) {
+					kindRows.delete(id);
+					continue;
+				}
+			} else if (cell.s === 'not_applicable') {
+				kindRows.delete(id);
+				continue;
+			} else {
+				placeState = cell;
+			}
+		}
+
+		let validState: V = { s: 'known', v: true };
+		if (restrictions.period) {
+			const { query, mode, validFromSlot, validUntilSlot, periodSlot } = restrictions.period;
+			if (mode === 'period' && periodSlot) {
+				const pCell = readSingleCell(cells, periodSlot, id);
+				if (pCell.s === 'unknown' || pCell.s === 'invalid') {
+					validState = pCell;
+				} else if (pCell.s === 'not_applicable') {
+					validState = { s: 'unknown', reason: NO_VERSION_APPLIES, cause: rowCause(periodSlot, id) };
+				} else {
+					const parsed = parsePeriodText(String(pCell.v));
+					if (!parsed) throw new AskError(500, 'invalid period value');
+					if (!(parsed.start <= query.start && query.end <= parsed.end)) {
+						validState = { s: 'unknown', reason: NO_VERSION_APPLIES, cause: rowCause(periodSlot, id) };
+					}
+				}
+			} else {
+				const vfCell = readSingleCell(cells, validFromSlot, id);
+				if (vfCell.s === 'unknown' || vfCell.s === 'invalid') {
+					validState = vfCell;
+				} else if (vfCell.s === 'not_applicable') {
+					validState = { s: 'unknown', reason: NO_VERSION_APPLIES, cause: rowCause(validFromSlot, id) };
+				} else {
+					const rStart = parseIsoDate(String(vfCell.v));
+					if (!rStart) throw new AskError(500, 'invalid valid_from date');
+					if (query.end <= rStart || rStart > query.start) {
+						validState = { s: 'unknown', reason: NO_VERSION_APPLIES, cause: rowCause(validFromSlot, id) };
+					} else if (validUntilSlot) {
+						const vuCell = readSingleCell(cells, validUntilSlot, id);
+						if (vuCell.s === 'not_applicable') {
+							validState = { s: 'known', v: true };
+						} else if (vuCell.s === 'unknown' || vuCell.s === 'invalid') {
+							validState = vuCell;
+						} else {
+							const rEnd = parseIsoDate(String(vuCell.v));
+							if (!rEnd) throw new AskError(500, 'invalid valid_until date');
+							if (rEnd <= rStart) {
+								validState = { s: 'invalid', reason: 'interval_inverted', cause: rowCause(validUntilSlot, id) };
+							} else if (query.end <= rEnd) {
+								validState = { s: 'known', v: true };
+							} else {
+								validState = { s: 'unknown', reason: NO_VERSION_APPLIES, cause: rowCause(validUntilSlot, id) };
+							}
+						}
+					}
+				}
+			}
+
+			if (validState.s === 'unknown' && validState.reason === NO_VERSION_APPLIES) {
+				for (const [slotName, slotDef] of Object.entries(slots)) {
+					if (slotDef.inverse === undefined) cells.set(slotName, validState);
+				}
+			}
+		}
+
+		if (placeState.s !== 'known' && validState.s !== 'known') {
+			domain.set(id, worstNonKnown(placeState, validState));
+		} else if (placeState.s !== 'known') {
+			domain.set(id, placeState);
+		} else if (validState.s !== 'known') {
+			domain.set(id, validState);
+		}
+	}
+
+	return domain;
 }
 
 function cursorOf(text: string | undefined): Cursor {
@@ -515,6 +817,84 @@ function cursorOf(text: string | undefined): Cursor {
 }
 
 /**
+ * Constructs a `rezono.answer/1` response when `as known on <date>` precedes the earliest published epoch:
+ * every visible binder row of the asked kind (or `["*"]` if none exist yet) is returned as `unknown before_first_known`.
+ */
+export async function beforeFirstKnownAnswer(a: Asking): Promise<Asked> {
+	if (!Number.isInteger(a.limit) || a.limit < 1) throw new AskError(400, 'limit is a whole number of at least 1');
+	const after = cursorOf(a.after);
+	const { schema } = a.view;
+	const checked = check(a.text, schema, { allowContext: true });
+	if (checked.diagnostics.some(isError) || !checked.tree) return { refused: checked.diagnostics };
+	const tree = checked.tree;
+	if (!isAsk(tree)) throw new AskError(400, 'the text is not an ask');
+	resolveAskRestrictions(checked, a.view);
+	const askedKind = checked.answer!.kind;
+	const want = wanted(checked, a.view);
+	const inTree = [...want.keys()].sort().find((kind) => a.view.trees.has(kind));
+	if (inTree !== undefined) throw new AskError(501, `kind ${inTree} is in a tree of kinds with a subkind: a question that reads it is not evaluated yet`);
+	const of = a.view.kinds.get(askedKind)!;
+
+	const ids: string[] = [];
+	let budgetLeft = a.budget.rows;
+	if (a.view.reads.has(of.relation)) {
+		for (let nextAfter: Key | undefined; ;) {
+			const pageRows = await a.read(of.relation, { prefix: [], ...(nextAfter ? { after: nextAfter } : {}), limit: Math.min(PAGE, budgetLeft + 1) });
+			budgetLeft -= pageRows.rows.length;
+			if (budgetLeft < 0) return { cut: { budget: 'rows', limit: a.budget.rows } };
+			for (const r of pageRows.rows) {
+				const parts = (r as { key: Key }).key.map(String);
+				ids.push(of.columns ? canonicalJson(parts) : parts[0]);
+			}
+			if (!pageRows.next) break;
+			if (!pageRows.rows.length) throw new AskError(500, `the reader of ${of.relation} names a next page and gives no row`);
+			nextAfter = pageRows.next;
+		}
+	}
+	const binderIds = ids.length ? [...new Set(ids)].sort((x, y) => byteOrder(canonicalJson([x]), canonicalJson([y]))) : ['*'];
+	const doc = (await outputSchema(tree, checked, schema))!;
+	const $schema = await schemaId(doc);
+	const allUndecided: UndecidedRow[] = binderIds.map((id) => ({
+		$kind: 'Undecided',
+		$id: id,
+		binder: { $ref: `${doc.imports.p.pack}@${doc.imports.p.schema}:${askedKind}/${id}` },
+		state: 'unknown',
+		reason: BEFORE_FIRST_KNOWN,
+		cause_relation: '',
+		cause_key: ''
+	}));
+	const whole = {
+		$schema,
+		schema: doc,
+		rows: [],
+		undecided: allUndecided,
+		counts: { rows: 0, undecided: allUndecided.length, not_applicable: 0 }
+	};
+	const on = page(whole, a.limit, after);
+	return {
+		answer: {
+			format: ANSWER,
+			question: 'ask',
+			manifest_id: a.manifest,
+			expression: { hash: await questionHash(checked, schema), text: print(tree) },
+			diagnostics: checked.diagnostics,
+			restriction: restrictionOf(tree.context, null, null),
+			nodes: [],
+			witnesses: [],
+			output_schema: $schema,
+			counts: whole.counts,
+			undecided: on.undecided.map((u) => ({
+				binder: u.$id,
+				state: u.state,
+				...(u.reason ? { reason: u.reason } : {})
+			})),
+			...(on.next ? { next: canonicalJson(on.next) } : {}),
+			dataset: { $schema, schema: doc, rows: on.undecided }
+		}
+	};
+}
+
+/**
  * Answers one `ask` for one role. A text that does not check is refused with its diagnostics and reads no row
  * (§8b). Every page is a slice of the one answer over the role's view, so two publications whose role views
  * are equal give the same bytes (§7a rule 5).
@@ -523,11 +903,18 @@ export async function ask(a: Asking): Promise<Asked> {
 	if (!Number.isInteger(a.limit) || a.limit < 1) throw new AskError(400, 'limit is a whole number of at least 1');
 	const after = cursorOf(a.after);
 	const { schema } = a.view;
-	const checked = check(a.text, schema);
+	const checked = check(a.text, schema, { allowContext: true });
 	if (checked.diagnostics.some(isError) || !checked.tree) return { refused: checked.diagnostics };
 	const tree = checked.tree;
 	if (!isAsk(tree)) throw new AskError(400, 'the text is not an ask');
+	const restrictions = resolveAskRestrictions(checked, a.view);
+	const askedKind = checked.answer!.kind;
 	const want = wanted(checked, a.view);
+	if (restrictions.place) want.get(askedKind)!.add(restrictions.place.slot);
+	if (restrictions.period) {
+		want.get(askedKind)!.add(restrictions.period.validFromSlot);
+		if (restrictions.period.validUntilSlot) want.get(askedKind)!.add(restrictions.period.validUntilSlot);
+	}
 	const inTree = [...want.keys()].sort().find((kind) => a.view.trees.has(kind));
 	if (inTree !== undefined) throw new AskError(501, `kind ${inTree} is in a tree of kinds with a subkind: a question that reads it is not evaluated yet`);
 	let rows: Record<string, unknown>[];
@@ -541,7 +928,9 @@ export async function ask(a: Asking): Promise<Asked> {
 	try {
 		// The evaluation is told what was read for it: a slot it reads and `wanted` did not name is refused,
 		// never read as a value that is not there.
-		whole = await answer(checked, schema, load(schema, rows, { only: want }), { steps: a.budget.steps });
+		const data = load(schema, rows, { only: want });
+		const domain = applyDomainRestrictions(a.view, askedKind, data, restrictions);
+		whole = await answer(checked, schema, data, { steps: a.budget.steps }, schema, domain);
 	} catch (e) {
 		if (e instanceof OverBudget) return { cut: { budget: 'steps', limit: a.budget.steps } };
 		if (e instanceof NotLoaded) throw new AskError(500, `the question reads what was not loaded for it: ${e.message}`);
@@ -554,16 +943,18 @@ export async function ask(a: Asking): Promise<Asked> {
 	for (const [kind, slots] of a.view.slots) for (const [name, at] of slots) relations.set(`${snake(kind)}__${name}`, at.relation);
 	const on = page(whole, a.limit, after);
 	const undecided = on.undecided.map((u) => ({ ...u, cause_relation: relations.get(u.cause_relation) ?? u.cause_relation }));
-	const of = a.view.kinds.get(checked.answer!.kind)!;
+	const of = a.view.kinds.get(askedKind)!;
 	return {
 		answer: {
 			format: ANSWER,
 			question: 'ask',
 			manifest_id: a.manifest,
 			// Bind the question hash to the role's schema.
-						expression: { hash: await questionHash(checked, schema), text: print(tree) },
+			expression: { hash: await questionHash(checked, schema), text: print(tree) },
 			diagnostics: checked.diagnostics,
+			restriction: restrictionOf(tree.context, a.manifest, a.knowledgeTime ?? null),
 			nodes: on.rows.map((r) => ({ relation: of.relation, key: of.columns ? r.$id : canonicalJson([r.$id]), distance: 0 })),
+			witnesses: [],
 			output_schema: whole.$schema,
 			counts: whole.counts,
 			undecided: undecided.map((u) => ({

@@ -132,11 +132,11 @@ async function resolveCalcIrValidAt(epochView: StaircaseEpochView): Promise<stri
 	return undefined;
 }
 
-function witnessRefKey(relation: string, key: string): string {
+export function witnessRefKey(relation: string, key: string): string {
 	return relation + '\u0000' + key;
 }
 
-async function checkProofClosureWithdrawals(
+export async function checkProofClosureWithdrawals(
 	epochView: StaircaseEpochView,
 	withdrawals: readonly WithdrawalRecord[],
 	rootWitness: Witness | CalcWitness,
