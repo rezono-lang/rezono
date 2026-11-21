@@ -57,8 +57,12 @@ def check(proof: dict, manifest: dict, rules: dict, read_bytes, role: str | None
             if (rule := rules.get(w["rule_id"])) is not None:
                 domains.update(aggregate.atom.relation for aggregate in rule.aggregates)
                 if (func := getattr(rules, "functionals", {}).get(rule.head.relation)) is not None:
+                    domains.add(rule.head.relation)
                     domains.add(func.domain)
-                    domains.update(b.atom.relation for b in rule.body)
+                    for r_item in rules.values():
+                        if r_item.head.relation == func.name:
+                            domains.update(b.atom.relation for b in r_item.body)
+                            domains.update(a.atom.relation for a in r_item.aggregates)
     _check_graph(proof, rules, findings)
     if domains and not any(f["reason"] not in WARNINGS for f in findings):
         findings.extend(closure.check(rules, lambda relation: rows(relation, None), domains=domains))
@@ -137,7 +141,10 @@ def check_epoch(witnesses: list, manifest: dict, rules: dict, read_bytes, *, der
                 if (rule := rules.get(w["rule_id"])) is not None and (
                         func := getattr(rules, "functionals", {}).get(rule.head.relation)) is not None:
                     scoped.append(func.domain)
-                    scoped.extend(b.atom.relation for b in rule.body)
+                    for r_item in rules.values():
+                        if r_item.head.relation == func.name:
+                            scoped.extend(b.atom.relation for b in r_item.body)
+                            scoped.extend(a.atom.relation for a in r_item.aggregates)
                 for relation in sorted(set(scoped + [a["relation"] for a in w.get("aggregates", [])]) - set(full)):
                     findings.append({"reason": "outside_full_scope", "witness": i, "relation": relation})
     if full is None:  # a role's snapshots are filtered: the obligations hold for the complete epoch
@@ -499,9 +506,14 @@ def _check_functional_witness(i, w, rule, func, rules, rows, findings, groups=No
     for v in sorted(key_vars - set(theta)):
         find("unbound_variable", detail=v)
     val_term = rule.head.terms[n]
-    if (tuple(theta.get(t, t) if t.startswith("?") else t for t in key_terms) != key_parts
-            or (state == "known" and val_term.startswith("?") and val_term in theta and theta[val_term] != val)):
+    if tuple(theta.get(t, t) if t.startswith("?") else t for t in key_terms) != key_parts:
         find("head_mismatch", relation=c["relation"], key=c["key"])
+    if state == "known":
+        if val_term.startswith("?"):
+            if val_term in theta and theta[val_term] != val:
+                find("head_mismatch", relation=c["relation"], key=c["key"])
+        elif val_term != val:
+            find("head_mismatch", relation=c["relation"], key=c["key"])
 
     dom_key_enc = encode_key(key_parts)
     if dom_key_enc not in rows(func.domain, i):
@@ -510,22 +522,33 @@ def _check_functional_witness(i, w, rule, func, rules, rows, findings, groups=No
     values_by_key, rule_instances = _functional_candidates(rules, func, rows, i, groups)
     all_vals = values_by_key.get(key_parts, set())
     insts = rule_instances.get(rule.id, {}).get(key_parts, [])
+    matching_insts = [
+        inst_theta for inst_theta in insts
+        if (inst_theta[val_term] if val_term.startswith("?") else val_term) == val
+    ]
 
     if not _functional_state_ok(func, all_vals, state, reason, val):
         find("outcome_state", relation=c["relation"], key=dom_key_enc)
     elif state == "invalid" and func.conflict_policy == "block":
         find("functional_invalid", relation=c["relation"], key=c["key"], detail=reason)
+    if state == "known" and not matching_insts:
+        find("premise_mismatch", relation=c["relation"], key=c["key"])
 
     expected_premises = set()
     for b in rule.body:
-        b_vars = {t for t in b.atom.terms if t.startswith("?")}
-        if b_vars <= set(theta):
-            row_key = encode_key(tuple(theta[t] if t.startswith("?") else t for t in b.atom.terms))
-            if b.polarity == "positive" or row_key not in rows(b.atom.relation, i):
-                expected_premises.add((b.atom.relation, row_key, b.polarity, b.stratum))
-    premise_rules = ([(r, rule_instances.get(r.id, {}).get(key_parts, []))
-                      for r in rules.values() if r.head.relation == func.name]
-                     if state == "invalid" else [(rule, insts)])
+        if b.polarity == "positive" and b.atom.relation == func.domain:
+            b_vars = {t for t in b.atom.terms if t.startswith("?")}
+            if b_vars <= set(theta):
+                dom_terms = tuple(theta[t] if t.startswith("?") else t for t in b.atom.terms)
+                if dom_terms == key_parts:
+                    expected_premises.add((b.atom.relation, dom_key_enc, b.polarity, b.stratum))
+    if state == "invalid":
+        premise_rules = [(r, rule_instances.get(r.id, {}).get(key_parts, []))
+                         for r in sorted(rules.values(), key=lambda x: x.id) if r.head.relation == func.name]
+    elif state == "known":
+        premise_rules = [(rule, matching_insts)]
+    else:
+        premise_rules = [(rule, [])]
     for r_item, r_insts in premise_rules:
         for inst_theta in r_insts:
             for b in r_item.body:
@@ -555,36 +578,55 @@ def _check_functional_witness(i, w, rule, func, rules, rows, findings, groups=No
             find("aggregate_mismatch", detail=f"{len(given_aggs)} given, {len(rule.aggregates)} expected")
         for index, spec in enumerate(rule.aggregates):
             spec_vars = {t for t in spec.atom.terms if t.startswith("?")}
-            if not spec_vars <= set(theta):
+            if spec_vars <= set(theta):
+                envs = [theta]
+            elif matching_insts if state == "known" else insts:
+                envs = matching_insts if state == "known" else insts
+            else:
+                for v in sorted(spec_vars - set(theta)):
+                    find("unbound_variable", detail=v)
                 continue
-            values = tuple(theta[t] if t.startswith("?") else t for t in spec.atom.terms)
-            fixed = [(pos, v) for pos, (t, v) in enumerate(zip(spec.atom.terms, values)) if t != "_"]
-            group = encode_key(v for _, v in fixed)
-            a = positioned[index] if index in positioned else keyed.get((spec.atom.relation, group))
-            if a is None or (a["relation"], a["group_key"]) != (spec.atom.relation, group):
-                find("aggregate_mismatch", relation=spec.atom.relation, key=group)
-                continue
-            count, contributors, result, invalid = recompute(spec, fixed, rows(spec.atom.relation, i), groups)
-            if invalid:
-                find("invalid_value", relation=spec.atom.relation, key=group)
-            for field, value in (("count", count), ("contributors_sha256", contributors), ("result", result)):
-                if a[field] != value:
-                    find(f"aggregate_{field.removesuffix('_sha256')}", relation=a["relation"], key=group,
-                         detail=f"{a[field]} != {value}")
+            for env in envs:
+                values = tuple(env[t] if t.startswith("?") else t for t in spec.atom.terms)
+                fixed = [(pos, v) for pos, (t, v) in enumerate(zip(spec.atom.terms, values)) if t != "_"]
+                group = encode_key(v for _, v in fixed)
+                a = positioned[index] if index in positioned else keyed.get((spec.atom.relation, group))
+                if a is None or (a["relation"], a["group_key"]) != (spec.atom.relation, group):
+                    find("aggregate_mismatch", relation=spec.atom.relation, key=group)
+                    continue
+                count, contributors, result, invalid = recompute(spec, fixed, rows(spec.atom.relation, i), groups)
+                if invalid:
+                    find("invalid_value", relation=spec.atom.relation, key=group)
+                for field, value in (("count", count), ("contributors_sha256", contributors), ("result", result)):
+                    if a[field] != value:
+                        find(f"aggregate_{field.removesuffix('_sha256')}", relation=a["relation"], key=group,
+                             detail=f"{a[field]} != {value}")
+                if rule.bare_values and result.startswith("known:") and not _fits(result.removeprefix("known:")):
+                    find("arithmetic_overflow", relation=spec.atom.relation, detail=spec.var)
+                bound = env.get(spec.var) if spec.var else None
+                if bound is None and state == "known" and spec.var and spec.var == val_term:
+                    bound = val
+                if spec.var and bound is not None and (f"known:{bound}" if rule.bare_values else bound) != result:
+                    find("aggregate_binding", detail=spec.var)
     else:
         for a in given_aggs:
             rel = a["relation"]
             if a["group_key"] != dom_key_enc:
                 find("aggregate_mismatch", relation=rel, key=a["group_key"])
                 continue
-            body_matches = [b for b in rule.body if b.polarity == "positive" and b.atom.relation == rel]
-            if not body_matches:
+            cand_rows_set = set()
+            matched_any = False
+            for r_item, r_insts in premise_rules:
+                body_matches = [b for b in r_item.body if b.polarity == "positive" and b.atom.relation == rel]
+                if body_matches:
+                    matched_any = True
+                    for inst_theta in r_insts:
+                        for b in body_matches:
+                            cand_rows_set.add(tuple(inst_theta[t] if t.startswith("?") else t for t in b.atom.terms))
+            if not matched_any:
                 find("aggregate_mismatch", relation=rel, key=dom_key_enc)
                 continue
-            cand_rows = sorted({
-                tuple(inst_theta[t] if t.startswith("?") else t for t in b.atom.terms)
-                for inst_theta in insts for b in body_matches
-            })
+            cand_rows = sorted(cand_rows_set)
             expected_count = len(cand_rows)
             expected_digest = sha256_hex(canonical_bytes([{"key": list(r)} for r in cand_rows]))
             expected_result = f"known:{val}" if state == "known" else f"{state}:{reason}"
@@ -696,11 +738,12 @@ def recompute(spec, fixed, relation_rows, groups=None, fmt=None):
     `groups` caches an index per (relation, arity, fixed positions), so each relation is scanned once.
     """
     members = aggregate_members(spec, fixed, relation_rows, groups)
-    if spec.function == "count" and spec.over is None:
+    effective_fmt = spec.format if fmt is None else fmt
+    if spec.function == "count" and (effective_fmt == "rezono.rules/1" or spec.over is None):
         return len(members), sha256_json([[k] for k, _ in members]), f"known:{len(members)}", False
     read = cells(spec, [(strict_json_loads(k), values) for k, values in members])
     contributors = sha256_json([[k, value_text(v)] for (k, _), v in zip(members, read)])
-    result = _fold(spec.function, read, spec.format if fmt is None else fmt)
+    result = _fold(spec.function, read, effective_fmt)
     return len(members), contributors, result, result == "invalid"
 
 

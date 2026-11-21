@@ -98,25 +98,54 @@ def steps(rules_doc: dict, witnesses: list[dict], rows: dict) -> set[tuple]:
         c = (w["conclusion"]["relation"], w["conclusion"]["key"])
         func = functionals.get(rule.head.relation)
         if func is not None:
+            c_parts = strict_json_loads(w["conclusion"]["key"])
+            if (w["conclusion"]["relation"] != rule.head.relation or not isinstance(c_parts, list)
+                    or len(c_parts) != func.key_arity + 3 or not all(isinstance(p, str) for p in c_parts)):
+                raise ValueError(f"malformed functional conclusion key in witness for {rule.id}")
+            state, val = c_parts[func.key_arity], c_parts[func.key_arity + 2]
             dom_key = tuple(
                 theta[t] if t.startswith("?") else t for t in rule.head.terms[:func.key_arity]
             ) if all(t in theta for t in rule.head.terms[:func.key_arity] if t.startswith("?")) else None
             if dom_key is None:
                 raise ValueError(f"unbound domain key variable in witness for {rule.id}")
-            insts = candidates(rule, func).get(dom_key, ())
+            dom_key_enc = encode_key(dom_key)
             for i, b in enumerate(rule.body):
-                b_vars = {t for t in b.atom.terms if t.startswith("?")}
-                if b_vars <= set(theta):
-                    out.add((*c, b.atom.relation, encode_key(subst(b.atom)), b.polarity, i))
-                else:
-                    for inst_theta in insts:
+                if b.polarity == "positive" and b.atom.relation == func.domain:
+                    b_vars = {t for t in b.atom.terms if t.startswith("?")}
+                    if b_vars <= set(theta) and subst(b.atom) == dom_key:
+                        out.add((*c, b.atom.relation, dom_key_enc, b.polarity, i))
+            val_term = rule.head.terms[func.key_arity]
+            if state == "invalid":
+                step_rules = [
+                    (r_item, candidates(r_item, func).get(dom_key, ()))
+                    for r_item in sorted(rules.values(), key=lambda x: x.id)
+                    if r_item.head.relation == func.name
+                ]
+                agg_insts = candidates(rule, func).get(dom_key, ())
+            elif state == "known":
+                matching = [
+                    inst_theta for inst_theta in candidates(rule, func).get(dom_key, ())
+                    if (inst_theta[val_term] if val_term.startswith("?") else val_term) == val
+                ]
+                step_rules = [(rule, matching)]
+                agg_insts = matching
+            else:
+                step_rules = []
+                agg_insts = ()
+            for r_item, r_insts in step_rules:
+                for inst_theta in r_insts:
+                    for i, b in enumerate(r_item.body):
                         out.add((*c, b.atom.relation, encode_key(subst(b.atom, inst_theta)), b.polarity, i))
         else:
             for i, b in enumerate(rule.body):
                 out.add((*c, b.atom.relation, encode_key(subst(b.atom)), b.polarity, i))
         for i, spec in enumerate(rule.aggregates):
-            envs = ([theta] if {t for t in spec.atom.terms if t.startswith("?")} <= set(theta)
-                    else (candidates(rule, func).get(dom_key, ()) if func is not None else ()))
+            if func is None:
+                envs = [theta]
+            elif {t for t in spec.atom.terms if t.startswith("?")} <= set(theta):
+                envs = [theta]
+            else:
+                envs = agg_insts
             for env in envs:
                 fixed = [(pos, v) for pos, (t, v) in enumerate(zip(spec.atom.terms, subst(spec.atom, env))) if t != "_"]
                 at = (spec.atom.relation, len(spec.atom.terms), tuple(pos for pos, _ in fixed))
@@ -127,7 +156,8 @@ def steps(rules_doc: dict, witnesses: list[dict], rows: dict) -> set[tuple]:
                             index.setdefault(tuple(parts[pos] for pos in at[2]), []).append((k, parts, values))
                     groups[at] = index
                 members = groups[at].get(tuple(v for _, v in fixed), ())
-                given = ([()] * len(members) if spec.function == "count"
+                given = ([()] * len(members)
+                         if spec.function == "count" and (spec.format == "rezono.rules/1" or spec.over is None)
                          else [(value_text(v),) for v in cells(spec, [(parts, values) for _, parts, values in members])])
                 out |= {(*c, spec.atom.relation, k, "contributes", i, *v) for (k, _, _), v in zip(members, given)}
     return out

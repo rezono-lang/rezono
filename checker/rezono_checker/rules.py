@@ -76,6 +76,7 @@ class AggregateSpec:
     stratum: int
     over_key: int | None = None  # rule IR: the key position of `over`, when it is a key column
     format: str = "rezono.rules/2"  # program format: strict four-state unless rezono.rules/1
+    state_key: int | None = None  # functional IR: the state column position when `over` reads a functional value
 
 
 @dataclass(frozen=True)
@@ -246,6 +247,13 @@ def _over_key(a: dict, keys: dict) -> int | None:
     return None
 
 
+def _state_key(a: dict, functionals: dict[str, FunctionalSpec]) -> int | None:
+    func = functionals.get(a["relation"])
+    if func is not None and a.get("over") == func.value_name:
+        return func.key_arity
+    return None
+
+
 SEAL_KEYS = ("kind", "period", "row_sha256", "tables", "closed_until", "covers", "element", "sha256", "refused",
              "accepted")
 
@@ -397,7 +405,7 @@ def load_rules(doc: dict) -> dict:
             body=tuple(BodyAtom(_atom(b), b["polarity"], int(b["stratum"])) for b in r.get("body", [])),
             aggregates=tuple(
                 AggregateSpec(_atom(a), a["function"], a.get("over"), a.get("as"), int(a["stratum"]),
-                              _over_key(a, keys), effective_format)
+                              _over_key(a, keys), effective_format, _state_key(a, rules.functionals))
                 for a in r.get("aggregates", [])
             ),
             conditions=tuple(Calculation(c["op"], c["left"], c["right"], compare_as=c.get("compare_as"))

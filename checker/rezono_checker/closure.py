@@ -276,7 +276,7 @@ def _aggregate(current, spec, table, rule):
     members = sorted((m for m in table(spec.atom.relation) if len(m[0]) == len(terms)), key=member)
     out = []
     for run, group_rows in _merge(sorted(found, key=group), group, members, member):
-        if spec.function == "count" and spec.over is None:
+        if spec.function == "count" and (spec.format == "rezono.rules/1" or spec.over is None):
             result = f"known:{len(group_rows)}"
         else:
             result = _fold(spec.function, cells(spec, group_rows), spec.format)

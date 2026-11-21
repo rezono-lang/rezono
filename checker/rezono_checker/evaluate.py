@@ -107,9 +107,18 @@ def _holds(op, left, right, compare_as=None):
 
 def cells(spec, members) -> list:
     """What each row of a group gives a `sum`, `min` or `max`: its value in the column the aggregate reads, or,
-    for a key column the aggregate ranges over, that part of the key as a known value. `members` are
-    (key parts, values); a missing column counts as unknown."""
+    for a key column the aggregate ranges over, that part of the key as a known value (or its co-located
+    state and value when reading a functional relation's value column). `members` are (key parts, values);
+    a missing column counts as unknown."""
     if spec.over_key is not None:
+        state_key = getattr(spec, "state_key", None)
+        if state_key is not None:
+            return [
+                {"state": "known", "value": parts[spec.over_key]}
+                if parts[state_key] == "known"
+                else {"state": parts[state_key]}
+                for parts, _ in members
+            ]
         return [{"state": "known", "value": parts[spec.over_key]} for parts, _ in members]
     return [values.get(spec.over, {"state": "unknown"}) for _, values in members]
 

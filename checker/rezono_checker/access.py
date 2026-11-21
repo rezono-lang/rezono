@@ -306,9 +306,14 @@ def full_relations(doc: dict, columns: dict, kinds_full: set, relations: set, wi
     derived = {r["name"] for r in doc.get("relations", ()) if r.get("role") in ("derived", "functional")}
     calc_inputs = {r["name"] for r in doc.get("relations", ()) if r.get("role") == "calc"}
     deps: dict[str, set[str]] = {}
+    invalid_functional: set[str] = set()
     for r in doc.get("relations", ()):
-        if r.get("role") == "functional" and isinstance(r.get("domain"), str):
-            deps.setdefault(r["name"], set()).add(r["domain"])
+        if r.get("role") == "functional":
+            domain = r.get("domain")
+            if isinstance(domain, str) and domain:
+                deps.setdefault(r["name"], set()).add(domain)
+            else:
+                invalid_functional.add(r["name"])
     for r in doc.get("rules", ()):
         reads = deps.setdefault(r["head"]["relation"], set())
         reads.update(b["relation"] for b in r["body"])
@@ -325,7 +330,7 @@ def full_relations(doc: dict, columns: dict, kinds_full: set, relations: set, wi
                 reached.add(x)
                 if x in derived:
                     todo.extend(deps.get(x, ()))
-        return all(x in derived or x in base for x in reached)
+        return all((x in derived and x not in invalid_functional) or x in base for x in reached)
 
     verdict: dict[str, bool] = {}
 
@@ -628,9 +633,14 @@ def check_role(role: str, complete: dict, snapshots: dict, claimed_full, bundle:
                   for rel, rs in every.items() if rel not in derived and rel not in calc_inputs and rel in columns}
 
     func_deps: dict[str, set[str]] = {}
+    invalid_functional: set[str] = set()
     for r in relations:
-        if r.get("role") == "functional" and isinstance(r.get("domain"), str):
-            func_deps.setdefault(r["name"], set()).add(r["domain"])
+        if r.get("role") == "functional":
+            domain = r.get("domain")
+            if isinstance(domain, str) and domain:
+                func_deps.setdefault(r["name"], set()).add(domain)
+            else:
+                invalid_functional.add(r["name"])
     for r in doc.get("rules", ()):
         head_rel = r["head"]["relation"]
         if head_rel in functional:
@@ -640,7 +650,7 @@ def check_role(role: str, complete: dict, snapshots: dict, claimed_full, bundle:
 
     def usable(w: dict) -> bool:
         head_rel = w["conclusion"]["relation"]
-        if head_rel in functional and not (func_deps.get(head_rel, set()) <= full):
+        if head_rel in functional and (head_rel in invalid_functional or not (func_deps.get(head_rel, set()) <= full)):
             return False
         for p in w.get("premises", ()):
             rel = p["row"]["relation"]
