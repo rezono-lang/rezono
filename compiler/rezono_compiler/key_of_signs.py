@@ -5,8 +5,7 @@ from __future__ import annotations
 from functools import cache
 from pathlib import Path
 
-import yaml
-
+from . import strict_yaml
 from .pack import CONTRACTS, entries
 
 PARTS = ("statuses", "tones", "signs", "differences")
@@ -109,7 +108,7 @@ FALLBACK_MESSAGES: dict[str, tuple[tuple[str, str], ...]] = {
 
 @cache
 def _load_from_dir(std_view: Path) -> tuple[dict[str, list[dict]], dict[str, tuple[tuple[str, str], ...]]]:
-    raw = yaml.safe_load((std_view / "key.yaml").read_text(encoding="utf-8"))
+    raw = strict_yaml.read(std_view / "key.yaml")
     key = {part: list(raw[part]) for part in PARTS}
     labels = {item["label_message"] for part in PARTS for item in key[part]}
     messages: dict[str, tuple[tuple[str, str], ...]] = {}
