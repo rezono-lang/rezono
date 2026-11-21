@@ -30,32 +30,37 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, NoReturn
 
-from . import rules_dl, spans
+from . import rules, rules_dl, spans
 from .diagnostics import Diagnostic
 
 if TYPE_CHECKING:
     from . import modules
 
 REZONO_1_FORMAT = "rezono.module/5"
-# Members that only the calculation IR lowers; a derived value with one of them stays a calculation.
-CALC_ONLY = frozenset({"unit", "versions", "definitions", "output", "totality", "unless", "table"})
 SCALARS = {"Int": "integer", "Integer": "integer", "Text": "string", "Bool": "boolean", "Date": "date"}
 COMPARE = rules_dl.COMPARE
+ARITH = rules_dl.ARITH
 NEGATED = {"eq": "ne", "ne": "eq", "lt": "ge", "le": "gt", "gt": "le", "ge": "lt"}
 KNOWN, UNKNOWN = ("const", "known", "string"), ("const", "unknown", "string")
+NOT_APPLICABLE, INVALID = ("const", "not_applicable", "string"), ("const", "invalid", "string")
 EMPTY, NO_VALUE = ("const", "", "string"), ("const", "no_value", "string")
-SENTINEL = {"string": ("const", "", "string"), "boolean": ("const", "false", "boolean")}
+EXCEPTION_CONFLICT = ("const", "exception_conflict", "string")
+VERSIONS_OVERLAP = ("const", "versions_overlap", "string")
+SENTINEL = {"string": ("const", "", "string"), "boolean": ("const", "false", "boolean"),
+            "rational": ("const", "0", "rational")}
 
 
-def module_as_of(form: dict) -> bool:
-    """Whether a module declares an evaluation date, which only the calculation IR reads."""
-    return any(isinstance(d, dict) and "asOf" in d for d in form["module"]["decls"])
+def module_as_of(form: dict) -> tuple[str, str] | None:
+    """The `(valid_at, known_at)` evaluation date declared by `as of` in `form`, if any."""
+    for d in form["module"]["decls"]:
+        if isinstance(d, dict) and "asOf" in d and "known" in d:
+            return d["asOf"], d["known"]
+    return None
 
 
 def is_derivation(form: dict | None, derived: object) -> bool:
-    """Whether a derived value of a kind or an extension in `form` lowers here rather than to rezono.calc/1."""
-    return (form is not None and form.get("format") == REZONO_1_FORMAT and isinstance(derived, dict)
-            and not (CALC_ONLY & derived.keys()) and not module_as_of(form))
+    """Whether a derived value of a kind or an extension in `form` lowers here to rezono.rules/2."""
+    return form is not None and form.get("format") == REZONO_1_FORMAT and isinstance(derived, dict)
 
 
 def is_module_derived(decl: object) -> bool:
@@ -114,12 +119,18 @@ class Signature:
     property: str | None = None  # for a property: its name
     binder: str | None = None  # for a property: the subject variable
     key_column: str | None = None  # for a property: the name of its key column
+    enum_type: str | None = None  # for an enum result: the pack enum id
+    note_source: str | None = None  # optional @ source from declaration or selected version
+    as_of: tuple[str, str] | None = None  # (valid_at, known_at) evaluation date
 
 
 def lower_pack(root: str, mods: Iterable[modules.Module], names: modules.Names, pack) -> Lowered:
     """The rules of every rezono 1 derivation of the pack being compiled, as native sources for the assembler."""
     from .pack import CompileError
 
+    root_v1 = [m for m in mods if m.pack == root and m.form is not None and m.form.get("format") == REZONO_1_FORMAT]
+    pack_as_ofs = {ao for m in root_v1 if (ao := module_as_of(m.form)) is not None}
+    default_as_of = next(iter(pack_as_ofs)) if len(pack_as_ofs) == 1 else None
     found = [m for m in mods if m.form is not None and m.form.get("format") == REZONO_1_FORMAT
              and any(_derivations(m.form))]
     if not found:
@@ -136,11 +147,12 @@ def lower_pack(root: str, mods: Iterable[modules.Module], names: modules.Names, 
             raise CompileError(message, [Diagnostic("R000", message, where)]) from error
         site = Site(where, text, {place["at"]: place["start"] for place in module.form["spans"]})
         sites[module.rel] = site
+        mod_as_of = module_as_of(module.form) or default_as_of
         for at, decl, owner in _derivations(module.form):
             try:
                 if module.pack != root:
                     site.refuse(at, "a derivation of an imported rezono 1 pack is not lowered yet")
-                signature = _signature(site, module, names, pack, at, decl, owner)
+                signature = _signature(site, module, names, pack, at, decl, owner, mod_as_of)
                 if signature.relation in signatures:
                     site.refuse(at, f"{signature.relation} is derived twice")
                 signatures[signature.relation] = signature
@@ -167,9 +179,9 @@ def lower_pack(root: str, mods: Iterable[modules.Module], names: modules.Names, 
             refused.append(error.diagnostic)
             continue
         decl = signature.decl
-        if "means" in decl or "source" in decl:
+        if "means" in decl or signature.note_source is not None:
             line, column = signature.site.place(f"{signature.at}/means" if "means" in decl else signature.at)
-            lowered.notes[name] = Note(decl.get("means"), decl.get("source"), signature.site.file, line, column,
+            lowered.notes[name] = Note(decl.get("means"), signature.note_source, signature.site.file, line, column,
                                        f"{signature.at}/means")
         if signature.property is not None:
             lowered.properties[name] = (signature.kind, signature.property)
@@ -198,6 +210,13 @@ def _derivations(form: dict):
             for position, derived in enumerate(decl["derived"]):
                 if is_derivation(form, derived):
                     yield f"/decls/{index}/derived/{position}", derived, decl
+
+
+def _enum_name(names: modules.Names, pack, module: modules.Module, text: object) -> str | None:
+    if not isinstance(text, str) or text in SCALARS:
+        return None
+    engine = names.resolve(module.id, text)
+    return engine if engine in pack.enums else None
 
 
 def _type(site: Site, names: modules.Names, pack, module: modules.Module, at: str, text: object) -> tuple:
@@ -229,18 +248,136 @@ def validate_note(site: Site, at: str, decl: Mapping[str, object]) -> tuple[str 
     return means if isinstance(means, str) else None, source if isinstance(source, str) else None
 
 
+VERSION_FIELDS = frozenset({"version", "replaces", "valid", "known", "value", "source", "definitions"})
+
+
+def _validate_versions(site: Site, at: str, versions: object) -> None:
+    if not isinstance(versions, list) or not versions:
+        site.refuse(f"{at}/versions", "versions must be a non-empty list")
+    by_number: dict[str, list[int]] = {}
+    for index, ver in enumerate(versions):
+        vat = f"{at}/versions/{index}"
+        if not isinstance(ver, dict):
+            site.refuse(vat, "a version must be an object")
+        if extra := sorted(set(ver) - VERSION_FIELDS):
+            site.refuse(vat, f"`{extra[0]}` on a rezono 1 version is not lowered yet")
+        if "definitions" in ver:
+            site.refuse(vat, "`definitions` on a rezono 1 version is not lowered yet")
+        if not isinstance(ver.get("version"), str) or not ver["version"]:
+            site.refuse(vat, "a version needs a version number")
+        if not isinstance(ver.get("value"), dict):
+            site.refuse(f"{vat}/value", "a version needs a `=` value")
+        if "valid" in ver:
+            valid = ver["valid"]
+            if (not isinstance(valid, list) or len(valid) not in (1, 2)
+                    or not all(isinstance(d, str) and rules.iso_date(d) for d in valid)
+                    or (len(valid) == 2 and valid[0] >= valid[1])):
+                site.refuse(vat, "version `valid` must be a valid date range")
+        if "known" in ver and (not isinstance(ver["known"], str) or not rules.iso_date(ver["known"])):
+            site.refuse(vat, "version `known` must be an ISO date")
+        if "source" in ver and (not isinstance(ver["source"], str) or not ver["source"]):
+            site.refuse(vat, "a version source must be non-empty text", "R000")
+        by_number.setdefault(ver["version"], []).append(index)
+    # Check replaces targets and acyclicity (R021).
+    state = [0] * len(versions)
+    for start in range(len(versions)):
+        if state[start]:
+            continue
+        stack = [start]
+        while stack:
+            node = stack[-1]
+            if state[node] == 0:
+                state[node] = 1
+                rep = versions[node].get("replaces")
+                if rep is not None:
+                    if not isinstance(rep, str) or rep not in by_number:
+                        site.refuse(f"{at}/versions/{node}", f"version replaces unknown version {rep!r}", "R021")
+                    for nxt in by_number[rep]:
+                        if state[nxt] == 1:
+                            site.refuse(f"{at}/versions/{node}", f"version {versions[node]['version']} replaces cycle", "R021")
+                        if state[nxt] == 0:
+                            stack.append(nxt)
+            else:
+                state[node] = 2
+                stack.pop()
+
+
+def _validate_unless(site: Site, at: str, blocks: object) -> None:
+    if not isinstance(blocks, list) or not blocks:
+        site.refuse(f"{at}/unless", "unless must be a non-empty list of blocks")
+    for bi, block in enumerate(blocks):
+        bat = f"{at}/unless/{bi}"
+        if not isinstance(block, list) or not block:
+            site.refuse(bat, "an unless block must be a non-empty list of clauses")
+        for ci, clause in enumerate(block):
+            cat = f"{bat}/{ci}"
+            if not isinstance(clause, dict):
+                site.refuse(cat, "an unless clause must be an object")
+            if extra := sorted(set(clause) - {"when", "then", "source"}):
+                site.refuse(cat, f"`{extra[0]}` in an unless clause is not lowered yet")
+            if not isinstance(clause.get("when"), dict):
+                site.refuse(f"{cat}/when", "an unless clause needs a `when` expression")
+            if not isinstance(clause.get("then"), dict):
+                site.refuse(f"{cat}/then", "an unless clause needs a `then` expression")
+            if "source" in clause and (not isinstance(clause["source"], str) or not clause["source"]):
+                site.refuse(cat, "an unless source must be non-empty text", "R000")
+
+
+def _validate_table(site: Site, at: str, table: object, card: object) -> None:
+    if not isinstance(table, dict):
+        site.refuse(f"{at}/table", "a table must be an object")
+    policy = table.get("table")
+    if policy == "priority":
+        site.refuse(f"{at}/table", "`table priority` is removed in `rezono 1` (R028); use `table first` instead", "R028")
+    if policy == "collect":
+        site.refuse(f"{at}/table", "`table collect` on a rezono 1 derivation is not lowered yet")
+    if policy not in ("unique", "first"):
+        site.refuse(f"{at}/table", f"a table `{policy}` is not lowered yet")
+    if card is not None:
+        site.refuse(at, f"a table derivation with cardinality `{card}` is not lowered yet")
+    inputs = table.get("inputs")
+    rows = table.get("rows")
+    if not isinstance(inputs, list) or not inputs:
+        site.refuse(f"{at}/table", "a table needs input columns")
+    if not isinstance(rows, list) or not rows:
+        site.refuse(f"{at}/table", "a table needs at least one row")
+    for ri, row in enumerate(rows):
+        rat = f"{at}/table/rows/{ri}"
+        if (not isinstance(row, dict) or not isinstance(row.get("tests"), list)
+                or len(row["tests"]) != len(inputs) or not isinstance(row.get("value"), dict)):
+            site.refuse(rat, f"table row needs {len(inputs)} cells and a value")
+
+
 def _signature(site: Site, module: modules.Module, names: modules.Names, pack, at: str, decl: dict,
-               owner: dict | None) -> Signature:
-    allowed = {"derived", "type", "card", "value", "means", "source"} | ({"params", "over"} if owner is None else set())
+               owner: dict | None, as_of: tuple[str, str] | None = None) -> Signature:
+    allowed = ({"derived", "type", "card", "value", "means", "source", "unit", "unless", "versions", "table", "totality"}
+               | ({"params", "over"} if owner is None else set()))
     if extra := sorted(set(decl) - allowed):
         site.refuse(at, f"`{extra[0]}` on a rezono 1 derivation is not lowered yet")
-    if "value" not in decl:
-        site.refuse(at, "a derivation without `=` is not lowered yet")
+    if "table" in decl and any(k in decl for k in ("value", "versions", "unless")):
+        site.refuse(at, "a `table` stands alone under its derived value")
+    if "value" in decl and "versions" in decl:
+        site.refuse(at, "a derivation cannot declare both `=` and `versions`")
+    if not any(k in decl for k in ("value", "versions", "table", "unless")):
+        site.refuse(at, "a derivation needs `=`, `versions`, `unless` or `table`")
+    if "unit" in decl and (not isinstance(decl["unit"], str) or not decl["unit"]):
+        site.refuse(f"{at}/unit", "unit must be non-empty text")
     card = decl.get("card")
     if card not in (None, "?"):
         site.refuse(at, f"a set-valued derivation `{decl.get('type')}{card}` is not lowered yet")
+    if "versions" in decl:
+        _validate_versions(site, at, decl["versions"])
+    if "unless" in decl:
+        _validate_unless(site, at, decl["unless"])
+    if "table" in decl:
+        _validate_table(site, at, decl["table"], card)
     result_type = _type(site, names, pack, module, at, decl.get("type"))
     boolean = result_type == ("scalar", "boolean") and card is None
+    if "totality" in decl:
+        if decl["totality"] != "total":
+            site.refuse(at, f"invalid totality {decl['totality']!r}")
+        if boolean:
+            site.refuse(at, "`total` applies to functional derivations, not Bool sets")
     if owner is None:
         key = []
         for index, param in enumerate(decl.get("params") or []):
@@ -271,7 +408,9 @@ def _signature(site: Site, module: modules.Module, names: modules.Names, pack, a
     if not boolean:
         signature.value_type = ir_type(pack, result_type)
         signature.optional = card == "?"
-    validate_note(site, at, decl)
+    signature.enum_type = _enum_name(names, pack, module, decl.get("type"))
+    _, signature.note_source = validate_note(site, at, decl)
+    signature.as_of = as_of
     return signature
 
 
@@ -311,6 +450,36 @@ class Member:
     pred: list[tuple[str, dict]]  # (pointer, atom) of its conjunctive predicate
 
 
+@dataclass(frozen=True)
+class BoolEval:
+    """Four-valued evaluation of a Boolean condition over the derivation's key."""
+
+    t_rel: str | None  # (key...) where true
+    f_rel: str | None  # (key...) where false
+    s_rel: str | None  # (key..., state, reason) where non-known
+    t_all: bool = False
+    f_all: bool = False
+
+
+@dataclass(frozen=True)
+class ValBranch:
+    """One known-value branch in a rule body."""
+
+    lits: tuple[tuple, ...]
+    assigns: tuple[tuple, ...]
+    conds: tuple[tuple, ...]
+    term: tuple
+
+
+@dataclass(frozen=True)
+class ValEval:
+    """Four-valued evaluation of a value expression over the derivation's key."""
+
+    typ: str
+    branches: tuple[ValBranch, ...]
+    state_rel: str | None  # (key..., state, reason) where non-known
+
+
 class Lowering:
     """The statements of one derivation."""
 
@@ -322,6 +491,11 @@ class Lowering:
         self.line, self.column = self.site.place(signature.at)
         self.used = {name for name, _ in signature.key}
         self.env = dict(signature.key)
+        self._declared_helpers: set[str] = set()
+        self._helper_seq = 0
+        self._has_cache: dict[str, str] = {}
+        self._key_cols = [(self.sig.key_column or name, ir_type(self.pack, typ)) for name, typ in self.sig.key]
+        self._state_cols = self._key_cols + [("state", "string"), ("reason", "string")]
 
     # -- output ---------------------------------------------------------------------------------------------------
 
@@ -339,6 +513,19 @@ class Lowering:
                                           f"derivation needs")
         self.taken.add(name)
         return name
+
+    def next_helper(self, tag: str) -> str:
+        self._helper_seq += 1
+        return self.helper(f"h{self._helper_seq}_{tag}")
+
+    def add_helper(self, name: str, columns: list[tuple[str, str]], terms: list[tuple], body: list[tuple]) -> None:
+        if name not in self._declared_helpers:
+            self.declare(name, columns)
+            self._declared_helpers.add(name)
+        self.rule(name, terms, body)
+
+    def helper_or_none(self, name: str) -> str | None:
+        return name if name in self._declared_helpers else None
 
     def declare(self, name: str, columns: list[tuple[str, str]]) -> None:
         self.statements.append(("decl", name, columns, self.line, None, False, False, None, False, None, False))
@@ -363,36 +550,921 @@ class Lowering:
 
     # -- the derivation -------------------------------------------------------------------------------------------
 
+    def select_version(self, at: str, versions: list[dict]) -> tuple[str, tuple[int, dict] | None]:
+        """Pick the active version against the module's `as of` (Rule 4a/4b/4c in v0.md §5a)."""
+        valid_at, known_at = self.sig.as_of if self.sig.as_of is not None else (None, None)
+
+        def matches(ver: dict) -> bool:
+            if "known" in ver and known_at is not None and ver["known"] > known_at:
+                return False
+            if "valid" in ver:
+                if valid_at is None:
+                    return False
+                bounds = ver["valid"]
+                if valid_at < bounds[0]:
+                    return False
+                if len(bounds) == 2 and valid_at >= bounds[1]:
+                    return False
+            return True
+
+        active = [(idx, ver) for idx, ver in enumerate(versions) if matches(ver)]
+        if not active:
+            return "none", None
+        active_nums = {ver["version"] for _, ver in active}
+        replaced = {ver["replaces"] for _, ver in active if ver.get("replaces") in active_nums}
+        remaining = [(idx, ver) for idx, ver in active if ver["version"] not in replaced] or active
+        max_known = max(ver.get("known", "") for _, ver in remaining)
+        latest = [(idx, ver) for idx, ver in remaining if ver.get("known", "") == max_known]
+        if len(latest) > 1:
+            return "overlap", None
+        return "one", latest[0]
+
+    def sentinel_term(self, at: str) -> tuple:
+        if self.sig.value_type not in SENTINEL and self.sig.value_type != "integer":
+            self.site.refuse(at, f"a {self.sig.value_type} derivation that can be undecided is not lowered yet")
+        return ("const", "0", "integer") if self.sig.value_type == "integer" else SENTINEL[self.sig.value_type]
+
+    def emit_state_rule(self, at: str, state_rel: str) -> None:
+        if self.sig.value_type not in SENTINEL and self.sig.value_type != "integer":
+            self.site.refuse(at, f"a {self.sig.value_type} derivation that can be undecided is not lowered yet")
+        total = self.fresh("n")
+        state_v, reason_v = ("var", self.fresh("st")), ("var", self.fresh("rsn"))
+        sentinel = ("var", total) if self.sig.value_type == "integer" else SENTINEL[self.sig.value_type]
+        self.statements.append((
+            "rule", (self.sig.relation, self.key_terms() + [sentinel], self.line),
+            self.domain() + [
+                self.lit(state_rel, self.key_terms() + [state_v, reason_v]),
+                ("agg", total, "count", None,
+                 (state_rel, self.key_terms() + [("wild",), ("wild",)], self.line)),
+            ],
+            self.line,
+        ))
+        self.columns.append(self.column)
+
+    def emit_functional(self, at: str, meta: dict, branches: tuple[ValBranch, ...], state_rel: str | None) -> None:
+        if self.sig.decl.get("totality") == "total":
+            meta["conflict_policy"] = "block"
+        self.statements.append(("functional", self.sig.relation, self._key_cols, self.line, meta))
+        if not branches and state_rel is None:
+            self.rule(self.sig.relation, self.key_terms() + [self.sentinel_term(at)],
+                      self.domain() + [("cmp", "eq", ("const", "1", "integer"), ("const", "0", "integer"))])
+            return
+        for branch in branches:
+            self.rule(self.sig.relation, self.key_terms() + [branch.term],
+                      self.domain() + list(branch.lits) + list(branch.assigns) + list(branch.conds))
+        if state_rel is not None:
+            self.emit_state_rule(at, state_rel)
+
     def run(self) -> None:
-        sig, value = self.sig, self.sig.decl["value"]
-        at = f"{sig.at}/value"
-        key_columns = [(sig.key_column or name, ir_type(self.pack, typ)) for name, typ in sig.key]
+        sig, decl = self.sig, self.sig.decl
+        key_columns = self._key_cols
+        value_at = f"{sig.at}/value"
+        value = decl.get("value")
+        if "versions" in decl:
+            status, picked = self.select_version(sig.at, decl["versions"])
+            if sig.result == "set":
+                if "table" in decl or "unless" in decl:
+                    self.site.refuse(sig.at, "`table` and `unless` on a Bool set derivation are not lowered yet")
+                self.declare(sig.relation, key_columns)
+                if status == "one":
+                    ver_idx, ver = picked
+                    for alternative in self.alternatives(f"{sig.at}/versions/{ver_idx}/value", ver["value"]):
+                        self.rule(sig.relation, self.key_terms(), self.domain() + alternative)
+                elif status == "none":
+                    self.rule(sig.relation, self.key_terms(),
+                              self.domain() + [("cmp", "eq", ("const", "1", "integer"), ("const", "0", "integer"))])
+                elif status == "overlap":
+                    self.site.refuse(f"{sig.at}/versions", "versions overlap on a Bool set derivation")
+                return
+            self._check_functional_domain()
+            meta = {"domain": sig.domain, "value": {"name": "value", "type": sig.value_type},
+                    "conflict_policy": "publish", "empty_state": "unknown", "empty_reason": "no_version_applies"}
+            if status == "none":
+                if "unless" in decl:
+                    self.lower_unless(sig.at, None, decl["unless"], meta, empty_reason="no_version_applies")
+                else:
+                    self.emit_functional(sig.at, meta, (), None)
+                return
+            if status == "overlap":
+                meta["conflict_policy"] = "block"
+                overlap = self.next_helper("overlap")
+                self.add_helper(overlap, self._state_cols, self.key_terms() + [INVALID, VERSIONS_OVERLAP],
+                                self.domain())
+                self.emit_functional(sig.at, meta, (), overlap)
+                return
+            ver_idx, ver = picked
+            if sig.note_source is None and "source" in ver:
+                sig.note_source = ver["source"]
+            value_at = f"{sig.at}/versions/{ver_idx}/value"
+            value = ver["value"]
         if sig.result == "set":
+            if "table" in decl or "unless" in decl:
+                self.site.refuse(sig.at, "`table` and `unless` on a Bool set derivation are not lowered yet")
             self.declare(sig.relation, key_columns)
-            for alternative in self.alternatives(at, value):
+            for alternative in self.alternatives(value_at, value):
                 self.rule(sig.relation, self.key_terms(), self.domain() + alternative)
             return
+        self._check_functional_domain()
+        meta = {"domain": sig.domain, "value": {"name": "value", "type": sig.value_type}, "conflict_policy": "publish"}
+        if "table" in decl:
+            self.lower_table(f"{sig.at}/table", decl["table"], meta)
+            return
+        if "unless" in decl:
+            fallback = (value_at, value) if value is not None else None
+            self.lower_unless(sig.at, fallback, decl["unless"], meta)
+            return
+        if set(value) == {"agg"} and isinstance(value["agg"], list) and value["agg"][:1] == ["one"]:
+            meta |= {"empty_state": "not_applicable" if sig.optional else "unknown", "empty_reason": "no_match"}
+            if decl.get("totality") == "total":
+                meta["conflict_policy"] = "block"
+            self.statements.append(("functional", sig.relation, key_columns, self.line, meta))
+            self.one(value_at, value["agg"])
+        elif set(value) == {"agg"} and isinstance(value["agg"], list) and value["agg"][:1] == ["count"]:
+            if sig.value_type != "integer":
+                self.site.refuse(value_at, "a count is a whole number: declare the derivation `Int`", "R003")
+            if decl.get("totality") == "total":
+                meta["conflict_policy"] = "block"
+            self.statements.append(("functional", sig.relation, key_columns, self.line, meta))
+            self.count(value_at, value["agg"])
+        elif (inline := self.try_inline_value(value_at, value)) is not None:
+            lits, assigns, conds, term, missing, typ = inline
+            if typ != sig.value_type:
+                self.site.refuse(value_at, f"expression has type {typ}, expected {sig.value_type}", "R003")
+            meta |= {"empty_state": "not_applicable" if missing == "not_applicable" else "unknown",
+                     "empty_reason": "no_value"}
+            self.emit_functional(value_at, meta, (ValBranch(tuple(lits), tuple(assigns), tuple(conds), term),), None)
+        else:
+            evaluated = self.eval_value(value_at, value)
+            if evaluated.typ != sig.value_type:
+                self.site.refuse(value_at, f"expression has type {evaluated.typ}, expected {sig.value_type}", "R003")
+            meta |= {"empty_state": "not_applicable" if sig.optional else "unknown", "empty_reason": "no_value"}
+            self.emit_functional(value_at, meta, evaluated.branches, evaluated.state_rel)
+
+    def _check_functional_domain(self) -> None:
+        sig = self.sig
         if sig.domain not in self.pack.kinds and sig.domain not in self.signatures and sig.property is None:
             self.site.refuse(f"{sig.at}/over", f"`over` names a set this pack derives in rezono 1, not {sig.domain}")
         if sig.domain in self.signatures and self.signatures[sig.domain].result != "set":
             self.site.refuse(f"{sig.at}/over", f"the domain {sig.domain} is a Bool set, not a functional derivation")
-        meta = {"domain": sig.domain, "value": {"name": "value", "type": sig.value_type}, "conflict_policy": "publish"}
-        if set(value) == {"agg"} and isinstance(value["agg"], list) and value["agg"][:1] == ["one"]:
-            meta |= {"empty_state": "not_applicable" if sig.optional else "unknown", "empty_reason": "no_match"}
-            self.statements.append(("functional", sig.relation, key_columns, self.line, meta))
-            self.one(at, value["agg"])
-        elif set(value) == {"agg"} and isinstance(value["agg"], list) and value["agg"][:1] == ["count"]:
-            if sig.value_type != "integer":
-                self.site.refuse(at, "a count is a whole number: declare the derivation `Int`", "R003")
-            self.statements.append(("functional", sig.relation, key_columns, self.line, meta))
-            self.count(at, value["agg"])
-        elif set(value) == {"path"}:
-            literals, term, optional = self.path(at, value["path"])
-            meta |= {"empty_state": "not_applicable" if optional else "unknown", "empty_reason": "no_value"}
-            self.statements.append(("functional", sig.relation, key_columns, self.line, meta))
-            self.rule(sig.relation, self.key_terms() + [term], self.domain() + literals)
+
+    # -- inline fast path & 4-state expression lowering -----------------------------------------------------------
+
+    def _prop_sig(self, kind: str, name: str) -> Signature | None:
+        while kind is not None:
+            if (sig := self.signatures.get(f"{kind}_{name}")) is not None:
+                return sig
+            kind = self.pack.kinds[kind].parent
+        return None
+
+    def _enum_literal(self, name: str) -> tuple | None:
+        if self.sig.enum_type is not None and name in self.pack.enums[self.sig.enum_type]:
+            return "const", name, "string"
+        matches = [e for e, vals in self.pack.enums.items() if name in vals]
+        if len(matches) == 1:
+            return "const", name, "string"
+        return None
+
+    def try_inline_value(self, at: str, node: dict) -> tuple[list, list, list, tuple, str | None, str] | None:
+        """Single-rule inline lowering when the expression is a simple literal, slot path, or integer arithmetic
+        whose missing slots (if any) all share the same missingness (`unknown` vs `not_applicable`)."""
+        if not isinstance(node, dict) or len(node) != 1:
+            return None
+        key = next(iter(node))
+        if key == "lit":
+            term = self.literal(at, node["lit"])
+            return [], [], [], term, None, term[2]
+        if key == "path":
+            path = node["path"]
+            if len(path) == 1 and path[0] in self.env:
+                return [], [], [], ("var", path[0]), None, ir_type(self.pack, self.env[path[0]])
+            if len(path) == 1:
+                if self.sig.binder == "it" and path[0] != "it" and self.slot(at, self.env["it"][1], path[0]) is not None:
+                    slot = self.slot(at, self.env["it"][1], path[0])
+                    if slot.multivalued or slot.world == "open":
+                        return None
+                    lits, term, optional = self.path(at, path)
+                    return lits, [], [], term, ("not_applicable" if optional else "unknown"), ir_type(self.pack, self.slot_type(slot))
+                if (enum_term := self._enum_literal(path[0])) is not None:
+                    return [], [], [], enum_term, None, "string"
+                return None
+            head = path[0]
+            if head not in self.env:
+                return None
+            typ = self.env[head]
+            opt_flags: set[bool] = set()
+            for part in path[1:]:
+                if typ[0] != "kind":
+                    return None
+                slot = self.slot(at, typ[1], part)
+                if slot is None or slot.multivalued or slot.world == "open":
+                    return None
+                opt_flags.add(not slot.required)
+                typ = self.slot_type(slot)
+            if len(opt_flags) > 1:
+                return None
+            lits, term, optional = self.path(at, path)
+            return lits, [], [], term, ("not_applicable" if optional else "unknown"), ir_type(self.pack, typ)
+        if key == "neg":
+            inner = node["neg"]
+            if isinstance(inner, dict) and set(inner) == {"lit"}:
+                term = self.literal(f"{at}/neg", inner["lit"])
+                if term[2] != "integer":
+                    self.site.refuse(at, "unary `-` requires an integer", "R003")
+                return [], [], [], ("const", str(-int(term[1])), "integer"), None, "integer"
+            sub = self.try_inline_value(f"{at}/neg", inner)
+            if sub is None:
+                return None
+            lits, assigns, conds, term, missing, typ = sub
+            if typ != "integer":
+                self.site.refuse(at, "unary `-` requires an integer", "R003")
+            res = self.fresh()
+            return lits, assigns + [("arith", res, "sub", ("const", "0", "integer"), term)], conds, ("var", res), missing, "integer"
+        if key == "arith":
+            op, left, right = node["arith"]
+            if op not in ARITH:
+                return None
+            sl = self.try_inline_value(f"{at}/arith/1", left)
+            sr = self.try_inline_value(f"{at}/arith/2", right)
+            if sl is None or sr is None:
+                return None
+            ll, al, cl, tl, ml, typ_l = sl
+            lr, ar, cr, tr, mr, typ_r = sr
+            if typ_l != "integer" or typ_r != "integer":
+                self.site.refuse(at, f"arithmetic `{op}` requires integer operands", "R003")
+            if ml is not None and mr is not None and ml != mr:
+                return None
+            if op == "/":
+                if tr[0] != "const" or tr[2] != "integer" or int(tr[1]) == 0:
+                    return None
+            res = self.fresh()
+            missing = ml or mr
+            return ll + lr, al + ar + [("arith", res, ARITH[op], tl, tr)], cl + cr, ("var", res), missing, "integer"
+        return None
+
+    def _has_slot(self, kind: str, slot) -> str:
+        if slot.table not in self._has_cache:
+            name = self.next_helper(f"has_{slot.name}")
+            elem = ("var", self.fresh("e"))
+            self.add_helper(name, [("element", ir_type(self.pack, ("kind", kind)))], [elem],
+                            [self.lit(kind, [elem]), self.lit(slot.table, [elem, ("var", self.fresh())])])
+            self._has_cache[slot.table] = name
+        return self._has_cache[slot.table]
+
+    def _undecided_keys(self, state_rel: str | None) -> str | None:
+        """Keys in `state_rel` whose state is `unknown` or `invalid`."""
+        if state_rel is None:
+            return None
+        und = self.next_helper("und")
+        rsn = ("var", self.fresh("rsn"))
+        for st in (UNKNOWN, INVALID):
+            self.add_helper(und, self._key_cols, self.key_terms(),
+                            self.domain() + [self.lit(state_rel, self.key_terms() + [st, rsn])])
+        return self.helper_or_none(und)
+
+    def _any_keys(self, state_rel: str | None) -> str | None:
+        if state_rel is None:
+            return None
+        any_rel = self.next_helper("any")
+        st, rsn = ("var", self.fresh("st")), ("var", self.fresh("rsn"))
+        self.add_helper(any_rel, self._key_cols, self.key_terms(),
+                        self.domain() + [self.lit(state_rel, self.key_terms() + [st, rsn])])
+        return self.helper_or_none(any_rel)
+
+    def combine_states(self, sources: list[str | None], *, exclude: tuple[str, ...] = ()) -> str | None:
+        """Combine multiple `(key..., state, reason)` relations with priority `invalid > unknown > not_applicable`."""
+        rels = [s for s in sources if s is not None]
+        if not rels:
+            return None
+        if len(rels) == 1 and not exclude:
+            return rels[0]
+        has_inv = self.next_helper("has_inv")
+        has_unk = self.next_helper("has_unk")
+        for s in rels:
+            self.add_helper(has_inv, self._key_cols, self.key_terms(),
+                            self.domain() + [self.lit(s, self.key_terms() + [INVALID, ("var", self.fresh("r"))])])
+            self.add_helper(has_unk, self._key_cols, self.key_terms(),
+                            self.domain() + [self.lit(s, self.key_terms() + [UNKNOWN, ("var", self.fresh("r"))])])
+        best = self.next_helper("state")
+        for s in rels:
+            rsn = ("var", self.fresh("r"))
+            if "invalid" not in exclude:
+                self.add_helper(best, self._state_cols, self.key_terms() + [INVALID, rsn],
+                                self.domain() + [self.lit(s, self.key_terms() + [INVALID, rsn])])
+            if "unknown" not in exclude:
+                self.add_helper(best, self._state_cols, self.key_terms() + [UNKNOWN, rsn],
+                                self.domain() + [self.lit(s, self.key_terms() + [UNKNOWN, rsn]),
+                                                 self.lit(has_inv, self.key_terms(), False)])
+            if "not_applicable" not in exclude:
+                self.add_helper(best, self._state_cols, self.key_terms() + [NOT_APPLICABLE, rsn],
+                                self.domain() + [self.lit(s, self.key_terms() + [NOT_APPLICABLE, rsn]),
+                                                 self.lit(has_inv, self.key_terms(), False),
+                                                 self.lit(has_unk, self.key_terms(), False)])
+        return self.helper_or_none(best)
+
+    def gate_state(self, state_rel: str | None, guard_lits: list[tuple]) -> str | None:
+        if state_rel is None:
+            return None
+        if not guard_lits:
+            return state_rel
+        gated = self.next_helper("gated")
+        st, rsn = ("var", self.fresh("st")), ("var", self.fresh("rsn"))
+        self.add_helper(gated, self._state_cols, self.key_terms() + [st, rsn],
+                        self.domain() + [self.lit(state_rel, self.key_terms() + [st, rsn])] + guard_lits)
+        return self.helper_or_none(gated)
+
+    def _materialize_val(self, val: ValEval) -> ValBranch | None:
+        if not val.branches:
+            return None
+        if len(val.branches) == 1:
+            return val.branches[0]
+        rel = self.next_helper("val")
+        cols = self._key_cols + [("value", val.typ)]
+        for branch in val.branches:
+            self.add_helper(rel, cols, self.key_terms() + [branch.term],
+                            self.domain() + list(branch.lits) + list(branch.assigns) + list(branch.conds))
+        v = ("var", self.fresh())
+        return ValBranch((self.lit(rel, self.key_terms() + [v]),), (), (), v)
+
+    def eval_path_val(self, at: str, path: list) -> ValEval:
+        head = path[0]
+        if head not in self.env:
+            if (self.sig.binder == "it" and head != "it"
+                    and (self.slot(at, self.env["it"][1], head) is not None
+                         or self._prop_sig(self.env["it"][1], head) is not None)):
+                path, head = ["it", *path], "it"
+            elif len(path) == 1 and (enum_term := self._enum_literal(head)) is not None:
+                return ValEval("string", (ValBranch((), (), (), enum_term),), None)
+        if head not in self.env:
+            self.site.refuse(at, f"{head} is not a variable here", "R001")
+        if len(path) == 1:
+            return ValEval(ir_type(self.pack, self.env[head]), (ValBranch((), (), (), ("var", head)),), None)
+        lits: list[tuple] = []
+        term: tuple = ("var", head)
+        typ = self.env[head]
+        state_rel_name = self.next_helper("path_st")
+        for index, name in enumerate(path[1:], 1):
+            if typ[0] != "kind":
+                self.site.refuse(at, f"{'.'.join(path[:index])} is no element, so it has no slot {name}", "R003")
+            slot = self.slot(at, typ[1], name)
+            if slot is not None:
+                if slot.multivalued:
+                    self.site.refuse(at, f"{'.'.join(path[:index + 1])} is a set; read it with a method such as "
+                                         "`.count()` or `.one()`", "R005")
+                if slot.world == "open":
+                    self.site.refuse(at, f"{slot.table} is open, so a missing value is unknown; it is not lowered yet",
+                                     "R004")
+                has_name = self._has_slot(typ[1], slot)
+                miss_state = NOT_APPLICABLE if not slot.required else UNKNOWN
+                self.add_helper(state_rel_name, self._state_cols, self.key_terms() + [miss_state, NO_VALUE],
+                                self.domain() + list(lits) + [self.lit(has_name, [term], False)])
+                nxt = ("var", self.fresh())
+                lits.append(self.lit(slot.table, [term, nxt]))
+                term, typ = nxt, self.slot_type(slot)
+                continue
+            prop = self._prop_sig(typ[1], name)
+            if prop is not None and prop.result == "functional":
+                if prop.relation == self.sig.relation:
+                    self.site.refuse(at, f"{prop.relation} cannot read itself recursively", "R043")
+                val_var = ("var", self.fresh())
+                for st_lit in (NOT_APPLICABLE, UNKNOWN, INVALID):
+                    rsn_v = ("var", self.fresh("rsn"))
+                    self.add_helper(state_rel_name, self._state_cols, self.key_terms() + [st_lit, rsn_v],
+                                    self.domain() + list(lits)
+                                    + [self.lit(prop.relation, [term, st_lit, rsn_v, ("var", self.fresh())])])
+                lits.append(self.lit(prop.relation, [term, KNOWN, EMPTY, val_var]))
+                term = val_var
+                typ = ("scalar", prop.value_type)
+                continue
+            self.site.refuse(at, f"{'.'.join(path[:index])} has no slot {name} lowered here", "R001")
+        return ValEval(ir_type(self.pack, typ), (ValBranch(tuple(lits), (), (), term),),
+                       self.helper_or_none(state_rel_name))
+
+    def eval_value(self, at: str, node: dict) -> ValEval:
+        if not isinstance(node, dict) or len(node) != 1:
+            self.site.refuse(at, "expression must be a single-key object")
+        key = next(iter(node))
+        if key == "lit":
+            term = self.literal(at, node["lit"])
+            return ValEval(term[2], (ValBranch((), (), (), term),), None)
+        if key == "path":
+            return self.eval_path_val(at, node["path"])
+        if key == "neg":
+            inner = node["neg"]
+            if isinstance(inner, dict) and set(inner) == {"lit"}:
+                term = self.literal(f"{at}/neg", inner["lit"])
+                if term[2] != "integer":
+                    self.site.refuse(at, "unary `-` requires an integer", "R003")
+                return ValEval("integer", (ValBranch((), (), (), ("const", str(-int(term[1])), "integer")),), None)
+            sub = self.eval_value(f"{at}/neg", inner)
+            if sub.typ != "integer":
+                self.site.refuse(at, "unary `-` requires an integer", "R003")
+            b = self._materialize_val(sub)
+            if b is None:
+                return sub
+            res = self.fresh()
+            return ValEval("integer", (ValBranch(b.lits, b.assigns + (("arith", res, "sub", ("const", "0", "integer"), b.term),),
+                                                 b.conds, ("var", res)),), sub.state_rel)
+        if key == "arith":
+            op, left, right = node["arith"]
+            if op not in ARITH:
+                self.site.refuse(at, f"arithmetic operator {op!r} is not lowered")
+            vl = self.eval_value(f"{at}/arith/1", left)
+            vr = self.eval_value(f"{at}/arith/2", right)
+            if vl.typ != "integer" or vr.typ != "integer":
+                self.site.refuse(at, f"arithmetic `{op}` requires integer operands", "R003")
+            bl, br = self._materialize_val(vl), self._materialize_val(vr)
+            st_rel = self.combine_states([vl.state_rel, vr.state_rel])
+            if bl is None or br is None:
+                return ValEval("integer", (), st_rel)
+            if op == "/" and (br.term[0] != "const" or br.term[2] != "integer" or int(br.term[1]) == 0):
+                self.site.refuse(f"{at}/arith/2", "division requires a non-zero integer constant divisor")
+            res = self.fresh()
+            branch = ValBranch(
+                bl.lits + br.lits,
+                bl.assigns + br.assigns + (("arith", res, ARITH[op], bl.term, br.term),),
+                bl.conds + br.conds,
+                ("var", res),
+            )
+            return ValEval("integer", (branch,), st_rel)
+        if key == "when":
+            cond_node, then_node, else_node = node["when"]
+            cond = self.eval_bool(f"{at}/when/0", cond_node)
+            vt = self.eval_value(f"{at}/when/1", then_node)
+            ve = self.eval_value(f"{at}/when/2", else_node)
+            if vt.typ != ve.typ:
+                self.site.refuse(at, f"`when` branches have different types ({vt.typ} vs {ve.typ})", "R003")
+            branches: list[ValBranch] = []
+            states: list[str | None] = [cond.s_rel]
+            if cond.t_all:
+                branches.extend(vt.branches)
+                states.append(vt.state_rel)
+            elif cond.t_rel is not None:
+                t_lit = self.lit(cond.t_rel, self.key_terms())
+                branches.extend(ValBranch((t_lit,) + b.lits, b.assigns, b.conds, b.term) for b in vt.branches)
+                states.append(self.gate_state(vt.state_rel, [t_lit]))
+            if cond.f_all:
+                branches.extend(ve.branches)
+                states.append(ve.state_rel)
+            elif cond.f_rel is not None:
+                f_lit = self.lit(cond.f_rel, self.key_terms())
+                branches.extend(ValBranch((f_lit,) + b.lits, b.assigns, b.conds, b.term) for b in ve.branches)
+                states.append(self.gate_state(ve.state_rel, [f_lit]))
+            return ValEval(vt.typ, tuple(branches), self.combine_states(states))
+        if key == "otherwise":
+            left_node, right_node = node["otherwise"]
+            vl = self.eval_value(f"{at}/otherwise/0", left_node)
+            vr = self.eval_value(f"{at}/otherwise/1", right_node)
+            if vl.typ != vr.typ:
+                self.site.refuse(at, f"`otherwise` operands have different types ({vl.typ} vs {vr.typ})", "R003")
+            branches = list(vl.branches)
+            states: list[str | None] = [self.combine_states([vl.state_rel], exclude=("not_applicable",))]
+            if vl.state_rel is not None:
+                na_rel = self.next_helper("na")
+                self.add_helper(na_rel, self._key_cols, self.key_terms(),
+                                self.domain() + [self.lit(vl.state_rel, self.key_terms() + [NOT_APPLICABLE, ("var", self.fresh("r"))])])
+                na_lit = self.lit(na_rel, self.key_terms())
+                branches.extend(ValBranch((na_lit,) + b.lits, b.assigns, b.conds, b.term) for b in vr.branches)
+                states.append(self.gate_state(vr.state_rel, [na_lit]))
+            return ValEval(vl.typ, tuple(branches), self.combine_states(states))
+        if key in ("cmp", "and", "or", "not", "imply", "is", "call"):
+            b = self.eval_bool(at, node)
+            branches = []
+            if b.t_all:
+                branches.append(ValBranch((), (), (), ("const", "true", "boolean")))
+            elif b.t_rel is not None:
+                branches.append(ValBranch((self.lit(b.t_rel, self.key_terms()),), (), (), ("const", "true", "boolean")))
+            if b.f_all:
+                branches.append(ValBranch((), (), (), ("const", "false", "boolean")))
+            elif b.f_rel is not None:
+                branches.append(ValBranch((self.lit(b.f_rel, self.key_terms()),), (), (), ("const", "false", "boolean")))
+            return ValEval("boolean", tuple(branches), b.s_rel)
+        self.site.refuse(at, f"expression `{key}` is not lowered in a rezono 1 functional derivation yet")
+
+    def _and_bool(self, a: BoolEval, b: BoolEval) -> BoolEval:
+        if a.f_all or b.f_all:
+            return BoolEval(None, None, None, f_all=True)
+        if a.t_all and b.t_all:
+            return BoolEval(None, None, None, t_all=True)
+        t_rel = self.next_helper("and_t")
+        if a.t_all and b.t_rel is not None:
+            t_rel_out: str | None = b.t_rel
+        elif b.t_all and a.t_rel is not None:
+            t_rel_out = a.t_rel
+        elif a.t_rel is not None and b.t_rel is not None:
+            self.add_helper(t_rel, self._key_cols, self.key_terms(),
+                            self.domain() + [self.lit(a.t_rel, self.key_terms()),
+                                             self.lit(b.t_rel, self.key_terms())])
+            t_rel_out = self.helper_or_none(t_rel)
         else:
-            self.site.refuse(at, "only a slot path, `.count(...)` and `.one(...)` lower to a functional derivation yet")
+            t_rel_out = None
+        f_rel = self.next_helper("and_f")
+        for side in (a.f_rel, b.f_rel):
+            if side is not None:
+                self.add_helper(f_rel, self._key_cols, self.key_terms(),
+                                self.domain() + [self.lit(side, self.key_terms())])
+        sa = self.gate_state(a.s_rel, [] if b.f_rel is None else [self.lit(b.f_rel, self.key_terms(), False)])
+        sb = self.gate_state(b.s_rel, [] if a.f_rel is None else [self.lit(a.f_rel, self.key_terms(), False)])
+        return BoolEval(t_rel_out, self.helper_or_none(f_rel), self.combine_states([sa, sb]))
+
+    def _or_bool(self, a: BoolEval, b: BoolEval) -> BoolEval:
+        if a.t_all or b.t_all:
+            return BoolEval(None, None, None, t_all=True)
+        if a.f_all and b.f_all:
+            return BoolEval(None, None, None, f_all=True)
+        t_rel = self.next_helper("or_t")
+        for side in (a.t_rel, b.t_rel):
+            if side is not None:
+                self.add_helper(t_rel, self._key_cols, self.key_terms(),
+                                self.domain() + [self.lit(side, self.key_terms())])
+        if a.f_all and b.f_rel is not None:
+            f_rel_out: str | None = b.f_rel
+        elif b.f_all and a.f_rel is not None:
+            f_rel_out = a.f_rel
+        elif a.f_rel is not None and b.f_rel is not None:
+            f_rel = self.next_helper("or_f")
+            self.add_helper(f_rel, self._key_cols, self.key_terms(),
+                            self.domain() + [self.lit(a.f_rel, self.key_terms()),
+                                             self.lit(b.f_rel, self.key_terms())])
+            f_rel_out = self.helper_or_none(f_rel)
+        else:
+            f_rel_out = None
+        sa = self.gate_state(a.s_rel, [] if b.t_rel is None else [self.lit(b.t_rel, self.key_terms(), False)])
+        sb = self.gate_state(b.s_rel, [] if a.t_rel is None else [self.lit(a.t_rel, self.key_terms(), False)])
+        return BoolEval(self.helper_or_none(t_rel), f_rel_out, self.combine_states([sa, sb]))
+
+    def _cmp_bool(self, at: str, op: str, left_val: ValEval, right_val: ValEval) -> BoolEval:
+        if op not in COMPARE:
+            self.site.refuse(at, f"the comparison {op} is not lowered", "R016")
+        if left_val.typ != right_val.typ:
+            self.site.refuse(at, f"cannot compare {left_val.typ} with {right_val.typ}", "R003")
+        if op not in ("=", "!=") and left_val.typ != "integer":
+            self.site.refuse(at, f"order comparison `{op}` requires integers", "R003")
+        bl, br = self._materialize_val(left_val), self._materialize_val(right_val)
+        s_rel = self.combine_states([left_val.state_rel, right_val.state_rel])
+        if bl is None or br is None:
+            return BoolEval(None, None, s_rel)
+        t_rel = self.next_helper("cmp_t")
+        f_rel = self.next_helper("cmp_f")
+        common = self.domain() + list(bl.lits + br.lits) + list(bl.assigns + br.assigns) + list(bl.conds + br.conds)
+        ir_op = COMPARE[op]
+        self.add_helper(t_rel, self._key_cols, self.key_terms(), common + [("cmp", ir_op, bl.term, br.term)])
+        self.add_helper(f_rel, self._key_cols, self.key_terms(), common + [("cmp", NEGATED[ir_op], bl.term, br.term)])
+        return BoolEval(self.helper_or_none(t_rel), self.helper_or_none(f_rel), s_rel)
+
+    def eval_bool(self, at: str, node: dict) -> BoolEval:
+        if not isinstance(node, dict) or len(node) != 1:
+            self.site.refuse(at, "condition must be a single-key object")
+        key = next(iter(node))
+        if key == "lit":
+            term = self.literal(at, node["lit"])
+            if term[2] != "boolean":
+                self.site.refuse(at, "expected a Boolean literal", "R003")
+            return BoolEval(None, None, None, t_all=(term[1] == "true"), f_all=(term[1] == "false"))
+        if key == "cmp":
+            op, left, right = node["cmp"]
+            return self._cmp_bool(at, op, self.eval_value(f"{at}/cmp/1", left),
+                                  self.eval_value(f"{at}/cmp/2", right))
+        if key == "and":
+            parts = [self.eval_bool(f"{at}/and/{i}", item) for i, item in enumerate(node["and"])]
+            acc = parts[0]
+            for part in parts[1:]:
+                acc = self._and_bool(acc, part)
+            return acc
+        if key == "or":
+            parts = [self.eval_bool(f"{at}/or/{i}", item) for i, item in enumerate(node["or"])]
+            acc = parts[0]
+            for part in parts[1:]:
+                acc = self._or_bool(acc, part)
+            return acc
+        if key == "not":
+            inner = self.eval_bool(f"{at}/not", node["not"])
+            return BoolEval(inner.f_rel, inner.t_rel, inner.s_rel, t_all=inner.f_all, f_all=inner.t_all)
+        if key == "imply":
+            left, right = node["imply"]
+            nl = self.eval_bool(f"{at}/imply/0", left)
+            return self._or_bool(BoolEval(nl.f_rel, nl.t_rel, nl.s_rel, t_all=nl.f_all, f_all=nl.t_all),
+                                 self.eval_bool(f"{at}/imply/1", right))
+        if key == "is":
+            target_node, state_name = node["is"]
+            mapped = "not_applicable" if state_name == "n/a" else state_name
+            if mapped not in ("known", "not_applicable", "unknown", "invalid"):
+                self.site.refuse(at, f"unknown state {state_name!r}")
+            val = self.eval_value(f"{at}/is/0", target_node)
+            t_rel = self.next_helper("is_t")
+            f_rel = self.next_helper("is_f")
+            if mapped == "known":
+                for b in val.branches:
+                    self.add_helper(t_rel, self._key_cols, self.key_terms(),
+                                    self.domain() + list(b.lits) + list(b.assigns) + list(b.conds))
+                if val.state_rel is not None:
+                    self.add_helper(f_rel, self._key_cols, self.key_terms(),
+                                    self.domain() + [self.lit(val.state_rel, self.key_terms()
+                                                              + [("var", self.fresh("st")), ("var", self.fresh("r"))])])
+            else:
+                if val.state_rel is not None:
+                    self.add_helper(t_rel, self._key_cols, self.key_terms(),
+                                    self.domain() + [self.lit(val.state_rel, self.key_terms()
+                                                              + [("const", mapped, "string"), ("var", self.fresh("r"))])])
+                if (t_out := self.helper_or_none(t_rel)) is not None:
+                    self.add_helper(f_rel, self._key_cols, self.key_terms(),
+                                    self.domain() + [self.lit(t_out, self.key_terms(), False)])
+                else:
+                    return BoolEval(None, None, None, f_all=True)
+            return BoolEval(self.helper_or_none(t_rel), self.helper_or_none(f_rel), None)
+        if key == "call":
+            lit = self.call(at, node["call"], True)
+            rel_name = lit[2][0]
+            target = self.signatures[rel_name]
+            t_rel = self.next_helper("call_t")
+            f_rel = self.next_helper("call_f")
+            self.add_helper(t_rel, self._key_cols, self.key_terms(), self.domain() + [lit])
+            neg_lit = self.call(at, node["call"], False)
+            self.add_helper(f_rel, self._key_cols, self.key_terms(), self.domain() + [neg_lit])
+            return BoolEval(self.helper_or_none(t_rel), self.helper_or_none(f_rel), None)
+        if key == "path":
+            val = self.eval_path_val(at, node["path"])
+            if val.typ != "boolean":
+                self.site.refuse(at, f"condition path must be Bool, got {val.typ}", "R003")
+            t_rel = self.next_helper("bt")
+            f_rel = self.next_helper("bf")
+            for b in val.branches:
+                common = self.domain() + list(b.lits) + list(b.assigns) + list(b.conds)
+                self.add_helper(t_rel, self._key_cols, self.key_terms(), common + [("cmp", "eq", b.term, ("const", "true", "boolean"))])
+                self.add_helper(f_rel, self._key_cols, self.key_terms(), common + [("cmp", "eq", b.term, ("const", "false", "boolean"))])
+            return BoolEval(self.helper_or_none(t_rel), self.helper_or_none(f_rel), val.state_rel)
+        self.site.refuse(at, f"Boolean condition `{key}` is not lowered yet")
+
+    def lower_unless(self, at: str, fallback: tuple[str, dict] | None, blocks: list[list[dict]], meta: dict,
+                     *, empty_reason: str | None = None) -> None:
+        """Lower ordered `unless` blocks (last block has highest priority) with sibling conflict detection."""
+        default_reason = empty_reason or ("no_value" if fallback is not None else "no_row_applies")
+        meta |= {"empty_state": "unknown", "empty_reason": default_reason}
+        if any(len(block) > 1 for block in blocks):
+            meta["conflict_policy"] = "block"
+        branches: list[ValBranch] = []
+        states: list[str | None] = []
+        prior_ref: str | None = None
+        for bi in range(len(blocks) - 1, -1, -1):
+            block = blocks[bi]
+            prior_guard = [] if prior_ref is None else [self.lit(prior_ref, self.key_terms(), False)]
+            conds: list[BoolEval] = []
+            und_rels: list[str | None] = []
+            for ci, clause in enumerate(block):
+                cat = f"{at}/unless/{bi}/{ci}"
+                c_eval = self.eval_bool(f"{cat}/when", clause["when"])
+                conds.append(c_eval)
+                und_rels.append(self._undecided_keys(c_eval.s_rel))
+            # Sibling clash inside this block when >= 2 clauses apply.
+            clash_rel: str | None = None
+            if len(block) > 1:
+                clash_name = self.next_helper(f"clash_b{bi}")
+                for i in range(len(block)):
+                    for j in range(i + 1, len(block)):
+                        ci, cj = conds[i], conds[j]
+                        if (not ci.t_all and ci.t_rel is None) or (not cj.t_all and cj.t_rel is None):
+                            continue
+                        body = self.domain() + prior_guard
+                        if ci.t_rel is not None:
+                            body.append(self.lit(ci.t_rel, self.key_terms()))
+                        if cj.t_rel is not None:
+                            body.append(self.lit(cj.t_rel, self.key_terms()))
+                        self.add_helper(clash_name, self._key_cols, self.key_terms(), body)
+                clash_rel = self.helper_or_none(clash_name)
+                if clash_rel is not None:
+                    clash_st = self.next_helper(f"clash_st_b{bi}")
+                    self.add_helper(clash_st, self._state_cols, self.key_terms() + [INVALID, EXCEPTION_CONFLICT],
+                                    self.domain() + [self.lit(clash_rel, self.key_terms())])
+                    states.append(clash_st)
+            # Undecided conditions in this block (when not blocked by higher blocks or clash).
+            block_und_guard: list[tuple] = []
+            clash_guard = [] if clash_rel is None else [self.lit(clash_rel, self.key_terms(), False)]
+            for ci_idx, (c_eval, u_rel) in enumerate(zip(conds, und_rels)):
+                if c_eval.s_rel is not None and u_rel is not None:
+                    gated = self.gate_state(c_eval.s_rel, prior_guard + clash_guard)
+                    states.append(self.combine_states([gated], exclude=("not_applicable",)))
+                    block_und_guard.append(self.lit(u_rel, self.key_terms(), False))
+            # Each clause that applies alone without undecided siblings.
+            for ci_idx, clause in enumerate(block):
+                c_eval = conds[ci_idx]
+                if not c_eval.t_all and c_eval.t_rel is None:
+                    continue
+                other_guard = [self.lit(conds[k].t_rel, self.key_terms(), False)
+                               for k in range(len(block)) if k != ci_idx and conds[k].t_rel is not None]
+                if any(conds[k].t_all for k in range(len(block)) if k != ci_idx):
+                    continue
+                clause_guard = (prior_guard + clash_guard + block_und_guard + other_guard
+                                + ([] if c_eval.t_all else [self.lit(c_eval.t_rel, self.key_terms())]))
+                then_val = self.eval_value(f"{at}/unless/{bi}/{ci_idx}/then", clause["then"])
+                if then_val.typ != self.sig.value_type:
+                    self.site.refuse(f"{at}/unless/{bi}/{ci_idx}/then",
+                                     f"expected {self.sig.value_type}, got {then_val.typ}", "R003")
+                for b in then_val.branches:
+                    branches.append(ValBranch(tuple(clause_guard) + b.lits, b.assigns, b.conds, b.term))
+                states.append(self.gate_state(then_val.state_rel, clause_guard))
+            # Accumulate handled keys into a fresh relation so lower blocks and fallback never self-negate.
+            next_handled = self.next_helper(f"unless_handled_b{bi}")
+            if prior_ref is not None:
+                self.add_helper(next_handled, self._key_cols, self.key_terms(),
+                                self.domain() + [self.lit(prior_ref, self.key_terms())])
+            for c_eval in conds:
+                if c_eval.t_all:
+                    self.add_helper(next_handled, self._key_cols, self.key_terms(), self.domain())
+                elif c_eval.t_rel is not None:
+                    self.add_helper(next_handled, self._key_cols, self.key_terms(),
+                                    self.domain() + [self.lit(c_eval.t_rel, self.key_terms())])
+            for u_rel in und_rels:
+                if u_rel is not None:
+                    self.add_helper(next_handled, self._key_cols, self.key_terms(),
+                                    self.domain() + [self.lit(u_rel, self.key_terms())])
+            prior_ref = self.helper_or_none(next_handled)
+        if fallback is not None:
+            fb_at, fb_node = fallback
+            fb_guard = [] if prior_ref is None else [self.lit(prior_ref, self.key_terms(), False)]
+            fb_val = self.eval_value(fb_at, fb_node)
+            if fb_val.typ != self.sig.value_type:
+                self.site.refuse(fb_at, f"expected {self.sig.value_type}, got {fb_val.typ}", "R003")
+            for b in fb_val.branches:
+                branches.append(ValBranch(tuple(fb_guard) + b.lits, b.assigns, b.conds, b.term))
+            states.append(self.gate_state(fb_val.state_rel, fb_guard))
+        self.emit_functional(at, meta, tuple(branches), self.combine_states(states))
+
+    def _table_cell_bool(self, at: str, inp: ValEval, inp_node: dict, cell: object) -> BoolEval | None:
+        if cell == "-":
+            return None
+        if not isinstance(cell, list) or not cell:
+            self.site.refuse(at, "table cell must be `-` or a list of tests")
+        slot_enum = self._input_slot_enum(inp_node)
+        tests: list[BoolEval] = []
+        for ti, test in enumerate(cell):
+            tat = f"{at}/{ti}"
+            if isinstance(test, dict) and set(test) == {"lit"}:
+                lit_term = self.literal(tat, test["lit"])
+                if slot_enum is not None and lit_term[1] not in self.pack.enums[slot_enum]:
+                    self.site.refuse(tat, f"{test['lit']} is not a value of {slot_enum}", "R001")
+                if lit_term[2] != inp.typ:
+                    self.site.refuse(tat, f"table cell value {test['lit']!r} is {lit_term[2]}, input is {inp.typ}", "R003")
+                lit_val = ValEval(lit_term[2], (ValBranch((), (), (), lit_term),), None)
+                tests.append(self._cmp_bool(tat, "=", inp, lit_val))
+            elif isinstance(test, dict) and set(test) == {"between"}:
+                if inp.typ != "integer":
+                    self.site.refuse(tat, "a range test requires an integer input", "R003")
+                b = test["between"]
+                parts: list[BoolEval] = []
+                for side, op in (("from", ">="), ("to", "<=" if b.get("op") == ".." else "<")):
+                    if side in b:
+                        bound = self.literal(tat, b[side]["lit"])
+                        if bound[2] != "integer":
+                            self.site.refuse(tat, "range bound must be an integer", "R003")
+                        parts.append(self._cmp_bool(tat, op, inp, ValEval("integer", (ValBranch((), (), (), bound),), None)))
+                if not parts:
+                    self.site.refuse(tat, "range test needs at least one bound")
+                acc = parts[0]
+                for p in parts[1:]:
+                    acc = self._and_bool(acc, p)
+                tests.append(acc)
+            else:
+                self.site.refuse(tat, "unsupported table test")
+        acc = tests[0]
+        for t in tests[1:]:
+            acc = self._or_bool(acc, t)
+        return acc
+
+    def _input_slot_enum(self, node: dict) -> str | None:
+        if not isinstance(node, dict) or set(node) != {"path"}:
+            return None
+        path = node["path"]
+        if len(path) == 1 and self.sig.binder == "it" and path[0] != "it":
+            path = ["it", path[0]]
+        if not path or path[0] not in self.env:
+            return None
+        typ = self.env[path[0]]
+        slot = None
+        for part in path[1:]:
+            if typ[0] != "kind":
+                return None
+            slot = self.slot("", typ[1], part)
+            if slot is None:
+                return None
+            typ = self.slot_type(slot)
+        return slot.enum if slot is not None else None
+
+    def lower_table(self, at: str, table: dict, meta: dict) -> None:
+        """Lower `table unique` or `table first` directly to functional rules in rezono.rules/2."""
+        policy = table["table"]
+        meta |= {"conflict_policy": "block" if policy == "unique" else "publish",
+                 "empty_state": "unknown", "empty_reason": "no_row_applies"}
+        inputs = [self.eval_value(f"{at}/inputs/{j}", expr) for j, expr in enumerate(table["inputs"])]
+        row_bools: list[BoolEval] = []
+        row_unds: list[str | None] = []
+        outputs: list[tuple] = []
+        for ri, row in enumerate(table["rows"]):
+            rat = f"{at}/rows/{ri}"
+            cell_evals = []
+            for j, cell in enumerate(row["tests"]):
+                if (ce := self._table_cell_bool(f"{rat}/tests/{j}", inputs[j], table["inputs"][j], cell)) is not None:
+                    cell_evals.append(ce)
+            if not cell_evals:
+                rb = BoolEval(None, None, None, t_all=True)
+            else:
+                rb = cell_evals[0]
+                for ce in cell_evals[1:]:
+                    rb = self._and_bool(rb, ce)
+            row_bools.append(rb)
+            row_unds.append(self._undecided_keys(rb.s_rel))
+            raw_val = row["value"]
+            lit_tok = raw_val.get("lit") if isinstance(raw_val, dict) and set(raw_val) == {"lit"} else None
+            if lit_tok is None:
+                self.site.refuse(f"{rat}/value", "table output must be a literal")
+            if self.sig.enum_type is not None and lit_tok not in self.pack.enums[self.sig.enum_type]:
+                self.site.refuse(f"{rat}/value", f"{lit_tok} is not a value of {self.sig.enum_type}", "R001")
+            out_term = self.literal(f"{rat}/value", lit_tok)
+            if out_term[2] != self.sig.value_type:
+                self.site.refuse(f"{rat}/value", f"table output {lit_tok!r} is {out_term[2]}, expected {self.sig.value_type}", "R003")
+            outputs.append(out_term)
+
+        branches: list[ValBranch] = []
+        states: list[str | None] = []
+        if policy == "unique":
+            clash_name = self.next_helper("tbl_clash")
+            for i in range(len(row_bools)):
+                for j in range(i + 1, len(row_bools)):
+                    ri_b, rj_b = row_bools[i], row_bools[j]
+                    if (not ri_b.t_all and ri_b.t_rel is None) or (not rj_b.t_all and rj_b.t_rel is None):
+                        continue
+                    body = self.domain()
+                    if ri_b.t_rel is not None:
+                        body.append(self.lit(ri_b.t_rel, self.key_terms()))
+                    if rj_b.t_rel is not None:
+                        body.append(self.lit(rj_b.t_rel, self.key_terms()))
+                    self.add_helper(clash_name, self._key_cols, self.key_terms(), body)
+            clash_rel = self.helper_or_none(clash_name)
+            clash_guard = [] if clash_rel is None else [self.lit(clash_rel, self.key_terms(), False)]
+            if clash_rel is not None:
+                clash_st = self.next_helper("tbl_clash_st")
+                self.add_helper(clash_st, self._state_cols, self.key_terms() + [INVALID, EXCEPTION_CONFLICT],
+                                self.domain() + [self.lit(clash_rel, self.key_terms())])
+                states.append(clash_st)
+            und_guard = [self.lit(u, self.key_terms(), False) for u in row_unds if u is not None]
+            for rb, u_rel in zip(row_bools, row_unds):
+                if rb.s_rel is not None and u_rel is not None:
+                    states.append(self.combine_states([self.gate_state(rb.s_rel, clash_guard)],
+                                                      exclude=("not_applicable",)))
+            for ri_idx, (rb, out_term) in enumerate(zip(row_bools, outputs)):
+                if not rb.t_all and rb.t_rel is None:
+                    continue
+                if any(row_bools[k].t_all for k in range(len(row_bools)) if k != ri_idx):
+                    continue
+                others = [self.lit(row_bools[k].t_rel, self.key_terms(), False)
+                          for k in range(len(row_bools)) if k != ri_idx and row_bools[k].t_rel is not None]
+                guard = clash_guard + und_guard + others + ([] if rb.t_all else [self.lit(rb.t_rel, self.key_terms())])
+                branches.append(ValBranch(tuple(guard), (), (), out_term))
+        else:  # policy == "first"
+            any_t_name = self.next_helper("tbl_any_t")
+            win_rels: list[str | None] = []
+            for ri_idx, rb in enumerate(row_bools):
+                if rb.t_all:
+                    self.add_helper(any_t_name, self._key_cols, self.key_terms(), self.domain())
+                elif rb.t_rel is not None:
+                    self.add_helper(any_t_name, self._key_cols, self.key_terms(),
+                                    self.domain() + [self.lit(rb.t_rel, self.key_terms())])
+                if not rb.t_all and rb.t_rel is None:
+                    win_rels.append(None)
+                    continue
+                if any(row_bools[m].t_all for m in range(ri_idx)):
+                    win_rels.append(None)
+                    continue
+                earlier_neg = [self.lit(row_bools[m].t_rel, self.key_terms(), False)
+                               for m in range(ri_idx) if row_bools[m].t_rel is not None]
+                win_name = self.next_helper(f"win_{ri_idx}")
+                body = self.domain() + earlier_neg + ([] if rb.t_all else [self.lit(rb.t_rel, self.key_terms())])
+                self.add_helper(win_name, self._key_cols, self.key_terms(), body)
+                win_rels.append(self.helper_or_none(win_name))
+            any_t_rel = self.helper_or_none(any_t_name)
+            for ri_idx, (w_rel, out_term) in enumerate(zip(win_rels, outputs)):
+                if w_rel is None:
+                    continue
+                blockers = [self.lit(row_unds[m], self.key_terms(), False)
+                            for m in range(ri_idx) if row_unds[m] is not None and outputs[m] != out_term]
+                branches.append(ValBranch((self.lit(w_rel, self.key_terms()),) + tuple(blockers), (), (), out_term))
+            for m_idx, (rb, u_rel) in enumerate(zip(row_bools, row_unds)):
+                if rb.s_rel is None or u_rel is None:
+                    continue
+                # Case 1: no row applied at all.
+                if any_t_rel is None:
+                    states.append(self.combine_states([rb.s_rel], exclude=("not_applicable",)))
+                else:
+                    states.append(self.combine_states(
+                        [self.gate_state(rb.s_rel, [self.lit(any_t_rel, self.key_terms(), False)])],
+                        exclude=("not_applicable",),
+                    ))
+                    # Case 2: a later winning row has a different output than this undecided row.
+                    for r_idx in range(m_idx + 1, len(win_rels)):
+                        if win_rels[r_idx] is not None and outputs[r_idx] != outputs[m_idx]:
+                            states.append(self.combine_states(
+                                [self.gate_state(rb.s_rel, [self.lit(win_rels[r_idx], self.key_terms())])],
+                                exclude=("not_applicable",),
+                            ))
+        self.emit_functional(at, meta, tuple(branches), self.combine_states(states))
 
     # -- paths ----------------------------------------------------------------------------------------------------
 
