@@ -25,7 +25,6 @@ import json
 import os
 from pathlib import Path
 import re
-import shutil
 import subprocess
 import sys
 import tarfile
@@ -56,20 +55,24 @@ DEFAULT_RUN_ID = "current"
 PINNED_TIMEOUT_SECONDS = 180
 
 _SHA40 = re.compile(r"^[0-9a-f]{40}$")
+_SHA64 = re.compile(r"^[0-9a-f]{64}$")
 _ZERO_SHA = "0" * 40
 
-_PINNED_ARCHIVE_PATHS = (
-    "canon",
-    "compiler",
-    "checker",
-    "edge/publisher",
-    "admission",
-    "publication",
-    "contracts",
-    "packs",
+_REQUIRED_PINNED_PATHS = (
     "build",
+    "compiler",
+    "edge/publisher",
+    "checker",
+    "canon",
+    "admission",
+    "contracts",
+)
+_OPTIONAL_PINNED_PATHS = (
+    "packs",
+    "publication",
     "rezono",
 )
+_PINNED_ARCHIVE_PATHS = (*_REQUIRED_PINNED_PATHS, *_OPTIONAL_PINNED_PATHS)
 _PINNED_PYTHON_DIRS = (
     "canon",
     "compiler",
@@ -79,19 +82,57 @@ _PINNED_PYTHON_DIRS = (
     "publication",
     "contracts/python",
 )
+_SAFE_SUBPROCESS_ENV_KEYS = (
+    "PATH",
+    "PATHEXT",
+    "SYSTEMROOT",
+    "WINDIR",
+    "COMSPEC",
+    "TEMP",
+    "TMP",
+    "TMPDIR",
+    "HOME",
+    "USERPROFILE",
+    "LOCALAPPDATA",
+    "APPDATA",
+    "LANG",
+    "LC_ALL",
+    "TZ",
+    "SSL_CERT_FILE",
+    "SSL_CERT_DIR",
+    "NODE_PATH",
+)
 
 _PINNED_WORKER_SCRIPT = r"""
 import hashlib
+import importlib
 import json
-import shutil
 import sys
 from pathlib import Path
 
 import yaml
 
 pinned_root = Path(sys.argv[1]).resolve()
-payload_path = Path(sys.argv[2]).resolve()
-result_path = Path(sys.argv[3]).resolve()
+candidate_root = Path(sys.argv[2]).resolve()
+payload_path = Path(sys.argv[3]).resolve()
+result_path = Path(sys.argv[4]).resolve()
+
+# Strip candidate checkout paths and editable finders before loading any rezono* package.
+def _is_under_candidate(raw_path: str) -> bool:
+    if not raw_path or raw_path == ".":
+        return True
+    try:
+        resolved = Path(raw_path).resolve()
+    except OSError:
+        return False
+    return resolved == candidate_root or resolved.is_relative_to(candidate_root)
+
+sys.path[:] = [entry for entry in sys.path if not _is_under_candidate(entry)]
+sys.meta_path[:] = [
+    finder for finder in sys.meta_path
+    if "editable" not in type(finder).__name__.lower()
+    and "editable" not in getattr(type(finder), "__module__", "").lower()
+]
 
 pinned_sys_paths = [str(pinned_root / "_pinned_meta")] + [
     str(pinned_root / rel)
@@ -107,25 +148,46 @@ pinned_sys_paths = [str(pinned_root / "_pinned_meta")] + [
     if (pinned_root / rel).is_dir()
 ]
 sys.path[:0] = pinned_sys_paths
+importlib.invalidate_caches()
 
+def _assert_all_rezono_modules_pinned() -> None:
+    for name, module in list(sys.modules.items()):
+        if not (name == "rezono" or name.startswith("rezono_") or name.startswith("rezono.")):
+            continue
+        if module is None:
+            continue
+        origin = getattr(module, "__file__", None)
+        if origin:
+            if not Path(origin).resolve().is_relative_to(pinned_root):
+                raise RuntimeError(f"refusing non-pinned module {name} loaded from {origin!r}")
+            continue
+        paths = getattr(module, "__path__", None)
+        if paths:
+            for item in paths:
+                if not Path(item).resolve().is_relative_to(pinned_root):
+                    raise RuntimeError(f"refusing non-pinned namespace {name} with path {item!r}")
+            continue
+        raise RuntimeError(f"refusing rezono module {name} without pinned file or path")
+
+import rezono_admission
+import rezono_canon
 import rezono_checker
 import rezono_compiler
 import rezono_publisher
+from rezono_checker import metadata as checker_metadata
+from rezono_checker.evidence import Evidence
 from rezono_checker.rules import derived_relations, load_rules, load_seals
 from rezono_compiler import pack as compiler_pack
 from rezono_publisher import batch, publish, store
 
-for module in (rezono_compiler, rezono_publisher, rezono_checker):
-    origin = getattr(module, "__file__", None)
-    if not origin or not Path(origin).resolve().is_relative_to(pinned_root):
-        raise RuntimeError(f"refusing to run non-pinned engine module {module.__name__} from {origin!r}")
+_assert_all_rezono_modules_pinned()
 
 payload = json.loads(payload_path.read_text(encoding="utf-8"))
 build_dir = pinned_root / "build"
 if not (build_dir / "pack.yaml").is_file():
     raise FileNotFoundError("pinned checkout is missing build/pack.yaml")
 
-# Verify the pinned pack compiles cleanly via rezono_compiler before publishing.
+# Compile the pinned pack via rezono_compiler before publishing.
 compiler_pack.read(build_dir)
 
 facts_dir = build_dir / "facts"
@@ -143,31 +205,67 @@ if sources_sidecar is not None:
 
 archive_dir = pinned_root / "archive"
 archive = store.FileStore(archive_dir)
+
+def read_archive_uri(uri: str) -> bytes:
+    prefix = archive.uri("")
+    if not isinstance(uri, str) or not uri.startswith(prefix):
+        raise ValueError(f"unexpected archive URI outside store: {uri!r}")
+    data = archive.get(uri.removeprefix(prefix))
+    if data is None:
+        raise FileNotFoundError(f"archive object missing for {uri!r}")
+    return data
+
 handoff = {}
 evidence_dir_raw = payload.get("evidence_dir")
 if evidence_dir_raw:
-    evidence_dir = Path(evidence_dir_raw)
-    if (evidence_dir / "archive").is_dir():
-        for src in sorted((evidence_dir / "archive").rglob("*")):
-            if src.is_file():
-                rel = src.relative_to(evidence_dir / "archive").as_posix()
+    evidence_dir = Path(evidence_dir_raw).resolve()
+    archive_src = evidence_dir / "archive"
+    if archive_src.is_dir():
+        for src in sorted(archive_src.rglob("*")):
+            if src.is_file() and not src.is_symlink():
+                rel = src.relative_to(archive_src).as_posix()
                 archive.put_new(rel, src.read_bytes())
-    context_file = evidence_dir / "context.json"
-    index_file = evidence_dir / "index.json"
-    if context_file.is_file() and index_file.is_file():
-        from rezono_publisher.evidence import Evidence
 
+    context_key = "observations/retained/context.json"
+    context_file = evidence_dir / "context.json"
+    if context_file.is_file():
         ctx_bytes = context_file.read_bytes()
+        archive.put_new(context_key, ctx_bytes)
+    else:
+        ctx_bytes = archive.get(context_key)
+        if ctx_bytes is None:
+            raise FileNotFoundError(f"evidence directory missing context.json and {context_key}")
+    context_ref = {
+        "file": context_key,
+        "uri": archive.uri(context_key),
+        "sha256": hashlib.sha256(ctx_bytes).hexdigest(),
+    }
+
+    index_key = "observations/submitted/index.json"
+    index_file = evidence_dir / "index.json"
+    candidates_ref = None
+    if index_file.is_file():
         idx_bytes = index_file.read_bytes()
-        archive.put_new("observations/context.json", ctx_bytes)
-        archive.put_new("observations/index.json", idx_bytes)
-        handoff["evidence"] = Evidence(
-            context_uri=archive.uri("observations/context.json"),
-            context_sha256=hashlib.sha256(ctx_bytes).hexdigest(),
-            index_uri=archive.uri("observations/index.json"),
-            index_sha256=hashlib.sha256(idx_bytes).hexdigest(),
-            store=archive,
-        )
+        archive.put_new(index_key, idx_bytes)
+        candidates_ref = {
+            "file": index_key,
+            "uri": archive.uri(index_key),
+            "sha256": hashlib.sha256(idx_bytes).hexdigest(),
+        }
+    else:
+        idx_bytes = archive.get(index_key)
+        if idx_bytes is not None:
+            candidates_ref = {
+                "file": index_key,
+                "uri": archive.uri(index_key),
+                "sha256": hashlib.sha256(idx_bytes).hexdigest(),
+            }
+
+    handoff["evidence"] = Evidence(
+        context=context_ref,
+        candidates=candidates_ref,
+        read_bytes=read_archive_uri,
+    )
 
 knowledge_time = payload["knowledge_time"]
 source_entries = [tuple(item) for item in payload.get("epoch_sources", [["facts", "input"]])]
@@ -183,50 +281,87 @@ role_name = payload.get("role", "reader")
 role_mode = payload.get("role_mode", "complete")
 manifest = publish.publish(epoch, archive, {role_name: role_mode})
 
-def read_archive_uri(uri: str) -> bytes:
-    prefix = archive.uri("")
-    if not uri.startswith(prefix):
-        raise ValueError(f"unexpected archive URI outside store: {uri!r}")
-    return archive.get(uri.removeprefix(prefix))
-
-# Independently verify every published witness document via rezono_checker.
+# Independently verify the published epoch and witness set via rezono_checker.
 rules_doc = json.loads(epoch.rules)
 rules_obj = load_rules(rules_doc)
 derived = derived_relations(rules_doc, rules_obj)
 seals = load_seals(rules_doc)
+calc_doc = publish.calc_ir(epoch)
+bundle_doc = json.loads(epoch.bundle) if epoch.bundle else {}
+meta_kwargs = (
+    {"bundle": bundle_doc, "check_metadata": epoch.check_metadata}
+    if (bundle_doc.get("kinds") or epoch.check_metadata)
+    else {}
+)
+
 checker_valid = True
+if meta_kwargs:
+    meta_errors = checker_metadata.check(meta_kwargs["bundle"], meta_kwargs["check_metadata"])
+    if meta_errors:
+        checker_valid = False
+
+role_snaps = [entry for entry in manifest.get("snapshots", []) if entry.get("role") == role_name]
 witness_entries = [entry for entry in manifest.get("witnesses", []) if entry.get("role") == role_name]
-if not witness_entries:
+if not witness_entries or not role_snaps:
     checker_valid = False
+
 for entry in witness_entries:
     raw = read_archive_uri(entry["uri"])
     if hashlib.sha256(raw).hexdigest() != entry["sha256"]:
         raise ValueError(f"witness digest mismatch for {entry['uri']}")
     proof_doc = json.loads(raw)
-    report = rezono_checker.check_epoch(
-        proof_doc["witnesses"],
-        manifest,
-        rules_obj,
-        read_archive_uri,
-        derived=derived,
-        seals=seals,
-        evidence=handoff.get("evidence"),
-    )
-    if not report.get("valid"):
+    calc_witnesses = proof_doc.get("calc_witnesses", ())
+    if role_mode == "complete":
+        role_manifest = {**manifest, "snapshots": role_snaps}
+        report = rezono_checker.check_epoch(
+            proof_doc["witnesses"],
+            role_manifest,
+            rules_obj,
+            read_archive_uri,
+            derived=derived,
+            full=None,
+            seals=seals,
+            calc_witnesses=calc_witnesses,
+            calc_ir=calc_doc,
+            **meta_kwargs,
+            evidence=handoff.get("evidence"),
+        )
+    else:
+        role_full = frozenset(entry["relation"] for entry in role_snaps if entry.get("full") is True)
+        role_manifest = {**manifest, "snapshots": [{**snap, "complete": True} for snap in role_snaps]}
+        report = rezono_checker.check_epoch(
+            proof_doc["witnesses"],
+            role_manifest,
+            rules_obj,
+            read_archive_uri,
+            derived=derived,
+            full=role_full,
+            seals=(),
+            calc_witnesses=calc_witnesses,
+            calc_ir=calc_doc,
+        )
+    if not report.get("valid") or any(f.get("severity") == "error" for f in report.get("findings", [])):
         checker_valid = False
 
 rows: dict[str, list[dict]] = {}
-for entry in manifest.get("snapshots", []):
-    if entry.get("role") != role_name:
-        continue
+for entry in role_snaps:
     raw = read_archive_uri(entry["uri"])
     if hashlib.sha256(raw).hexdigest() != entry["sha256"]:
         raise ValueError(f"snapshot digest mismatch for {entry['relation']}")
     rows[entry["relation"]] = json.loads(raw)
 
+# Verify after the entire compile/publish/check execution that zero non-pinned rezono* modules loaded.
+_assert_all_rezono_modules_pinned()
+
 checks = [dict(c) for c in manifest.get("checks", []) if isinstance(c, dict)]
 if not checker_valid:
     checks.append({"name": "rezono:proofs", "status": "red", "violations": 1})
+
+def _zero_violations(check: dict) -> bool:
+    if "violations" not in check:
+        return True
+    val = check["violations"]
+    return type(val) is int and val == 0
 
 if not any(c.get("name") == "rezono:schema" for c in checks):
     schema_checks = [
@@ -234,7 +369,7 @@ if not any(c.get("name") == "rezono:schema" for c in checks):
         if isinstance(c.get("name"), str) and not c["name"].startswith("rezono:")
     ]
     schema_ok = bool(schema_checks) and all(
-        c.get("status") == "green" and c.get("violations", 0) == 0
+        c.get("status") == "green" and _zero_violations(c)
         for c in schema_checks
     )
     checks.append({
@@ -276,6 +411,15 @@ def _shard_count(root: Path, folder: str) -> int:
     return min(SHARDS.get(folder, 1), max(1, len(files)))
 
 
+def _scrubbed_env() -> dict[str, str]:
+    """Return a minimal subprocess environment stripped of Python/pytest override variables."""
+    return {
+        key: value
+        for key, value in os.environ.items()
+        if key in _SAFE_SUBPROCESS_ENV_KEYS
+    }
+
+
 def _write_pinned_metadata(pinned_root: Path) -> None:
     """Create isolated PEP 566 .dist-info metadata from pinned pyproject.toml files."""
     meta_dir = pinned_root / "_pinned_meta"
@@ -310,8 +454,11 @@ def _extract_pinned_engine(root: Path, engine_sha: str, target_dir: Path) -> Non
         )
         if probe.returncode == 0:
             available.append(rel)
-    if "build" not in available or "compiler" not in available or "edge/publisher" not in available:
-        raise ValueError(f"pinned commit {engine_sha} is missing required engine or build/ paths")
+    missing = [rel for rel in _REQUIRED_PINNED_PATHS if rel not in available]
+    if missing:
+        raise ValueError(
+            f"pinned commit {engine_sha} is missing required engine/pack paths: {', '.join(missing)}"
+        )
     archive_bytes = _git(root, "archive", engine_sha, "--", *available)
     with tarfile.open(fileobj=io.BytesIO(archive_bytes), mode="r:*") as tar:
         tar.extractall(target_dir, filter="data")
@@ -324,6 +471,16 @@ def _format_utc(timestamp: int) -> str:
     return dt.datetime.fromtimestamp(timestamp, tz=dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _resolve_engine_sha(*, root: Path, pin_path: Path | None, pin_sha: str | None) -> str:
+    """Resolve the pinned engine SHA from an explicit SHA override or ``build/engine-pin.yaml``."""
+    if pin_sha is not None:
+        if not isinstance(pin_sha, str) or not _SHA40.fullmatch(pin_sha):
+            raise ValueError(f"pin_sha must be a 40-lowercase-hex commit SHA, got {pin_sha!r}")
+        return pin_sha
+    resolved_pin = pin_path if pin_path is not None else root / ENGINE_PIN_REL
+    return read_engine_pin(resolved_pin)
+
+
 def run_pinned_build_pack(
     *,
     root: Path,
@@ -331,6 +488,7 @@ def run_pinned_build_pack(
     sources_sidecar: Mapping[str, Any] | None,
     knowledge_time: str,
     pin_path: Path | None = None,
+    pin_sha: str | None = None,
     candidate_sha: str | None = None,
     main_ref: str = DEFAULT_MAIN_REF,
     role: str = "reader",
@@ -344,10 +502,9 @@ def run_pinned_build_pack(
     publish, or checker failure returns ``engine_error`` instead of raising so callers
     enter fail-closed safe mode through ``select_suites`` or ``read_coordinator_state``.
     """
-    resolved_pin = pin_path if pin_path is not None else root / ENGINE_PIN_REL
     engine_sha: str | None = None
     try:
-        engine_sha = read_engine_pin(resolved_pin)
+        engine_sha = _resolve_engine_sha(root=root, pin_path=pin_path, pin_sha=pin_sha)
         candidate = candidate_sha or _git_text(root, "rev-parse", "HEAD")
         validate_engine_pin(
             root=root,
@@ -376,12 +533,23 @@ def run_pinned_build_pack(
                 "epoch_sources": [["facts", "input"]],
             }
             if evidence_dir is not None:
-                payload["evidence_dir"] = str(evidence_dir)
+                payload["evidence_dir"] = str(evidence_dir.resolve())
             payload_path.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
 
             proc = subprocess.run(
-                [sys.executable, "-P", "-c", _PINNED_WORKER_SCRIPT, str(pinned_root), str(payload_path), str(result_path)],
+                [
+                    sys.executable,
+                    "-E",
+                    "-P",
+                    "-c",
+                    _PINNED_WORKER_SCRIPT,
+                    str(pinned_root),
+                    str(root.resolve()),
+                    str(payload_path),
+                    str(result_path),
+                ],
                 cwd=pinned_root,
+                env=_scrubbed_env(),
                 capture_output=True,
                 text=True,
                 timeout=timeout_seconds,
@@ -468,7 +636,7 @@ def capture_ci_records(
     changed_paths: Sequence[str],
     repository_name: str = "rezono-lang/rezono",
 ) -> tuple[dict[str, list[dict[str, Any]]], dict[str, Any]]:
-    """Build typed ``build/`` observation records and Git provenance sidecar for one CI run."""
+    """Build typed ``build/`` observation records and honest ``tool`` provenance sidecar."""
     records: dict[str, list[dict[str, Any]]] = {
         "build_run": [{
             "id": run_id,
@@ -494,10 +662,10 @@ def capture_ci_records(
     }
     sources_sidecar = {
         "default": {
-            "kind": "git",
-            "name": repository_name,
+            "kind": "tool",
+            "name": "loop/ci_discover.py",
             "revision": head_sha,
-            "position": f"{base_sha}..{head_sha}",
+            "position": f"ci-observe:{repository_name}:{base_sha}..{head_sha}",
         }
     }
     return records, sources_sidecar
@@ -567,8 +735,10 @@ def discover_ci_matrix(
     merge_group_base: str = "",
     merge_group_head: str = "",
     pin_path: Path | None = None,
+    pin_sha: str | None = None,
     main_ref: str = DEFAULT_MAIN_REF,
     records_override: Mapping[str, Any] | None = None,
+    sources_sidecar_override: Mapping[str, Any] | None = None,
     evidence_dir: Path | None = None,
     repository_name: str = "rezono-lang/rezono",
 ) -> dict[str, Any]:
@@ -582,21 +752,13 @@ def discover_ci_matrix(
     rows: dict[str, list[dict[str, Any]]] | None = None
     engine_error: str | None = None
 
-    resolved_pin = pin_path if pin_path is not None else root / ENGINE_PIN_REL
     try:
-        engine_sha = read_engine_pin(resolved_pin)
+        engine_sha = _resolve_engine_sha(root=root, pin_path=pin_path, pin_sha=pin_sha)
         if records_override is not None:
             head_sha = _git_text(root, "rev-parse", "HEAD")
             observed_at = int(_git_text(root, "show", "-s", "--format=%ct", head_sha))
             records: Mapping[str, Any] = records_override
-            sources_sidecar: Mapping[str, Any] = {
-                "default": {
-                    "kind": "git",
-                    "name": repository_name,
-                    "revision": head_sha,
-                    "position": head_sha,
-                }
-            }
+            sources_sidecar: Mapping[str, Any] | None = sources_sidecar_override
         else:
             build_event, base_sha, head_sha, changed_paths, observed_at = _resolve_git_range(
                 root,
@@ -626,7 +788,8 @@ def discover_ci_matrix(
             records=records,
             sources_sidecar=sources_sidecar,
             knowledge_time=_format_utc(observed_at),
-            pin_path=resolved_pin,
+            pin_path=pin_path,
+            pin_sha=pin_sha,
             candidate_sha=head_sha,
             main_ref=main_ref,
             evidence_dir=evidence_dir,
@@ -648,6 +811,25 @@ def discover_ci_matrix(
     }
 
 
+def _resolve_archive_blob(root_dir: Path, uri: object) -> Path | None:
+    """Resolve an archive URI strictly inside ``root_dir``, or return None if invalid."""
+    if not isinstance(uri, str) or not uri:
+        return None
+    if "://" in uri:
+        rest = uri.split("://", 1)[1]
+        if "/" not in rest:
+            return None
+        rel = rest.split("/", 1)[1]
+    else:
+        rel = uri
+    if not rel or rel.startswith("/") or "\\" in rel:
+        return None
+    blob_path = (root_dir / rel).resolve()
+    if not blob_path.is_relative_to(root_dir) or not blob_path.is_file():
+        return None
+    return blob_path
+
+
 def _load_publication_files(
     *,
     manifest_path: Path | None,
@@ -655,7 +837,7 @@ def _load_publication_files(
     archive_dir: Path | None,
     role: str,
 ) -> tuple[dict[str, Any] | None, dict[str, list[dict[str, Any]]] | None, str | None]:
-    """Read a published manifest and verified snapshot rows from disk."""
+    """Read a published manifest and digest-verified snapshot rows from disk, failing closed."""
     if manifest_path is None:
         return None, None, None
     try:
@@ -669,23 +851,74 @@ def _load_publication_files(
             return manifest, raw_rows, None
         if archive_dir is None:
             return manifest, None, None
-        rows: dict[str, list[dict[str, Any]]] = {}
+
+        snapshots = manifest.get("snapshots")
+        if not isinstance(snapshots, list):
+            return manifest, None, "manifest snapshots field is not a list"
+
         root_dir = archive_dir.resolve()
-        for entry in manifest.get("snapshots", []):
+        rows: dict[str, list[dict[str, Any]]] = {}
+        for entry in snapshots:
+            if not isinstance(entry, dict):
+                return manifest, None, "malformed snapshot entry in manifest"
             if entry.get("role") != role:
                 continue
-            uri = str(entry.get("uri", ""))
-            rel = uri.split("://", 1)[1].split("/", 1)[1] if "://" in uri else uri
-            blob_path = (root_dir / rel).resolve()
-            if not blob_path.is_relative_to(root_dir) or not blob_path.is_file():
-                return manifest, None, f"snapshot missing from archive: {entry.get('relation')}"
+            relation = entry.get("relation")
+            expected_sha = entry.get("sha256")
+            if not isinstance(relation, str) or not relation:
+                return manifest, None, "snapshot entry missing relation name"
+            if not isinstance(expected_sha, str) or not _SHA64.fullmatch(expected_sha):
+                return manifest, None, f"snapshot entry has invalid sha256: {relation}"
+            blob_path = _resolve_archive_blob(root_dir, entry.get("uri"))
+            if blob_path is None:
+                return manifest, None, f"snapshot missing from archive: {relation}"
             raw = blob_path.read_bytes()
-            if hashlib.sha256(raw).hexdigest() != entry.get("sha256"):
-                return manifest, None, f"snapshot digest mismatch: {entry.get('relation')}"
-            rows[entry["relation"]] = json.loads(raw)
+            if hashlib.sha256(raw).hexdigest() != expected_sha:
+                return manifest, None, f"snapshot digest mismatch: {relation}"
+            decoded = json.loads(raw)
+            if not isinstance(decoded, list):
+                return manifest, None, f"snapshot payload is not a list: {relation}"
+            rows[relation] = decoded
+
+        witnesses = manifest.get("witnesses")
+        if witnesses is not None:
+            if not isinstance(witnesses, list):
+                return manifest, None, "manifest witnesses field is not a list"
+            for entry in witnesses:
+                if not isinstance(entry, dict):
+                    return manifest, None, "malformed witness entry in manifest"
+                if entry.get("role") != role:
+                    continue
+                expected_sha = entry.get("sha256")
+                if not isinstance(expected_sha, str) or not _SHA64.fullmatch(expected_sha):
+                    return manifest, None, "witness entry has invalid sha256"
+                blob_path = _resolve_archive_blob(root_dir, entry.get("uri"))
+                if blob_path is None:
+                    return manifest, None, "witness file missing from archive"
+                if hashlib.sha256(blob_path.read_bytes()).hexdigest() != expected_sha:
+                    return manifest, None, "witness digest mismatch"
+
         return manifest, rows, None
-    except (OSError, ValueError, json.JSONDecodeError) as exc:
+    except (OSError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError) as exc:
         return None, None, f"publication read failed: {exc}"
+
+
+def _load_optional_sources_sidecar(
+    records_path: Path,
+    sources_path: Path | None,
+) -> Mapping[str, Any] | None:
+    """Load an explicit or sibling ``.sources.yaml`` sidecar without fabricating provenance."""
+    candidate = sources_path
+    if candidate is None:
+        sibling = records_path.with_suffix(".sources.yaml")
+        if sibling.is_file():
+            candidate = sibling
+    if candidate is None:
+        return None
+    loaded = yaml.safe_load(candidate.read_text(encoding="utf-8"))
+    if not isinstance(loaded, Mapping):
+        raise ValueError(f"sources sidecar {candidate} must contain a YAML mapping")
+    return loaded
 
 
 def evaluate_coordinator_state(
@@ -696,13 +929,14 @@ def evaluate_coordinator_state(
     rows_path: Path | None = None,
     archive_dir: Path | None = None,
     records_path: Path | None = None,
+    sources_path: Path | None = None,
     pin_path: Path | None = None,
+    pin_sha: str | None = None,
     main_ref: str = DEFAULT_MAIN_REF,
     role: str = "reader",
     role_mode: str = "complete",
     knowledge_time: str = "2027-01-15T08:00:00Z",
     evidence_dir: Path | None = None,
-    repository_name: str = "rezono-lang/rezono",
 ) -> dict[str, Any]:
     """Read coordinator task and claim-release state from a verified build publication."""
     manifest: dict[str, Any] | None = None
@@ -714,15 +948,8 @@ def evaluate_coordinator_state(
             records = yaml.safe_load(records_path.read_text(encoding="utf-8"))
             if not isinstance(records, Mapping):
                 raise ValueError(f"records file {records_path} must contain a mapping")
+            sources_sidecar = _load_optional_sources_sidecar(records_path, sources_path)
             head_sha = _git_text(root, "rev-parse", "HEAD")
-            sources_sidecar = {
-                "default": {
-                    "kind": "git",
-                    "name": repository_name,
-                    "revision": head_sha,
-                    "position": str(records_path.name),
-                }
-            }
         except (OSError, ValueError, yaml.YAMLError, subprocess.CalledProcessError) as exc:
             engine_error = f"coordinator records load failed: {exc}"
         else:
@@ -732,6 +959,7 @@ def evaluate_coordinator_state(
                 sources_sidecar=sources_sidecar,
                 knowledge_time=knowledge_time,
                 pin_path=pin_path,
+                pin_sha=pin_sha,
                 candidate_sha=head_sha,
                 main_ref=main_ref,
                 role=role,
@@ -798,7 +1026,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     matrix_p = sub.add_parser("ci-matrix", help="Run pinned build/ pack and emit CI matrix outputs.")
     matrix_p.add_argument("--root", type=Path, default=None)
     matrix_p.add_argument("--run", dest="run_id", default=DEFAULT_RUN_ID)
-    matrix_p.add_argument("--pin", type=Path, default=None)
+    matrix_p.add_argument("--pin", "--pin-file", dest="pin", type=Path, default=None)
+    matrix_p.add_argument("--pin-sha", default=None)
     matrix_p.add_argument("--main-ref", default=DEFAULT_MAIN_REF)
     matrix_p.add_argument("--event", default=os.environ.get("GITHUB_EVENT_NAME", ""))
     matrix_p.add_argument("--base-ref", default=os.environ.get("GITHUB_BASE_REF", ""))
@@ -815,7 +1044,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     coord_p.add_argument("--rows", type=Path, default=None)
     coord_p.add_argument("--archive", type=Path, default=None)
     coord_p.add_argument("--records", type=Path, default=None)
-    coord_p.add_argument("--pin", type=Path, default=None)
+    coord_p.add_argument("--sources", type=Path, default=None)
+    coord_p.add_argument("--pin", "--pin-file", dest="pin", type=Path, default=None)
+    coord_p.add_argument("--pin-sha", default=None)
     coord_p.add_argument("--main-ref", default=DEFAULT_MAIN_REF)
     coord_p.add_argument("--role", default="reader")
     coord_p.add_argument("--role-mode", default="complete")
@@ -837,6 +1068,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             merge_group_base=args.merge_group_base,
             merge_group_head=args.merge_group_head,
             pin_path=args.pin,
+            pin_sha=args.pin_sha,
             main_ref=args.main_ref,
             evidence_dir=args.evidence_dir,
             repository_name=repo_name,
@@ -866,13 +1098,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             rows_path=args.rows,
             archive_dir=args.archive,
             records_path=args.records,
+            sources_path=args.sources,
             pin_path=args.pin,
+            pin_sha=args.pin_sha,
             main_ref=args.main_ref,
             role=args.role,
             role_mode=args.role_mode,
             knowledge_time=args.knowledge_time,
             evidence_dir=args.evidence_dir,
-            repository_name=repo_name,
         )
         print(json.dumps(state, indent=2, sort_keys=True))
         if args.fail_on_safe_mode and state.get("safe_mode"):
