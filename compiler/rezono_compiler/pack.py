@@ -944,6 +944,7 @@ def read(pack_dir: str | Path) -> Pack:
             all_notes = rezono_derived.Lowered(
                 notes={**derivations.notes, **requirements.notes},
                 properties=derivations.properties,
+                note_owners={**derivations.note_owners, **requirements.note_owners},
             )
             rule_notes: dict[str, tuple[str, rules_dl.RuleNote]] = {}
             pack.rules, rule_warnings = rules_dl.read(pack, pack_dir, ordered, renames, calc_inputs=calc_inputs,

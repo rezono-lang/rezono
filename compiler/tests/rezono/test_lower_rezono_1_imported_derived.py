@@ -253,20 +253,6 @@ def _imported_problems(document: dict, alone: dict, derived: dict) -> list:
     return problems
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "M3: decisions/language-rezono-1.md: sections 5.5 (cross-pack consumers) and 8 step 5. Lower the rezono 1 "
-        "derivations of an imported pack in the importer's compile; compiler/rezono_compiler/rezono_derived.py "
-        "refuses them today with R049 \"a derivation of an imported rezono 1 pack is not lowered yet\". Each keeps "
-        "the relation name, role, key, closed domain, value and conflict policy it has when its own pack compiles, "
-        "gives the rows written by hand here on the importer's facts (on DuckDB and, where installed, Soufflé), and "
-        "a Datalog rule of the importer reads it, a functional derivation as (key..., state, reason, value). Every "
-        "standard pack reaches its readers through an import, so each conversion case in "
-        "examples/test_rezono_1_pack_conversion.py names this test as its prerequisite."
-    ),
-)
 def test_an_importer_compiles_the_derivations_of_an_imported_rezono_1_pack(tmp_path):
     lib = _lib(tmp_path)
     alone = json.loads(emit.compile_pack(pack.read(lib))["ir/rules.json"])
@@ -283,20 +269,6 @@ def test_an_importer_compiles_the_derivations_of_an_imported_rezono_1_pack(tmp_p
         raise MissingImportedRezono1Derivations(json.dumps(problems, indent=1, default=str))
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "M3: decisions/language-rezono-1.md: sections 2 and 5.5, with decisions/language-rezono-1-refinements.md "
-        "section 1. Let a rezono 1 derivation read a relation of a pack it imports with `use`: a call to an "
-        "imported Bool derivation, also negated, and a functional derivation `over` an imported Bool set; "
-        "compiler/rezono_compiler/rezono_derived.py accepts only relations derived in the pack itself today "
-        "(R001, and `over` names a set this pack derives). A call to a relation that neither pack declares stays "
-        "refused with R001. "
-        "Waits for compiler/tests/rezono/test_lower_rezono_1_imported_derived.py"
-        "--test_an_importer_compiles_the_derivations_of_an_imported_rezono_1_pack."
-    ),
-)
 def test_a_rezono_1_derivation_reads_a_relation_of_an_imported_pack(tmp_path):
     lib = _lib(tmp_path)
     alone = json.loads(emit.compile_pack(pack.read(lib))["ir/rules.json"])
