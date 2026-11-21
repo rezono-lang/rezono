@@ -228,6 +228,10 @@ def _functional_state_ok(func, all_vals: set[str], state: str, reason: str, val:
     if "invalid" in prop_states or "invalid" in rat_states or len(all_vals) > 1:
         if state != "invalid" or val != "":
             return False
+        if len(all_vals) > 1:
+            # More than one distinct known candidate yields invalid/multiple_values
+            # (decisions/language-rezono-1.md §4), never masked by an empty-reason invalid input.
+            return bool(REASON.fullmatch(reason))
         if "invalid" in prop_states:
             return bool(REASON.fullmatch(reason)) or ("invalid" in rat_states and reason == "")
         if "invalid" in rat_states:

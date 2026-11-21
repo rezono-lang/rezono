@@ -407,10 +407,9 @@ def functional_candidate_select(prog, rule, dialect="feldera"):
         vn, vd = r.rat_term(vt)
         norm_n = f"rezono_add_n({vn}, {vd}, CAST(0 AS BIGINT), CAST(1 AS BIGINT))"
         norm_d = f"rezono_add_d({vn}, {vd}, CAST(0 AS BIGINT), CAST(1 AS BIGINT))"
-        # rezono.rules/2 has no rational arithmetic, so every rational head value is a base/input
-        # fact: a non-positive denominator or a reduced fraction outside [-BOUND, +BOUND]
-        # (where rezono_add_d returns 0, e.g. -2^63 / 1) is an input violation -> invalid with
-        # empty reason (decisions/language-rezono-1-refinements.md §3.4C).
+        # Functional rational heads lower a (vn, vd) input or literal through rezono_add_{n,d}(..., 0, 1):
+        # a non-positive denominator or a reduced fraction outside [-BOUND, +BOUND] returns norm_d = 0
+        # -> invalid with empty reason (decisions/language-rezono-1-refinements.md §3.4C).
         rat_st = f"CAST(CASE WHEN {norm_d} <= CAST(0 AS BIGINT) THEN 3 ELSE 0 END AS BIGINT)"
         rat_rsn = "CAST('' AS VARCHAR)"
         states.append((rat_st, rat_rsn))
@@ -557,16 +556,16 @@ def functional_select(prog, name, dialect="feldera"):
 
     state_expr = (
         f'CAST(CASE WHEN g."__cnt" IS NULL THEN {literal(empty_state)} '
-        f'WHEN g."__max_st" = 3 THEN \'invalid\' '
         f'WHEN {conflict} THEN \'invalid\' '
+        f'WHEN g."__max_st" = 3 THEN \'invalid\' '
         f'WHEN g."__max_st" = 2 THEN \'unknown\' '
         f'WHEN g."__max_st" = 1 THEN \'not_applicable\' '
         f'ELSE \'known\' END AS VARCHAR) AS "state"'
     )
     reason_expr = (
         f'CAST(CASE WHEN g."__cnt" IS NULL THEN {literal(empty_reason)} '
-        f'WHEN g."__max_st" = 3 THEN COALESCE(g."__rsn_inv", \'\') '
         f'WHEN {conflict} THEN \'multiple_values\' '
+        f'WHEN g."__max_st" = 3 THEN COALESCE(g."__rsn_inv", \'\') '
         f'WHEN g."__max_st" = 2 THEN COALESCE(g."__rsn_unk", \'no_value\') '
         f'WHEN g."__max_st" = 1 THEN COALESCE(g."__rsn_na", \'empty\') '
         f'ELSE \'\' END AS VARCHAR) AS "reason"'

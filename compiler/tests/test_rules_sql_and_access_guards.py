@@ -67,6 +67,8 @@ def test_rational_functional_base_fact_bounds_and_invalid_denominator():
     items = [
         ("i_ok",),
         ("i_unreduced",),
+        ("i_max_bound",),
+        ("i_min_bound",),
         ("i_reducible_min",),
         ("i_oob",),
         ("i_mixed_oob",),
@@ -80,6 +82,8 @@ def test_rational_functional_base_fact_bounds_and_invalid_denominator():
     ratio_in = [
         ("i_ok", 3, 2),
         ("i_unreduced", 4, 6),
+        ("i_max_bound", 2**63 - 1, 1),
+        ("i_min_bound", -(2**63 - 1), 1),
         ("i_reducible_min", -(2**63), 2),
         ("i_oob", -(2**63), 1),
         ("i_mixed_oob", 1, 2),
@@ -110,6 +114,8 @@ def test_rational_functional_base_fact_bounds_and_invalid_denominator():
     expected = {
         "i_ok": ("known", "", 3, 2),
         "i_unreduced": ("known", "", 2, 3),
+        "i_max_bound": ("known", "", 2**63 - 1, 1),
+        "i_min_bound": ("known", "", -(2**63 - 1), 1),
         "i_reducible_min": ("known", "", -(2**62), 1),
         "i_oob": ("invalid", "", 0, 1),
         "i_mixed_oob": ("invalid", "", 0, 1),
@@ -117,7 +123,8 @@ def test_rational_functional_base_fact_bounds_and_invalid_denominator():
         "i_neg_den": ("invalid", "", 0, 1),
         "i_mixed_bad": ("invalid", "", 0, 1),
         "i_conflict": ("invalid", "multiple_values", 0, 1),
-        "i_conflict_oob": ("invalid", "", 0, 1),
+        # More than one distinct known candidate yields invalid/multiple_values (decisions/language-rezono-1.md §4).
+        "i_conflict_oob": ("invalid", "multiple_values", 0, 1),
         "i_empty": ("unknown", "no_value", 0, 1),
     }
     assert by_id == expected

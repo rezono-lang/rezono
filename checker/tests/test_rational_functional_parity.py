@@ -89,6 +89,8 @@ def _ratio_witness(iid: str, state: str, reason: str, val: str, ratio_premises: 
 
 
 def _full_rows_and_witnesses() -> tuple[dict[str, list[list[str]]], list[dict]]:
+    max_bound = str(2**63 - 1)
+    min_bound = str(-(2**63 - 1))
     min_i64 = str(-(2**63))
     half_min = str(-(2**62))
     big_den = f"1/{2**63}"
@@ -96,6 +98,8 @@ def _full_rows_and_witnesses() -> tuple[dict[str, list[list[str]]], list[dict]]:
         "item": [
             ["i_ok"],
             ["i_unreduced"],
+            ["i_max_bound"],
+            ["i_min_bound"],
             ["i_reducible_min"],
             ["i_oob"],
             ["i_oob_den"],
@@ -110,6 +114,8 @@ def _full_rows_and_witnesses() -> tuple[dict[str, list[list[str]]], list[dict]]:
         "ratio_in": [
             ["i_ok", "3/2"],
             ["i_unreduced", "4/6"],
+            ["i_max_bound", max_bound],
+            ["i_min_bound", min_bound],
             ["i_reducible_min", f"{min_i64}/2"],
             ["i_oob", min_i64],
             ["i_oob_den", big_den],
@@ -128,6 +134,8 @@ def _full_rows_and_witnesses() -> tuple[dict[str, list[list[str]]], list[dict]]:
         "ratio_val": [
             ["i_ok", "known", "", "3/2"],
             ["i_unreduced", "known", "", "2/3"],
+            ["i_max_bound", "known", "", max_bound],
+            ["i_min_bound", "known", "", min_bound],
             ["i_reducible_min", "known", "", half_min],
             ["i_oob", "invalid", "", ""],
             ["i_oob_den", "invalid", "", ""],
@@ -136,13 +144,16 @@ def _full_rows_and_witnesses() -> tuple[dict[str, list[list[str]]], list[dict]]:
             ["i_neg_den", "invalid", "", ""],
             ["i_mixed_bad", "invalid", "", ""],
             ["i_conflict", "invalid", "multiple_values", ""],
-            ["i_conflict_oob", "invalid", "", ""],
+            # More than one distinct known candidate yields invalid/multiple_values (decisions/language-rezono-1.md §4).
+            ["i_conflict_oob", "invalid", "multiple_values", ""],
             ["i_empty", "unknown", "no_value", ""],
         ],
     }
     witnesses = [
         _ratio_witness("i_ok", "known", "", "3/2", ["3/2"]),
         _ratio_witness("i_unreduced", "known", "", "2/3", ["4/6"]),
+        _ratio_witness("i_max_bound", "known", "", max_bound, [max_bound]),
+        _ratio_witness("i_min_bound", "known", "", min_bound, [min_bound]),
         _ratio_witness("i_reducible_min", "known", "", half_min, [f"{min_i64}/2"]),
         _ratio_witness("i_oob", "invalid", "", "", [min_i64]),
         _ratio_witness("i_oob_den", "invalid", "", "", [big_den]),
@@ -151,7 +162,7 @@ def _full_rows_and_witnesses() -> tuple[dict[str, list[list[str]]], list[dict]]:
         _ratio_witness("i_neg_den", "invalid", "", "", ["1/-2"]),
         _ratio_witness("i_mixed_bad", "invalid", "", "", ["1/2", "1/0"]),
         _ratio_witness("i_conflict", "invalid", "multiple_values", "", ["1/2", "3/4"]),
-        _ratio_witness("i_conflict_oob", "invalid", "", "", ["1/2", "3/4", min_i64]),
+        _ratio_witness("i_conflict_oob", "invalid", "multiple_values", "", ["1/2", "3/4", min_i64]),
         _ratio_witness("i_empty", "unknown", "no_value", "", []),
     ]
     return rows, witnesses
@@ -192,7 +203,9 @@ def test_checker_block_policy_blocks_out_of_bound_and_bad_denominator_base_facts
     assert _errors(rep) == {"functional_invalid"}, rep["findings"]
 
 
-def test_checker_block_policy_accepts_reducible_min_i64_within_bound():
+def test_checker_block_policy_accepts_exact_bounds_and_reducible_min_i64():
+    max_bound = str(2**63 - 1)
+    min_bound = str(-(2**63 - 1))
     min_i64 = str(-(2**63))
     half_min = str(-(2**62))
     doc = _rational_program(conflict_policy="block")
@@ -200,11 +213,23 @@ def test_checker_block_policy_accepts_reducible_min_i64_within_bound():
     derived = checker_rules.derived_relations(doc, loaded)
 
     rows = {
-        "item": [["i_reducible_min"]],
-        "ratio_in": [["i_reducible_min", f"{min_i64}/2"]],
-        "ratio_val": [["i_reducible_min", "known", "", half_min]],
+        "item": [["i_max_bound"], ["i_min_bound"], ["i_reducible_min"]],
+        "ratio_in": [
+            ["i_max_bound", max_bound],
+            ["i_min_bound", min_bound],
+            ["i_reducible_min", f"{min_i64}/2"],
+        ],
+        "ratio_val": [
+            ["i_max_bound", "known", "", max_bound],
+            ["i_min_bound", "known", "", min_bound],
+            ["i_reducible_min", "known", "", half_min],
+        ],
     }
-    witnesses = [_ratio_witness("i_reducible_min", "known", "", half_min, [f"{min_i64}/2"])]
+    witnesses = [
+        _ratio_witness("i_max_bound", "known", "", max_bound, [max_bound]),
+        _ratio_witness("i_min_bound", "known", "", min_bound, [min_bound]),
+        _ratio_witness("i_reducible_min", "known", "", half_min, [f"{min_i64}/2"]),
+    ]
     manifest, read = _manifest_and_reader(rows)
     rep = check_epoch(witnesses, manifest, loaded, read, derived=derived)
     assert rep["valid"], rep["findings"]
@@ -213,6 +238,8 @@ def test_checker_block_policy_accepts_reducible_min_i64_within_bound():
 @pytest.mark.parametrize("bad_input, forged_state, forged_reason, forged_val", [
     (str(-(2**63)), "unknown", "beyond_exact_bound", ""),
     (str(-(2**63)), "unknown", "no_value", ""),
+    (str(-(2**63)), "unknown", "made_up_reason", ""),
+    (str(-(2**63)), "unknown", "", ""),
     (str(-(2**63)), "invalid", "invalid_rational", ""),
     (str(-(2**63)), "invalid", "made_up_reason", ""),
     (str(-(2**63)), "invalid", "multiple_values", ""),
@@ -244,7 +271,7 @@ def test_checker_rejects_forged_reason_or_state_on_invalid_rational_base_fact(
     assert "outcome_state" in _errors(rep), rep["findings"]
 
 
-def test_checker_rejects_omitted_premise_and_forged_known_on_out_of_bound_base_fact():
+def test_checker_rejects_omitted_premise_forged_rule_citation_and_forged_known_on_out_of_bound_base_fact():
     min_i64 = str(-(2**63))
     doc = _rational_program(conflict_policy="publish")
     doc["relations"].append({"name": "ratio_alt", "role": "base", "key": [_col("id"), _col("r", "rational")]})
@@ -282,6 +309,12 @@ def test_checker_rejects_omitted_premise_and_forged_known_on_out_of_bound_base_f
     assert not rep_omitted["valid"]
     assert "premise_mismatch" in _errors(rep_omitted), rep_omitted["findings"]
 
+    # Citing `ratio_alt_r` without the candidate premises fails with premise_mismatch.
+    forged_rule_w = [_ratio_witness("i_oob", "invalid", "", "", [], rule_id="ratio_alt_r")]
+    rep_forged = check_epoch(forged_rule_w, manifest, loaded, read, derived=derived)
+    assert not rep_forged["valid"]
+    assert "premise_mismatch" in _errors(rep_forged), rep_forged["findings"]
+
     # Forging `known` "1/2" when another rule carries an out-of-bound base fact fails with outcome_state.
     forged_known = deepcopy(rows)
     forged_known["ratio_val"] = [["i_oob", "known", "", "1/2"]]
@@ -298,6 +331,20 @@ def test_checker_rejects_omitted_premise_and_forged_known_on_out_of_bound_base_f
     rep_fk = check_epoch(forged_known_w, m_fk, loaded, r_fk, derived=derived)
     assert not rep_fk["valid"]
     assert "outcome_state" in _errors(rep_fk), rep_fk["findings"]
+
+    # When >1 distinct known candidates also exist alongside an out-of-bound base fact, empty reason
+    # cannot mask `multiple_values` (decisions/language-rezono-1.md §4).
+    conflict_rows = {
+        "item": [["i_conflict_oob"]],
+        "ratio_in": [["i_conflict_oob", "1/2"], ["i_conflict_oob", "3/4"], ["i_conflict_oob", min_i64]],
+        "ratio_alt": [],
+        "ratio_val": [["i_conflict_oob", "invalid", "", ""]],
+    }
+    conflict_w = [_ratio_witness("i_conflict_oob", "invalid", "", "", ["1/2", "3/4", min_i64])]
+    m_co, r_co = _manifest_and_reader(conflict_rows)
+    rep_co = check_epoch(conflict_w, m_co, loaded, r_co, derived=derived)
+    assert not rep_co["valid"]
+    assert "outcome_state" in _errors(rep_co), rep_co["findings"]
 
 
 def _state_agg_rational_program(*, conflict_policy: str = "publish") -> dict:
