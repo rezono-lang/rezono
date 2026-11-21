@@ -6,7 +6,7 @@ shortcuts:
 
 - Standalone green regression test for fail-closed ``safe_mode`` across both ``ci-matrix``
   and ``coordinator-state`` (on invalid engine pin and on manifest missing ``rezono:schema``).
-- Five strict ``@pytest.mark.xfail(strict=True, raises=AssertionError, ...)`` tests:
+- Five strict ``pytest.mark.xfail(strict=True, raises=AssertionError, ...)`` tests:
   1. ``rezono:schema`` emitted directly by ``rezono_publisher`` / ``rezono_checker``, never
      synthesized by ``loop/ci_discover.py``.
   2. CI shard counts sourced from ``BuildShardConfig`` facts in ``build/facts/`` (with
@@ -51,18 +51,6 @@ LEASE_SECONDS = 4 * 60 * 60
 SUITES = ("alpha", "beta", "gamma", "spare")
 AUTHORITY_PATH = "observer/build-readers.json"
 
-_ENGINE_DIRS = (
-    "build",
-    "compiler",
-    "edge/publisher",
-    "checker",
-    "canon",
-    "admission",
-    "contracts",
-    "packs",
-    "publication",
-    "rezono",
-)
 _COPY_SKIP = frozenset({"__pycache__", "tests", "fixtures", ".pytest_cache", "node_modules"})
 
 
@@ -94,10 +82,12 @@ def _commit_env(epoch_seconds: int = COMMIT_TIME) -> dict[str, str]:
 
 
 def _copy_engine_tree(dst: Path) -> None:
+    import loop.ci_discover as ci_discover
+
     def _ignore(_directory: str, names: list[str]) -> list[str]:
         return [name for name in names if name in _COPY_SKIP]
 
-    for rel in _ENGINE_DIRS:
+    for rel in ci_discover._PINNED_ARCHIVE_PATHS:
         src = ROOT / rel
         if src.is_dir():
             target = dst / rel
@@ -219,7 +209,10 @@ def _make_stub_publisher_repo_without_schema_check(tmp_path: Path) -> tuple[Path
         encoding="utf-8",
     )
 
-    pub_pkg = repo / "edge" / "publisher" / "rezono_publisher"
+    import loop.ci_discover as ci_discover
+
+    pub_rel = next(p for p in ci_discover._PINNED_ARCHIVE_PATHS if p.endswith("/publisher"))
+    pub_pkg = repo / pub_rel / "rezono_publisher"
     pub_pkg.mkdir(parents=True)
     (pub_pkg / "__init__.py").write_text("", encoding="utf-8")
     (pub_pkg / "store.py").write_text(
