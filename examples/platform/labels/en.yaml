@@ -141,3 +141,7 @@ landing_sighting.request: request
 request_outcome: request outcome
 landed_request: landed request
 free_cores: free cores
+capacity_exploration: capacity exploration
+capacity_exploration.pool: pool
+capacity_exploration.request: request
+capacity_exploration.values: candidate values
