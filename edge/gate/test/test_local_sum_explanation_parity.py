@@ -1,11 +1,10 @@
 """Local explanation parity for published aggregate sums over value columns outside the key.
 
 Expectation source: decisions/local-sum-explanation-parity.md.
-Uses the real RuleProgram fixture contracts/fixtures/rules/RuleProgram/valid/aggregates.yaml
-(`hours(member, task; h)` -> `member_hours(member, total)`), publishes a verified role archive
-with `rezono_publisher.proof.plan`, verifies both the witnesses (`rezono_checker.check.check`)
-and proof trees (`rezono_checker.proof.check_proof`), then opens the exact same publication with
-the exact same role locally (`edge/gate/src/local.ts`) and via the published proof steps.
+Uses an inline `rezono.rules/1` program matching the `hours(member, task; h)` -> `member_hours(member, total)`
+shape, publishes a verified role archive with `rezono_publisher.proof.plan`, verifies both the witnesses
+(`rezono_checker.check.check`) and proof trees (`rezono_checker.proof.check_proof`), then opens the exact
+same publication with the exact same role locally (`edge/gate/src/local.ts`) and via the published proof steps.
 """
 
 from __future__ import annotations
@@ -16,7 +15,6 @@ from pathlib import Path
 import subprocess
 
 import pytest
-import yaml
 
 from rezono_canon import canonical_sha256
 from rezono_checker.check import check as check_witnesses
@@ -26,13 +24,59 @@ from rezono_compiler import rules as ir
 from rezono_compiler.explain import Explainer, key_text
 from rezono_publisher import proof
 
-ROOT = Path(__file__).resolve().parents[3]
-AGGREGATES_FIXTURE = ROOT / "contracts" / "fixtures" / "rules" / "RuleProgram" / "valid" / "aggregates.yaml"
 PROBE = Path(__file__).with_name("local-sum-parity-probe.mts")
 PACK = "fixture"
 MANIFEST_ID = "m-1"
 ROLE = "reader"
 QUESTION = "grounds"
+
+RULES_DOC = {
+    "format": "rezono.rules/1",
+    "pack": PACK,
+    "relations": [
+        {
+            "name": "member",
+            "role": "base",
+            "key": [{"name": "id", "type": "string"}],
+        },
+        {
+            "name": "hours",
+            "role": "base",
+            "key": [{"name": "member", "type": "string"}, {"name": "task", "type": "string"}],
+            "values": [{"name": "h", "type": "integer"}],
+        },
+        {
+            "name": "member_hours",
+            "role": "derived",
+            "key": [{"name": "member", "type": "string"}, {"name": "total", "type": "integer"}],
+            "module": "load",
+            "explain": "materialize",
+        },
+    ],
+    "rules": [
+        {
+            "id": "member_hours",
+            "module": "load",
+            "stratum": "1",
+            "head": {"relation": "member_hours", "terms": ["?m", "?s"]},
+            "body": [
+                {"relation": "member", "terms": ["?m"], "polarity": "positive", "stratum": "0"},
+            ],
+            "aggregates": [
+                {
+                    "relation": "hours",
+                    "terms": ["?m", "_"],
+                    "function": "sum",
+                    "over": "h",
+                    "as": "?s",
+                    "stratum": "0",
+                }
+            ],
+            "witness": {"relation": "member_hours__witness", "variables": ["?m", "?s"]},
+            "origin": {"file": "rules/load.dl", "line": "4"},
+        }
+    ],
+}
 
 
 def _sha256(data: bytes) -> str:
@@ -56,7 +100,7 @@ def _write_object(root: Path, payload: object) -> tuple[dict, bytes]:
 
 def _build_verified_sum_publication(root: Path) -> tuple[dict[str, str], dict[str, list[tuple[list[str], str]]]]:
     """Build and independently verify a published archive for `hours(member, task; h)` -> `member_hours`."""
-    rules_doc = yaml.safe_load(AGGREGATES_FIXTURE.read_text(encoding="utf-8"))
+    rules_doc = RULES_DOC
     prog = ir.load(rules_doc)
 
     # Hand-authored base facts: two members with tasks whose hours live in value column `h` (outside key).
@@ -73,9 +117,6 @@ def _build_verified_sum_publication(root: Path) -> tuple[dict[str, str], dict[st
         "member": members,
         "hours": hours_entries,
         "member_hours": member_totals,
-        "busy_member": [],
-        "shortest_task": [("ada", "5"), ("ben", "4")],
-        "with_margin": [("ada", "20"), ("ben", "21")],
     }
     witness_tables = {
         "member_hours": [("ada", "12"), ("ben", "13")],

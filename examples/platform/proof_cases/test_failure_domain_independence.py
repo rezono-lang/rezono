@@ -20,8 +20,14 @@ NO = "no"
 
 def base_records():
     """Minimal topology with one consumer (shop), one provider (idp) serving login on clusters east and west."""
+    from management_probes import _committed
+
     function = lambda key: {"id": key, "recovery_allowed": NO, "open_by_design": NO}
     service = lambda key, product: {"id": key, "product": product, "role": "app-role", "step": 1}
+    has_offer_port = "port" in _committed().kinds["offer"].slots
+    offer = {"id": "o-login", "product": "idp-app", "function": "login"}
+    if has_offer_port:
+        offer["port"] = 443
     return {
         "zone": [{"id": "inner", "outside": NO, "entry_boundary": NO, "isolated_recovery": NO, "workload": "yes"}],
         "cluster_class": [{"id": "shared"}],
@@ -29,7 +35,7 @@ def base_records():
                            "build_authority": NO}],
         "function": [function("login")],
         "product": [{"id": "shop-app"}, {"id": "idp-app"}],
-        "offer": [{"id": "o-login", "product": "idp-app", "function": "login", "port": 443}],
+        "offer": [offer],
         "demand": [{"id": "d-login", "product": "shop-app", "function": "login"}],
         "service": [service("shop", "shop-app"), service("idp", "idp-app")],
         "cluster_role": [{"id": "worker-role", "control_placement": "local"}],
