@@ -77,15 +77,6 @@ def _nft_table_json(ports: list[int]) -> str:
     return json.dumps({"nftables": items})
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "M2: decisions/loop-apply-readback.md: loop/router_render.py must emit valid nftables "
-        "comment syntax directly without escaped quotes, and loop/cluster/record_management_firewall.py "
-        "must apply the exact rendered script bytes to `nft -f -` without rewriting comments so "
-        "`applied_sha256` equals the hash of the applied bytes (see decisions/platform-management-firewall.md)."
-    ),
-)
 def test_router_render_emits_valid_nft_comments_and_recorder_applies_exact_bytes(monkeypatch):
     monkeypatch.syspath_prepend(str(ROOT / "loop" / "cluster"))
     monkeypatch.syspath_prepend(str(ROOT / "loop"))
