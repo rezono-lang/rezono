@@ -1,3 +1,11 @@
+---
+decider: [run]
+decided_on: 2026-11-18
+valid_from: 2026-11-18
+state: in_force
+subject: provider-workflow-dispatch
+---
+
 # Provider workflow dispatch boundary
 
 Use `.github/workflows/provider-run.yml` for the operator's provider run.
