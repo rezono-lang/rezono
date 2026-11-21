@@ -20,3 +20,7 @@ kinds:
   - {kind: build_citation_scan, shape: rect}
   - {kind: build_decision_citation, shape: rect}
   - {kind: build_red_citation, shape: rect}
+  - {kind: build_pull_head, shape: rect}
+  - {kind: build_required_check, shape: pill}
+  - {kind: build_check_reading, shape: rect}
+  - {kind: build_queue_plan, shape: rect}

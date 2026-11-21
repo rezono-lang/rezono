@@ -55,6 +55,21 @@ may_read(r, "build_claim_pull_reading", x) :- role__capability(r, "read"), build
 may_read(r, "build_claim_delete", x) :- role__capability(r, "read"), build_claim_delete(x).
 may_read(r, "build_claim_ref_read", x) :- role__capability(r, "read"), build_claim_ref_read(x).
 
+// Landing gate, readings and queue effects.
+may_read(r, "build_pull_head", x) :- role__capability(r, "read"), build_pull_head(x).
+may_read(r, "build_required_check", x) :- role__capability(r, "read"), build_required_check(x).
+may_read(r, "build_check_reading", x) :- role__capability(r, "read"), build_check_reading(x).
+may_read(r, "build_queue_plan", x) :- role__capability(r, "read"), build_queue_plan(x).
+may_read(r, "change", x) :- role__capability(r, "read"), change(x).
+may_read(r, "reading", x) :- role__capability(r, "read"), reading(x).
+may_read(r, "reading_finding", x) :- role__capability(r, "read"), reading_finding(x).
+may_read(r, "reading_dismissal", x) :- role__capability(r, "read"), reading_dismissal(x).
+may_read(r, "finding_resolution", x) :- role__capability(r, "read"), finding_resolution(x).
+may_read(r, "loop_claim", x) :- role__capability(r, "read"), loop_claim(x).
+may_read(r, "loop_effect_plan", x) :- role__capability(r, "read"), loop_effect_plan(x).
+may_read(r, "loop_effect_attempt", x) :- role__capability(r, "read"), loop_effect_attempt(x).
+may_read(r, "loop_effect_readback", x) :- role__capability(r, "read"), loop_effect_readback(x).
+
 // Explicit full-kind read coverage for every full-kind grant above.
 .decl may_read_full(role: symbol, kind: symbol)
 may_read_full(r, "role") :- role__capability(r, "read").
@@ -103,5 +118,19 @@ may_read_full(r, "build_claim_lease") :- role__capability(r, "read").
 may_read_full(r, "build_claim_pull_reading") :- role__capability(r, "read").
 may_read_full(r, "build_claim_delete") :- role__capability(r, "read").
 may_read_full(r, "build_claim_ref_read") :- role__capability(r, "read").
+
+may_read_full(r, "build_pull_head") :- role__capability(r, "read").
+may_read_full(r, "build_required_check") :- role__capability(r, "read").
+may_read_full(r, "build_check_reading") :- role__capability(r, "read").
+may_read_full(r, "build_queue_plan") :- role__capability(r, "read").
+may_read_full(r, "change") :- role__capability(r, "read").
+may_read_full(r, "reading") :- role__capability(r, "read").
+may_read_full(r, "reading_finding") :- role__capability(r, "read").
+may_read_full(r, "reading_dismissal") :- role__capability(r, "read").
+may_read_full(r, "finding_resolution") :- role__capability(r, "read").
+may_read_full(r, "loop_claim") :- role__capability(r, "read").
+may_read_full(r, "loop_effect_plan") :- role__capability(r, "read").
+may_read_full(r, "loop_effect_attempt") :- role__capability(r, "read").
+may_read_full(r, "loop_effect_readback") :- role__capability(r, "read").
 
 .output may_read

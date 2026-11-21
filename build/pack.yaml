@@ -11,3 +11,6 @@ imports:
   - name: std-loop
     path: ../packs/std-loop
     sha256: 1512bdc4315125b60d28488378adc81ef4cae45b1cff71e5f12d8fe546979f70
+  - name: std-review
+    path: ../packs/std-review
+    sha256: 4239b7105fb99b656d0fd5da01fa16e48f053078291cffd84d361da5cbc19cf8

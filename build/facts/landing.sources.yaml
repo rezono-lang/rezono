@@ -1,0 +1,42 @@
+default:
+  kind: git
+  name: rezono-lang/rezono
+  revision: 83b577e42c8cc819cf97da03c3b92ea5bdebe475
+  position: decisions/landing-gate-as-rule.md#22-required-checks
+records:
+  - of: {kind: build_target_rule, id: correctness-reading-checker}
+    position: decisions/checker-and-access-review.md#the-paths-read-first
+  - of: {kind: build_target_rule, id: correctness-reading-std-access}
+    position: decisions/checker-and-access-review.md#the-paths-read-first
+  - of: {kind: build_target_rule, id: correctness-reading-edge-gate}
+    position: decisions/checker-and-access-review.md#the-paths-read-first
+  - of: {kind: build_target_rule, id: correctness-reading-canon}
+    position: decisions/checker-and-access-review.md#the-paths-read-first
+  - of: {kind: build_target_rule, id: correctness-reading-k8s-admission}
+    position: decisions/checker-and-access-review.md#the-paths-read-first
+  - of: {kind: build_target_rule, id: correctness-reading-contracts-proof}
+    position: decisions/checker-and-access-review.md#the-paths-read-first
+  - of: {kind: build_target_rule, id: correctness-reading-network-policy}
+    position: decisions/checker-and-access-review.md#the-paths-read-first
+  - of: {kind: build_target_rule, id: correctness-reading-pub-access}
+    position: decisions/checker-and-access-review.md#the-paths-read-first
+  - of: {kind: build_target_rule, id: correctness-reading-pub-calc-scope}
+    position: decisions/checker-and-access-review.md#the-paths-read-first
+  - of: {kind: build_target_rule, id: correctness-reading-pub-sources}
+    position: decisions/checker-and-access-review.md#the-paths-read-first
+  - of: {kind: build_target_rule, id: correctness-reading-pub-sweep}
+    position: decisions/checker-and-access-review.md#the-paths-read-first
+  - of: {kind: build_target_rule, id: correctness-reading-pub-difference}
+    position: decisions/checker-and-access-review.md#the-paths-read-first
+  - of: {kind: build_target_rule, id: correctness-reading-pub-batch}
+    position: decisions/checker-and-access-review.md#the-paths-read-first
+  - of: {kind: build_target_rule, id: correctness-reading-pub-publish}
+    position: decisions/checker-and-access-review.md#the-paths-read-first
+  - of: {kind: build_target_rule, id: correctness-reading-pub-proof}
+    position: decisions/checker-and-access-review.md#the-paths-read-first
+  - of: {kind: build_target_rule, id: correctness-reading-pub-views}
+    position: decisions/checker-and-access-review.md#the-paths-read-first
+  - of: {kind: build_target_rule, id: correctness-reading-pub-retained}
+    position: decisions/checker-and-access-review.md#the-paths-read-first
+  - of: {kind: build_target_rule, id: correctness-reading-full-fallback}
+    position: decisions/checker-and-access-review.md#the-paths-read-first

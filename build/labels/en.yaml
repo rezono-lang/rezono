@@ -77,3 +77,38 @@ build_milestone_progress: Milestone progress
 release_1_done: Release 1 done
 build_offboard_work_count: Off-board work count
 build_offboard_work_unknown: Unknown off-board work
+build_pull_head: Pull request head
+build_pull_head.run: Run
+build_pull_head.change: Change
+build_pull_head.head_sha: Head SHA
+build_pull_head.observed_at: Observed at
+build_pull_head.source: Source
+build_required_check: Required check
+build_required_check.check: Check
+build_check_reading: Check reading
+build_check_reading.run: Run
+build_check_reading.head_sha: Head SHA
+build_check_reading.check: Check
+build_check_reading.state: State
+build_check_reading.observed_at: Observed at
+build_check_reading.source: Source
+build_check_reading.receipt: Receipt
+build_check_state: Check state
+build_check_state.green: Green
+build_check_state.red: Red
+build_check_state.pending: Pending
+build_check_state.skipped: Skipped
+build_queue_plan: Queue effect plan
+build_queue_plan.plan: Plan
+build_queue_plan.change: Change
+build_queue_plan.head_sha: Head SHA
+build_queue_plan.action: Action
+build_queue_plan.gate_run: Gate run
+build_queue_action: Queue action
+build_queue_action.enqueue: Enqueue
+build_queue_action.dequeue: Dequeue
+build_landing: Landing state
+build_landing_ground: Landing ground
+build_landing_read: Landing reading state
+build_reading_needed: Reading needed
+build_queue_driver: Queue driver

@@ -24,7 +24,7 @@ TABLE: dict[str, str] = {
     "std-loop": "1512bdc4315125b60d28488378adc81ef4cae45b1cff71e5f12d8fe546979f70",
     "std-order": "6c56982cfaa6535835b594be2fb280655795a96f0308d8e5d423c6040f923495",
     "std-part": "207f4f097f68e6dade792b714754e0f279ce2c948be8adce82108a3abc18cca9",
-    "std-review": "ad0a9b9c585ff348f96b7a57c3cbe5ba70e811fcd5d2796e4bc894668c0091ea",
+    "std-review": "4239b7105fb99b656d0fd5da01fa16e48f053078291cffd84d361da5cbc19cf8",
     "std-time": "8086365e4aecf05bada7b2eb7571242dd26fbbf2b84c767a7c221bcf6c436f6d",
     "std-view": "a544468e9e64efbe31dfc5ccf72f1eccbf508dafc55f7087a39ab9b4dd4bff60",
 }
