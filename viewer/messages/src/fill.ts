@@ -2,6 +2,10 @@ import type { MessageResource } from '../../../contracts/typescript/generated/bu
 
 export type MessageArgs = Readonly<Record<string, string | number | boolean | undefined>>;
 
+export type MessagePart =
+	| { kind: 'text'; text: string }
+	| { kind: 'var'; name: string; text: string };
+
 /** Raised when an MF2 message references a variable that has no argument value. */
 export class MissingMessageArgument extends Error {
 	argument: string;
@@ -22,6 +26,7 @@ export class MissingMessageArgument extends Error {
 interface BoundValue {
 	value: string | number | boolean;
 	func?: string;
+	varName?: string;
 }
 
 interface Variant {
@@ -184,6 +189,7 @@ function parseExpression(
 		return {
 			value: existing.value,
 			func: funcMatch ? funcMatch[1] : existing.func,
+			varName: name,
 		};
 	}
 	if (trimmed.startsWith('|')) {
@@ -194,37 +200,52 @@ function parseExpression(
 	return { value: trimmed };
 }
 
-function renderPattern(
+function renderPatternParts(
 	pattern: string,
 	args: MessageArgs,
 	env: ReadonlyMap<string, BoundValue>,
 	id: string,
-): string {
-	let out = '';
+): MessagePart[] {
+	const parts: MessagePart[] = [];
+	let buf = '';
+	const flush = (): void => {
+		if (buf.length > 0) {
+			parts.push({ kind: 'text', text: buf });
+			buf = '';
+		}
+	};
 	let pos = 0;
 	while (pos < pattern.length) {
 		const ch = pattern[pos];
 		if (ch === '\\') {
 			const next = pattern[pos + 1];
 			if (next === '\\' || next === '{' || next === '}' || next === '|') {
-				out += next;
+				buf += next;
 				pos += 2;
 			} else {
-				out += ch;
+				buf += ch;
 				pos++;
 			}
 			continue;
 		}
 		if (ch === '{') {
 			const { inner, end } = readBraced(pattern, pos);
-			out += String(parseExpression(inner, args, env, id).value);
+			const expr = parseExpression(inner, args, env, id);
+			const text = String(expr.value);
+			if (expr.varName !== undefined) {
+				flush();
+				parts.push({ kind: 'var', name: expr.varName, text });
+			} else {
+				buf += text;
+			}
 			pos = end;
 			continue;
 		}
-		out += ch;
+		buf += ch;
 		pos++;
 	}
-	return out;
+	flush();
+	return parts;
 }
 
 function readKey(text: string, start: number): { key: string; end: number } {
@@ -310,7 +331,7 @@ function isDirective(text: string, pos: number, keyword: string): boolean {
 	return next === undefined || /\s/.test(next) || next === '{';
 }
 
-function fillComplex(raw: string, startPos: number, lang: string, id: string, args: MessageArgs): string {
+function fillComplexParts(raw: string, startPos: number, lang: string, id: string, args: MessageArgs): MessagePart[] {
 	let pos = startPos;
 	const env = new Map<string, BoundValue>();
 	while (pos < raw.length) {
@@ -354,7 +375,7 @@ function fillComplex(raw: string, startPos: number, lang: string, id: string, ar
 	pos = skipWs(raw, pos);
 	if (raw.startsWith('{{', pos)) {
 		const { pattern } = readQuotedPattern(raw, pos);
-		return renderPattern(pattern, args, env, id);
+		return renderPatternParts(pattern, args, env, id);
 	}
 
 	if (isDirective(raw, pos, '.match')) {
@@ -383,19 +404,19 @@ function fillComplex(raw: string, startPos: number, lang: string, id: string, ar
 			pos = end;
 		}
 		const chosen = selectVariant(variants, selectors, lang);
-		return renderPattern(chosen, args, env, id);
+		return renderPatternParts(chosen, args, env, id);
 	}
 
-	return renderPattern(raw.slice(pos).trimEnd(), args, env, id);
+	return renderPatternParts(raw.slice(pos).trimEnd(), args, env, id);
 }
 
-/** Fill MF2 message `id` in `lang` from `resources`, throwing `MissingMessageArgument` on missing args. */
-export function fill(
+/** Fill MF2 message `id` in `lang` into text and variable parts, throwing `MissingMessageArgument` on missing args. */
+export function fillParts(
 	resources: readonly MessageResource[],
 	lang: string,
 	id: string,
 	args: MessageArgs = {},
-): string | undefined {
+): MessagePart[] | undefined {
 	if (!Array.isArray(resources)) {
 		return undefined;
 	}
@@ -406,11 +427,22 @@ export function fill(
 	const safeArgs: MessageArgs = args ?? {};
 	const start = skipWs(raw, 0);
 	if (isDirective(raw, start, '.input') || isDirective(raw, start, '.local') || isDirective(raw, start, '.match')) {
-		return fillComplex(raw, start, lang, id, safeArgs);
+		return fillComplexParts(raw, start, lang, id, safeArgs);
 	}
 	if (raw.startsWith('{{', start)) {
 		const { pattern } = readQuotedPattern(raw, start);
-		return renderPattern(pattern, safeArgs, new Map(), id);
+		return renderPatternParts(pattern, safeArgs, new Map(), id);
 	}
-	return renderPattern(raw.slice(start).trimEnd(), safeArgs, new Map(), id);
+	return renderPatternParts(raw.slice(start).trimEnd(), safeArgs, new Map(), id);
+}
+
+/** Fill MF2 message `id` in `lang` from `resources`, throwing `MissingMessageArgument` on missing args. */
+export function fill(
+	resources: readonly MessageResource[],
+	lang: string,
+	id: string,
+	args: MessageArgs = {},
+): string | undefined {
+	const parts = fillParts(resources, lang, id, args);
+	return parts === undefined ? undefined : parts.map((part) => part.text).join('');
 }
