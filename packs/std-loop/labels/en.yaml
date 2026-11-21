@@ -178,3 +178,48 @@ watchdog_trigger: watchdog trigger
 watchdog_resolve: watchdog resolve
 watchdog_resolved: resolved watchdog target
 watchdog_hold: watchdog hold
+derived_refusal: derived refusal
+loop_effect_state: effect journal state
+loop_effect_state.planned: planned
+loop_effect_state.applying: applying
+loop_effect_state.unknown: unknown
+loop_effect_state.applied: applied
+loop_effect_state.failed: failed
+loop_effect_state.cleaned: cleaned
+loop_effect_attempt_outcome: effect attempt outcome
+loop_effect_attempt_outcome.claimed: claimed
+loop_effect_attempt_outcome.sent: sent
+loop_effect_attempt_outcome.refused: refused
+loop_effect_attempt_outcome.unknown: unknown
+loop_effect_readback_state: effect readback state
+loop_effect_readback_state.expected: expected
+loop_effect_readback_state.before: before
+loop_effect_readback_state.other: other
+loop_effect_plan: effect plan
+loop_effect_plan.run: plan run
+loop_effect_plan.step: planned step
+loop_effect_plan.reason: plan evidence
+loop_effect_attempt: effect attempt
+loop_effect_attempt.run: attempt run
+loop_effect_attempt.plan: attempted plan
+loop_effect_attempt.sent_at: attempt send tick
+loop_effect_attempt.outcome: attempt outcome
+loop_effect_attempt.source: attempt source
+loop_effect_readback: effect readback
+loop_effect_readback.run: readback run
+loop_effect_readback.plan: readback plan
+loop_effect_readback.observed_at: readback observation tick
+loop_effect_readback.state: observed target state
+loop_effect_readback.receipt: readback sweep receipt
+loop_effect_readback.source: readback source
+loop_claim: observed claim
+loop_claim.run: claim run
+loop_claim.subject: claimed subject
+loop_claim.generation: claimed generation
+loop_claim.observed_at: claim observation tick
+loop_claim.source: claim source
+loop_claim_renewal: claim renewal
+loop_claim_renewal.claim: renewed claim
+loop_claim_renewal.generation: renewal generation
+loop_claim_renewal.at: renewal tick
+loop_claim_renewal.source: renewal source

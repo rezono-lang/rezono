@@ -1,0 +1,24 @@
+rezono 0
+pack std-loop
+
+schema std_loop_claim
+  iri "https://rezono.org/std-loop/claim"
+  import "linkml:types"
+  default range Text
+  description "Observed claims and claim renewals shared across runs (decisions/loop-engine-epoch.md)."
+  annotation layer = "facts"
+
+kind LoopClaim world closed
+  description "A claim observed at a cut, such as a branch ref, a write-once ref or a store object."
+  run: Text
+  subject: Text
+  generation: Text
+  observed_at: Int
+  source: Text
+
+kind LoopClaimRenewal world closed
+  description "One recorded push or renewal of an observed claim."
+  claim: LoopClaim
+  generation: Text
+  `at`: Int
+  source: Text
