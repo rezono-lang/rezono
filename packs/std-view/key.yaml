@@ -10,6 +10,8 @@ statuses:
   # Checked and not there (a negative premise that holds). Neutral, like not applicable; its glyph and its
   # word tell it apart from valid and from unknown, not its colour.
   - {status: absent, tone: neutral, color_role: status.not_applicable, glyph: "⦸", label_message: status.absent}
+  # Invalid value (expression or constraint error with an explicit reason). Distinct from violated (✕) and unknown (▨).
+  - {status: invalid, tone: negative, color_role: status.invalid, glyph: "!", label_message: status.invalid}
 tones:
   - {tone: positive, color_role: status.valid, glyph: "✓", label_message: tone.positive}
   - {tone: neutral, color_role: status.not_applicable, glyph: "–", label_message: tone.neutral}
