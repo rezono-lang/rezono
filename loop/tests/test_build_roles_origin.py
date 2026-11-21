@@ -45,14 +45,6 @@ def _is_honest_origin(src: dict) -> bool:
     return True
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "extra: decisions/fact-origin-required.md: build/facts/roles.yaml must have "
-        "build/facts/roles.sources.yaml covering every row via rezono_compiler.sources with "
-        "honest non-default citations"
-    ),
-)
 def test_build_roles_fact_file_has_honest_origins():
     from rezono_compiler import facts, pack, sources
 

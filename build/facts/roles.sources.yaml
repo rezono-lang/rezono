@@ -1,0 +1,5 @@
+default:
+  kind: git
+  name: rezono-lang/rezono
+  revision: 0189496ba3e22b4467da71fdaefff1be82b444ab
+  position: decisions/build-reconciliation.md#role-scoped-publication-std-access
