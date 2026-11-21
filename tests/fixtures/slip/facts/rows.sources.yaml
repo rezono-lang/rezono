@@ -1,0 +1,4 @@
+default:
+  kind: synthetic
+  name: tests/fixtures/slip/README.md
+  position: facts/rows.yaml
