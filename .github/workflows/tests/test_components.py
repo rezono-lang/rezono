@@ -70,8 +70,9 @@ class WorkflowEnvironmentTests(unittest.TestCase):
         self.assertIn(".github/actions/release-rehearsal/action.yml action", found)
 
     def test_the_base_decides_what_runs_and_counts_what_ran(self):
-        # A candidate's scripts/components.py, environment action or pytest
-        # options must not drop tests from both its inventory and its run.
+        # Suite selection runs build/ on the pinned earlier main engine via
+        # loop/ci_discover.py, and the base scripts still count the inventory
+        # and verify execution so a candidate cannot drop tests from both.
         jobs = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"))["jobs"]
         base = ("${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha "
                 "|| github.sha }}")
@@ -81,14 +82,21 @@ class WorkflowEnvironmentTests(unittest.TestCase):
         source, = [i for i, run in enumerate(runs) if "git archive" in run and ".build-base" in run]
         self.assertEqual(steps[source]["env"]["POLICY"], base)
         self.assertIn('git archive "$POLICY" scripts | tar -x -C .build-base --strip-components=1', runs[source])
-        for command in ("components.py ci-matrix", "components.py inventory"):
-            uses, = [i for i, run in enumerate(runs) if command in run]
-            self.assertIn(".build-base/" + command, runs[uses])
-            self.assertNotIn("scripts/" + command, runs[uses])
-            self.assertLess(source, uses, command)
-        inventory, = [run for run in runs if "components.py inventory" in run]
-        self.assertLess(inventory.index("unset PYTEST_ADDOPTS PYTEST_PLUGINS"),
-                        inventory.index("components.py inventory"))
+
+        environment, = [i for i, step in enumerate(steps)
+                        if step.get("uses") == "./.github/workflows/python-environment"]
+        matrix_idx, = [i for i, step in enumerate(steps) if step.get("id") == "matrix"]
+        self.assertIn("loop/ci_discover.py ci-matrix", runs[matrix_idx])
+        self.assertNotIn("components.py ci-matrix", "\n".join(runs))
+        self.assertLess(environment, matrix_idx,
+                        "pinned build pack discovery needs the locked Python and Node environment")
+
+        inv_idx, = [i for i, run in enumerate(runs) if "components.py inventory" in run]
+        self.assertIn(".build-base/components.py inventory", runs[inv_idx])
+        self.assertNotIn("scripts/components.py inventory", runs[inv_idx])
+        self.assertLess(source, inv_idx, "components.py inventory")
+        self.assertLess(runs[inv_idx].index("unset PYTEST_ADDOPTS PYTEST_PLUGINS"),
+                        runs[inv_idx].index("components.py inventory"))
 
         steps = jobs["check"]["steps"]
         verify, = [i for i, step in enumerate(steps) if "components.py verify-execution" in step.get("run", "")]
