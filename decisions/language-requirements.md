@@ -230,7 +230,7 @@ The compiler (`compiler/rezono_compiler/rezono_requirements.py`, invoked from `p
 
 ### Verified witnesses (`contracts/proof.yaml` and `checker/rezono_checker/`)
 
-Every proven outcome row in `<name>` (`(k..., "known", "", "true")`) and every violation row in `<name>_violation` (`(k..., clause, target, bound, observed)`) carries a complete proof verified independently by `checker/rezono_checker/`:
+Every proven outcome row in `<name>` (`(k..., "known", "", "true")`) and every violation row in `<name>_violation` (`(k..., clause, target, bound, observed)`) carries a complete proof verified independently by `checker/rezono_checker/`. To support verifying functional outcomes directly, `compiler/rezono_compiler/explain.py` MUST emit `rezono.rules/2` functional snapshots keyed by the full `(k..., state, reason, value)` tuple and functional witnesses matching `checker/rezono_checker/check.py::_check_functional_witness`:
 
 - **Trigger and scope premises:** positive premises proving `k ∈ domain` and every base/derived atom establishing `when P(k) = true`.
 - **Distinct identities, scope, and time (for proven bounds):**

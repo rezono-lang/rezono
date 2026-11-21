@@ -107,7 +107,10 @@ def _evaluate(directory: Path):
 
 
 def _verified_proof(explainer, manifest, read_bytes, document, relation: str, row: tuple[str, ...]) -> dict:
-    proof = explainer.proof(relation, row, "0-case")
+    try:
+        proof = explainer.proof(relation, row, "0-case")
+    except explain.NoProof as error:
+        raise MissingRequirementLowering(str(error)) from error
     report = verify_proof(proof, manifest, load_checker_rules(document), read_bytes)
     if not report["valid"] or report["findings"]:
         raise MissingRequirementLowering(f"checker rejected proof for {relation}{row}: {report['findings']}")
@@ -712,7 +715,10 @@ def _verify_bound_witness(
 
     agg = matching_aggs[0]
     match_rel = agg["relation"]
-    contributors = sorted(r for r in explainer.rows.get(match_rel, ()) if r[0] == scope)
+    contributors = sorted(
+        (r for r in explainer.rows.get(match_rel, ()) if r[0] == scope),
+        key=explain.key_text,
+    )
     expected_sha = canonical_sha256([[explain.key_text(r)] for r in contributors])
     if len(contributors) != expected_count or expected_sha != agg["contributors_sha256"]:
         raise MissingRequirementLowering(
@@ -996,7 +1002,7 @@ derived replica_sweep_complete(service: Service): Bool = ReplicaSweep.any(it.ser
 kind ReplicaEntity world open, complete by replica_sweep_complete
   service: Service
 
-kind ReplicaObservation world open, complete by replica_sweep_complete
+kind ReplicaObservation
   service: Service
   healthy: Flag
   observed_at: Text
