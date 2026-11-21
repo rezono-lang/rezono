@@ -184,7 +184,7 @@ def test_souffle_run_evaluates_functional_derivations_and_strict_aggregates(tmp_
     got = souffle.run(prog, facts, tmp_path)
     assert got["pair_val"] == {
         ("g1", "k_known", "known", "", "v1"),
-        ("g1", "k_missing", "unknown", "no_value", ""),
+        ("g1", "k_missing", "unknown", "no_match", ""),
         ("g1", "k_conflict", "invalid", "multiple_values", ""),
     }
     assert got["opt_val"] == {
@@ -196,13 +196,13 @@ def test_souffle_run_evaluates_functional_derivations_and_strict_aggregates(tmp_
     assert got["flag_val"] == {
         ("i_ok1", "known", "", "true"),
         ("i_ok2", "known", "", "false"),
-        ("i_empty", "unknown", "no_value", "false"),
+        ("i_empty", "unknown", "no_match", "false"),
         ("i_clash", "invalid", "multiple_values", "false"),
     }
     assert got["group_total"] == {
         ("g_ok", "known", "", "30"),
-        ("g_unknown", "unknown", "no_value", "0"),
-        ("g_na", "unknown", "no_value", "0"),
+        ("g_unknown", "unknown", "no_match", "0"),
+        ("g_na", "unknown", "no_match", "0"),
         ("g_invalid", "invalid", "multiple_values", "0"),
     }
     assert got["group_opt_total"] == {
@@ -213,3 +213,85 @@ def test_souffle_run_evaluates_functional_derivations_and_strict_aggregates(tmp_
     }
     assert got["resolved_pair"] == {("g1", "k_known", "v1")}
     assert got["conflict_pair"] == {("g1", "k_conflict")}
+
+
+def test_souffle_oracle_emits_no_match_for_empty_functional_keys(tmp_path):
+    """0-candidate functional keys emit exact 'no_match' for both unknown (T) and not_applicable (T?)
+    unless empty_reason is explicitly overridden, and >1 distinct values emit ('invalid', 'multiple_values')
+    (decisions/language-rezono-1.md §§2-3)."""
+    doc = {
+        "format": "rezono.rules/2",
+        "pack": "sample",
+        "relations": [
+            {"name": "pair_dom", "role": "base", "key": [_col("a"), _col("b")]},
+            {"name": "cand", "role": "base", "key": [_col("a"), _col("b"), _col("v")]},
+            {
+                "name": "pick", "role": "functional", "module": "core", "explain": "on_demand",
+                "key": [_col("a"), _col("b")], "domain": "pair_dom",
+                "value": _col("value", "string"), "conflict_policy": "publish",
+            },
+            {
+                "name": "opt_pick", "role": "functional", "module": "core", "explain": "on_demand",
+                "key": [_col("a"), _col("b")], "domain": "pair_dom",
+                "value": _col("value", "string"), "conflict_policy": "publish",
+                "empty_state": "not_applicable",
+            },
+            {
+                "name": "explicit_opt", "role": "functional", "module": "core", "explain": "on_demand",
+                "key": [_col("a"), _col("b")], "domain": "pair_dom",
+                "value": _col("value", "string"), "conflict_policy": "publish",
+                "empty_state": "not_applicable", "empty_reason": "empty",
+            },
+        ],
+        "rules": [
+            _rule("pick_r", "pick", ["?a", "?b", "?v"],
+                  [_lit("pair_dom", "?a", "?b"), _lit("cand", "?a", "?b", "?v")], stratum="1"),
+            _rule("opt_pick_r", "opt_pick", ["?a", "?b", "?v"],
+                  [_lit("pair_dom", "?a", "?b"), _lit("cand", "?a", "?b", "?v")], stratum="1"),
+            _rule("explicit_opt_r", "explicit_opt", ["?a", "?b", "?v"],
+                  [_lit("pair_dom", "?a", "?b"), _lit("cand", "?a", "?b", "?v")], stratum="1"),
+        ],
+    }
+    prog = ir.load(doc, require_witness=False)
+    lines = souffle.program(prog).splitlines()
+
+    for name, expected_state, expected_reason in (
+        ("pick", "unknown", "no_match"),
+        ("opt_pick", "not_applicable", "no_match"),
+        ("explicit_opt", "not_applicable", "empty"),
+    ):
+        empty_lines = [line for line in lines if f"!Func_{name}_HasCand(" in line]
+        assert len(empty_lines) == 1, f"expected one empty-key rule for {name}, got {empty_lines}"
+        empty_rule = empty_lines[0]
+        assert f'"{expected_state}", "{expected_reason}"' in empty_rule, (
+            f"Soufflé oracle emitted wrong empty-key reason for {name}: {empty_rule}"
+        )
+        assert '"no_value"' not in empty_rule, (
+            f"Soufflé oracle must not emit 'no_value' for 0-candidate key in {name}: {empty_rule}"
+        )
+        conflict_lines = [line for line in lines if f"Func_{name}_Conflict(" in line and line.startswith(f"{name}(")]
+        assert conflict_lines and '"invalid", "multiple_values"' in conflict_lines[0], (
+            f"Soufflé oracle conflict rule for {name} must emit ('invalid', 'multiple_values'): {conflict_lines}"
+        )
+
+    if shutil.which("souffle") is not None:
+        facts = {
+            "pair_dom": [("g1", "k1"), ("g1", "k2"), ("g1", "k3")],
+            "cand": [("g1", "k1", "v1"), ("g1", "k3", "v1"), ("g1", "k3", "v2")],
+        }
+        got = souffle.run(prog, facts, tmp_path)
+        assert got["pick"] == {
+            ("g1", "k1", "known", "", "v1"),
+            ("g1", "k2", "unknown", "no_match", ""),
+            ("g1", "k3", "invalid", "multiple_values", ""),
+        }
+        assert got["opt_pick"] == {
+            ("g1", "k1", "known", "", "v1"),
+            ("g1", "k2", "not_applicable", "no_match", ""),
+            ("g1", "k3", "invalid", "multiple_values", ""),
+        }
+        assert got["explicit_opt"] == {
+            ("g1", "k1", "known", "", "v1"),
+            ("g1", "k2", "not_applicable", "empty", ""),
+            ("g1", "k3", "invalid", "multiple_values", ""),
+        }
