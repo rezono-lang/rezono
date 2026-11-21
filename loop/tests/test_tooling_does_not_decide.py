@@ -171,11 +171,6 @@ def test_commit_pinned_evidence_shared_form():
     }
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="extra: decisions/tooling-does-not-decide.md: Form 3 change-to-target selection in build/",
-)
 def test_change_to_target_selection_shared_form():
     """Form 3: build/ derives build_target_selected and build_target_not_required, failing closed without a receipt."""
     from rezono_compiler import pack, rules
