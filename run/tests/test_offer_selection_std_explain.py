@@ -15,10 +15,6 @@ OFFER = REPO / "run" / "packs" / "offer-selection"
 STD_EXPLAIN = REPO / "packs" / "std-explain"
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "extra: decisions/standard-packs-everywhere.md, section 3. Import std-explain in "
-    "run/packs/offer-selection/pack.yaml, pinned to its sha256, and drop the copied grounds question from its "
-    "questions.yaml; the physical-or-nested reader keeps proof: grounds."))
 def test_offer_selection_imports_std_explain():
     manifest = yaml.safe_load((OFFER / "pack.yaml").read_text(encoding="utf-8"))
     by_name = {entry["name"]: entry for entry in manifest.get("imports") or ()}
