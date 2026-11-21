@@ -559,7 +559,7 @@ def load(doc, require_witness=True):
 
 
 def _check_access_boundary(prog):
-    """Neither may_read nor may_read_full may depend (directly or transitively) on a functional derivation
+    """Neither may_read nor may_read_full may be or depend (directly or transitively) on a functional derivation
     or a calculation selection (decisions/language-rezono-1.md, section 4)."""
     calc_rels = {n for n, r in prog.relations.items() if r.role == "calc"}
     if calc_rels:
@@ -572,7 +572,7 @@ def _check_access_boundary(prog):
     if func_rels:
         after_func = prog.downstream(func_rels)
         for access_rel in ACCESS_RELATIONS:
-            if access_rel in after_func:
+            if access_rel in func_rels or access_rel in after_func:
                 raise IRError("access_depends_on_functional",
                               f"{access_rel} cannot depend on a functional derivation")
 
