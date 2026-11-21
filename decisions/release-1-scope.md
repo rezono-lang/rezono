@@ -44,20 +44,34 @@ Beside the vision, release 1 carries the language at the front door: the readme 
 
 ## 3. Reading: the table twin, its legend and why
 
-Release 1 has one sheet: the slip of [the slip decision](viewer-slip.md), step 1, as far as a reader needs it to see one conclusion as a table with a legend and to ask why. That is the page, the parts of the local reader the page asks, and the rows the page must draw: a rule row, a calculated row and a value that is not known. A calculated row is in, because the calculations of Rezono 1 are the conclusions most readers ask about, and `test_tables_and_legend` already draws one. A value that is not known is in, because a page that draws it with a digit breaks "Unknown is explicit".
+On 2026-11-21 the owner set the repository boundary for reading (recorded here and in [the slip decision](viewer-slip.md#repository-boundary)): **Release 1 reading in `rezono-lang/rezono` is the data side and the screenless readers**, while the browser slip reader page moves to `rezono-lang/cartouche`.
 
-These red tests move from `extra` to `M3`:
+- **What stays in `rezono-lang/rezono` (Release 1 reading = the data side):**
+  - the contracts (`contracts/`) and `packs/std-view`;
+  - per-role bundles, head status (`witness_check`), and manifest hash (`manifest_sha256`);
+  - the key of signs in every schema bundle (section 4);
+  - sweeps and turning points (section 5);
+  - message formatting and canonical helpers (`viewer/messages/src/fill.ts` and `viewer/src/lib/canon.ts`);
+  - screenless readers (REPL, MCP, and CLI).
+- **What moves to `rezono-lang/cartouche`:**
+  - the browser slip page (`packages/slip` in `rezono-lang/cartouche`, consumed at a pinned version), tested against the same conformance requirements of [the slip decision](viewer-slip.md) and against Rezono's fixtures;
+  - once the slip tests are green on `rezono-lang/cartouche`'s `main`, `viewer/slip/` and the DOM slip tests leave `rezono-lang/rezono`, while all data-side tests remain in `rezono-lang/rezono`.
+- **CI independence:** `rezono-lang/rezono`'s CI does **not** depend on `rezono-lang/cartouche`'s CI.
 
-- `tests/slip/test_role_part_of_bundle.py::test_role_part_of_bundle`
-- `tests/slip/test_head_status_and_hash.py::test_head_status_and_hash`
-- `tests/slip/test_message_filled.py::test_message_filled`
-- `tests/slip/test_slip_rule_row.py::test_slip_rule_row`
-- `tests/slip/test_slip_calculated_row.py::test_slip_calculated_row`
-- `tests/slip/test_unknown_shows_no_digit.py::test_unknown_shows_no_digit`
-- `tests/slip/test_verbs_that_answer.py::test_verbs_that_answer`
-- `tests/slip/test_tables_and_legend.py::test_tables_and_legend`
+On 2026-11-20, before the browser page moved out, Release 1 scoped step 1 of [the slip decision](viewer-slip.md) as the parts of the local reader the page asks and the rows the page must draw (a rule row, a calculated row, and a value that is not known — a calculated row because the calculations of Rezono 1 are the conclusions most readers ask about, and a value that is not known because drawing it with a digit breaks "Unknown is explicit") and moved these red tests from `extra` to `M3`:
 
-The rest of step 1 stays `extra`: `tests/slip/test_unserved_publication.py::test_unserved_publication`, because the local reader already refuses a damaged witness set and the page's own notice of it comes after, and `examples/test_slip_claims.py::test_one_build_every_claim`, because release 1 needs the page, not a home claim drawn for every example. Step 2 on the page (`test_several_sweeps`, `test_several_sweeps_in_the_repl`, `test_variant_difference_local`, `test_stops_only`) stays `extra`: release 1 answers what if through the reader (section 5), not yet through a control on the line. Steps 3 to 5 have no tests yet.
+- Data-side tests (stay in `rezono-lang/rezono`):
+  - `tests/slip/test_role_part_of_bundle.py::test_role_part_of_bundle`
+  - `tests/slip/test_head_status_and_hash.py::test_head_status_and_hash`
+  - `tests/slip/test_message_filled.py::test_message_filled`
+- DOM slip page tests (conformance requirements for `packages/slip` in `rezono-lang/cartouche`; leave `rezono-lang/rezono` together with `viewer/slip/` once the slip tests are green on Cartouche's `main`):
+  - `tests/slip/test_slip_rule_row.py::test_slip_rule_row`
+  - `tests/slip/test_slip_calculated_row.py::test_slip_calculated_row`
+  - `tests/slip/test_unknown_shows_no_digit.py::test_unknown_shows_no_digit`
+  - `tests/slip/test_verbs_that_answer.py::test_verbs_that_answer`
+  - `tests/slip/test_tables_and_legend.py::test_tables_and_legend`
+
+The rest of step 1 stays `extra`: `tests/slip/test_unserved_publication.py::test_unserved_publication`, because the local reader already refuses a damaged witness set and the page's own notice of it comes after, and `examples/test_slip_claims.py::test_one_build_every_claim`, because release 1 needs the page, not a home claim drawn for every example (both are DOM slip tests that likewise move to `rezono-lang/cartouche` and leave `rezono-lang/rezono` once Cartouche's `main` is green). Step 2 on the page (`test_several_sweeps`, `test_several_sweeps_in_the_repl`, `test_variant_difference_local`, `test_stops_only`) stays `extra`: release 1 answers what if through the reader (section 5), not yet through a control on the line (with the data-side sweep and variant-difference tests staying in `rezono-lang/rezono` and the DOM `test_stops_only` moving to Cartouche). Steps 3 to 5 have no tests yet.
 
 ## 4. The key of signs
 
