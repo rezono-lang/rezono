@@ -83,19 +83,6 @@ def test_red_test_citing_a_replaced_decision_is_a_finding(tmp_path):
     assert not rows.get("superseded_in_force")
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingUncitedDecisionRule,
-    reason=(
-        "extra: decisions/decision-heads.md: section 5. Waits for loop/tests/test_build_decision_rules.py--"
-        "test_red_test_citing_a_replaced_decision_is_a_finding (BuildCitationScan, and the same schema and rule "
-        "files). Declare BuildDecisionCitation {id, scan: BuildCitationScan, path, decision: Decision}, all "
-        "required, in build/schema, and derive build_uncited_decision(run, decision) in build/rules: a scan of a "
-        "verified run at the cut tick exists, the decision is in_force_on the run's build_policy_date_at_cut "
-        "day, and no citation of a scan at that cut names it. Without such a scan there is no row. Add labels "
-        "to build/labels/en.yaml."
-    ),
-)
 def test_uncited_decision_in_force_is_a_warning(tmp_path):
     kinds = {"BuildCitationScan", "BuildDecisionCitation"}
     if not kinds <= declared_kinds():
