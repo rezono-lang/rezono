@@ -1,4 +1,11 @@
 vendor_default_transport_source:
+  - id: postgresql-16-connection-settings
+    product: postgresql
+    series: '16'
+    protocol: TCP
+    port: 5432
+    source_url: 'https://www.postgresql.org/docs/16/runtime-config-connection.html'
+    source_sha256: 2e2f62a84273b907dea80b6e65cefdc18600287a1e8559157021b2658d0a0dfb
   - id: postgresql-17-connection-settings
     product: postgresql
     series: '17'

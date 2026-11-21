@@ -70,6 +70,15 @@ offer:
   - {id: o-git-ssh, product: forgejo, function: git, port: 22}
   - {id: o-s3, product: ceph, function: object-storage, port: 443}
   - {id: o-sign, product: signer, function: signing, port: 443}
+port_decision:
+  - {id: pd-lb-ingress, product: loadbalancer, function: ingress, port: 443}
+  - {id: pd-dns, product: coredns, function: dns, port: 53}
+  - {id: pd-reg, product: registry, function: registry, port: 443}
+  - {id: pd-gitops, product: argocd, function: gitops, port: 443}
+  - {id: pd-git-https, product: forgejo, function: git, port: 443}
+  - {id: pd-git-ssh, product: forgejo, function: git, port: 22}
+  - {id: pd-s3, product: ceph, function: object-storage, port: 443}
+  - {id: pd-sign, product: signer, function: signing, port: 443}
 demand:
   - {id: d-client-ingress, product: client, function: ingress}
   - {id: d-idp-db, product: keycloak, function: database}

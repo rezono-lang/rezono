@@ -1,5 +1,6 @@
 {
   "vendor_default_transport_source__product__reference": [
+    ["postgresql-16-connection-settings", "postgresql"],
     ["postgresql-17-connection-settings", "postgresql"]
   ]
 }

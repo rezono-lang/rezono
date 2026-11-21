@@ -48,12 +48,11 @@ def _decision_file(source: dict) -> bool:
 
 
 @pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "M2: decisions/platform-facts-not-conclusions.md, section 3. Derive provides from the PortDecision for the "
+    "M2: decisions/platform-facts-not-conclusions.md: section 3. Derive provides from the PortDecision for the "
     "product and function where one exists, else from each vendor_default_transport_source statement whose series "
     "is the version or series of the release the service runs, else from the product's one stated series, and add "
     "port_unknown; choice_evidence.dl and unique_evidence.dl read provides instead of offer__port. Keep Offer.port: "
-    "a planner retires it. Waits for the planner's sources step of section 3 (the eight port decisions with their "
-    "origin, the PostgreSQL 16 statement and the restated incremental proof tests)."))
+    "a planner retires it."))
 def test_service_port_follows_the_vendor_statement_unless_decided():
     from rezono_compiler import sources
 

@@ -4,6 +4,46 @@ default:
   revision: 19949a346deba8fb46578da60148cba776a355d6
   position: decisions/platform-inventory.md
 records:
+  - of: {kind: port_decision, id: pd-lb-ingress}
+    kind: git
+    name: rezono-lang/rezono
+    revision: dbac8a77492843cfe1532f60e2959e3a9dd9696e
+    position: decisions/platform-facts-not-conclusions.md#3-ports-point-1
+  - of: {kind: port_decision, id: pd-dns}
+    kind: git
+    name: rezono-lang/rezono
+    revision: dbac8a77492843cfe1532f60e2959e3a9dd9696e
+    position: decisions/platform-facts-not-conclusions.md#3-ports-point-1
+  - of: {kind: port_decision, id: pd-reg}
+    kind: git
+    name: rezono-lang/rezono
+    revision: dbac8a77492843cfe1532f60e2959e3a9dd9696e
+    position: decisions/platform-facts-not-conclusions.md#3-ports-point-1
+  - of: {kind: port_decision, id: pd-gitops}
+    kind: git
+    name: rezono-lang/rezono
+    revision: dbac8a77492843cfe1532f60e2959e3a9dd9696e
+    position: decisions/platform-facts-not-conclusions.md#3-ports-point-1
+  - of: {kind: port_decision, id: pd-git-https}
+    kind: git
+    name: rezono-lang/rezono
+    revision: dbac8a77492843cfe1532f60e2959e3a9dd9696e
+    position: decisions/platform-facts-not-conclusions.md#3-ports-point-1
+  - of: {kind: port_decision, id: pd-git-ssh}
+    kind: git
+    name: rezono-lang/rezono
+    revision: dbac8a77492843cfe1532f60e2959e3a9dd9696e
+    position: decisions/platform-facts-not-conclusions.md#3-ports-point-1
+  - of: {kind: port_decision, id: pd-s3}
+    kind: git
+    name: rezono-lang/rezono
+    revision: dbac8a77492843cfe1532f60e2959e3a9dd9696e
+    position: decisions/platform-facts-not-conclusions.md#3-ports-point-1
+  - of: {kind: port_decision, id: pd-sign}
+    kind: git
+    name: rezono-lang/rezono
+    revision: dbac8a77492843cfe1532f60e2959e3a9dd9696e
+    position: decisions/platform-facts-not-conclusions.md#3-ports-point-1
   - of: {kind: release, id: distribution-3.0.0}
     kind: git
     name: rezono-lang/rezono
