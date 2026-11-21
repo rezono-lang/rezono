@@ -86,7 +86,7 @@ def test_merge_preserves_all_live_cases_and_outcomes(evidence, outcome):
     merged = run("feldera_shards.py", "merge", inputs, output, 5)
     assert merged.returncode == 0, merged.stderr
     report = ET.parse(output / "results.xml")
-    assert len(list(report.iter("testcase"))) == 14
+    assert len(list(report.iter("testcase"))) == sum(map(len, EXPECTED.values()))
     if outcome:
         assert report.find(f".//{outcome}").text == "original diagnostic"
     verified = run("verify_feldera_run.py", output / "collected.txt", output / "results.xml")

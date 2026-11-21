@@ -284,3 +284,14 @@ def test_slice_module_uses_only_the_first_slice(tmp_path):
         assert REQUIRED_THREE_SOURCE_FEATURES <= used, (
             f"the three-source slice needs: {sorted(REQUIRED_THREE_SOURCE_FEATURES - used)}"
         )
+        slice_module_features = set().union(
+            *(
+                authored_features(p)
+                for p in sorted(SLICE.rglob("*.rezono"))
+                if "facts" not in p.relative_to(SLICE).parts
+            )
+        )
+        assert REQUIRED_FEATURES <= slice_module_features, (
+            f"the three-source slice modules must retain units and all required features: "
+            f"{sorted(REQUIRED_FEATURES - slice_module_features)}"
+        )
