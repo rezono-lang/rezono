@@ -29,7 +29,8 @@ def task_observations(data):
              "track": "core" if task == "core" else "language", "source": "task-board"}
             for task in tasks
         ],
-        "reference_date": [{"id": "policy-day", "title": "Observed reference day", "day": 20270115}],
+        "reference_date": [{"id": "policy-day", "title": "Observed reference day",
+                            "date": "2027-01-15", "day": 20270115}],
         "build_policy_date": [
             {"id": "policy-cut", "run": run, "reference": "policy-day", "observed_at": OBSERVED_AT}
         ],

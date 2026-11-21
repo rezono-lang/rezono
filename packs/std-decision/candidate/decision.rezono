@@ -136,6 +136,8 @@ kind ReferenceDate world closed
   title: Text
     iri "rdfs:label"
     description "The day as people write it."
+  date: Date?
+    description "The day as a calendar date."
   day: Int
     description "The day as the whole number YYYYMMDD (the stopgap of Decision.valid_from_day)."
     minimum 19000101

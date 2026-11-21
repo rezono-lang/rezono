@@ -45,7 +45,8 @@ def observations(tmp_path, decisions, scans, citations=(), red=()):
     base, head, paths = repository(source, "decisions/rules.md")
     records = capture(source, base, head, paths)
     records.update({
-        "reference_date": [{"id": "policy-day", "title": "Observed reference day", "day": 20270115}],
+        "reference_date": [{"id": "policy-day", "title": "Observed reference day",
+                            "date": "2027-01-15", "day": 20270115}],
         "build_policy_date": [{"id": "policy-cut", "run": "current", "reference": "policy-day",
                                "observed_at": OBSERVED_AT}],
         "subject": [{"id": "rules", "title": "rules"}],

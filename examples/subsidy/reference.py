@@ -126,13 +126,14 @@ def ledger_paid(t):
     return paid
 
 
-def in_force(t, d, day):
-    """Whether a decision is in force on a day (a whole number YYYYMMDD), as std-decision defines it: it
-    took effect (not proposed, first day on or before the day), has not ended, and no decision that took
-    effect supersedes it."""
+def in_force(t, d, on):
+    """Whether a decision is in force on a calendar date, as std-decision defines it: it took effect
+    (not proposed, first day on or before the date), has not ended, and no decision that took effect
+    supersedes it."""
+    on = day(on)
     def took_effect(x):
-        return x["state"] != "proposed" and "valid_from_day" in x and x["valid_from_day"] <= day
-    ended = "valid_until_day" in d and d["valid_until_day"] <= day
+        return x["state"] != "proposed" and "valid_from" in x and day(x["valid_from"]) <= on
+    ended = "valid_until" in d and day(d["valid_until"]) <= on
     replaced = any(d["id"] in s.get("supersedes", []) and took_effect(s) for s in t["decision"].values())
     return took_effect(d) and not ended and not replaced
 
@@ -160,7 +161,7 @@ def standing(t):
         for r in t.get("evaluation_day", {}).values():
             if r["calendar"] != p["calendar"]:
                 continue
-            at, near = day(r["day"]), day(r["day"]) + datetime.timedelta(days=r["horizon"])
+            at, near = day(r["date"]), day(r["date"]) + datetime.timedelta(days=r["horizon"])
             pair = [p["id"], r["id"]]
             if s <= at:
                 out["begun_at"].append(pair)
@@ -273,7 +274,7 @@ def rules(t):
     }
     # The scheme: a parameter stands on its decision when that decision is in force on the reference date.
     decided = [[p["id"], p["decision"], r["id"]] for p in t["scheme_parameter"].values()
-               for r in reference_dates(t).values() if in_force(t, t["decision"][p["decision"]], r["day"])]
+               for r in reference_dates(t).values() if in_force(t, t["decision"][p["decision"]], r["date"])]
     out["decided_parameter"] = decided
     out["undecided_parameter"] = [[p, r] for p in t["scheme_parameter"] for r in reference_dates(t)
                                   if not any(x[0] == p and x[2] == r for x in decided)]

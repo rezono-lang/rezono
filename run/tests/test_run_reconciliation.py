@@ -42,7 +42,7 @@ def inputs(*, second_stop="03:00", registry=True, invoice=True, cap=300, billed_
                                   "currency": "EUR", "reference_date": "comparison-day"}],
     }
     measured = {
-        "reference_date": [{"id": "comparison-day", "title": DAY, "day": 20260115}],
+        "reference_date": [{"id": "comparison-day", "title": DAY, "date": DAY, "day": 20260115}],
         "axis": [{"id": "utc-seconds"}],
         "reconciliation_run": [{"id": RUN, "profile": PROFILE, "plan": "approved-plan",
                                 "window": "run-window"}],
