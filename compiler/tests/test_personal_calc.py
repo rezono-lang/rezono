@@ -13,7 +13,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-from rezono_compiler import emit, pack, rules_dl
+from rezono_compiler import emit, pack
+from test_personal_slots import refused_codes
 
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "calc"
 CHOICE = {"name": "name", "valid_from": "valid_from", "valid_until": "valid_until", "known_from": "known_from"}
@@ -47,16 +48,6 @@ def _compiles(directory: Path) -> None:
     emit.compile_pack(pack.read(directory))
 
 
-def _refused_codes(directory: Path) -> list[str]:
-    """The diagnostic codes compiling `directory` is refused with; an AssertionError when it compiles."""
-    try:
-        emit.compile_pack(pack.read(directory))
-    except (pack.CompileError, rules_dl.RuleError) as refused:
-        return [d.code for d in getattr(refused, "diagnostics", ())]
-    else:
-        raise AssertionError(f"{directory.name}: compiled, but its calculation reads a personal slot")
-
-
 @pytest.mark.xfail(
     strict=True,
     raises=AssertionError,
@@ -70,7 +61,7 @@ def _refused_codes(directory: Path) -> list[str]:
 def test_parameters_bound_to_a_personal_slot_are_refused(tmp_path: Path):
     calculation = _calculation({"parameter": "s0"}, parameters="setting.value")
     _compiles(_calc_pack(tmp_path / "plain", calculation))
-    assert _refused_codes(_calc_pack(tmp_path / "personal", calculation, personal="Setting.value")) == ["R054"]
+    assert refused_codes(_calc_pack(tmp_path / "personal", calculation, personal="Setting.value")) == ["R054"]
 
 
 @pytest.mark.xfail(
@@ -88,7 +79,7 @@ def test_a_parameter_choice_over_a_personal_slot_is_refused(tmp_path: Path, role
     calculation = _calculation({"parameter": "rate"}, parameters="setting.value", parameter_choice=CHOICE)
     _compiles(_calc_pack(tmp_path / "plain", calculation))
     personal = f"Setting.{CHOICE[role]}"
-    assert _refused_codes(_calc_pack(tmp_path / "personal", calculation, personal=personal)) == ["R054"]
+    assert refused_codes(_calc_pack(tmp_path / "personal", calculation, personal=personal)) == ["R054"]
 
 
 @pytest.mark.xfail(
@@ -106,7 +97,7 @@ def test_inputs_bound_to_a_personal_slot_are_refused(tmp_path: Path, role: str):
     calculation = _calculation({"op": "add", "args": [{"fact": "x0"}, {"integer": "1"}]}, inputs=INPUTS)
     _compiles(_calc_pack(tmp_path / "plain", calculation))
     personal = f"Entry.{INPUTS[role]}"
-    assert _refused_codes(_calc_pack(tmp_path / "personal", calculation, personal=personal)) == ["R054"]
+    assert refused_codes(_calc_pack(tmp_path / "personal", calculation, personal=personal)) == ["R054"]
 
 
 @pytest.mark.xfail(
@@ -125,4 +116,4 @@ def test_a_fact_leaf_reading_a_personal_slot_is_refused(tmp_path: Path, place: s
     calculation = _calculation(leaf, None) if place == "value" else _calculation({"integer": "1"}, leaf)
     _compiles(_calc_pack(tmp_path / "plain", calculation))
     personal = f"Item.{attribute}"
-    assert _refused_codes(_calc_pack(tmp_path / "personal", calculation, personal=personal)) == ["R054"]
+    assert refused_codes(_calc_pack(tmp_path / "personal", calculation, personal=personal)) == ["R054"]

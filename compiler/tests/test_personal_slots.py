@@ -62,7 +62,8 @@ def test_rule_reading_personal_slot_is_refused(tmp_path: Path):
     try:
         emit.compile_pack(pack.read(positive_dir))
     except (pack.CompileError, rules_dl.RuleError) as pos_err:
-        # A diagnostic names no slot (contracts/diagnostic.yaml): the code and the place of the reading atom.
+        # R054's sentence names the slot, but a diagnostic has no argument for it (contracts/diagnostic.yaml) and a
+        # test compares no sentence: so the code and the place of the reading atom.
         assert [(d.code, d.where) for d in pos_err.diagnostics] == [("R054", "rules/derive.dl:2")], pos_err
     else:
         raise AssertionError("rule reading personal slot alpha__secret_note must be refused with R054")
@@ -97,7 +98,7 @@ def test_rule_reading_personal_slot_is_refused(tmp_path: Path):
     assert "personal" not in attrs["alpha.title"]
 
 
-def _refused_codes(directory: Path) -> list[str]:
+def refused_codes(directory: Path) -> list[str]:
     """The diagnostic codes compiling `directory` is refused with; an AssertionError when it compiles."""
     try:
         emit.compile_pack(pack.read(directory))
@@ -134,7 +135,7 @@ def test_path_equation_over_a_personal_slot_is_refused(tmp_path: Path, left: str
     equation("alpha", "alpha")  # counter-case: the same pack with an equation over arrows only compiles
     emit.compile_pack(pack.read(directory))
     equation(left, right)
-    assert _refused_codes(directory) == ["R054"]
+    assert refused_codes(directory) == ["R054"]
 
 
 @pytest.mark.xfail(
@@ -150,7 +151,7 @@ def test_path_equation_over_a_personal_slot_is_refused(tmp_path: Path, left: str
 def test_negated_literal_reading_a_personal_slot_is_refused(tmp_path: Path):
     directory = _personal_pack(tmp_path / "pack",
                                ".decl hidden(x: symbol)\nhidden(x) :- alpha(x), !alpha__secret_note(x, \"x\").\n")
-    assert _refused_codes(directory) == ["R054"]
+    assert refused_codes(directory) == ["R054"]
 
 
 def test_rule_reading_a_parameter_table_of_a_personal_slot_compiles(tmp_path: Path):
@@ -177,7 +178,7 @@ def test_rule_reading_a_parameter_table_of_a_personal_slot_compiles(tmp_path: Pa
 )
 def test_rule_reading_the_state_table_of_a_personal_slot_is_refused(tmp_path: Path):
     rule = ".decl seen(x: symbol)\nseen(x) :- alpha__secret_note_state(x, s, r).\n"
-    assert _refused_codes(_personal_pack(tmp_path / "pack", rule)) == ["R054"]
+    assert refused_codes(_personal_pack(tmp_path / "pack", rule)) == ["R054"]
 
 
 # A rule over Beta only, so that sealing Alpha leaves it valid.
@@ -291,7 +292,7 @@ def _sealed_beside_personal_slot(s: dict) -> None:
 def test_personal_annotation_out_of_place_is_refused(tmp_path: Path, change):
     """decisions/personal-data-handling.md, section 2: `personal` is a boolean on a scalar attribute."""
     directory = _with_schema(_personal_pack(tmp_path / "pack", STATED), change)
-    assert _refused_codes(directory) == ["invalid_personal_annotation"]
+    assert refused_codes(directory) == ["invalid_personal_annotation"]
 
 
 @pytest.mark.parametrize("change", [
@@ -356,7 +357,7 @@ def test_personal_slot_cannot_take_part_in_a_schema_construct(tmp_path: Path, ch
     plain = _with_schema(_personal_pack(tmp_path / "plain", STATED), lambda s: (change(s), _not_personal(s)))
     emit.compile_pack(pack.read(plain))
     directory = _with_schema(_personal_pack(tmp_path / "pack", STATED), change)
-    assert _refused_codes(directory) == ["personal_slot_disallowed"]
+    assert refused_codes(directory) == ["personal_slot_disallowed"]
 
 
 @pytest.mark.xfail(
@@ -376,4 +377,4 @@ def test_class_rule_condition_on_a_personal_slot_is_refused(tmp_path: Path):
             "postconditions": {"slot_conditions": {"size": {"required": True}}}}])
 
     emit.compile_pack(pack.read(_with_schema(_personal_pack(tmp_path / "plain", STATED), ruled("title"))))
-    assert _refused_codes(_with_schema(_personal_pack(tmp_path / "pack", STATED), ruled("secret_note"))) == ["R054"]
+    assert refused_codes(_with_schema(_personal_pack(tmp_path / "pack", STATED), ruled("secret_note"))) == ["R054"]

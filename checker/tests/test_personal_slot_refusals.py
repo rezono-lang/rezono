@@ -1,4 +1,4 @@
-"""The checker refuses a definition that reads a personal slot, independently of the compiler's R054
+"""The checker refuses a definition that reads or writes a personal slot, independently of the compiler's R054
 (decisions/personal-data-handling.md, section 3): no rule head, body (negated or not) or aggregate, no functional
 domain and no calculation binding may reference a table of a slot the schema bundle marks `personal: true`: its own
 table or its state table (`<table>_state`). The parameter tables of its bounds, constant and cardinalities hold
@@ -6,8 +6,9 @@ values that are the same for everyone, so a rule may read them (the owner, 21-11
 is handed the bundle, as the publisher does for the complete epoch, and check_role for each role.
 
 A refusal is a registered code with named arguments (decisions/checker-refusal-register.md), and each argument has
-one meaning in all of them: `rule` is the id of the rule that reads, `relation` the table it reads, `field` the
-personal slot (`<kind>.<slot>`) of the bundle. The tests compare the code and its arguments, never a sentence."""
+one meaning in all of them: `rule` is the id of the rule that reads or writes the table, `relation` that table,
+`field` the personal slot (`<kind>.<slot>`) of the bundle. A refusal without such a rule has no `rule`. The tests
+compare the code and its arguments, never a sentence."""
 
 import pytest
 
@@ -153,8 +154,8 @@ def test_a_rule_reading_only_other_slots_passes(ir):
     raises=AssertionError,
     reason=(
         "extra: decisions/personal-data-handling.md: check_epoch refuses a functional derivation over the table "
-        "of a personal attribute as its domain, with personal_slot_in_functional_domain (rule: a rule that "
-        "derives it, relation: the domain table, field). Waits for "
+        "of a personal attribute as its domain, with personal_slot_in_functional_domain (relation: the domain "
+        "table, field). Waits for "
         "compiler/tests/test_personal_slots.py--test_rule_reading_personal_slot_is_refused (#1342), which lifts "
         "it with the fix."
     ),
@@ -164,8 +165,7 @@ def test_a_functional_derivation_over_a_personal_slot_is_refused():
     is not valid either way; only the refusals are compared.)"""
     assert refusals(functional("subject__grade"))[1] == []
     assert refusals(functional("subject__display_name"))[1] == [
-        {"reason": "personal_slot_in_functional_domain", "rule": "pick_r", "relation": "subject__display_name",
-         "field": SLOT}]
+        {"reason": "personal_slot_in_functional_domain", "relation": "subject__display_name", "field": SLOT}]
 
 
 @pytest.mark.xfail(
