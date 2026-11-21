@@ -42,6 +42,15 @@ A colimit can compose presentations that share a schema fragment. Shared vocabul
 
 A reading of a publication, such as a graph or an ordered table, interprets a selected structure. In the sense of algebraic semiotics, the mapping has preservation obligations for the particular reading, such as edge incidence, order, containment, scope and access. The view boundary does not assert that every presentation of a model preserves its whole theory. [Publication and readings](rezono/publication.md).
 
+### One structure
+
+Place and sight are instances of this structure, not features beside it. [One structure decision](../decisions/one-structure-space-and-readings.md).
+
+- Space is a theory with two models. `std-space` declares places, their parts through the `part_of` of `std-part`, and the eight relations of region connection as axioms, without facts. Its symbolic model is the part-of tree alone. Its geometric model, `std-geo`, has integer coordinates on a declared grid with exact predicates. A theory morphism maps the one into the other, so geometric containment implies `part_of`. Its satisfaction is tested like that of the other theories, with a reversed binding as the failing control.
+- Anchoring is a view. A domain binds its kinds to places with an ordinary view, so an anchor is a derived row with two times, a state, a source, a witness and access, and is maintained incrementally. No contract has an anchor field.
+- Spatial membership takes the four states. A point or cell inside a region is known true and outside it known false. On the boundary, or not yet decided by the cells, it is `unknown` with the reason `straddles`. No overlap anywhere is `absent` only with a complete sweep as its witness, and contradictory classifications of one place are `invalid`. There is no separate rough-set or egg-yolk model.
+- A reading is a morphism whose losses are published. It binds a role's publication to marks and is declared in a pack's channels; a theory's channels give its default readings to every domain bound to it. Per reading and role the checker measures what the reading preserves, such as order, containment and coverage, as exact counts with the elements that break it, and the report is published beside the reading. Every measure warns and none blocks: a report says what a picture keeps, not that it is understood.
+
 ## 5. Plans: DPO rewriting
 
 Double-pushout (DPO) rewriting describes a change by a span L ← K → R. The match of L locates the old pattern. K is the interface preserved by the change, and R specifies the resulting pattern. With monic matches, the pushout complement expresses the deletions that can be made without leaving dangling references. The second pushout attaches R at the surviving interface. Negative application conditions rule out specified matches, and independence of two matches is the condition under which their applications can commute.
@@ -136,6 +145,7 @@ Oracle coverage is specific to the declared inputs and observed outputs. Compare
 - David I. Spivak, *Functorial Data Migration*.
 - Joseph A. Goguen and Rod M. Burstall, *Institutions: Abstract Model Theory for Specification and Programming*.
 - Joseph A. Goguen, *An Introduction to Algebraic Semiotics, with Application to User Interface Design*.
+- David A. Randell, Zhan Cui and Anthony G. Cohn, *A Spatial Logic Based on Regions and Connection*.
 - Hartmut Ehrig, Karsten Ehrig, Ulrike Prange and Gabriele Taentzer, *Fundamentals of Algebraic Graph Transformation*.
 - Leslie Lamport, *Specifying Systems: The TLA+ Language and Tools for Hardware and Software Engineers*.
 - The Univalent Foundations Program, *Homotopy Type Theory: Univalent Foundations of Mathematics*.
