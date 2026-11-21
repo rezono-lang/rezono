@@ -236,19 +236,6 @@ EFFECT_CASES = [
 ]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingExtension,
-    reason=(
-        "extra: decisions/loop-engine-epoch.md: section 5. Waits for "
-        "loop/tests/test_shared_run_vocabulary.py--test_effects_and_claims_are_declared_once. Declare "
-        "`// @extend .decl effect_permitted(run: symbol, step: symbol, plan: symbol, reason: symbol)` in "
-        "packs/std-loop/rules and derive effect_attempted(run, plan), effect_planned(run, step, plan, reason) from "
-        "unblocked and effect_permitted without an attempt, effect_confirmed and effect_discarded from the first "
-        "settling readback, effect_pending(run, plan, reason) with reason still-before or readback-missing, and "
-        "effect_state(run, plan, state, reason) with the journal states of contracts/effect.yaml."
-    ),
-)
 def test_an_effect_is_attempted_once_per_plan(tmp_path):
     if not extensible(LOOP / "rules", "effect_permitted"):
         raise MissingExtension("packs/std-loop/rules does not declare effect_permitted with // @extend")

@@ -223,3 +223,25 @@ loop_claim_renewal.claim: renewed claim
 loop_claim_renewal.generation: renewal generation
 loop_claim_renewal.at: renewal tick
 loop_claim_renewal.source: renewal source
+effect_permitted: permitted effect plan
+effect_attempt: journaled effect attempt
+effect_attempted: attempted effect plan
+effect_effective_attempt: effective effect attempt
+effect_has_effective_attempt: effect plan with an effective attempt
+effect_submitted_attempt: submitted effect attempt
+effect_planned: planned effect ready to apply
+effect_readback: receipted effect readback
+effect_readback_expected: expected effect readback
+effect_readback_before: prior-state effect readback
+effect_readback_other: divergent effect readback
+effect_settling_readback: settling effect readback
+effect_settled_earlier: earlier settling effect readback
+effect_first_settling: first settling effect readback
+effect_discarded: discarded effect plan
+effect_discarded_at: discarded effect plan marker
+effect_confirmed: confirmed effect plan
+effect_settled: settled effect plan
+effect_still_before: effect still showing prior state
+effect_pending: pending effect plan
+effect_applying: applying effect plan
+effect_state: derived effect journal state
