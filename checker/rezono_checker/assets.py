@@ -44,6 +44,9 @@ UNSAFE_CSS_TOKEN = re.compile(
 URL_OPEN = re.compile(r"url\s*\(", re.IGNORECASE)
 URL_FRAGMENT = re.compile(r"""\s*(?:"#[^"()\\\r\n]+"|'#[^'()\\\r\n]+'|#[^\s"'()\\]+)\s*\)""")
 PNG = b"\x89PNG\r\n\x1a\n"
+XML_DECL_END = "?>"
+CSS_COMMENT_OPEN = "/*"
+CSS_COMMENT_CLOSE = "*/"
 
 
 def check_role_assets(index: list, bundle, snapshots: dict, read_object) -> list[dict]:
@@ -130,7 +133,7 @@ def svg_problem(data: bytes) -> str:
         return "DOCTYPE or ENTITY"
     rest = text
     if text[:5].lower() == "<?xml" and len(text) > 5 and text[5].isspace():
-        end = text.find("?>", 5)
+        end = text.find(XML_DECL_END, 5)
         if end == -1:
             return "unterminated XML declaration"
         body = text[5:end]
@@ -177,12 +180,12 @@ def _strip_css_comments(text: str) -> str:
     out: list[str] = []
     pos = 0
     while True:
-        start = text.find("/*", pos)
+        start = text.find(CSS_COMMENT_OPEN, pos)
         if start == -1:
             out.append(text[pos:])
             return "".join(out)
         out.append(text[pos:start])
-        end = text.find("*/", start + 2)
+        end = text.find(CSS_COMMENT_CLOSE, start + 2)
         if end == -1:
             return "".join(out)
         pos = end + 2
