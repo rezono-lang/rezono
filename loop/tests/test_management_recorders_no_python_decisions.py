@@ -1150,13 +1150,6 @@ def test_access_recorder_renders_role_from_derived_right_and_publication_diff(
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="M2: decisions/code-does-not-decide.md: record_management_firewall.py must derive router allowances "
-    "from the platform pack before rendering and replace _parse_nft_table / hardcoded complete=True with "
-    "read-scope facts decided by witnessed read completeness.",
-)
 def test_firewall_recorder_derives_allowances_and_witnessed_read_completeness(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

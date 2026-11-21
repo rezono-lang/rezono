@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import copy
+from functools import cache
 import hashlib
 from ipaddress import IPv4Address, IPv4Network
 import json
@@ -23,9 +25,14 @@ from router_render import PacketRule, render
 ROUTER = "boundary"
 TABLE = "rezono_fixture"
 CHAIN = "forward"
+SWEEP_ID = "complete-read"
 SOURCE_NETWORK = IPv4Network("192.0.2.0/28")
 DESTINATION_ADDRESS = IPv4Address("198.51.100.7")
 PLATFORM_PACK = ROOT / "examples" / "platform"
+_RULE_WITNESSES: dict[str, tuple[str, str, str]] = {
+    "desired-1": ("client", "gateway", "ingress"),
+    "desired-2": ("client", "gateway", "management"),
+}
 
 
 def sudo(*args: str, data: str | None = None) -> str:
@@ -41,35 +48,78 @@ def sudo(*args: str, data: str | None = None) -> str:
     ).stdout
 
 
-def _desired_rules() -> list[PacketRule]:
-    """Return the validated intended TCP 443 and 8443 allowance records."""
-    source_from = int(SOURCE_NETWORK.network_address)
-    source_to = int(SOURCE_NETWORK.broadcast_address)
-    destination = int(DESTINATION_ADDRESS)
-    intended: list[PacketRule] = [
-        {
-            "source": "client",
-            "destination": "gateway",
-            "function": "ingress",
-            "sourceFrom": source_from,
-            "sourceTo": source_to,
-            "destinationAddress": destination,
-            "protocol": "TCP",
-            "fromPort": 443,
-            "toPort": 443,
-        },
-        {
-            "source": "client",
-            "destination": "gateway",
-            "function": "management",
-            "sourceFrom": source_from,
-            "sourceTo": source_to,
-            "destinationAddress": destination,
-            "protocol": "TCP",
-            "fromPort": 8443,
-            "toPort": 8443,
-        },
-    ]
+@cache
+def _compiled_platform() -> tuple[Any, Any, Any]:
+    """Load and compile the platform pack once per process."""
+    model = pack.read(PLATFORM_PACK)
+    program = rules.load(model.rules)
+    calculation = calc.build(model, model.calc) if program.calc_inputs() else None
+    return model, program, calculation
+
+
+def _run_platform_rules(
+    records: dict[str, list[dict[str, Any]]],
+    targets: list[str],
+) -> dict[str, set[tuple[str, ...]]]:
+    """Evaluate the platform pack on `records` and read `targets` via `batch.read`."""
+    base_model, program, calculation = _compiled_platform()
+    model = copy.deepcopy(base_model)
+    con, _, _ = batch.run(model, program, facts.rows_of(model, records), calculation)
+    try:
+        return batch.read(con, program, targets)
+    finally:
+        con.close()
+
+
+def _desired_rules(run_id: str = "desired") -> list[PacketRule]:
+    """Derive the validated intended router allowance records via the platform pack."""
+    records = {
+        "router_management": [{"id": "active-policy", "run": run_id, "router": ROUTER, "table": TABLE}],
+        "router_desired": [
+            {
+                "id": "desired-1",
+                "run": run_id,
+                "router": ROUTER,
+                "table": TABLE,
+                "source": str(SOURCE_NETWORK),
+                "destination": str(DESTINATION_ADDRESS),
+                "protocol": "TCP",
+                "first_port": 443,
+                "last_port": 443,
+            },
+            {
+                "id": "desired-2",
+                "run": run_id,
+                "router": ROUTER,
+                "table": TABLE,
+                "source": str(SOURCE_NETWORK),
+                "destination": str(DESTINATION_ADDRESS),
+                "protocol": "TCP",
+                "first_port": 8443,
+                "last_port": 8443,
+            },
+        ],
+    }
+    derived = _run_platform_rules(records, ["managed_router_desired"])
+    intended: list[PacketRule] = []
+    for desired_id, _, _, _, source, destination, protocol, first_port, last_port in sorted(
+        derived.get("managed_router_desired", set())
+    ):
+        if desired_id not in _RULE_WITNESSES:
+            raise RuntimeError(f"Unexpected desired router allowance id {desired_id!r}")
+        src_label, dst_label, function_label = _RULE_WITNESSES[desired_id]
+        network = IPv4Network(source, strict=False)
+        intended.append({
+            "source": src_label,
+            "destination": dst_label,
+            "function": function_label,
+            "sourceFrom": int(network.network_address),
+            "sourceTo": int(network.broadcast_address),
+            "destinationAddress": int(IPv4Address(destination)),
+            "protocol": protocol,
+            "fromPort": int(first_port),
+            "toPort": int(last_port),
+        })
     validate(intended)
     return intended
 
@@ -145,47 +195,50 @@ def _parse_rule(rule: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _parse_nft_table(payload: str) -> tuple[bool, list[dict[str, Any]]]:
-    """Parse `nft -j list table ip rezono_fixture` and verify table/chain completeness."""
+def _read_nft_observations(payload: str) -> dict[str, list[dict[str, Any]]]:
+    """Extract raw table, chain, and rule observations from `nft -j list table` output."""
     document = json.loads(payload)
     items = document.get("nftables")
     if not isinstance(items, list):
         raise RuntimeError("Missing nftables list in nft -j output")
-    has_table = False
-    has_chain = False
+    tables: list[dict[str, Any]] = []
+    chains: list[dict[str, Any]] = []
     seen_rules: list[dict[str, Any]] = []
     for item in items:
         if "table" in item:
             table = item["table"]
-            if table.get("family") == "ip" and table.get("name") == TABLE:
-                has_table = True
+            tables.append({
+                "family": str(table.get("family", "")),
+                "table": str(table.get("name", "")),
+            })
         elif "chain" in item:
             chain = item["chain"]
-            if (
-                chain.get("family") == "ip"
-                and chain.get("table") == TABLE
-                and chain.get("name") == CHAIN
-                and chain.get("type") == "filter"
-                and chain.get("hook") == "forward"
-                and chain.get("policy") == "drop"
-            ):
-                has_chain = True
+            entry: dict[str, Any] = {
+                "family": str(chain.get("family", "")),
+                "table": str(chain.get("table", "")),
+                "chain": str(chain.get("name", "")),
+            }
+            if isinstance(chain.get("type"), str):
+                entry["chain_type"] = chain["type"]
+            if isinstance(chain.get("hook"), str):
+                entry["hook"] = chain["hook"]
+            if isinstance(chain.get("policy"), str):
+                entry["policy"] = chain["policy"]
+            chains.append(entry)
         elif "rule" in item:
             rule = item["rule"]
             if rule.get("family") == "ip" and rule.get("table") == TABLE and rule.get("chain") == CHAIN:
                 seen_rules.append(_parse_rule(rule))
-    if not (has_table and has_chain):
-        raise RuntimeError(f"Incomplete nftables readback for ip/{TABLE}/{CHAIN}")
-    return True, seen_rules
+    return {"tables": tables, "chains": chains, "rules": seen_rules}
 
 
-def _apply_and_readback(netns: str, rendered: bytes) -> tuple[str, list[dict[str, Any]]]:
-    """Apply rendered rules in an isolated netns, drop 8443, add 9443, and read back the full table."""
+def _apply_and_readback(netns: str, rendered: bytes) -> tuple[str, dict[str, list[dict[str, Any]]]]:
+    """Apply rendered rules in an isolated netns, drop 8443, add 9443, and read back observations."""
     sudo("ip", "netns", "add", netns)
     try:
         sudo("ip", "netns", "exec", netns, "nft", "-f", "-", data=rendered.decode("utf-8"))
         initial_raw = sudo("ip", "netns", "exec", netns, "nft", "-j", "list", "table", "ip", TABLE)
-        _, initial_rules = _parse_nft_table(initial_raw)
+        initial_rules = _read_nft_observations(initial_raw)["rules"]
         handles_8443 = [
             rule["handle"]
             for rule in initial_rules
@@ -233,10 +286,7 @@ def _apply_and_readback(netns: str, rendered: bytes) -> tuple[str, list[dict[str
             '"rezono-extra-9443"',
         )
         raw_table = sudo("ip", "netns", "exec", netns, "nft", "-j", "list", "table", "ip", TABLE)
-        complete, seen_rules = _parse_nft_table(raw_table)
-        if not complete:
-            raise RuntimeError("Router table readback was not complete")
-        return raw_table, seen_rules
+        return raw_table, _read_nft_observations(raw_table)
     finally:
         sudo("ip", "netns", "del", netns)
 
@@ -272,32 +322,59 @@ def _rule_key(rule: dict[str, Any]) -> list[Any]:
     ]
 
 
+def _scope_records(run_id: str, read_observations: dict[str, list[dict[str, Any]]]) -> dict[str, list[dict[str, Any]]]:
+    """Build management scope, sweep, and raw nftables read-scope observation facts."""
+    return {
+        "router_management": [{"id": "active-policy", "run": run_id, "router": ROUTER, "table": TABLE}],
+        "router_sweep": [{"id": SWEEP_ID, "run": run_id, "router": ROUTER, "table": TABLE}],
+        "router_table_read": [
+            {"id": f"table-{index}", "sweep": SWEEP_ID, **entry}
+            for index, entry in enumerate(read_observations["tables"], 1)
+        ],
+        "router_chain_read": [
+            {"id": f"chain-{index}", "sweep": SWEEP_ID, **entry}
+            for index, entry in enumerate(read_observations["chains"], 1)
+        ],
+    }
+
+
+def _evaluate_read_completeness(
+    run_id: str,
+    read_observations: dict[str, list[dict[str, Any]]],
+) -> tuple[bool, set[tuple[str, ...]]]:
+    """Derive router sweep completeness and witnessed read completeness via management_firewall.dl."""
+    derived = _run_platform_rules(
+        _scope_records(run_id, read_observations),
+        ["complete_router_sweep", "managed_router_unknown", "may_read_full"],
+    )
+    unknown = derived.get("managed_router_unknown", set())
+    complete_sweeps = derived.get("complete_router_sweep", set())
+    may_read_full = derived.get("may_read_full", set())
+    is_complete = (
+        bool(complete_sweeps)
+        and not unknown
+        and any(kind == "router_seen" for _, kind in may_read_full)
+    )
+    return is_complete, unknown
+
+
 def _evaluate_firewall_dl(
     run_id: str,
-    complete: bool,
+    read_observations: dict[str, list[dict[str, Any]]],
     desired_rules: list[PacketRule],
     seen_rules: list[dict[str, Any]],
 ) -> list[tuple[str, list[Any], str, str]]:
     """Evaluate drift through examples/platform/rules/management_firewall.dl."""
     desired_by_id = {f"desired-{index}": dict(rule) for index, rule in enumerate(desired_rules, 1)}
     seen_by_id = {f"seen-{index}-handle-{rule['handle']}": rule for index, rule in enumerate(seen_rules, 1)}
-    records = {
-        "router_management": [{"id": "active-policy", "run": run_id, "router": ROUTER, "table": TABLE}],
-        "router_sweep": [{"id": "complete-read", "run": run_id, "router": ROUTER, "table": TABLE, "complete": complete}],
+    records = _scope_records(run_id, read_observations) | {
         "router_desired": [_fact_row(identifier, run_id, rule) for identifier, rule in desired_by_id.items()],
         "router_seen": [_fact_row(identifier, run_id, rule) for identifier, rule in seen_by_id.items()],
     }
-    model = pack.read(PLATFORM_PACK)
-    program = rules.load(model.rules)
-    calculation = calc.build(model, model.calc) if program.calc_inputs() else None
-    con, _, _ = batch.run(model, program, facts.rows_of(model, records), calculation)
-    try:
-        derived = batch.read(con, program, ["managed_router_drift", "managed_router_unknown"])
-    finally:
-        con.close()
-    unknown = derived.get("managed_router_unknown", set())
-    if unknown:
-        raise RuntimeError(f"management_firewall.dl reported unknown scope: {sorted(unknown)}")
+    derived = _run_platform_rules(
+        records,
+        ["managed_router_drift", "managed_router_unknown", "complete_router_sweep", "may_read_full"],
+    )
     findings = []
     for direction, allowance_id, sweep_id in sorted(derived.get("managed_router_drift", set())):
         source_map = desired_by_id if direction == "missing" else seen_by_id
@@ -309,7 +386,7 @@ def _evaluate_firewall_dl(
 
 def main() -> None:
     cluster = ManagementCluster()
-    desired_rules = _desired_rules()
+    desired_rules = _desired_rules(cluster.run)
     rendered = render(desired_rules)
     desired_event = cluster.make_event(
         "firewall",
@@ -320,19 +397,20 @@ def main() -> None:
         applied_sha256=hashlib.sha256(rendered).hexdigest(),
     )
     netns = f"rzfw-{cluster.run}-{cluster.attempt}"
-    raw_table, seen_rules = _apply_and_readback(netns, rendered)
+    raw_table, observations = _apply_and_readback(netns, rendered)
+    seen_rules = observations["rules"]
+    is_complete, unknown = _evaluate_read_completeness(cluster.run, observations)
+    read_kind = "complete-router-read" if is_complete else "incomplete-router-read"
     read_event = cluster.make_event(
         "firewall",
-        "complete-router-read",
+        read_kind,
         router=ROUTER,
         table=TABLE,
-        complete=True,
+        complete=is_complete,
         rules=seen_rules,
         table_sha256=hashlib.sha256(raw_table.encode("utf-8")).hexdigest(),
     )
-    drift_rows = _evaluate_firewall_dl(cluster.run, True, desired_rules, seen_rules)
-    if {row[0] for row in drift_rows} != {"missing", "extra"} or len(drift_rows) != 2:
-        raise RuntimeError(f"Expected one missing and one extra drift row, got {drift_rows!r}")
+    drift_rows = _evaluate_firewall_dl(cluster.run, observations, desired_rules, seen_rules)
     drift_events = [
         cluster.make_event(
             "firewall",
@@ -347,7 +425,17 @@ def main() -> None:
         )
         for direction, rule_key, allowance_id, sweep_id in drift_rows
     ]
-    cluster.record_job("firewall", [desired_event, read_event, *drift_events])
+    unknown_events = [
+        cluster.make_event(
+            "firewall",
+            "router-unknown",
+            router=router_name,
+            table=table_name,
+            source_evidence=[desired_event["evidence"], read_event["evidence"]],
+        )
+        for _, router_name, table_name in sorted(unknown)
+    ]
+    cluster.record_job("firewall", [desired_event, read_event, *drift_events, *unknown_events])
 
 
 if __name__ == "__main__":

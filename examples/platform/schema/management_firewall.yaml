@@ -23,6 +23,24 @@ classes:
       router: {required: true}
       table: {required: true}
       complete: {range: boolean}
+  RouterTableRead:
+    description: An observed nftables table entry recorded during a router sweep.
+    attributes:
+      id: {identifier: true}
+      sweep: {required: true}
+      family: {required: true}
+      table: {required: true}
+  RouterChainRead:
+    description: An observed nftables chain entry recorded during a router sweep.
+    attributes:
+      id: {identifier: true}
+      sweep: {required: true}
+      family: {required: true}
+      table: {required: true}
+      chain: {required: true}
+      chain_type: {}
+      hook: {}
+      policy: {}
   RouterDesired:
     description: An intended router allowance within a scoped run, router, and table.
     attributes:
