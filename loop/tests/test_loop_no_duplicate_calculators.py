@@ -215,13 +215,23 @@ def test_build_cutover_and_selection_outcome_share_one_strict_acceptance_rule():
         )
 
 
+def _formal_section_11_table_rows() -> list[str]:
+    """Return Markdown table rows from section 11 (Independent oracles) of docs/formal.md."""
+    formal = (ROOT / "docs" / "formal.md").read_text(encoding="utf-8")
+    marker = "## 11. Independent oracles"
+    assert marker in formal, "docs/formal.md is missing section 11 (Independent oracles)"
+    section = formal.split(marker, 1)[1].split("\n## ", 1)[0]
+    return [line.strip() for line in section.splitlines() if line.strip().startswith("|")]
+
+
 @pytest.mark.xfail(
     strict=True,
     raises=AssertionError,
     reason="extra: decisions/code-does-not-decide.md: loop/status_times.py and "
-           "loop/flow_evidence.py must not remain in production loop/ computing live "
-           "status/evidence decisions beside the std-loop pack rules; retire them or "
-           "keep them strictly test-oracle-only under loop/tests/ with zero production imports.",
+           "loop/flow_evidence.py must be removed from production loop/ with zero production "
+           "imports; loop/tests/flow_evidence.py must remain as a fate-(b) independent test "
+           "oracle recorded in docs/formal.md section 11, and loop/tests/status_times.py "
+           "must either be retired or recorded in its own docs/formal.md section 11 row.",
 )
 def test_status_times_and_flow_evidence_are_not_live_calculators_in_production_loop():
     from rezono_compiler import pack, rules
@@ -242,7 +252,7 @@ def test_status_times_and_flow_evidence_are_not_live_calculators_in_production_l
     for name in ("status_times.py", "flow_evidence.py"):
         assert not (LOOP / name).exists(), (
             f"loop/{name} still computes live decisions in production loop/ beside packs/std-loop; "
-            f"retire it or move it under loop/tests/ as a test-only oracle"
+            f"remove the production module while keeping fate-(b) test-only oracles under loop/tests/"
         )
 
     # No production file under loop/ may import or dynamically execute either module.
@@ -253,16 +263,35 @@ def test_status_times_and_flow_evidence_are_not_live_calculators_in_production_l
                 f"production module {path.relative_to(ROOT).as_posix()} imports or loads {stem!r}"
             )
 
-    # If kept under loop/tests/ as fate (b) independent test oracles, their module docstrings
-    # must state that they are test oracles for the std-loop rules.
-    oracle_rules = {
-        "status_times.py": ("delivery_waiting_time", "delivery_completed_at"),
-        "flow_evidence.py": ("flow_case_verdict", "flow_case_incomplete"),
-    }
-    for filename, rule_names in oracle_rules.items():
-        oracle_copy = LOOP / "tests" / filename
-        if oracle_copy.is_file():
-            doc = (ast.get_docstring(ast.parse(oracle_copy.read_text(encoding="utf-8"))) or "").lower()
-            assert "oracle" in doc and any(rel in doc for rel in rule_names), (
-                f"loop/tests/{filename} must declare itself as an independent test oracle for {rule_names}"
-            )
+    # flow_evidence.py is a required fate-(b) oracle under loop/tests/ (never deleted).
+    flow_oracle = LOOP / "tests" / "flow_evidence.py"
+    assert flow_oracle.is_file(), (
+        "moved test-only oracle loop/tests/flow_evidence.py is missing; "
+        "keep the independent test oracle under loop/tests/"
+    )
+
+    # docs/formal.md section 11 (Independent oracles) must record every test oracle present under
+    # loop/tests/ in its own table row, and never reference the retired production module paths.
+    oracle_rows = _formal_section_11_table_rows()
+    assert oracle_rows, "docs/formal.md section 11 (Independent oracles) table is empty"
+    assert any("(../loop/tests/flow_evidence.py)" in row for row in oracle_rows), (
+        "docs/formal.md section 11 table must record the independent test oracle at "
+        "../loop/tests/flow_evidence.py"
+    )
+
+    status_oracle = LOOP / "tests" / "status_times.py"
+    has_status_row = any("(../loop/tests/status_times.py)" in row for row in oracle_rows)
+    if status_oracle.is_file():
+        assert has_status_row, (
+            "loop/tests/status_times.py is kept as a test oracle, so docs/formal.md section 11 "
+            "must record it in its own table row (../loop/tests/status_times.py)"
+        )
+    else:
+        assert not has_status_row, (
+            "docs/formal.md section 11 still references ../loop/tests/status_times.py after retirement"
+        )
+
+    for retired_link in ("(../loop/flow_evidence.py)", "(../loop/status_times.py)"):
+        assert not any(retired_link in row for row in oracle_rows), (
+            f"docs/formal.md section 11 table still references retired production module {retired_link}"
+        )
