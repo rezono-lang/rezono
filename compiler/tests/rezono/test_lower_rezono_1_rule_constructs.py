@@ -190,18 +190,6 @@ def _compare(native: Path, twin: Path, expected: dict, tmp_path: Path, *, declar
         raise MissingRezono1RuleConstruct(json.dumps(problems, indent=1, default=str))
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "M3: decisions/language-rezono-1.md: section 8 step 5, with decisions/language-native-rules.md "
-        "(annotations). Lower the `invariant` option of a rezono 1 Bool derivation (`derived p(...): Bool invariant "
-        "= ...`) as the Datalog @invariant: the relation declares invariant true and keeps its rows. "
-        "compiler/rezono_compiler/rezono_derived.py refuses it today with R049 \"`options` on a rezono 1 derivation "
-        "is not lowered yet\"; the same derivation without the option compiles. The standard packs std-decision, "
-        "std-identity, std-loop, std-order, std-part, std-review and std-time and front-door example packs need it."
-    ),
-)
 def test_rezono_1_invariant_option_lowers_as_the_datalog_invariant(tmp_path):
     native = _pack(tmp_path, "native", KINDS + "\nderived self_linked(a: Item): Bool invariant = a.next = a\n")
     twin = _pack(tmp_path, "twin", KINDS, datalog=(
@@ -209,19 +197,6 @@ def test_rezono_1_invariant_option_lowers_as_the_datalog_invariant(tmp_path):
     _compare(native, twin, {"self_linked": {("i2",)}}, tmp_path)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "M3: decisions/language-rezono-1.md: section 8 step 5, with decisions/language-native-rules.md "
-        "(annotations). Lower the `explain` option of a rezono 1 Bool derivation as the Datalog @explain: with "
-        "`explain on_demand` the relation declares that explain mode, with `explain fold` the pack folds it "
-        "(pack.folds, display only), and both keep their rows. "
-        "compiler/rezono_compiler/rezono_derived.py refuses it today with R049 \"`options` on a rezono 1 "
-        "derivation is not lowered yet\"; the same derivation without the option compiles. The standard packs "
-        "std-identity, std-order and std-time need it."
-    ),
-)
 def test_rezono_1_explain_option_lowers_as_the_datalog_explain(tmp_path):
     native = _pack(tmp_path, "native", KINDS + (
         "\nderived pointed(a: Item, b: Item): Bool explain fold = a.next = b\n"
@@ -252,20 +227,6 @@ ahead(a, b) :- item__next(a, b).
 EXTEND_CLAUSE = "stated(a, b) :- item__rank(a, x), item__rank(b, y), x < y.\n"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "M3: decisions/language-rezono-1.md: sections 5.5 and 8 step 5, with decisions/language-native-rules.md "
-        "(annotations). Lower the `extend` option on a rezono 1 Bool derivation without `=` "
-        "(`derived p(...): Bool extend`) as the Datalog @extend: alone it denotes the empty set, a pack that imports "
-        "it writes its clauses, and derivations of its own pack read them. "
-        "compiler/rezono_compiler/rezono_derived.py refuses both today with R049. The standard packs std-access, "
-        "std-identity, std-loop and std-order need it. "
-        "Waits for compiler/tests/rezono/test_lower_rezono_1_imported_derived.py"
-        "--test_an_importer_compiles_the_derivations_of_an_imported_rezono_1_pack."
-    ),
-)
 def test_rezono_1_extend_option_lowers_as_the_datalog_extension_point(tmp_path):
     native_lib = _lib(tmp_path, "native-lib", KINDS + EXTEND_MODULE)
     twin_lib = _lib(tmp_path, "twin-lib", KINDS, datalog=EXTEND_TWIN)
