@@ -32,7 +32,7 @@ def recorded_allocation(preferences=(), *, coverage=SCOPE, third=False, setup=Fa
         "allocation_member": [{"id": member, "workload": WORKLOAD, "cpu": 2, "memory": 8, "disk": 80}
                               for member in members],
         "allocation_scope": [{"id": SCOPE}, {"id": "other-order"}],
-        "reference_date": [{"id": "comparison-day", "title": DAY, "day": 20260115}],
+        "reference_date": [{"id": "comparison-day", "title": DAY, "date": DAY, "day": 20260115}],
         "allocation_comparison": [{"id": "comparison-cut", "workload": WORKLOAD, "scope": SCOPE,
                                   "reference_date": "comparison-day"}],
         "allocation_candidate_coverage": (

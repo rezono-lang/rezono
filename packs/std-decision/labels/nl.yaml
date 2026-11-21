@@ -25,6 +25,7 @@ subject: {text: onderwerp, gender: neuter}
 subject.title: titel
 reference_date: {text: peildatum, gender: common}
 reference_date.title: naam
+reference_date.date: datum
 reference_date.day: dagnummer
 replaces: vervangt
 supersession_cycle: kring van vervangen besluiten

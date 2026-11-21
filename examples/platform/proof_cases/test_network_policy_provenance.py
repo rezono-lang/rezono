@@ -47,7 +47,7 @@ def records():
         "decision": [decision("allow-db"), decision("allow-cache", state="proposed"),
                      decision("allow-udp", end=5), decision("allow-udp-again", decider=()),
                      decision("allow-redis")],
-        "reference_date": [{"id": ON, "title": ON, "day": 20260408}],
+        "reference_date": [{"id": ON, "title": ON, "date": "2026-04-08", "day": 20260408}],
         "flow_policy_binding": [
             tuple_of("g-db", "app", "db", "tcp", 5432, decision="allow-db"),
             tuple_of("g-cache", "app", "cache", "tcp", 5432, decision="allow-cache"),

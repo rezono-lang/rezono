@@ -35,7 +35,7 @@ def records(*extra, coverage=(SCOPE, 20260301), registered=None, register_covere
         "decision": [decision(key, start, state, end) for key, start, _, state, end in rulings],
         "ruling": [{"id": key, "decision": key, "scope": SCOPE, "outcome": outcome}
                    for key, _, outcome, _, _ in rulings],
-        "reference_date": [{"id": ON, "title": ON, "day": 20260301}],
+        "reference_date": [{"id": ON, "title": ON, "date": "2026-03-01", "day": 20260301}],
         "norm_register": [{"id": "register-4"}],
         "authority_coverage": [],
         "registration": [{"id": f"entry-{key}", "register": "register-4", "scope": SCOPE, "decision": key}
