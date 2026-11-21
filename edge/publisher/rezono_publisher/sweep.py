@@ -43,6 +43,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from collections import Counter
 from collections.abc import Mapping
 from contextlib import contextmanager
 from pathlib import Path
@@ -437,6 +438,131 @@ def side_by_side(argv: list[str], workers: int) -> tuple[int, list[str]]:
     return (1 if any(child.returncode for child in children) else 0), sorted(lines)
 
 
+def _file_rows(pack, data: dict) -> Counter[tuple[str, str]]:
+    """Canonical base rows emitted by one fact file's parsed mapping."""
+    from rezono_compiler import facts as compiler_facts
+
+    out: Counter[tuple[str, str]] = Counter()
+    judged = compiler_facts.schema(pack)
+
+    def on_row(table, values, *_):
+        out[(table, canonical_json(values))] += 1
+
+    for kind, records in data.items():
+        for record in records or []:
+            compiler_facts.walk(judged, kind, record, on_row=on_row)
+    return out
+
+
+def _swept_cell_rows(lay, data: dict, change: dict) -> Counter[tuple[str, str]]:
+    """Canonical base rows contributed by the swept cell `(kind, key, slot)`."""
+    from rezono_compiler import facts as compiler_facts
+    from rezono_compiler import writer
+
+    kind = change["kind"]
+    slot = change["slot"]
+    ident, id_type = lay.identifier(kind)
+    key = writer.scalar(id_type, change["key"], f"{kind}.{ident}")
+    records = [r for r in data.get(kind) or [] if writer.same(r.get(ident), key)]
+    if not records:
+        return Counter()
+    out: Counter[tuple[str, str]] = Counter()
+
+    def on_row(table, values, row_kind, row_key, row_slot, _):
+        if row_kind == kind and row_key == key and row_slot == slot:
+            out[(table, canonical_json(values))] += 1
+
+    compiler_facts.walk(compiler_facts.schema(lay.pack), kind, records[0], on_row=on_row)
+    return out
+
+
+def _preserved_origin(entries: list[dict], refs: list[tuple[str, str]], where: str) -> dict:
+    """Collect the existing base sources (and optional reason) of `refs` without inventing any origin."""
+    from rezono_compiler import writer
+
+    by_ref = {(e["row"]["relation"], e["row"]["key"]): e for e in entries}
+    selected = [by_ref[ref] for ref in refs if ref in by_ref]
+    if not selected:
+        raise writer.WriteError(f"{where}: base fact row has no source entry to preserve")
+    sources_map = {canonical_json(s): s for e in selected for s in e["sources"]}
+    reasons = {e["reason"] for e in selected if "reason" in e}
+    if len(reasons) > 1:
+        raise writer.WriteError(f"{where}: conflicting source reasons on swept cell")
+    preserved: dict = {"sources": [sources_map[k] for k in sorted(sources_map, key=lambda s: s.encode("utf-16-be"))]}
+    if reasons:
+        preserved["reason"] = next(iter(reasons))
+    return preserved
+
+
+def _sweep_texts(pack_dir: Path, lay, change: dict) -> dict[str, str]:
+    """Apply one sweep `set` change to its fact file while preserving the swept cell's base origins.
+
+    A sweep varies an existing cell to explore consequences; it never stamps `synthetic` onto the
+    swept cell or hides an uncited / self-citing cell (decisions/fact-origin-required.md §§1-3, 5).
+    """
+    import yaml
+    from rezono_compiler import facts as compiler_facts
+    from rezono_compiler import source_format, source_writer, strict_yaml, writer
+    from rezono_compiler import sources as provenance
+
+    rel = writer.locate(pack_dir, lay, change["kind"], change["key"], {})
+    old_text = writer.read_fact_file(pack_dir, rel)
+    new_text, _ = source_format.of(rel).edit_fact(lay, old_text, change)
+    texts = {rel: new_text}
+
+    comp = source_writer.companion(rel)
+    comp_path = writer.fact_path(pack_dir, comp)
+    if not comp_path.exists():
+        return texts
+
+    try:
+        old_comp = comp_path.read_bytes().decode("utf-8")
+        doc = strict_yaml.load(old_comp, comp)
+        old_data = strict_yaml.load(old_text, rel) or {}
+        new_data = strict_yaml.load(new_text, rel) or {}
+        base_entries = provenance.text_entries(lay.pack, rel, old_text, old_data, metadata=doc)
+    except (compiler_facts.LoadError, yaml.YAMLError, UnicodeDecodeError) as err:
+        raise writer.WriteError(f"{comp}: {err}") from err
+
+    if new_text == old_text:
+        texts[comp] = old_comp
+        return texts
+
+    before_rows = _file_rows(lay.pack, old_data)
+    after_rows = _file_rows(lay.pack, new_data)
+    before = _swept_cell_rows(lay, old_data, change)
+    after = _swept_cell_rows(lay, new_data, change)
+    if not after:
+        raise writer.WriteError(f"{rel}: swept cell produced no row")
+    if any(before_rows[r] > before[r] for r in before) or any(after_rows[r] > after[r] for r in after):
+        raise writer.WriteError(f"{rel}: ambiguous shared-row source contribution")
+
+    ledger = {(e["row"]["relation"], e["row"]["key"]): e for e in base_entries}
+    if before:
+        origin = _preserved_origin(
+            base_entries, sorted(before), f"{rel} ({change['kind']} {change['key']}.{change['slot']})"
+        )
+    else:
+        ident, id_type = lay.identifier(change["kind"])
+        key = writer.scalar(id_type, change["key"], f"{change['kind']}.{ident}")
+        key_json = canonical_json([key])
+        rec_refs = [ref for a in lay.pack.ancestors(change["kind"]) if (ref := (a, key_json)) in ledger][:1]
+        origin = _preserved_origin(base_entries, rec_refs, f"{rel} ({change['kind']} {change['key']})")
+
+    for ref in before:
+        ledger.pop(ref, None)
+    for rel_name, key_str in sorted(after):
+        ledger[(rel_name, key_str)] = {"row": {"relation": rel_name, "key": key_str}, **origin}
+    if set(ledger) != set(after_rows):
+        raise writer.WriteError(f"{rel}: unexplained source loss or new fact")
+
+    try:
+        texts[comp] = provenance.canonical_sidecar_text(lay.pack, rel, new_text, list(ledger.values()))
+    except compiler_facts.LoadError as err:
+        raise writer.WriteError(f"{comp}: {err}") from err
+    return texts
+
+
 def run(repo: Path, pack: str, base_commit: str, st, roles: dict[str, str],
         part: tuple[int, int] = (0, 1)) -> list[tuple[str, str]]:
     """The variants of the pack's sweeps against the main manifest of `base_commit`: [(variant id, what
@@ -468,6 +594,7 @@ def run(repo: Path, pack: str, base_commit: str, st, roles: dict[str, str],
         main = json.loads(published)
         if not same_source(main, base, n, base_commit):
             raise ValueError(f"the published {base} is not of commit {base_commit}: another commit with as many ancestors")
+        lay = None
         for sw in model.sweeps:
             values = grid(sw)
             for i, value in enumerate(values):
@@ -492,8 +619,9 @@ def run(repo: Path, pack: str, base_commit: str, st, roles: dict[str, str],
                         result = f"{there} kept"
                     else:
                         change = {"op": "set", "kind": sw["kind"], "key": sw["key"], "slot": sw["slot"], "value": value}
-                        stated = {"sources": [{"kind": "synthetic", "name": f"sweep/{sw['name']}", "position": f"index={i}"}]}
-                        texts, _ = writer.apply_delta(pack_dir, {"format": writer.FORMAT, "changes": [change]}, stated=stated)
+                        if lay is None:
+                            lay = writer.layout(pack_dir)
+                        texts = _sweep_texts(pack_dir, lay, change)
                         originals = {f: writer.read_fact_file(pack_dir, f) for f in texts}
                         writer.write_files(pack_dir, texts)
                         try:
