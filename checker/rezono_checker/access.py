@@ -47,6 +47,8 @@ from collections import defaultdict
 from collections.abc import Set as AbstractSet
 from graphlib import CycleError, TopologicalSorter
 
+from rezono_canon import canonical_json, canonical_sha256
+
 from .access_change import may_change_access as may_change_access
 from .calc import published_views, subject_of, version_of
 from .calc import reads as calc_reads
@@ -448,8 +450,24 @@ def _witnessed_grants(doc: dict, role: str, chains: dict, every: dict, instances
     return out
 
 
-def _founded_usable(instances, derived, usable) -> list[dict]:
-    """Every usable witness instance that is well-founded (excluding cyclic alternatives)."""
+MAX_WITNESSES_PER_CONCLUSION = 64
+
+
+def _witness_hash(w: dict) -> str:
+    if "iri" in w:
+        return canonical_sha256({k: v for k, v in w.items() if k != "iri"})
+    return canonical_sha256(w)
+
+
+def _founded_usable(
+    instances,
+    derived,
+    usable,
+    chosen: dict | None = None,
+    *,
+    cap: int = MAX_WITNESSES_PER_CONCLUSION,
+) -> list[dict]:
+    """Every usable founded witness instance per derivable conclusion, capped to `cap` in canonical order."""
     ok = [w for w in instances if usable(w)]
     if not ok:
         return []
@@ -487,6 +505,33 @@ def _founded_usable(instances, derived, usable) -> list[dict]:
                     ready.append(pairs[idx][0])
         return proved
 
+    def _lfp_ranks(pairs) -> dict[tuple[str, str], int]:
+        users: dict[tuple[str, str], list[int]] = defaultdict(list)
+        left: list[int] = []
+        level: list[int] = []
+        for idx, (_, ps) in enumerate(pairs):
+            left.append(len(ps))
+            if not ps:
+                level.append(idx)
+            else:
+                for p in ps:
+                    users[p].append(idx)
+        ranks: dict[tuple[str, str], int] = {}
+        stage = 1
+        while level:
+            later: list[int] = []
+            for idx in level:
+                h = pairs[idx][0]
+                if h in ranks:
+                    continue
+                ranks[h] = stage
+                for k in users.get(h, ()):
+                    left[k] -= 1
+                    if left[k] == 0:
+                        later.append(k)
+            level, stage = later, stage + 1
+        return ranks
+
     pairs = [(_ref(w), _pos_derived(w)) for w in ok]
     supported = _lfp(pairs)
     # Fast path: if the conclusion dependency graph over supported witnesses is acyclic,
@@ -497,39 +542,66 @@ def _founded_usable(instances, derived, usable) -> list[dict]:
         if h in supported and ps <= supported:
             supported_items.append((w, h, ps))
             dep_graph.setdefault(h, set()).update(ps)
+    acyclic = False
     try:
         TopologicalSorter(dep_graph).prepare()
-        return [w for w, _, _ in supported_items]
+        acyclic = True
     except CycleError:
         pass
 
     by_head: dict[tuple[str, str], list[tuple[dict, set[tuple[str, str]]]]] = defaultdict(list)
     for w, h, ps in supported_items:
         by_head[h].append((w, ps))
+
+    ranks: dict[tuple[str, str], int] | None = None
     out: list[dict] = []
-    for head, mine in by_head.items():
-        if len(mine) == 1:
-            out.append(mine[0][0])
+    for head in sorted(by_head):
+        mine = by_head[head]
+        if acyclic or len(mine) == 1:
+            founded_ws = [w for w, _ in mine]
         else:
             others = [(h, ps) for h, ps in pairs if h != head]
             base_supported = _lfp(others)
-            for w, ps in mine:
-                if ps <= base_supported:
-                    out.append(w)
+            founded_ws = [w for w, ps in mine if ps <= base_supported]
+        deduped: dict[str, dict] = {}
+        for w in founded_ws:
+            h_sha = _witness_hash(w)
+            if h_sha not in deduped:
+                deduped[h_sha] = w
+        if len(deduped) <= cap:
+            out.extend(deduped.values())
+            continue
+        if ranks is None:
+            ranks = _lfp_ranks(pairs)
+        primary_sha = _witness_hash(chosen[head]) if chosen and head in chosen else None
+
+        def sort_key(item: tuple[str, dict]):
+            h_sha, w = item
+            w_rank = 1 + max((ranks[p] for p in _pos_derived(w) if p in ranks), default=0)
+            return (
+                0 if h_sha == primary_sha else 1,
+                w_rank,
+                w["rule_id"],
+                canonical_json(w.get("bindings", ())),
+                h_sha,
+            )
+
+        ordered = [w for _, w in sorted(deduped.items(), key=sort_key)]
+        out.extend(ordered[:cap])
     return out
 
 
 def check_choice(witnesses, chosen: dict, founded=None) -> list[dict]:
-    """The given witnesses against the chosen proofs (`select`): every chosen proof must be present, and
-    every witness must be a chosen proof (or, when `founded` is given, a founded alternative)."""
+    """The given witnesses against the chosen proofs (`select`) or, when `founded` is given, the exact
+    capped founded witness set: no extra witness and no missing founded witness."""
     text = lambda ws: {json.dumps(w, sort_keys=True) for w in ws}  # noqa: E731
-    got, want = text(witnesses), text(chosen.values())
-    allowed = want if founded is None else (want | text(founded))
+    got = text(witnesses)
+    want = text(chosen.values()) if founded is None else text(founded)
     out = []
-    if got - allowed:
-        out.append({"reason": "choice_mismatch", "detail": f"{len(got - allowed)} witnesses that are no founded proof"})
+    if got - want:
+        out.append({"reason": "choice_mismatch", "detail": f"{len(got - want)} witnesses that are not in the founded set"})
     if want - got:
-        out.append({"reason": "choice_mismatch", "detail": f"{len(want - got)} chosen proofs missing"})
+        out.append({"reason": "choice_mismatch", "detail": f"{len(want - got)} founded witnesses missing"})
     for f in out:
         f["severity"] = "error"
     return out
@@ -748,7 +820,7 @@ def check_role(role: str, complete: dict, snapshots: dict, claimed_full, bundle:
                                    if (rel, key) in visible and len(p) == 4 and p[2:] == ("known", "")
                                    and calc_value(p[1], column_type)}
             chosen = select(instances, derived, usable)
-    findings += check_choice(witnesses, chosen, founded=_founded_usable(instances, derived, usable))
+    findings += check_choice(witnesses, chosen, founded=_founded_usable(instances, derived, usable, chosen))
     for rel in sorted(derived & (set(every) | set(mine))):
         want = {key for key in every.get(rel, {}) if (rel, key) in chosen}
         got = set(mine.get(rel, {}))
