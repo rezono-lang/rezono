@@ -231,10 +231,56 @@ def _index_stop(stop: dict) -> tuple[dict[str, set[str]], dict[tuple[str, str], 
     return rows, witnesses, calc_witnesses
 
 
+def _independent_tables(bundle: dict | None) -> frozenset[str]:
+    """Tables whose rows are independent memberships (`multivalued: true` slots and `kinds`) from `bundle`."""
+    if bundle is None:
+        return frozenset()
+    if not isinstance(bundle, dict):
+        raise ValueError("malformed schema bundle")
+    fmt = bundle.get("format")
+    if fmt is not None and fmt != "rezono.schema-bundle/1":
+        raise ValueError("malformed schema bundle format")
+    if not any(section in bundle for section in ("kinds", "attributes", "arrows")):
+        raise ValueError("malformed schema bundle")
+    cardinality: dict[str, bool] = {}
+    for section in ("attributes", "arrows"):
+        if section not in bundle:
+            continue
+        items = bundle[section]
+        if not isinstance(items, list):
+            raise ValueError(f"malformed schema bundle {section}")
+        for entry in items:
+            if not isinstance(entry, dict):
+                raise ValueError(f"malformed schema bundle {section} entry")
+            table = entry.get("table")
+            mv = entry.get("multivalued")
+            if not isinstance(table, str) or not table or type(mv) is not bool:
+                raise ValueError(f"malformed schema bundle {section} entry")
+            if table in cardinality:
+                raise ValueError(f"duplicate schema slot table {table!r}")
+            cardinality[table] = mv
+    kind_tables: set[str] = set()
+    if "kinds" in bundle:
+        kinds = bundle["kinds"]
+        if not isinstance(kinds, list):
+            raise ValueError("malformed schema bundle kinds")
+        for entry in kinds:
+            if not isinstance(entry, dict):
+                raise ValueError("malformed schema bundle kinds entry")
+            table = entry["table"] if "table" in entry else entry.get("id")
+            if not isinstance(table, str) or not table:
+                raise ValueError("malformed schema bundle kinds entry")
+            if table in cardinality or table in kind_tables:
+                raise ValueError(f"duplicate schema table {table!r}")
+            kind_tables.add(table)
+    return frozenset(table for table, mv in cardinality.items() if mv) | frozenset(kind_tables)
+
+
 def _pair_rows(
     rows_b: dict[str, set[str]],
     rows_a: dict[str, set[str]],
     calc_views: set[str],
+    independent: frozenset[str] = frozenset(),
 ) -> tuple[dict[tuple[str, str], tuple[str, str, str]], dict[tuple[str, str], tuple[str, str, str]], list[tuple[str, str, str]]]:
     pair_b: dict[tuple[str, str], tuple[str, str, str]] = {}
     pair_a: dict[tuple[str, str], tuple[str, str, str]] = {}
@@ -269,6 +315,8 @@ def _pair_rows(
             for ka in sorted(rem_a):
                 if ka in decoded_a and decoded_a[ka][0] in by_subj_b:
                     link(rel, by_subj_b[decoded_a[ka][0]], ka)
+        elif rel in independent:
+            continue
         else:
             decoded_b = {k: p for k in keys_b if (p := _decode_key(k)) is not None and len(p) > 1}
             decoded_a = {k: p for k in keys_a if (p := _decode_key(k)) is not None and len(p) > 1}
@@ -312,6 +360,7 @@ def _compare_negative_premises(
     neg_b: set[tuple[str, str]],
     neg_a: set[tuple[str, str]],
     causes: set[str],
+    independent: frozenset[str] = frozenset(),
 ) -> None:
     if neg_b == neg_a:
         return
@@ -321,7 +370,7 @@ def _compare_negative_premises(
         rows_b.setdefault(rel, set()).add(key)
     for rel, key in neg_a:
         rows_a.setdefault(rel, set()).add(key)
-    pair_b, pair_a, neg_pairs = _pair_rows(rows_b, rows_a, set())
+    pair_b, pair_a, neg_pairs = _pair_rows(rows_b, rows_a, set(), independent)
     if len(pair_b) < len(neg_b) or len(pair_a) < len(neg_a):
         causes.add("presence")
     for rel, kb, ka in neg_pairs:
@@ -366,18 +415,26 @@ def _compare_aggregates(aggs_b, aggs_a, causes: set[str]) -> None:
             causes.add("presence")
 
 
-def between(columns: dict, program: dict | None, before: dict, after: dict) -> list[dict]:
+def between(
+    columns: dict,
+    program: dict | None,
+    before: dict,
+    after: dict,
+    *,
+    bundle: dict | None = None,
+) -> list[dict]:
     """Conclusions the role reads that turn between `before` and `after`, with sorted causes.
 
     Returns `[{"relation", "key", "causes"}]` in `(relation, key)` order, using the key at `after` when
     the row is present there, else the key at `before`.
     """
     cols = columns or {}
+    independent = _independent_tables(bundle)
     calc_views = _calc_views(program, before, after)
     by_rv, by_id, by_view, rule_types = _program_index(program)
     rows_b, wits_b, calc_b = _index_stop(before)
     rows_a, wits_a, calc_a = _index_stop(after)
-    pair_b, pair_a, pairs = _pair_rows(rows_b, rows_a, calc_views)
+    pair_b, pair_a, pairs = _pair_rows(rows_b, rows_a, calc_views, independent)
 
     def row_id_b(rel: str, key: str) -> tuple:
         paired = pair_b.get((rel, key))
@@ -479,7 +536,7 @@ def between(columns: dict, program: dict | None, before: dict, after: dict) -> l
                     for p in wa.get("premises") or ()
                     if p.get("polarity") == "negative"
                 }
-                _compare_negative_premises(cols, neg_b, neg_a, causes)
+                _compare_negative_premises(cols, neg_b, neg_a, causes, independent)
                 _compare_aggregates(wb.get("aggregates") or (), wa.get("aggregates") or (), causes)
             elif wb is None and wa is None and cb is None and ca is None:
                 if rel in calc_views:

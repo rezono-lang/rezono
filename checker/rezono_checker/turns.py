@@ -12,6 +12,7 @@ from collections import defaultdict
 
 from . import access
 from .canon import canonical_json, number, strict_json_loads
+from .difference import _bundle_schema
 
 CAUSES = frozenset({
     "rule",
@@ -254,10 +255,10 @@ class _Stop:
         return ref in self.witnesses or ref in self.calc_witnesses
 
 
-def _group_id(parts: tuple[str, ...], is_calc: bool) -> tuple[bool, tuple[str, ...]]:
+def _group_id(parts: tuple[str, ...], is_calc: bool, independent: bool = False) -> tuple[bool, tuple[str, ...]]:
     if is_calc and len(parts) == 4:
         return (True, (parts[0],))
-    if not is_calc and len(parts) > 1:
+    if not is_calc and not independent and len(parts) > 1:
         return (True, parts[:-1])
     return (False, parts)
 
@@ -266,6 +267,7 @@ def _pair_rows(
     before_rows: dict[str, set[str]],
     after_rows: dict[str, set[str]],
     calc_views: set[str],
+    independent: frozenset[str] = frozenset(),
 ) -> tuple[list[tuple[str, str | None, str | None]], dict[tuple[str, str], str], dict[tuple[str, str], str]]:
     """Pair rows across two stops following the same-row rules of decisions/viewer-slip.md."""
     pairs: list[tuple[str, str | None, str | None]] = []
@@ -274,12 +276,13 @@ def _pair_rows(
 
     for rel in sorted(set(before_rows) | set(after_rows)):
         is_calc = rel in calc_views
+        is_independent = rel in independent
         b_groups: dict[tuple[bool, tuple[str, ...]], set[str]] = defaultdict(set)
         a_groups: dict[tuple[bool, tuple[str, ...]], set[str]] = defaultdict(set)
         for k in before_rows.get(rel, ()):
-            b_groups[_group_id(_parse_key(k), is_calc)].add(k)
+            b_groups[_group_id(_parse_key(k), is_calc, is_independent)].add(k)
         for k in after_rows.get(rel, ()):
-            a_groups[_group_id(_parse_key(k), is_calc)].add(k)
+            a_groups[_group_id(_parse_key(k), is_calc, is_independent)].add(k)
 
         for gid in set(b_groups) | set(a_groups):
             o = b_groups.get(gid, set())
@@ -345,6 +348,7 @@ def _compare_negative_premises(
     neg_b: set[tuple[str, str]],
     neg_a: set[tuple[str, str]],
     causes: set[str],
+    independent: frozenset[str] = frozenset(),
 ) -> None:
     if neg_b == neg_a:
         return
@@ -354,7 +358,7 @@ def _compare_negative_premises(
         by_rel_b[rel].add(key)
     for rel, key in neg_a:
         by_rel_a[rel].add(key)
-    neg_pairs, _, _ = _pair_rows(by_rel_b, by_rel_a, set())
+    neg_pairs, _, _ = _pair_rows(by_rel_b, by_rel_a, set(), independent)
     for rel, kb, ka in neg_pairs:
         if kb is None or ka is None:
             causes.add("presence")
@@ -362,12 +366,26 @@ def _compare_negative_premises(
             _check_row_value(columns, rel, kb, ka, causes)
 
 
-def derive(columns: dict | None, program: dict | None, before: dict, after: dict) -> list[dict]:
+def derive(
+    columns: dict | None,
+    program: dict | None,
+    before: dict,
+    after: dict,
+    *,
+    bundle: dict | None = None,
+) -> list[dict]:
     """Derive turning points between two stops, sorted by `(relation, key)` with sorted causes."""
+    if bundle is not None:
+        slot_cardinality, kind_tables, bundle_errors = _bundle_schema(bundle)
+        if bundle_errors:
+            raise ValueError("; ".join(bundle_errors))
+        independent = frozenset(t for t, mv in slot_cardinality.items() if mv) | kind_tables
+    else:
+        independent = frozenset()
     prog_views, versions, rule_types = _index_program(program)
     stop_b, stop_a = _Stop(before), _Stop(after)
     calc_views = prog_views | stop_b.calc_views | stop_a.calc_views
-    pairs, from_before, from_after = _pair_rows(stop_b.rows, stop_a.rows, calc_views)
+    pairs, from_before, from_after = _pair_rows(stop_b.rows, stop_a.rows, calc_views, independent)
 
     memo: dict[tuple[str, str, str], frozenset[str]] = {}
     active: set[tuple[str, str, str]] = set()
@@ -471,7 +489,7 @@ def derive(columns: dict | None, program: dict | None, before: dict, after: dict
                     for p in wa.get("premises", ())
                     if p.get("polarity") == "negative"
                 }
-                _compare_negative_premises(columns, neg_b, neg_a, causes)
+                _compare_negative_premises(columns, neg_b, neg_a, causes, independent)
 
             elif wb is None and wa is None and cwb is None and cwa is None:
                 if rel in calc_views:
@@ -538,9 +556,15 @@ def check(
     before: dict,
     after: dict,
     listed: list[dict],
+    *,
+    bundle: dict | None = None,
 ) -> list[str]:
     """Check `listed` turning points against the turns independently derived from `before` and `after`."""
-    expected = derive(columns, program, before, after)
+    if bundle is not None:
+        _, _, bundle_errors = _bundle_schema(bundle)
+        if bundle_errors:
+            return [f"turns: {err}" for err in bundle_errors]
+    expected = derive(columns, program, before, after, bundle=bundle)
     if not isinstance(listed, list):
         return ["turns: listed must be a list"]
 

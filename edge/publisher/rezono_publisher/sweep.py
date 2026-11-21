@@ -369,9 +369,9 @@ def publish_turns(st, pack: str, base: str, sweep_name: str, before_index: int, 
     for role in missing_roles:
         before_stop = _stop_data(st, before_m, role)
         after_stop = _stop_data(st, after_m, role)
-        listed = turns.between(columns, calc_doc, before_stop, after_stop)
+        listed = turns.between(columns, calc_doc, before_stop, after_stop, bundle=bundle)
         with timing.phase("checker"):
-            problems = checker_turns.check(columns, calc_doc, before_stop, after_stop, listed)
+            problems = checker_turns.check(columns, calc_doc, before_stop, after_stop, listed, bundle=bundle)
         if problems:
             raise publish.Blocked(
                 f"{publish.PROOFS}: role {role}: turns {before_vid}->{after_vid}: "
