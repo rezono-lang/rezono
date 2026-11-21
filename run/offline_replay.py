@@ -238,20 +238,15 @@ def execute_run(
     authorized = _dispatch_authorized(plan_hash, plan["currency"], cost_micros, spec.get("approval"), event_us)
 
     orders = 0
+    order_state = "refused"
+    order_receipt: Mapping[str, object] | None = None
+    sweep_id = "after"
+    cleanup_ran = False
 
     def _apply(key: str) -> Mapping[str, object] | None:
         nonlocal orders
         orders += 1
         return submit_order(key)
-
-    if authorized:
-        order_state, order_receipt = invoke_order(plan_hash, claim, _apply, order_status)
-    else:
-        order_state, order_receipt = "refused", None
-
-    sweep_id = "after"
-    order_applied = order_state == "applied" or orders > 0
-    cleanup_ran = False
 
     def _run_cleanup() -> tuple[object, str]:
         nonlocal cleanup_ran
@@ -266,6 +261,10 @@ def execute_run(
         return receipt, status
 
     try:
+        if authorized:
+            order_state, order_receipt = invoke_order(plan_hash, claim, _apply, order_status)
+
+        order_applied = order_state == "applied" or orders > 0
         machines = (
             prepare_machines(observe_machines(plan_hash))
             if order_state == "applied"
@@ -290,7 +289,7 @@ def execute_run(
             if order_outcome == "success" and bool(machines)
             else None
         )
-        delivered = (
+        delivered_evidence = (
             order_outcome == "success"
             and bool(machines)
             and isinstance(installation, Mapping)
@@ -305,7 +304,7 @@ def execute_run(
             delete_receipt = None
             cleanup_evidence = "unknown"
     finally:
-        if order_applied and not cleanup_ran:
+        if (order_state == "applied" or orders > 0) and not cleanup_ran:
             try:
                 _run_cleanup()
             except Exception:
@@ -314,7 +313,7 @@ def execute_run(
     install_obs: list[tuple[str, str]] = []
     if order_outcome == "success" and machines:
         install_obs.append(("installation_applied", request_id))
-        if delivered:
+        if delivered_evidence:
             install_obs.append(("delivery_observed", request_id))
             if isinstance(delete_receipt, Mapping) and delete_receipt.get("accepted") is True:
                 install_obs.append(("resources_deleted", str(delete_receipt.get("id"))))
@@ -329,14 +328,19 @@ def execute_run(
     )
 
     operations = [step for step_list in (*order_trace, *install_trace) for step in step_list]
+    install_succeeded = install_outcome == "success"
+    delivered = (
+        delivered_evidence
+        and install_succeeded
+        and "apply_installation" in operations
+        and "observe_delivery" in operations
+    )
     cleanup = (
         cleanup_evidence
-        if scope == "live"
-        or (
-            install_outcome == "success"
-            and "delete_resources" in operations
-            and "list_inventory" in operations
-        )
+        if order_outcome == "success"
+        and install_succeeded
+        and "delete_resources" in operations
+        and "list_inventory" in operations
         else "unknown"
     )
     return {

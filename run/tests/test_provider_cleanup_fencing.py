@@ -25,14 +25,6 @@ def _approved_spec(scenario: dict) -> dict:
     }
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "M4: decisions/provider-workflow-dispatch.md: execute_run must still invoke delete_resources and "
-        "list_inventory cleanup when submit_order or order_status raises after order dispatch is attempted"
-    ),
-)
 def test_execute_run_runs_cleanup_when_submit_order_or_order_status_raises():
     scenario = case()
     spec = _approved_spec(scenario)
@@ -121,14 +113,6 @@ def test_execute_run_runs_cleanup_when_submit_order_or_order_status_raises():
     assert inventory_calls_b == [PLAN_HASH], f"Case B skipped list_inventory cleanup: {inventory_calls_b!r}"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "M4: decisions/provider-workflow-dispatch.md: live execute_run must not report cleanup='cleaned' or "
-        "delivered=True when the install phase returns install_outcome='failed', and provider_run.main must exit non-zero"
-    ),
-)
 def test_live_execute_run_never_reports_cleaned_when_install_phase_fails(tmp_path, monkeypatch):
     scenario = case()
     spec = _approved_spec(scenario)
