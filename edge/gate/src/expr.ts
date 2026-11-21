@@ -540,29 +540,23 @@ export function parseIsoDate(text: string): string | undefined {
 	return text;
 }
 
-function nextDay(iso: string): string {
+function nextDay(iso: string): string | undefined {
+	if (iso === '9999-12-31') return undefined;
 	const [y, mo, d] = iso.split('-').map(Number);
-	const dt = new Date(Date.UTC(y, mo - 1, d + 1));
+	const dt = new Date(0);
+	dt.setUTCFullYear(y, mo - 1, d + 1);
 	return `${String(dt.getUTCFullYear()).padStart(4, '0')}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}`;
 }
 
-/** Parses an ISO date, month, year, closed range (`..`), or half-open range (`..<`) into `[start, end)`. */
-export function parsePeriodText(text: string): { start: string; end: string } | undefined {
-	const rangeMatch = /^(.+?)(\.\.<|\.\.)(.+)$/.exec(text);
-	if (rangeMatch) {
-		const [, left, op, right] = rangeMatch;
-		const a = parsePeriodText(left.trim());
-		const b = parsePeriodText(right.trim());
-		if (!a || !b) return undefined;
-		const start = a.start;
-		const end = op === '..<' ? b.start : b.end;
-		return start < end ? { start, end } : undefined;
+function parseSinglePeriod(text: string): { start: string; end: string } | undefined {
+	if (parseIsoDate(text)) {
+		const end = nextDay(text);
+		return end ? { start: text, end } : undefined;
 	}
-	if (parseIsoDate(text)) return { start: text, end: nextDay(text) };
 	const ym = ISO_MONTH_RE.exec(text);
 	if (ym) {
 		const y = Number(ym[1]), mo = Number(ym[2]);
-		if (mo < 1 || mo > 12) return undefined;
+		if (mo < 1 || mo > 12 || (y === 9999 && mo === 12)) return undefined;
 		const start = `${ym[1]}-${ym[2]}-01`;
 		const end = mo === 12
 			? `${String(y + 1).padStart(4, '0')}-01-01`
@@ -572,14 +566,31 @@ export function parsePeriodText(text: string): { start: string; end: string } | 
 	const yr = ISO_YEAR_RE.exec(text);
 	if (yr) {
 		const y = Number(yr[1]);
+		if (y >= 9999) return undefined;
 		return { start: `${yr[1]}-01-01`, end: `${String(y + 1).padStart(4, '0')}-01-01` };
 	}
 	return undefined;
 }
 
-/** Extracts the string value of an atom expression (`path` or `lit`) for `at`/`during`/`as known` contexts. */
+/** Parses an ISO date, month, year, closed range (`..`), or half-open range (`..<`) into `[start, end)`. */
+export function parsePeriodText(text: string): { start: string; end: string } | undefined {
+	const rangeMatch = /^(.+?)(\.\.<|\.\.)(.+)$/.exec(text);
+	if (rangeMatch) {
+		const [, left, op, right] = rangeMatch;
+		const a = parseSinglePeriod(left.trim());
+		const b = parseSinglePeriod(right.trim());
+		if (!a || !b) return undefined;
+		const start = a.start;
+		const end = op === '..<' ? b.start : b.end;
+		return start < end ? { start, end } : undefined;
+	}
+	return parseSinglePeriod(text);
+}
+
+/** Extracts the string value of an atom expression (`path`, `kind`, or `lit`) for `at`/`during`/`as known` contexts. */
 export function contextAtomText(e: Expr, what: string): string {
 	if ('path' in e && e.path.length === 1) return e.path[0];
+	if ('kind' in e) return e.kind;
 	if ('lit' in e) {
 		const raw = e.lit;
 		if (raw.startsWith('"') && raw.endsWith('"')) {
@@ -687,14 +698,15 @@ function applyDomainRestrictions(
 	askedKind: string,
 	data: Data,
 	restrictions: ResolvedRestrictions
-): Map<string, V> | undefined {
-	if (!restrictions.place && !restrictions.period) return undefined;
+): { domain?: Map<string, V>; excludeIds?: ReadonlySet<string> } {
+	if (!restrictions.place && !restrictions.period) return {};
 	const kindRows = data.kinds.get(askedKind);
-	if (!kindRows) return undefined;
+	if (!kindRows) return {};
 	const { schema } = view;
 	const of = view.kinds.get(askedKind)!;
 	const slots = schema.kinds[askedKind].slots;
 	const domain = new Map<string, V>();
+	const excludeIds = new Set<string>();
 
 	const rowCause = (slotName: string, id: string): EvalRowRef =>
 		of.columns
@@ -715,7 +727,7 @@ function applyDomainRestrictions(
 		return raw as V;
 	};
 
-	for (const [id, cells] of [...kindRows.entries()]) {
+	for (const [id, cells] of kindRows.entries()) {
 		let placeState: V = { s: 'known', v: true };
 		if (restrictions.place) {
 			const cell = readSingleCell(cells, restrictions.place.slot, id);
@@ -724,11 +736,11 @@ function applyDomainRestrictions(
 					? cell.v
 					: (typeof cell.v === 'object' && cell.v !== null && 'id' in cell.v ? (cell.v as { id: string }).id : undefined);
 				if (placeVal !== restrictions.place.target) {
-					kindRows.delete(id);
+					excludeIds.add(id);
 					continue;
 				}
 			} else if (cell.s === 'not_applicable') {
-				kindRows.delete(id);
+				excludeIds.add(id);
 				continue;
 			} else {
 				placeState = cell;
@@ -752,40 +764,36 @@ function applyDomainRestrictions(
 					}
 				}
 			} else {
+				// Always read and validate both bounds before comparing against `query` so inverted or invalid/unknown bounds surface honestly.
 				const vfCell = readSingleCell(cells, validFromSlot, id);
-				if (vfCell.s === 'unknown' || vfCell.s === 'invalid') {
+				const vuCell = validUntilSlot ? readSingleCell(cells, validUntilSlot, id) : undefined;
+				if (vfCell.s === 'invalid') {
 					validState = vfCell;
+				} else if (vuCell?.s === 'invalid') {
+					validState = vuCell;
+				} else if (vfCell.s === 'unknown') {
+					validState = vfCell;
+				} else if (vuCell?.s === 'unknown') {
+					validState = vuCell;
 				} else if (vfCell.s === 'not_applicable') {
 					validState = { s: 'unknown', reason: NO_VERSION_APPLIES, cause: rowCause(validFromSlot, id) };
 				} else {
 					const rStart = parseIsoDate(String(vfCell.v));
 					if (!rStart) throw new AskError(500, 'invalid valid_from date');
-					if (query.end <= rStart || rStart > query.start) {
-						validState = { s: 'unknown', reason: NO_VERSION_APPLIES, cause: rowCause(validFromSlot, id) };
-					} else if (validUntilSlot) {
-						const vuCell = readSingleCell(cells, validUntilSlot, id);
-						if (vuCell.s === 'not_applicable') {
-							validState = { s: 'known', v: true };
-						} else if (vuCell.s === 'unknown' || vuCell.s === 'invalid') {
-							validState = vuCell;
-						} else {
-							const rEnd = parseIsoDate(String(vuCell.v));
-							if (!rEnd) throw new AskError(500, 'invalid valid_until date');
-							if (rEnd <= rStart) {
-								validState = { s: 'invalid', reason: 'interval_inverted', cause: rowCause(validUntilSlot, id) };
-							} else if (query.end <= rEnd) {
-								validState = { s: 'known', v: true };
-							} else {
-								validState = { s: 'unknown', reason: NO_VERSION_APPLIES, cause: rowCause(validUntilSlot, id) };
-							}
+					let rEnd: string | undefined;
+					if (vuCell && vuCell.s === 'known') {
+						rEnd = parseIsoDate(String(vuCell.v));
+						if (!rEnd) throw new AskError(500, 'invalid valid_until date');
+						if (rEnd <= rStart) {
+							validState = { s: 'invalid', reason: 'interval_inverted', cause: rowCause(validUntilSlot!, id) };
 						}
 					}
-				}
-			}
-
-			if (validState.s === 'unknown' && validState.reason === NO_VERSION_APPLIES) {
-				for (const [slotName, slotDef] of Object.entries(slots)) {
-					if (slotDef.inverse === undefined) cells.set(slotName, validState);
+					if (validState.s === 'known') {
+						if (!(rStart <= query.start && (rEnd === undefined || query.end <= rEnd))) {
+							const causeSlot = rStart > query.start ? validFromSlot : (validUntilSlot ?? validFromSlot);
+							validState = { s: 'unknown', reason: NO_VERSION_APPLIES, cause: rowCause(causeSlot, id) };
+						}
+					}
 				}
 			}
 		}
@@ -799,7 +807,10 @@ function applyDomainRestrictions(
 		}
 	}
 
-	return domain;
+	return {
+		...(domain.size ? { domain } : {}),
+		...(excludeIds.size ? { excludeIds } : {})
+	};
 }
 
 function cursorOf(text: string | undefined): Cursor {
@@ -929,8 +940,8 @@ export async function ask(a: Asking): Promise<Asked> {
 		// The evaluation is told what was read for it: a slot it reads and `wanted` did not name is refused,
 		// never read as a value that is not there.
 		const data = load(schema, rows, { only: want });
-		const domain = applyDomainRestrictions(a.view, askedKind, data, restrictions);
-		whole = await answer(checked, schema, data, { steps: a.budget.steps }, schema, domain);
+		const { domain, excludeIds } = applyDomainRestrictions(a.view, askedKind, data, restrictions);
+		whole = await answer(checked, schema, data, { steps: a.budget.steps }, schema, domain, excludeIds);
 	} catch (e) {
 		if (e instanceof OverBudget) return { cut: { budget: 'steps', limit: a.budget.steps } };
 		if (e instanceof NotLoaded) throw new AskError(500, `the question reads what was not loaded for it: ${e.message}`);

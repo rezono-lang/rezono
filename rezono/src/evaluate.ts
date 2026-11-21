@@ -911,7 +911,8 @@ export async function answer(
 	data: Data,
 	budget: { steps?: number } = {},
 	pack: Schema = schema,
-	domain?: Map<string, V>
+	domain?: Map<string, V>,
+	excludeIds?: ReadonlySet<string>
 ): Promise<Answer | undefined> {
 	const { tree, answer: shape } = checked;
 	if (!tree || !isAsk(tree) || !shape) return undefined;
@@ -921,11 +922,13 @@ export async function answer(
 	const ty: Ty = { t: 'ref', kind: shape.kind };
 	const out: Answer = { $schema: await schemaId(doc), schema: doc, rows: [], undecided: [], counts: { rows: 0, undecided: 0, not_applicable: 0 } };
 	for (const id of idsOf(data, shape.kind)) {
+		if (excludeIds?.has(id)) continue;
 		const row = known({ id });
 		const binder = { $ref: `${doc.imports.p.pack}@${doc.imports.p.schema}:${shape.kind}/${id}` };
-		const rawC = read.within(row, ty, () => read.ex(tree.where));
 		const d = domain?.get(id);
-		const c = d ? and([d, rawC]) : rawC;
+		// A non-known domain restriction (e.g. unknown no_version_applies or invalid interval_inverted)
+		// short-circuits directly so a false predicate never suppresses an unknown/invalid domain state.
+		const c = d && d.s !== 'known' ? d : read.within(row, ty, () => read.ex(tree.where));
 		if (c.s === 'known') {
 			if (c.v !== true) continue;
 			const shown = shape.shown.map((s, i) => [`c${i + 1}`, toJson(read.within(row, ty, () => read.ex(s.expr)), doc.kinds.Answer.slots[`c${i + 1}`], doc, schema)]);

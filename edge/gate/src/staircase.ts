@@ -140,12 +140,12 @@ export async function checkProofClosureWithdrawals(
 	epochView: StaircaseEpochView,
 	withdrawals: readonly WithdrawalRecord[],
 	rootWitness: Witness | CalcWitness,
-	witnessByRef: ReadonlyMap<string, Witness | CalcWitness>
+	witnessByRef: ReadonlyMap<string, readonly (Witness | CalcWitness)[]>
 ): Promise<void> {
 	if (!withdrawals.some((entry) => entry.rows.length > 0)) return;
 	const manifestId = epochView.manifest.id;
 	let withdrawn: WithdrawalRecord | undefined;
-	const visited = new Set<string>();
+	const visited = new Set<Witness | CalcWitness>();
 	const checkedRelations = new Set<string>();
 	const queue: (Witness | CalcWitness)[] = [rootWitness];
 
@@ -155,9 +155,10 @@ export async function checkProofClosureWithdrawals(
 		const rows = await epochView.rows(relation);
 		withdrawn = earlierWithdrawal(withdrawn, rowsWithdrawal(withdrawals, manifestId, relation, rows));
 		for (const row of rows) {
-			const ref = witnessByRef.get(witnessRefKey(relation, canonicalJson(row.key)));
-			if (ref && !visited.has(witnessRefKey(ref.conclusion.relation, ref.conclusion.key))) {
-				queue.push(ref);
+			for (const ref of witnessByRef.get(witnessRefKey(relation, canonicalJson(row.key))) ?? []) {
+				if (!visited.has(ref)) {
+					queue.push(ref);
+				}
 			}
 		}
 	};
@@ -171,17 +172,17 @@ export async function checkProofClosureWithdrawals(
 		if (checkCollection) {
 			await checkRelationRows(relation);
 		}
-		const next = witnessByRef.get(witnessRefKey(relation, rawKey));
-		if (next && !visited.has(witnessRefKey(next.conclusion.relation, next.conclusion.key))) {
-			queue.push(next);
+		for (const next of witnessByRef.get(witnessRefKey(relation, rawKey)) ?? []) {
+			if (!visited.has(next)) {
+				queue.push(next);
+			}
 		}
 	};
 
 	while (queue.length > 0) {
 		const w = queue.pop()!;
-		const id = witnessRefKey(w.conclusion.relation, w.conclusion.key);
-		if (visited.has(id)) continue;
-		visited.add(id);
+		if (visited.has(w)) continue;
+		visited.add(w);
 
 		await checkRowRef(w.conclusion.relation, w.conclusion.key);
 
@@ -302,9 +303,12 @@ export async function readStaircase<T extends StaircaseEpochView>(opts: {
 			|| published.hidden.length || (published.calc_witnesses !== undefined && !Array.isArray(published.calc_witnesses))) {
 			fault();
 		}
-		const witnessByRef = new Map<string, Witness | CalcWitness>();
+		const witnessByRef = new Map<string, (Witness | CalcWitness)[]>();
 		for (const w of [...published.witnesses, ...(published.calc_witnesses ?? [])]) {
-			witnessByRef.set(witnessRefKey(w.conclusion.relation, w.conclusion.key), w);
+			const k = witnessRefKey(w.conclusion.relation, w.conclusion.key);
+			const list = witnessByRef.get(k);
+			if (list) list.push(w);
+			else witnessByRef.set(k, [w]);
 		}
 
 		const snapshotValidAt = epochReading.valid_time_source === 'as_of'
@@ -315,9 +319,12 @@ export async function readStaircase<T extends StaircaseEpochView>(opts: {
 		const base = epochView.bundle.pack.base || `https://rezono.example/${epochView.bundle.pack.id}/`;
 
 		for (const row of matchingRows) {
-			const w = witnessByRef.get(witnessRefKey(epochReading.relation, canonicalJson(row.key)));
+			const matchingWitnesses = witnessByRef.get(witnessRefKey(epochReading.relation, canonicalJson(row.key))) ?? [];
+			const w = matchingWitnesses[0];
 			if (!w) fault();
-			await checkProofClosureWithdrawals(epochView, withdrawals, w, witnessByRef);
+			for (const candidateWitness of matchingWitnesses) {
+				await checkProofClosureWithdrawals(epochView, withdrawals, candidateWitness, witnessByRef);
+			}
 			let validAt: string;
 			if (validTimeIdx >= 0) {
 				validAt = row.key[validTimeIdx];

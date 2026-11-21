@@ -531,7 +531,8 @@ function epochMatchesKnowledgeTime(knowledgeTime: unknown, target: ParsedAsKnown
 	const ns = utcInstant(knowledgeTime);
 	if (ns !== undefined) {
 		if (target.kind === 'date') {
-			const utcDate = new Date(Number(ns / 1_000_000n)).toISOString().slice(0, 10);
+			const utcMs = ns < 0n ? (ns - 999_999n) / 1_000_000n : ns / 1_000_000n;
+			const utcDate = new Date(Number(utcMs)).toISOString().slice(0, 10);
 			return utcDate <= target.date;
 		}
 		return ns <= target.ns;
@@ -559,17 +560,15 @@ async function attachWitnessesAndSources(
 		if (!record(published) || !Array.isArray(published.witnesses) || !Array.isArray(published.hidden) || published.hidden.length
 			|| (published.calc_witnesses !== undefined && !Array.isArray(published.calc_witnesses))) fault();
 		const byRef = new Map<string, (Witness | CalcWitness)[]>();
-		const closureMap = new Map<string, Witness | CalcWitness>();
 		for (const w of [...published.witnesses, ...(published.calc_witnesses ?? [])]) {
 			const k = witnessRefKey(w.conclusion.relation, w.conclusion.key);
 			const list = byRef.get(k);
 			if (list) list.push(w);
 			else byRef.set(k, [w]);
-			closureMap.set(k, w);
 		}
 		for (const node of answer.nodes) {
 			for (const w of byRef.get(witnessRefKey(node.relation, node.key)) ?? []) {
-				await checkProofClosureWithdrawals(selectedView, withdrawals, w, closureMap);
+				await checkProofClosureWithdrawals(selectedView, withdrawals, w, byRef);
 				if (isCalc(w)) calcWitnesses.push(w);
 				else witnesses.push(w);
 			}
@@ -805,7 +804,7 @@ export async function openLocalGate(root: string, role: string): Promise<Handle>
 					const answered = beforeFirstKnown ? await beforeFirstKnownAnswer(asking) : await evaluate(asking);
 					if ('refused' in answered) return json({ error: 'the text does not check', diagnostics: answered.refused }, 400);
 					if ('cut' in answered) return json({ cut: answered.cut }, 422);
-					const finalAnswer = beforeFirstKnown
+					const finalAnswer = beforeFirstKnown || body.scope === 'row' || body.scope === 'catalogue' || answered.answer.nodes.length === 0
 						? answered.answer
 						: await attachWitnessesAndSources(selectedView, withdrawals, role, answered.answer);
 					const replyStanding = standingHeaders(pack, selectedView.manifest.epoch, current.manifest.id, current.manifest.epoch);
