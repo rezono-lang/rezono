@@ -86,7 +86,8 @@ def test_a_confirmed_disagreement_requires_complete_comparison_evidence(tmp_path
 
 
 @pytest.mark.xfail(strict=True, raises=ValueError, reason=(
-    "M3: decisions/live-feldera-ci.md: compiler/ci/feldera_shards.py does not yet expect "
+    "M3: decisions/release-1-scope.md: section 6 (Engine agreement); "
+    "compiler/ci/feldera_shards.py does not yet expect "
     "examples/test_rule_witness_engine_parity.py::test_feldera_rule_witnesses_match_batch[subsidy] in the live "
     "collection. It joins the subsidy shard there and stays out of ORIGINAL, as INTERFACE and CALC_PARITY do. "
     "Lift this mark in the pull request that routes it."))
