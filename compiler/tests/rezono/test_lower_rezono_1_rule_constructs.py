@@ -334,18 +334,6 @@ def test_rezono_1_membership_in_a_multivalued_slot_lowers(tmp_path):
     }, tmp_path)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "M3: decisions/language-rezono-1.md: section 8 step 5, with decisions/language-native-rules.md (arithmetic "
-        "assignments). Lower arithmetic in a comparison operand of a rezono 1 Bool derivation "
-        "(`s.end > s.start + 5`, `t.start <= s.end + 2`) as the Datalog assignment of a fresh variable and its "
-        "comparison. compiler/rezono_compiler/rezono_derived.py refuses it today with R049 \"an operand is a "
-        "variable, a slot path or a literal here\"; a comparison of two slot paths (`t.start > s.end`) already "
-        "lowers. The standard packs std-loop and std-time need it."
-    ),
-)
 def test_rezono_1_arithmetic_in_a_bool_derivation_lowers(tmp_path):
     native = _pack(tmp_path, "native", KINDS + (
         "\nderived long(s: Span): Bool = s.end > s.start + 5\n"
@@ -357,18 +345,6 @@ def test_rezono_1_arithmetic_in_a_bool_derivation_lowers(tmp_path):
     _compare(native, twin, {"long": {("s1",), ("s3",)}, "soon_after": {("s1", "s3")}}, tmp_path)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "M3: decisions/language-rezono-1.md: section 8 step 5, with decisions/language-rezono-1-refinements.md "
-        "section 3.1. Lower a count compared inside a rezono 1 Bool derivation "
-        "(`derived crowded(g: Area): Bool = Item.count(area = g) >= 2`) as the Datalog count aggregate and its "
-        "comparison, a group without rows counting 0. compiler/rezono_compiler/rezono_derived.py refuses it today "
-        "with R049 \"an operand is a variable, a slot path or a literal here\"; `.count(...)` lowers only as the "
-        "value of a functional derivation. The standard pack std-loop and front-door example packs need it."
-    ),
-)
 def test_rezono_1_count_in_a_bool_derivation_lowers(tmp_path):
     native = _pack(tmp_path, "native", KINDS + "\nderived crowded(g: Area): Bool = Item.count(area = g) >= 2\n")
     twin = _pack(tmp_path, "twin", KINDS, datalog=(
