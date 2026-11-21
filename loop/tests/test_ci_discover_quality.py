@@ -23,7 +23,7 @@ Covers five contracts from ``decisions/build-reconciliation.md`` and
 from __future__ import annotations
 
 import ast
-import copy
+import dataclasses
 import hashlib
 import inspect
 import json
@@ -649,8 +649,7 @@ def test_rezono_schema_check_emitted_by_publisher_never_synthesized_by_ci_discov
     )
 
     # 4. Negative check: tampering with check_metadata must block publication rather than stamp rezono:schema green.
-    tampered = copy.deepcopy(epoch)
-    tampered.check_metadata = {}
+    tampered = dataclasses.replace(epoch, check_metadata={})
     blocked = False
     try:
         publish.publish(tampered, store.FileStore(work / "archive-tampered"), {"reader": "complete"})
@@ -749,6 +748,10 @@ def test_ci_discover_shard_counts_come_from_build_facts_via_single_renderer(tmp_
     repo = tmp_path / "shard-repo"
     repo.mkdir()
     shutil.copytree(BUILD_DIR, repo / "build")
+    for pack_name in ("std-access", "std-decision", "std-loop", "std-order", "std-time"):
+        src = ROOT / "packs" / pack_name
+        if src.is_dir():
+            shutil.copytree(src, repo / "packs" / pack_name)
     for path in sorted((repo / "build" / "facts").glob("*.yaml")):
         if path.name.endswith(".sources.yaml"):
             continue
@@ -768,6 +771,18 @@ def test_ci_discover_shard_counts_come_from_build_facts_via_single_renderer(tmp_
         )
 
     shards_fact_file = repo / "build" / "facts" / "shards.yaml"
+    shards_sources_file = repo / "build" / "facts" / "shards.sources.yaml"
+    shards_sources_file.write_text(
+        yaml.safe_dump({
+            "default": {
+                "kind": "tool",
+                "name": "shard-config-test",
+                "revision": "1" * 40,
+                "position": "build/facts/shards.yaml",
+            }
+        }),
+        encoding="utf-8",
+    )
     comp = components.Component(folder="alpha", kind="python")
 
     shards_fact_file.write_text(
@@ -1010,7 +1025,10 @@ def test_ci_discover_forbids_hardcoded_knowledge_time_and_pin_sha_override(tmp_p
     raises=AssertionError,
     reason="M2: decisions/build-reconciliation.md: end-to-end behavioral test of loop/ci_discover.py "
            "(ci-matrix and coordinator-state) against independent hand-written records covering happy "
-           "path, fail-closed safe_mode, and role-scoped publication.",
+           "path, fail-closed safe_mode, and role-scoped publication. "
+           "Waits for loop/tests/test_ci_discover_quality.py--test_rezono_schema_check_emitted_by_publisher_never_synthesized_by_ci_discover, "
+           "loop/tests/test_ci_discover_quality.py--test_ci_discover_honest_observation_capture, and "
+           "loop/tests/test_ci_discover_quality.py--test_ci_discover_forbids_hardcoded_knowledge_time_and_pin_sha_override.",
 )
 def test_ci_discover_end_to_end_against_hand_written_records(tmp_path: Path):
     """End-to-end verification of ci-matrix and coordinator-state over hand-written records."""
@@ -1134,7 +1152,8 @@ def test_ci_discover_end_to_end_against_hand_written_records(tmp_path: Path):
     assert coord_state["claim_held"] == [{"claim": "task/active", "reason": "lease-active"}]
     assert coord_state["findings"] == []
 
-    # Unprivileged role lacks read capability and must never receive tasks or claim release plans.
+    # Unprivileged role lacks read capability and must never receive tasks or claim release plans
+    # (verified pack publication with empty role-filtered relations, not a safe_mode crash).
     denied_state = ci_discover.evaluate_coordinator_state(
         root=repo,
         run_id="run-coord",
@@ -1143,6 +1162,9 @@ def test_ci_discover_end_to_end_against_hand_written_records(tmp_path: Path):
         role_mode="may_read",
         knowledge_time=EVENT_ISO,
     )
+    assert denied_state["source"] == "pack", f"expected verified pack publication for unprivileged role, got {denied_state}"
+    assert denied_state["safe_mode"] is False
+    assert denied_state["findings"] == []
     assert denied_state["ready"] == []
     assert denied_state["waiting"] == []
     assert denied_state["stuck"] == []
