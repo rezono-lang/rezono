@@ -145,7 +145,15 @@ def test_subsidy_scheme_award_in_rezono(tmp_path):
         raise MissingSubsidyAwardInRezono(f"compiling examples/subsidy-scheme failed: {error}") from error
 
     legacy_files = compile_legacy_oracle(tmp_path)
-    calc_files = live_files if "ir/calc.json" in live_files else compile_archived_rezono_0_award(tmp_path)
+    helpers = legacy_helpers()
+    if helpers.pack_is_rezono_1(SCHEME):
+        assert "ir/calc.json" not in live_files, (
+            "native rezono 1 examples/subsidy-scheme must lower award to ir/rules.json, not ir/calc.json"
+        )
+        calc_files = compile_archived_rezono_0_award(tmp_path)
+    else:
+        assert "ir/calc.json" in live_files, "rezono 0 examples/subsidy-scheme must emit ir/calc.json"
+        calc_files = live_files
     if calc_files["ir/calc.json"] != legacy_files["ir/calc.json"]:
         raise MissingSubsidyAwardInRezono("ir/calc.json from rezono/award.rezono differs from legacy calc/award.yaml")
     if calc_files["engine/calc.sql"] != legacy_files["engine/calc.sql"]:
@@ -156,7 +164,8 @@ def test_subsidy_scheme_award_in_rezono(tmp_path):
     expected_dir = SUBSIDY / "expected" / "calc"
     expected_files = sorted(expected_dir.glob("*.json"))
     seen_labels: list[str] = []
-    if model.calc:
+    if not helpers.pack_is_rezono_1(SUBSIDY):
+        assert model.calc, "rezono 0 examples/subsidy must carry a calculation program"
         program = calc.build(model, model.calc)
         evaluation_rows = {table: [tuple(row.values()) for row in rows] for table, rows in calc_sql.rows(program).items()}
         for label, rows in scenarios.states(model, SUBSIDY):
@@ -170,6 +179,7 @@ def test_subsidy_scheme_award_in_rezono(tmp_path):
             if golden_calc_text(got) != want.read_text(encoding="utf-8"):
                 raise MissingSubsidyAwardInRezono(f"{label}: calculation output differs from {want.relative_to(REPO)}")
     else:
+        assert not model.calc, "native rezono 1 examples/subsidy must lower calculations to ir/rules.json, not model.calc"
         prog = ir.load(model.rules)
         calc_rules = (
             "income_threshold",
@@ -180,6 +190,12 @@ def test_subsidy_scheme_award_in_rezono(tmp_path):
             "award",
             "payment_difference",
         )
+        for name in calc_rules:
+            rel_id = f"application_{name}"
+            rel = prog.relations.get(rel_id)
+            assert rel is not None and rel.role == "functional", (
+                f"native rezono 1 examples/subsidy must declare {rel_id!r} with role == 'functional'"
+            )
         for label, rows in scenarios.states(model, SUBSIDY):
             seen_labels.append(label)
             want = expected_dir / f"{label}.json"
@@ -192,7 +208,7 @@ def test_subsidy_scheme_award_in_rezono(tmp_path):
                 con.close()
             got = {
                 name: {
-                    str(row[0]): (str(row[1]), int(row[3]) if str(row[1]) == "known" else None)
+                    str(row[0]): (str(row[1]), str(row[3]) if str(row[1]) == "known" else None)
                     for row in derived.get(f"application_{name}", ())
                 }
                 for name in calc_rules

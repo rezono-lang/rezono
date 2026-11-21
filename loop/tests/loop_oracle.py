@@ -30,6 +30,9 @@ def evaluate(name, columns, facts):
 
     doc = _loop_rules_doc()
     inputs = set(columns)
+    by_name = {rel["name"]: rel for rel in doc.get("relations", ())}
+    assert name in by_name, f"packs/std-loop does not declare relation {name!r}"
+
     rules_by_head: dict[str, list[dict]] = {}
     for rule in doc.get("rules", ()):
         rules_by_head.setdefault(rule["head"]["relation"], []).append(rule)
@@ -44,6 +47,12 @@ def evaluate(name, columns, facts):
         if rel_name in seen_rels or rel_name in inputs:
             continue
         seen_rels.add(rel_name)
+        rel_doc = by_name.get(rel_name)
+        if rel_doc is not None and rel_doc.get("role") == "functional":
+            domain = rel_doc["domain"]
+            needed_rels.add(domain)
+            if domain not in seen_rels and domain not in inputs:
+                queue.append(domain)
         for rule in rules_by_head.get(rel_name, ()):
             rule_id = rule["id"]
             if rule_id not in seen_rule_ids:
@@ -59,9 +68,6 @@ def evaluate(name, columns, facts):
                 needed_rels.add(dep)
                 if dep not in seen_rels and dep not in inputs:
                     queue.append(dep)
-
-    by_name = {rel["name"]: rel for rel in doc.get("relations", ())}
-    assert name in by_name, f"packs/std-loop does not declare relation {name!r}"
 
     sliced_relations: list[dict] = []
     for rel_name in sorted(inputs):
