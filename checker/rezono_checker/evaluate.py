@@ -114,14 +114,20 @@ def cells(spec, members) -> list:
     return [values.get(spec.over, {"state": "unknown"}) for _, values in members]
 
 
-def _fold(function, cells):
-    """formal.md §6, exact: invalid blocks, unknown is strict, not_applicable does not count."""
+def _fold(function, cells, fmt=None):
+    """Exact aggregate fold: strict four-state (invalid -> unknown -> not_applicable -> known) for
+    rezono.rules/2 and without a format (decisions/language-rezono-1-aggregate-spelling.md, section 2);
+    formal.md §6 (not_applicable skipped) for rezono.rules/1."""
     states = {v["state"] for v in cells}
     known = [v for v in cells if v["state"] == "known"]
     if "invalid" in states or len({measure(v) for v in known}) > 1:
         return "invalid"  # also amounts in two currencies, or quantities in two units: they do not add up
     if "unknown" in states:
         return "unknown"
+    if fmt != "rezono.rules/1" and "not_applicable" in states:
+        return "not_applicable"
+    if function == "count":
+        return f"known:{len(known)}"
     try:
         numbers = [number(payload(v)) for v in known]
     except ValueError:

@@ -31,10 +31,13 @@ from .rules import Calculation
 
 def covered(rules, read=()) -> set:
     """The derived relations the pass covers: those a rule negates or aggregates over, those the rule IR marks as
-    an invariant or an outcome (the checker reads their absence itself: an invariant is empty, an outcome gives one
-    state), those in `read` (what the calculation reads, where a missing row is false or unknown), and every
+    an invariant, an outcome or a functional derivation (together with every functional domain and candidate/guard
+    input), those in `read` (what the calculation reads, where a missing row is false or unknown), and every
     derived relation a rule of a covered relation reads."""
-    todo = set(read) | set(getattr(rules, "invariants", ())) | set(getattr(rules, "outcomes", ()))
+    functionals = getattr(rules, "functionals", {})
+    todo = set(read) | set(getattr(rules, "invariants", ())) | set(getattr(rules, "outcomes", ())) | set(functionals)
+    for func in functionals.values():
+        todo.add(func.domain)
     for rule in rules.values():
         todo |= {b.atom.relation for b in rule.body if b.polarity != "positive"}
         todo |= {a.atom.relation for a in rule.aggregates}
@@ -46,11 +49,14 @@ def dependencies(rules, relations) -> set:
     by_head = {}
     for rule in rules.values():
         by_head.setdefault(rule.head.relation, []).append(rule)
+    functionals = getattr(rules, "functionals", {})
     out, todo = set(), sorted(set(relations) & by_head.keys())
     while todo:
         relation = todo.pop()
         if relation not in out:
             out.add(relation)
+            if relation in functionals and functionals[relation].domain in by_head:
+                todo.append(functionals[relation].domain)
             for rule in by_head[relation]:
                 todo.extend(item.atom.relation for item in (*rule.body, *rule.aggregates)
                             if item.atom.relation in by_head)
@@ -71,9 +77,10 @@ def check(rules, rows, read=(), *, domains=None) -> list:
         return ordered[relation]
 
     scope = covered(rules, read) if domains is None else dependencies(rules, domains)
+    functionals = getattr(rules, "functionals", {})
     findings = []
     for rule in sorted(rules.values(), key=lambda r: r.id):
-        if rule.head.relation not in scope:
+        if rule.head.relation not in scope or rule.head.relation in functionals:
             continue
         variables, found = instances(rule, table)
         head = _subst(rule.head.terms, variables)
@@ -269,10 +276,10 @@ def _aggregate(current, spec, table, rule):
     members = sorted((m for m in table(spec.atom.relation) if len(m[0]) == len(terms)), key=member)
     out = []
     for run, group_rows in _merge(sorted(found, key=group), group, members, member):
-        if spec.function == "count":
+        if spec.function == "count" and spec.over is None:
             result = f"known:{len(group_rows)}"
         else:
-            result = _fold(spec.function, cells(spec, group_rows))
+            result = _fold(spec.function, cells(spec, group_rows), spec.format)
         if result == "invalid":
             continue
         if rule.bare_values:

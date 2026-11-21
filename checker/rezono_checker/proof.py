@@ -30,9 +30,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+from operator import itemgetter
 import re
 
 from .canon import encode_key, strict_json_loads, value_text
+from .closure import instances as rule_instances
 from .evaluate import cells
 from .rules import load_rules
 from .snapshots import read_rows, rows_of
@@ -54,7 +56,27 @@ def steps(rules_doc: dict, witnesses: list[dict], rows: dict) -> set[tuple]:
     """The step rows of the witnesses: (c_relation, c_key, p_relation, p_key, how, position), and on a
     `contributes` row of a `sum`, `min` or `max` a seventh element, the value text of the row's cell."""
     rules = load_rules(rules_doc)
+    functionals = getattr(rules, "functionals", {})
     groups: dict = {}
+    ordered: dict = {}
+    func_cache: dict = {}
+
+    def table(relation):
+        if relation not in ordered:
+            ordered[relation] = sorted(rows.get(relation, {}).values(), key=itemgetter(0))
+        return ordered[relation]
+
+    def candidates(rule, func):
+        if rule.id not in func_cache:
+            by_key: dict[tuple, list[dict[str, str]]] = {}
+            variables, found = rule_instances(rule, table)
+            for row in found:
+                inst_theta = dict(zip(variables, row))
+                dom_key = tuple(inst_theta[t] if t.startswith("?") else t for t in rule.head.terms[:func.key_arity])
+                by_key.setdefault(dom_key, []).append(inst_theta)
+            func_cache[rule.id] = by_key
+        return func_cache[rule.id]
+
     out = set()
     for w in witnesses:
         rule = rules.get(w["rule_id"])
@@ -62,25 +84,52 @@ def steps(rules_doc: dict, witnesses: list[dict], rows: dict) -> set[tuple]:
             raise ValueError(f"unknown rule {w['rule_id']}")
         theta = {b["variable"]: b["value"] for b in w.get("bindings", [])}
 
-        def subst(atom):
-            return tuple(theta[t] if t.startswith("?") else t for t in atom.terms)
+        def subst(atom, env=theta):
+            out_terms = []
+            for t in atom.terms:
+                if t.startswith("?"):
+                    if t not in env:
+                        raise ValueError(f"unbound variable {t} in witness for {rule.id}")
+                    out_terms.append(env[t])
+                else:
+                    out_terms.append(t)
+            return tuple(out_terms)
 
         c = (w["conclusion"]["relation"], w["conclusion"]["key"])
-        for i, b in enumerate(rule.body):
-            out.add((*c, b.atom.relation, encode_key(subst(b.atom)), b.polarity, i))
+        func = functionals.get(rule.head.relation)
+        if func is not None:
+            dom_key = tuple(
+                theta[t] if t.startswith("?") else t for t in rule.head.terms[:func.key_arity]
+            ) if all(t in theta for t in rule.head.terms[:func.key_arity] if t.startswith("?")) else None
+            if dom_key is None:
+                raise ValueError(f"unbound domain key variable in witness for {rule.id}")
+            insts = candidates(rule, func).get(dom_key, ())
+            for i, b in enumerate(rule.body):
+                b_vars = {t for t in b.atom.terms if t.startswith("?")}
+                if b_vars <= set(theta):
+                    out.add((*c, b.atom.relation, encode_key(subst(b.atom)), b.polarity, i))
+                else:
+                    for inst_theta in insts:
+                        out.add((*c, b.atom.relation, encode_key(subst(b.atom, inst_theta)), b.polarity, i))
+        else:
+            for i, b in enumerate(rule.body):
+                out.add((*c, b.atom.relation, encode_key(subst(b.atom)), b.polarity, i))
         for i, spec in enumerate(rule.aggregates):
-            fixed = [(pos, v) for pos, (t, v) in enumerate(zip(spec.atom.terms, subst(spec.atom))) if t != "_"]
-            at = (spec.atom.relation, len(spec.atom.terms), tuple(pos for pos, _ in fixed))
-            if at not in groups:
-                index: dict = {}
-                for k, (parts, values) in rows.get(spec.atom.relation, {}).items():
-                    if len(parts) == at[1]:
-                        index.setdefault(tuple(parts[pos] for pos in at[2]), []).append((k, parts, values))
-                groups[at] = index
-            members = groups[at].get(tuple(v for _, v in fixed), ())
-            given = ([()] * len(members) if spec.function == "count"
-                     else [(value_text(v),) for v in cells(spec, [(parts, values) for _, parts, values in members])])
-            out |= {(*c, spec.atom.relation, k, "contributes", i, *v) for (k, _, _), v in zip(members, given)}
+            envs = ([theta] if {t for t in spec.atom.terms if t.startswith("?")} <= set(theta)
+                    else (candidates(rule, func).get(dom_key, ()) if func is not None else ()))
+            for env in envs:
+                fixed = [(pos, v) for pos, (t, v) in enumerate(zip(spec.atom.terms, subst(spec.atom, env))) if t != "_"]
+                at = (spec.atom.relation, len(spec.atom.terms), tuple(pos for pos, _ in fixed))
+                if at not in groups:
+                    index: dict = {}
+                    for k, (parts, values) in rows.get(spec.atom.relation, {}).items():
+                        if len(parts) == at[1]:
+                            index.setdefault(tuple(parts[pos] for pos in at[2]), []).append((k, parts, values))
+                    groups[at] = index
+                members = groups[at].get(tuple(v for _, v in fixed), ())
+                given = ([()] * len(members) if spec.function == "count"
+                         else [(value_text(v),) for v in cells(spec, [(parts, values) for _, parts, values in members])])
+                out |= {(*c, spec.atom.relation, k, "contributes", i, *v) for (k, _, _), v in zip(members, given)}
     return out
 
 
