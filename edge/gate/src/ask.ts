@@ -364,9 +364,22 @@ export function memoryGraph(witnesses: (Witness | CalcWitness)[], steps: Edge[])
 export const calcSteps = (witnesses: CalcWitness[]): Edge[] =>
 	witnesses.flatMap((w) => (w.premises ?? []).map((p, position) => ({ c: plain(w.conclusion), p: plain(p), how: 'positive', position })));
 
+/** One cell value in a snapshot record (contracts/value.yaml). */
+export interface SnapshotValue {
+	state?: unknown;
+	value?: unknown;
+	minor_units?: unknown;
+}
+
+/** One snapshot record as `rows` returns it, with key parts and optional value columns. */
+export interface SnapshotRow {
+	key: string[];
+	values?: Record<string, unknown>;
+}
+
 /** The rule IR as far as `step` needs it (contracts/rules.yaml). */
 export interface RuleDoc {
-	relations?: { name: string; key?: { name?: string }[] }[];
+	relations?: { name: string; key?: { name?: string }[]; values?: { name?: string }[] }[];
 	rules?: {
 		id: string;
 		body?: { relation: string; terms: string[]; polarity: string }[];
@@ -374,34 +387,58 @@ export interface RuleDoc {
 	}[];
 }
 
+function contributionValue(row: SnapshotRow, over: string, keyIndex: number, ruleId: string, relation: string): string {
+	if (keyIndex >= 0) {
+		const cell = row.key[keyIndex];
+		if (typeof cell !== 'string') throw new AskError(500, `${ruleId}: missing key column ${over} in ${relation}`);
+		return `known:${cell}`;
+	}
+	const values = row.values;
+	if (!values || typeof values !== 'object' || Array.isArray(values) || !Object.hasOwn(values, over)) {
+		throw new AskError(500, `${ruleId}: ${relation}.${over} is missing`);
+	}
+	const cell = values[over];
+	if (!cell || typeof cell !== 'object' || Array.isArray(cell) || (cell as SnapshotValue).state !== 'known') {
+		throw new AskError(500, `${ruleId}: ${relation}.${over} is not known`);
+	}
+	const { value, minor_units } = cell as SnapshotValue;
+	const text = typeof value === 'string' ? value : typeof minor_units === 'string' ? minor_units : undefined;
+	if (text === undefined) throw new AskError(500, `${ruleId}: ${relation}.${over} has no known payload`);
+	return `known:${text}`;
+}
+
 /**
  * The `step` rows of a set of chosen witnesses, as rezono_compiler.trace.steps makes them: the premises from the
  * rule body under the bindings (`position` is the literal's place in the rule), and per aggregate the rows of
- * its group in `rows` (the role's rows of that relation, key columns). Keys are canonical key text. A
- * `contributes` edge of a `sum`, `min` or `max` carries what its row gives the aggregate, as the published
- * pieces do (trace.steps, `valued`): `known:` and the row's cell in the key column the aggregate ranges over.
+ * its group in `rows` (the role's rows of that relation, key columns and optional `values`). Keys are canonical
+ * key text. A `contributes` edge of a `sum`, `min` or `max` carries what its row gives the aggregate, as the
+ * published pieces do (trace.steps, `valued`): `known:` and the row's cell in the key or value column the
+ * aggregate ranges over.
  */
-export async function stepsOf(doc: RuleDoc | undefined, witnesses: Witness[], rows: (relation: string) => Promise<string[][]>): Promise<Edge[]> {
+export async function stepsOf(doc: RuleDoc | undefined, witnesses: Witness[], rows: (relation: string) => Promise<readonly (string[] | SnapshotRow)[]>): Promise<Edge[]> {
 	if (!witnesses.length) return [];
 	if (!doc) throw new AskError(500, 'witnesses without a rule IR');
 	const rules = new Map((doc.rules ?? []).map((r) => [r.id, r]));
 	const width = new Map((doc.relations ?? []).map((r) => [r.name, (r.key ?? []).length]));
-	const columns = new Map((doc.relations ?? []).map((r) => [r.name, (r.key ?? []).map((c) => c.name)]));
+	const keyColumns = new Map((doc.relations ?? []).map((r) => [r.name, (r.key ?? []).map((c) => c.name)]));
+	const valueColumns = new Map((doc.relations ?? []).map((r) => [r.name, (r.values ?? []).map((c) => c.name)]));
 	const text = (parts: string[]) => JSON.stringify(parts.map(String));
 	const out = new Map<string, Edge>();
 	const add = (e: Edge) => out.set(JSON.stringify([e.c.relation, e.c.key, e.p.relation, e.p.key, e.how, e.position]), e);
 	// The rows of a relation by the values of the columns an aggregate fixes: each relation and set of columns
 	// is grouped once, so a witness reads its own group, never the whole relation again (as trace.steps caches).
-	const groups = new Map<string, Promise<Map<string, string[][]>>>();
+	const groups = new Map<string, Promise<Map<string, SnapshotRow[]>>>();
 	const groupOf = (relation: string, fixed: (readonly [number, string])[]) => {
 		const k = `${relation}\u0000${fixed.map(([j]) => j).join(',')}`;
 		if (!groups.has(k))
 			groups.set(
 				k,
 				rows(relation).then((all) => {
-					const by = new Map<string, string[][]>();
-					for (const r of all) {
-						const at = JSON.stringify(fixed.map(([j]) => r[j]));
+					const by = new Map<string, SnapshotRow[]>();
+					for (const item of all) {
+						const r = Array.isArray(item) ? { key: item } : item;
+						if (fixed.some(([j]) => j >= r.key.length)) continue;
+						const at = JSON.stringify(fixed.map(([j]) => r.key[j]));
 						if (!by.has(at)) by.set(at, []);
 						by.get(at)!.push(r);
 					}
@@ -428,11 +465,23 @@ export async function stepsOf(doc: RuleDoc | undefined, witnesses: Witness[], ro
 			if (!atom) throw new AskError(500, `${w.rule_id}: no aggregate at ${position}`);
 			const fixed = atom.terms.flatMap((t, j) => (t === '_' ? [] : [[j, value(t)] as const]));
 			const n = width.get(atom.relation) ?? 0;
-			// The column a sum, min or max reads: a key column, as these rows hold no other. A count reads none.
-			const over = atom.function && atom.function !== 'count' ? (columns.get(atom.relation) ?? []).indexOf(atom.over) : undefined;
-			if (over !== undefined && (over < 0 || atom.over === undefined)) throw new AskError(500, `${w.rule_id}: the aggregate at ${position} ranges over ${atom.over}, not a key column of ${atom.relation}`);
-			for (const r of await groupOf(atom.relation, fixed))
-				add({ c, p: { relation: atom.relation, key: text(r.slice(0, n)) }, how: 'contributes', position, ...(over !== undefined && { value: `known:${r[over]}` }) });
+			const needsValue = Boolean(atom.function && atom.function !== 'count');
+			let keyIndex = -1;
+			if (needsValue) {
+				if (atom.over === undefined) {
+					throw new AskError(500, `${w.rule_id}: the aggregate at ${position} is missing an over column`);
+				}
+				keyIndex = (keyColumns.get(atom.relation) ?? []).indexOf(atom.over);
+				const hasValueCol = (valueColumns.get(atom.relation) ?? []).includes(atom.over);
+				if (keyIndex < 0 && !hasValueCol) {
+					throw new AskError(500, `${w.rule_id}: the aggregate at ${position} ranges over ${atom.over}, not a column of ${atom.relation}`);
+				}
+			}
+			for (const r of await groupOf(atom.relation, fixed)) {
+				if (r.key.length < n) throw new AskError(500, `${w.rule_id}: malformed row key in ${atom.relation}`);
+				const cellValue = needsValue ? contributionValue(r, atom.over!, keyIndex, w.rule_id, atom.relation) : undefined;
+				add({ c, p: { relation: atom.relation, key: text(r.key.slice(0, n)) }, how: 'contributes', position, ...(cellValue !== undefined && { value: cellValue }) });
+			}
 		}
 	}
 	return [...out.values()];
