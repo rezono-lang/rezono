@@ -123,3 +123,71 @@ classes:
       Table name to root (64 hex): a kind, a kind and its many-valued slot (`Kind__slot`), `$why` and `$src`. Its
       keys are the schema's tables, so the contract holds the map's shape only; `rezono_publication.statement.verify`
       recomputes every root from the rows.
+
+  EpochStatementV2:
+    description: >-
+      Version 2 of the in-toto Statement v1 over one role's published form (decisions/publication-role-diffs.md):
+      keeps every field of version 1 and adds optional per-role epoch-chain links (`previous` and `diff`) in its
+      predicate.
+    attributes:
+      _type: {required: true, equals_string: "https://in-toto.io/Statement/v1"}
+      subject:
+        range: Subject
+        multivalued: true
+        inlined_as_list: true
+        required: true
+        description: Every object the role's form index names except the statement itself, sorted by name (including `diff.json` on chained epochs).
+      predicateType: {required: true, equals_string: "https://rezono.org/epoch-statement/v2"}
+      predicate: {required: true, range: EpochPredicateV2, inlined: true}
+
+  EpochPredicateV2:
+    description: >-
+      Version 2 of the epoch predicate (`rezono.epoch-statement/2`): preserves every field of version 1 and adds
+      optional `previous` and `diff` for chained epochs. Both fields are present together on chained epochs and
+      both are omitted on a role's initial epoch (never empty placeholders).
+    attributes:
+      format: {required: true, equals_string: rezono.epoch-statement/2}
+      pack: {required: true, range: Name}
+      role: {required: true, range: Name, description: "A filtered role; the complete role's statement is never made."}
+      manifest: {required: true, range: ManifestId}
+      epoch: {required: true, range: DecimalText, description: "The manifest's epoch, as text."}
+      knowledge_time: {required: true, range: KnowledgeTime, description: "The manifest's knowledge time, as its form carries it."}
+      definition: {required: true, range: Sha256, description: "The manifest's `definition_sha256`, the schema pin of the definition."}
+      role_manifest:
+        required: true
+        range: Sha256
+        description: >-
+          The canonical hash of the manifest as the role's form index carries it (`role_manifest`: id, epoch,
+          knowledge time, definition hash and compiled files, and the role); never the stored manifest, which names
+          `pack_sha256` and the other roles' files.
+      snapshots:
+        range: SnapshotPin
+        multivalued: true
+        inlined_as_list: true
+        required: true
+        description: The role's own snapshots the form was made from, sorted by relation, as the index's `sources`.
+      schema: {required: true, range: SchemaId, description: "The schema id of the role's form (L0 section 2.2)."}
+      dataset: {required: true, range: DatasetHash, description: "The role's dataset hash (L0 section 6.2, step 5); unchanged by the statement."}
+      annotation: {required: true, range: Sha256, description: "The annotation hash over `$why` and `$src` (L0 section 6.2)."}
+      roots:
+        required: true
+        range: TableRoots
+        inlined: true
+        description: >-
+          Per table of L0 section 6.2, the kind and relation tables and `$why` and `$src`, the RFC 9162 Merkle tree
+          hash over its hash rows in hash order: a leaf is SHA-256(0x00 ‖ CJ(row)), a node SHA-256(0x01 ‖ left ‖
+          right), an empty table SHA-256().
+      inclusion: {required: true, range: Sha256, description: "`H({\"dataset\", \"roots\"})`, the canonical hash over the dataset hash and the roots."}
+      previous:
+        required: false
+        range: Sha256
+        description: >-
+          Chained epochs only: SHA-256 of the canonical `statement.json` bytes of this same role's immediately
+          preceding main epoch publication. Omitted on a role's initial epoch; always paired with `diff`.
+      diff:
+        required: false
+        range: Sha256
+        description: >-
+          Chained epochs only: SHA-256 of this role's canonical `diff.json` bytes (`rezono.role-diff/1`) for the
+          transition from that previous epoch to this epoch. Omitted on a role's initial epoch; always paired with
+          `previous`.

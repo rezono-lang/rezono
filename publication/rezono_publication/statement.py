@@ -45,8 +45,10 @@ signing nothing; `verify_sealed` is the reader of the seal and its statement tog
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 import hashlib
 import json
+import re
 import sys
 import tempfile
 from pathlib import Path
@@ -63,8 +65,13 @@ from .hash import H, CJ, HashError, hash_rows, hashes
 STATEMENT_TYPE = "https://in-toto.io/Statement/v1"
 PREDICATE_TYPE = "https://rezono.org/epoch-statement/v1"
 FORMAT = "rezono.epoch-statement/1"
+PREDICATE_TYPE_V2 = "https://rezono.org/epoch-statement/v2"
+FORMAT_V2 = "rezono.epoch-statement/2"
 LEGACY_STATEMENT_TYPES = (("https://rede.dev/epoch-statement/v1", "rede.epoch-statement/1"),)
+ACCEPTED_STATEMENT_TYPES = ((PREDICATE_TYPE, FORMAT), (PREDICATE_TYPE_V2, FORMAT_V2), *LEGACY_STATEMENT_TYPES)
 NAME = "statement.json"  # its name under the role's prefix, beside the form's objects
+DIFF_NAME = "diff.json"  # the role-scoped epoch diff beside statement.json on chained epochs
+DIFF_FORMAT = "rezono.role-diff/1"
 SIGNATURE = "statement.sigstore.json"  # cosign's Sigstore bundle over the statement's bytes, beside it
 ARTIFACT = "application/vnd.rezono.epoch-statement.v1"  # the two as a referrer of the role's seal
 LEGACY_ARTIFACTS = ("application/vnd.rede.epoch-statement.v1",)
@@ -76,10 +83,13 @@ SUBJECT_KEYS = ("name", "digest")
 DIGEST_KEYS = ("sha256",)
 PREDICATE_KEYS = ("format", "pack", "role", "manifest", "epoch", "knowledge_time", "definition", "role_manifest",
                   "snapshots", "schema", "dataset", "annotation", "roots", "inclusion")
+CHAIN_KEYS = ("previous", "diff")
 SNAPSHOT_KEYS = ("relation", "sha256")
+_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
-__all__ = ["NAME", "SIGNATURE", "PREDICATE_KEYS", "tree_root", "roots", "inclusion_hash", "make", "dumps", "verify",
-           "verify_signature", "trust_of", "referrer", "attach", "verify_sealed"]
+__all__ = ["NAME", "DIFF_NAME", "DIFF_FORMAT", "SIGNATURE", "PREDICATE_TYPE_V2", "FORMAT_V2", "PREDICATE_KEYS",
+           "CHAIN_KEYS", "tree_root", "roots", "inclusion_hash", "compute_role_diff", "apply_role_diff", "make",
+           "dumps", "verify", "verify_signature", "trust_of", "referrer", "attach", "verify_sealed"]
 
 
 def _sha256(data: bytes) -> bytes:
@@ -120,35 +130,192 @@ def _text(value) -> str:
     return str(value)
 
 
-def make(index: dict, objects: dict[str, bytes], schema: dict, rows: list) -> dict:
+def _snapshot_keys(raw: bytes) -> set[tuple[str, ...]]:
+    """Parse one role snapshot JSON array (`[{"key": [str, ...]}, ...]`) into its set of row key tuples."""
+    doc = json.loads(raw)
+    if not isinstance(doc, list):
+        raise ValueError("snapshot is not a JSON list")
+    out: set[tuple[str, ...]] = set()
+    for row in doc:
+        if (not isinstance(row, dict) or set(row) != {"key"}
+                or not isinstance(row["key"], list)
+                or not all(isinstance(part, str) for part in row["key"])):
+            raise ValueError("snapshot row does not have a text key list")
+        out.add(tuple(row["key"]))
+    return out
+
+
+def _relation_diff(before: set[tuple[str, ...]], after: set[tuple[str, ...]]) -> list[dict]:
+    """Deterministic row diff of one relation, matching `rezono_publisher.difference.entries`."""
+    removed, added = before - after, after - before
+    width_b = Counter(k[:-1] for k in before if len(k) > 1)
+    width_a = Counter(k[:-1] for k in after if len(k) > 1)
+    was = {k[:-1]: k for k in removed if len(k) > 1 and width_b[k[:-1]] == 1 and width_a[k[:-1]] == 1}
+    out = []
+    for k in added:
+        if len(k) > 1 and k[:-1] in was:
+            out.append({"key": list(k), "change": "changed", "was": list(was[k[:-1]])})
+        else:
+            out.append({"key": list(k), "change": "added"})
+    paired = {tuple(e["was"]) for e in out if e["change"] == "changed"}
+    out += [{"key": list(k), "change": "removed"} for k in removed if k not in paired]
+    return sorted(out, key=lambda e: [p.encode("utf-8") for p in e["key"]])
+
+
+def compute_role_diff(before: dict[str, bytes], after: dict[str, bytes]) -> dict:
+    """Compute canonical `rezono.role-diff/1` directly from one role's previous and current snapshot bytes."""
+    relations: dict[str, list[dict]] = {}
+    for rel in sorted(set(before) | set(after)):
+        b_rows = _snapshot_keys(before[rel]) if rel in before else set()
+        a_rows = _snapshot_keys(after[rel]) if rel in after else set()
+        entries = _relation_diff(b_rows, a_rows)
+        if entries:
+            relations[rel] = entries
+    return {"format": DIFF_FORMAT, "relations": relations}
+
+
+def _check_diff_doc(diff_bytes: bytes) -> tuple[dict | None, list[str]]:
+    """Validate `diff.json` bytes against canonical `rezono.role-diff/1` shape."""
+    problems: list[str] = []
+    try:
+        doc = json.loads(diff_bytes)
+        if canonical_bytes(doc) != diff_bytes:
+            problems.append(f"{DIFF_NAME} is not in canonical form")
+    except (ValueError, CanonError) as err:
+        return None, [f"{DIFF_NAME} is not canonical JSON: {err}"]
+    if not isinstance(doc, dict) or set(doc) != {"format", "relations"}:
+        return None, [f"{DIFF_NAME} does not have exact keys format and relations"]
+    if doc["format"] != DIFF_FORMAT:
+        problems.append(f"{DIFF_NAME} format is not {DIFF_FORMAT}")
+    rels = doc["relations"]
+    if not isinstance(rels, dict):
+        return None, problems + [f"{DIFF_NAME} relations is not an object"]
+    for rel, entries in rels.items():
+        if not isinstance(rel, str) or not isinstance(entries, list) or not entries:
+            problems.append(f"{DIFF_NAME} relation {rel!r} must map to a non-empty list")
+            continue
+        prev_key: list[bytes] | None = None
+        for i, entry in enumerate(entries):
+            if not isinstance(entry, dict):
+                problems.append(f"{DIFF_NAME} {rel}[{i}] is not an object")
+                continue
+            ch = entry.get("change")
+            if ch in ("added", "removed"):
+                want_keys = {"change", "key"}
+            elif ch == "changed":
+                want_keys = {"change", "key", "was"}
+            else:
+                problems.append(f"{DIFF_NAME} {rel}[{i}] has unknown change {ch!r}")
+                continue
+            if set(entry) != want_keys:
+                problems.append(f"{DIFF_NAME} {rel}[{i}] keys are not {sorted(want_keys)}")
+                continue
+            key = entry["key"]
+            if not isinstance(key, list) or not key or not all(isinstance(p, str) for p in key):
+                problems.append(f"{DIFF_NAME} {rel}[{i}] key must be a non-empty list of text")
+                continue
+            if ch == "changed":
+                was = entry["was"]
+                if (not isinstance(was, list) or len(was) != len(key) or len(key) < 2
+                        or not all(isinstance(p, str) for p in was) or was[:-1] != key[:-1] or was == key):
+                    problems.append(f"{DIFF_NAME} {rel}[{i}] was is not a changed cell with the same prefix")
+                    continue
+            enc = [p.encode("utf-8") for p in key]
+            if prev_key is not None and enc <= prev_key:
+                problems.append(f"{DIFF_NAME} {rel} entries are not strictly sorted by key")
+                break
+            prev_key = enc
+    return doc, problems
+
+
+def apply_role_diff(before: dict[str, bytes], diff_doc: dict) -> dict[str, set[tuple[str, ...]]]:
+    """Apply a verified `rezono.role-diff/1` document to a role's previous snapshots."""
+    rels = diff_doc["relations"]
+    out: dict[str, set[tuple[str, ...]]] = {}
+    for rel in sorted(set(before) | set(rels)):
+        base = _snapshot_keys(before[rel]) if rel in before else set()
+        current = set(base)
+        for entry in rels.get(rel, ()):
+            ch = entry["change"]
+            key = tuple(entry["key"])
+            if ch == "added":
+                if key in current:
+                    raise ValueError(f"{rel}: added key {key!r} already present")
+                current.add(key)
+            elif ch == "removed":
+                if key not in current:
+                    raise ValueError(f"{rel}: removed key {key!r} not present")
+                current.remove(key)
+            elif ch == "changed":
+                was = tuple(entry["was"])
+                if was not in current:
+                    raise ValueError(f"{rel}: changed previous key {was!r} not present")
+                if key in current:
+                    raise ValueError(f"{rel}: changed new key {key!r} already present")
+                current.remove(was)
+                current.add(key)
+            else:
+                raise ValueError(f"{rel}: unknown change {ch!r}")
+        out[rel] = current
+    return out
+
+
+def make(index: dict, objects: dict[str, bytes], schema: dict, rows: list, *,
+         version: int = 1, previous: str | None = None, diff: str | None = None) -> dict:
     """The statement of the role whose form index and objects these are. `objects` are every object the index
     names except the statement; `schema` and `rows` are the form's own, as `rezono_publication.publication.form` made
-    them (or as the L0 reader reads them back from those objects)."""
+    them (or as the L0 reader reads them back from those objects). Version 1 is preserved untouched for existing
+    callers and fixtures; version 2 adds optional paired `previous` and `diff` for chained epochs."""
+    if version == 1:
+        if previous is not None or diff is not None:
+            raise ValueError("epoch statement v1 does not carry previous or diff")
+        pred_type, fmt = PREDICATE_TYPE, FORMAT
+    elif version == 2:
+        if (previous is None) != (diff is None):
+            raise ValueError("epoch statement v2 requires both previous and diff, or neither")
+        if previous is not None:
+            if not isinstance(previous, str) or not _SHA256_RE.match(previous):
+                raise ValueError(f"previous is not a sha256: {previous!r}")
+            if not isinstance(diff, str) or not _SHA256_RE.match(diff):
+                raise ValueError(f"diff is not a sha256: {diff!r}")
+            if DIFF_NAME not in objects:
+                raise ValueError(f"chained epoch statement v2 requires {DIFF_NAME} in objects")
+            if hashlib.sha256(objects[DIFF_NAME]).hexdigest() != diff:
+                raise ValueError(f"diff sha256 does not match {DIFF_NAME} bytes")
+        elif DIFF_NAME in objects:
+            raise ValueError(f"initial epoch statement v2 must not include {DIFF_NAME}")
+        pred_type, fmt = PREDICATE_TYPE_V2, FORMAT_V2
+    else:
+        raise ValueError(f"unsupported epoch statement version: {version!r}")
     m = index["manifest"]
     h = hashes(schema, rows)
     if h["schema"] != index["schema"] or h["dataset"] != index["dataset"]:
         raise ValueError("the index does not name the dataset of these rows")
     table_roots = roots(schema, rows)
+    predicate = {
+        "format": fmt,
+        "pack": index["pack"],
+        "role": index["role"],
+        "manifest": _text(m["id"]),
+        "epoch": _text(m["epoch"]),
+        "knowledge_time": _text(m["knowledge_time"]),
+        "definition": _text(m["definition_sha256"]),
+        "role_manifest": H(m),
+        "snapshots": [{"relation": s["relation"], "sha256": s["sha256"]} for s in index["sources"]],
+        "schema": h["schema"],
+        "dataset": h["dataset"],
+        "annotation": h["annotation"],
+        "roots": table_roots,
+        "inclusion": inclusion_hash(h["dataset"], table_roots),
+    }
+    if previous is not None and diff is not None:
+        predicate["previous"] = previous
+        predicate["diff"] = diff
     return {
         "_type": STATEMENT_TYPE,
         "subject": [{"name": n, "digest": {"sha256": hashlib.sha256(objects[n]).hexdigest()}} for n in sorted(objects)],
-        "predicateType": PREDICATE_TYPE,
-        "predicate": {
-            "format": FORMAT,
-            "pack": index["pack"],
-            "role": index["role"],
-            "manifest": _text(m["id"]),
-            "epoch": _text(m["epoch"]),
-            "knowledge_time": _text(m["knowledge_time"]),
-            "definition": _text(m["definition_sha256"]),
-            "role_manifest": H(m),
-            "snapshots": [{"relation": s["relation"], "sha256": s["sha256"]} for s in index["sources"]],
-            "schema": h["schema"],
-            "dataset": h["dataset"],
-            "annotation": h["annotation"],
-            "roots": table_roots,
-            "inclusion": inclusion_hash(h["dataset"], table_roots),
-        },
+        "predicateType": pred_type,
+        "predicate": predicate,
     }
 
 
@@ -192,7 +359,23 @@ def _shape(st) -> list[str]:
         if not problems and names != sorted(set(names)):
             problems.append("the subjects are not sorted by name, one each")
     p = st["predicate"]
-    problems += _keys("the predicate", p, PREDICATE_KEYS)
+    is_v2 = st.get("predicateType") == PREDICATE_TYPE_V2
+    if is_v2 and isinstance(p, dict):
+        has_prev = "previous" in p
+        has_diff = "diff" in p
+        if has_prev and has_diff:
+            expected_keys = PREDICATE_KEYS + CHAIN_KEYS
+        elif not has_prev and not has_diff:
+            expected_keys = PREDICATE_KEYS
+        else:
+            expected_keys = PREDICATE_KEYS + CHAIN_KEYS
+            problems.append("the predicate must carry both previous and diff, or neither")
+        problems += _keys("the predicate", p, expected_keys)
+        for k in CHAIN_KEYS:
+            if k in p and (not isinstance(p[k], str) or not _SHA256_RE.match(p[k])):
+                problems.append(f"the predicate {k} is not a sha256")
+    else:
+        problems += _keys("the predicate", p, PREDICATE_KEYS)
     if isinstance(p, dict) and isinstance(p.get("snapshots"), list):
         for i, s in enumerate(p["snapshots"]):
             problems += _keys(f"snapshot {i}", s, SNAPSHOT_KEYS)
@@ -205,7 +388,111 @@ def _shape(st) -> list[str]:
     return problems
 
 
-def verify(statement_bytes: bytes, index: dict, objects: dict[str, bytes], absent=()) -> list[str]:
+def _verify_chain(
+    p: dict,
+    subjects: dict[str, str],
+    held: dict[str, bytes],
+    *,
+    previous_statement: bytes | None,
+    previous_snapshots: dict[str, bytes] | None,
+    current_snapshots: dict[str, bytes] | None,
+) -> list[str]:
+    """Verify v2 epoch-chain invariants: subject agreement, diff.json shape, predecessor link, and diff replay."""
+    problems: list[str] = []
+    chained = "previous" in p and "diff" in p
+    if not chained:
+        if DIFF_NAME in subjects:
+            problems.append(f"{DIFF_NAME} is a subject without predicate previous and diff")
+        if any(x is not None for x in (previous_statement, previous_snapshots, current_snapshots)):
+            problems.append("predecessor chain inputs were given for an unchained statement")
+        return problems
+
+    if DIFF_NAME not in subjects:
+        problems.append(f"{DIFF_NAME} is missing from subjects on a chained statement")
+    elif subjects[DIFF_NAME] != p["diff"]:
+        problems.append(f"{DIFF_NAME} subject sha256 does not match predicate diff")
+
+    diff_doc = None
+    if DIFF_NAME in held:
+        diff_doc, diff_problems = _check_diff_doc(held[DIFF_NAME])
+        problems.extend(diff_problems)
+
+    prev_p = None
+    if previous_statement is not None:
+        if hashlib.sha256(previous_statement).hexdigest() != p["previous"]:
+            problems.append("previous statement bytes do not match predicate previous")
+        try:
+            prev_st = json.loads(previous_statement)
+            if dumps(prev_st) != previous_statement:
+                problems.append("previous statement is not in canonical form")
+        except (ValueError, CanonError) as err:
+            problems.append(f"previous statement is not canonical JSON: {err}")
+            prev_st = None
+        if prev_st is not None:
+            accepted_types = {t for t, _ in ACCEPTED_STATEMENT_TYPES}
+            if (not isinstance(prev_st, dict) or prev_st.get("_type") != STATEMENT_TYPE
+                    or prev_st.get("predicateType") not in accepted_types or _shape(prev_st)):
+                problems.append("previous statement is not a valid epoch statement")
+            else:
+                prev_p = prev_st["predicate"]
+                if (prev_st["predicateType"], prev_p["format"]) not in ACCEPTED_STATEMENT_TYPES:
+                    problems.append("previous statement predicate format does not match its predicateType")
+                if prev_p["pack"] != p["pack"]:
+                    problems.append("previous statement pack does not match")
+                if prev_p["role"] != p["role"]:
+                    problems.append("previous statement role does not match")
+                try:
+                    if not (int(prev_p["epoch"]) < int(p["epoch"])):
+                        problems.append("previous statement epoch is not strictly smaller")
+                except ValueError:
+                    problems.append("epoch is not an integer")
+
+    if previous_snapshots is not None and prev_p is not None:
+        want_prev = {s["relation"]: s["sha256"] for s in prev_p["snapshots"]}
+        got_prev = {rel: hashlib.sha256(b).hexdigest() for rel, b in previous_snapshots.items()}
+        if got_prev != want_prev:
+            problems.append("previous snapshots do not match previous statement snapshots")
+
+    if current_snapshots is not None:
+        want_curr = {s["relation"]: s["sha256"] for s in p["snapshots"]}
+        got_curr = {rel: hashlib.sha256(b).hexdigest() for rel, b in current_snapshots.items()}
+        if got_curr != want_curr:
+            problems.append("current snapshots do not match predicate snapshots")
+
+    if previous_snapshots is not None and current_snapshots is not None:
+        if DIFF_NAME not in held:
+            problems.append(f"{DIFF_NAME} is not a subject with its bytes")
+        else:
+            try:
+                recomputed = canonical_bytes(compute_role_diff(previous_snapshots, current_snapshots))
+            except (ValueError, CanonError) as err:
+                problems.append(f"could not recompute {DIFF_NAME}: {err}")
+            else:
+                if recomputed != held[DIFF_NAME]:
+                    problems.append(f"{DIFF_NAME} does not match recomputed role diff")
+            if diff_doc is not None:
+                try:
+                    applied = apply_role_diff(previous_snapshots, diff_doc)
+                    expected = {rel: _snapshot_keys(b) for rel, b in current_snapshots.items()}
+                    for rel in sorted(set(applied) | set(expected)):
+                        if applied.get(rel, set()) != expected.get(rel, set()):
+                            problems.append(f"applying {DIFF_NAME} to previous snapshots does not yield current {rel}")
+                except ValueError as err:
+                    problems.append(f"applying {DIFF_NAME} failed: {err}")
+
+    return problems
+
+
+def verify(
+    statement_bytes: bytes,
+    index: dict,
+    objects: dict[str, bytes],
+    absent=(),
+    *,
+    previous_statement: bytes | None = None,
+    previous_snapshots: dict[str, bytes] | None = None,
+    current_snapshots: dict[str, bytes] | None = None,
+) -> list[str]:
     """What is wrong with a role's statement, read from the published bytes alone: `index` is the role's form
     index, `objects` every object it names (the statement may be among them and is then left out; an object the
     index does not name, such as the index itself, is never read). An object named in `absent` may be missing
@@ -218,15 +505,16 @@ def verify(statement_bytes: bytes, index: dict, objects: dict[str, bytes], absen
             problems.append("the statement is not in canonical form")
     except (ValueError, CanonError) as err:
         return [f"the statement is not canonical JSON: {err}"]
-    accepted_types = {PREDICATE_TYPE, *(t for t, _ in LEGACY_STATEMENT_TYPES)}
+    accepted_types = {t for t, _ in ACCEPTED_STATEMENT_TYPES}
     if not isinstance(st, dict) or st.get("_type") != STATEMENT_TYPE or st.get("predicateType") not in accepted_types:
         return ["not an epoch statement (in-toto Statement v1 with Rezono's predicate type)"]
     shape = _shape(st)
     if shape:
         return problems + shape
     p = st["predicate"]
-    if (st["predicateType"], p["format"]) not in {(PREDICATE_TYPE, FORMAT), *LEGACY_STATEMENT_TYPES}:
-        return [f"predicate format is not {FORMAT}"]
+    if (st["predicateType"], p["format"]) not in ACCEPTED_STATEMENT_TYPES:
+        want_fmt = FORMAT_V2 if st["predicateType"] == PREDICATE_TYPE_V2 else FORMAT
+        return [f"predicate format is not {want_fmt}"]
 
     listed = {o["name"]: o["sha256"] for o in index.get("objects", [])}
     if NAME in listed and listed[NAME] != hashlib.sha256(statement_bytes).hexdigest():
@@ -296,6 +584,15 @@ def verify(statement_bytes: bytes, index: dict, objects: dict[str, bytes], absen
                 problems.append("hashes.json is not the hashes of the rows")
         except ValueError:
             problems.append("hashes.json is not JSON")
+    if st["predicateType"] == PREDICATE_TYPE_V2:
+        problems.extend(_verify_chain(
+            p, subjects, held,
+            previous_statement=previous_statement,
+            previous_snapshots=previous_snapshots,
+            current_snapshots=current_snapshots,
+        ))
+    elif any(x is not None for x in (previous_statement, previous_snapshots, current_snapshots)):
+        problems.append("predecessor chain inputs were given for a v1 statement")
     return problems
 
 
