@@ -39,7 +39,7 @@ def _load_shortcut_budgets():
         "loop/shortcut-budget.json must be canonical sorted JSON with 2-space indent and trailing LF"
     )
     try:
-        import shortcut_budgets
+        from loop import shortcut_budgets
     except ImportError as exc:
         raise AssertionError(f"loop/shortcut_budgets.py does not exist yet: {exc}") from exc
     return shortcut_budgets, parsed
