@@ -25,9 +25,10 @@ and WHERE as the rule. It reads the final relations, so it is never part of a re
 """
 
 from dataclasses import replace
+from fractions import Fraction
 
 from . import calc_sql, feldera_names
-from .rules import BOOLEAN, Condition, calc_input_table, const_type, is_var, upper
+from .rules import BOOLEAN, Condition, IRError, calc_input_table, const_type, is_var, upper
 from .sqltext import literal, q
 
 OPS = {"eq": "=", "ne": "<>", "lt": "<", "le": "<=", "gt": ">", "ge": ">=", "add": "+", "sub": "-", "mul": "*", "div": "/"}
@@ -90,8 +91,16 @@ def lit_sql(term, typ):
 
 
 def _parse_rational(term):
-    num_s, _, den_s = term.partition("/")
-    return int(num_s), int(den_s or "1")
+    num_s, sep, den_s = term.partition("/")
+    try:
+        num = int(num_s)
+        den = int(den_s) if sep else 1
+    except ValueError as exc:
+        raise IRError("bad_constant", f"{term!r} is not a rational") from exc
+    if den == 0:
+        raise IRError("bad_constant", f"{term!r}: rational denominator cannot be zero")
+    frac = Fraction(num, den)
+    return frac.numerator, frac.denominator
 
 
 def _sql_col_names(cols):
@@ -272,6 +281,14 @@ class RuleSQL:
                     filters.append(f"{q(col.name + '_d')} = CAST({rd} AS BIGINT)")
                 else:
                     filters.append(f"{q(col.name)} = {lit_sql(t, col.type)}")
+        if a.function != "count":
+            over_col = next((c for c in rel.values + rel.row_columns if c.name == a.over), None)
+            if over_col is not None and over_col.type == "rational":
+                raise IRError(
+                    "bad_aggregate",
+                    f"{self.rule.id}: SQL lowering does not support {a.function} aggregate over rational column "
+                    f"{rel.name}.{a.over}",
+                )
         fn = "COUNT(*)" if a.function == "count" else f"{a.function.upper()}({q(a.over)})"
         sel, group_cols, on_parts = [], [], []
         for j, (t, col) in enumerate(keys):
@@ -416,12 +433,45 @@ def functional_candidate_select(prog, rule, dialect="feldera"):
     return r.select(cols)
 
 
+def _empty_functional_candidates(rel, dialect):
+    """Typed empty candidate set for a `role: functional` relation with zero rules."""
+    cols = []
+    for j, c in enumerate(rel.key):
+        if c.type == "rational":
+            cols.append(f'CAST(0 AS BIGINT) AS {q(f"k{j}_n")}')
+            cols.append(f'CAST(1 AS BIGINT) AS {q(f"k{j}_d")}')
+        elif c.type == "string":
+            cols.append(f"CAST('' AS VARCHAR) AS {q(f'k{j}')}")
+        elif c.type == "integer":
+            cols.append(f'CAST(0 AS BIGINT) AS {q(f"k{j}")}')
+        else:
+            cols.append(f'FALSE AS {q(f"k{j}")}')
+    cols.append('CAST(0 AS BIGINT) AS "__st"')
+    cols.append("CAST('' AS VARCHAR) AS \"__rsn\"")
+    vtype = rel.value.type
+    if vtype == "rational":
+        cols.append('CAST(0 AS BIGINT) AS "__vn"')
+        cols.append('CAST(1 AS BIGINT) AS "__vd"')
+    elif vtype == "string":
+        cols.append("CAST('' AS VARCHAR) AS \"__v\"")
+    elif vtype == "integer":
+        cols.append('CAST(0 AS BIGINT) AS "__v"')
+    else:
+        cols.append('FALSE AS "__v"')
+    # Calcite requires a FROM clause before WHERE. The constant source contributes no facts.
+    source = " FROM (VALUES (1)) AS seed(n)" if dialect == "feldera" else ""
+    return f"SELECT {', '.join(cols)}{source} WHERE FALSE"
+
+
 def functional_select(prog, name, dialect="feldera"):
     """One co-located NOT NULL `(key..., state, reason, value)` query for a `role: functional` relation,
     LEFT JOINed over its declared closed domain (decisions/language-rezono-1.md, sections 2, 4 and 5.4)."""
     rel = prog.relations[name]
     dom = prog.relations[rel.domain]
-    cand_sql = "\nUNION\n".join(functional_candidate_select(prog, r, dialect) for r in prog.rules_for(name))
+    cand_sql = (
+        "\nUNION\n".join(functional_candidate_select(prog, r, dialect) for r in prog.rules_for(name))
+        or _empty_functional_candidates(rel, dialect)
+    )
     key_specs = []
     for j, (c, dc) in enumerate(zip(rel.key, dom.key)):
         if c.type == "rational":
@@ -461,6 +511,7 @@ def functional_select(prog, name, dialect="feldera"):
     empty_state = rel.empty_state or "unknown"
     empty_reason = rel.empty_reason or ("empty" if empty_state == "not_applicable" else "no_value")
     if vtype == "rational":
+        bad_rat = '(g."__known_cnt" > 0 AND g."__min_vd" <= 0)'
         conflict = '(g."__known_cnt" > 0 AND (g."__min_vn" <> g."__max_vn" OR g."__min_vd" <> g."__max_vd"))'
         is_known = ('(g."__cnt" IS NOT NULL AND g."__max_st" = 0 AND g."__known_cnt" > 0 '
                     'AND g."__min_vn" = g."__max_vn" AND g."__min_vd" = g."__max_vd" AND g."__min_vd" > 0)')
@@ -471,6 +522,7 @@ def functional_select(prog, name, dialect="feldera"):
              f'ELSE CAST(1 AS BIGINT) END AS BIGINT) AS {q(rel.value.name + "_d")}'),
         ]
     else:
+        bad_rat = None
         conflict = '(g."__known_cnt" > 0 AND g."__min_v" <> g."__max_v")'
         is_known = '(g."__cnt" IS NOT NULL AND g."__max_st" = 0 AND g."__known_cnt" > 0 AND g."__min_v" = g."__max_v")'
         if vtype == "string":
@@ -487,9 +539,12 @@ def functional_select(prog, name, dialect="feldera"):
                 f'CASE WHEN {is_known} THEN (COALESCE(g."__min_v", 0) = 1) ELSE FALSE END AS {q(rel.value.name)}'
             ]
 
+    bad_rat_state = f"WHEN {bad_rat} THEN 'invalid' " if bad_rat else ""
+    bad_rat_reason = f"WHEN {bad_rat} THEN 'invalid_rational' " if bad_rat else ""
     state_expr = (
         f'CAST(CASE WHEN g."__cnt" IS NULL THEN {literal(empty_state)} '
         f'WHEN g."__max_st" = 3 THEN \'invalid\' '
+        f'{bad_rat_state}'
         f'WHEN {conflict} THEN \'invalid\' '
         f'WHEN g."__max_st" = 2 THEN \'unknown\' '
         f'WHEN g."__max_st" = 1 THEN \'not_applicable\' '
@@ -498,6 +553,7 @@ def functional_select(prog, name, dialect="feldera"):
     reason_expr = (
         f'CAST(CASE WHEN g."__cnt" IS NULL THEN {literal(empty_reason)} '
         f'WHEN g."__max_st" = 3 THEN COALESCE(g."__rsn_inv", \'invalid\') '
+        f'{bad_rat_reason}'
         f'WHEN {conflict} THEN \'multiple_values\' '
         f'WHEN g."__max_st" = 2 THEN COALESCE(g."__rsn_unk", \'no_value\') '
         f'WHEN g."__max_st" = 1 THEN COALESCE(g."__rsn_na", \'empty\') '
