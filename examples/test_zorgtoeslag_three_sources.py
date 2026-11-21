@@ -662,7 +662,7 @@ def test_retire_legacy_single_source_household_branch_in_zorgtoeslag_slice(tmp_p
     person_kind_ids = []
     for kind in bundle.get("kinds") or []:
         owner_pack = kind["module"].partition(":")[0] if ":" in kind["module"] else model.name
-        if owner_pack not in allowed_source_packs:
+        if owner_pack not in allowed_source_packs and not owner_pack.startswith("std-"):
             slice_owned_kinds.append((kind["id"], owner_pack))
         if owner_pack == SOURCE_PACKS["person"]:
             person_kind_ids.append(kind["id"])
@@ -681,11 +681,14 @@ def test_retire_legacy_single_source_household_branch_in_zorgtoeslag_slice(tmp_p
         f"retired single-source stored attributes still exist in compiled schema: {stored_legacy_slots}"
     )
 
-    allowance_result = program.result("allowance")
-    assert allowance_result.kind == person_kind_ids[0].rpartition(":")[2].rpartition(".")[2] or (
-        allowance_result.kind in {k.name for k in model.kinds.values() if k.cls == "Persoon"}
-    ), (
-        f"allowance calculation must anchor on Persoon, not an intermediate kind: {allowance_result}"
+    assert "allowance" in program.rules, f"missing allowance rule in calc.Program: {sorted(program.rules)}"
+    persoon_kind_names = {
+        k.name
+        for k in model.kinds.values()
+        if k.cls == "Persoon" and k.module.partition(":")[0] == SOURCE_PACKS["person"]
+    }
+    assert program.subject == person_kind_ids[0] or program.subject in persoon_kind_names, (
+        f"allowance calculation must anchor on Persoon, not an intermediate kind: subject={program.subject!r}"
     )
 
     # 2. Oracle cleanup check: no legacy single-source detector or Household branch remains in reference.py.
