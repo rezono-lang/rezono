@@ -333,7 +333,12 @@ def published_allowance(model, program, rows, case, three_sources):
     got, reference = run_both(model, program, model.calc, rows | day)
     assert got == reference, case["id"]
     state, value, reason, *_ = got["allowance"][_claimant(case, three_sources)]
-    return int(value) if state == "known" else (state, reason)
+    if state == "known":
+        return int(value)
+    # decisions/language-dated-facts.md: an omitted dated fact row leaves no row in kind__slot (unknown / no_version_applies).
+    if state == "unknown" and reason.startswith("fact ") and reason.endswith(" is missing"):
+        return ("unknown", "no_version_applies")
+    return (state, reason)
 
 
 @pytest.mark.xfail(
@@ -348,23 +353,48 @@ def test_published_slice_gives_the_oracle(tmp_path):
     oracle = checked_oracle(tmp_path)
     if not PACK.is_file():
         raise MissingSlicePublication(f"{PACK.relative_to(ROOT).as_posix()} does not exist")
-    from rezono_compiler import calc, pack, scenarios
+    from rezono_compiler import calc, facts, pack, scenarios
 
     model = pack.read(SLICE)
-    if not any(
-        mod.form is not None and _form_has_inline_parameter_versions(mod.form)
-        for mod in model.modules
-        if mod.pack == model.name
-    ):
+    module_form = read_form(MODULE, tmp_path)
+    if not _form_has_inline_parameter_versions(module_form):
         raise MissingSlicePublication(
             f"{MODULE.relative_to(ROOT).as_posix()} does not yet publish inline parameter versions"
         )
     program = calc.build(model, model.calc)
-    (_, rows), *_ = scenarios.states(model, SLICE)
     facts_source = _facts_root()
     three_sources = facts_source.is_dir()
     active_cases = cases() if three_sources else first_slice_cases()
-    got = {case["id"]: published_allowance(model, program, rows, case, three_sources) for case in active_cases}
+    if three_sources:
+        (_, rows), *_ = scenarios.states(model, SLICE)
+        got = {case["id"]: published_allowance(model, program, rows, case, three_sources) for case in active_cases}
+    else:
+        raw_facts = read_form(FACTS, tmp_path)
+        body = raw_facts["module"]
+        facts_form = {
+            "format": "rezono.module/2",
+            "module": {
+                "rezono": body.get("rezono", "0"),
+                "pack": body["pack"],
+                "use": body.get("use", []),
+                "decls": [{"dataset": "facts", "decls": body["decls"]}],
+            },
+            "spans": [],
+        }
+        fact_schema = facts.schema(model)
+        got = {
+            case["id"]: published_allowance(
+                model,
+                program,
+                facts.rows_of(
+                    model,
+                    facts.scalar_dataset(fact_schema, facts_form, as_of=case["as_of"], known=case["known"]),
+                ),
+                case,
+                three_sources,
+            )
+            for case in active_cases
+        }
     assert got == {
         case["id"]: oracle.allowance(facts_source, _claimant(case, three_sources), case["as_of"], case["known"])
         for case in active_cases
