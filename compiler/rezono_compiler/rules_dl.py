@@ -33,7 +33,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from . import rules as ir
-from .diagnostics import Diagnosed, Diagnostic
+from .diagnostics import PERSONAL_SLOT_CODE, Diagnosed, Diagnostic, personal_slot_message
 
 TOKEN = re.compile(r"""
     (?P<ws>[ \t\r]+) | (?P<nl>\n) | (?P<line>//[^\n]*) | (?P<block>/\*.*?\*/) |
@@ -88,7 +88,7 @@ class ProtectedTable(RuleError, Diagnosed):
 
 class PersonalSlotError(RuleError, Diagnosed):
     """A rule reads a slot marked `personal` (decisions/personal-data-handling.md, R054)."""
-    CODE = "R054"
+    CODE = PERSONAL_SLOT_CODE
 
     def __init__(self, items: list[tuple[str, str, tuple[str, int, int] | None]]):
         messages = [message for message, _, _ in items]
@@ -713,8 +713,7 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
         for n, _, atom_line in atoms:
             if n in personal_tables:
                 personal_errors.append((
-                    f"{where}:{atom_line}: rule cannot read personal slot `{personal_tables[n]}` ({n}) (R054); "
-                    "personal slots live outside the reasoning layer so discarding a person's key erases their data",
+                    personal_slot_message(personal_tables[n], where=f"{where}:{atom_line}", table=n),
                     f"{where}:{atom_line}",
                     (where, atom_line, 1),
                 ))

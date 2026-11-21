@@ -14,6 +14,18 @@ from dataclasses import dataclass
 from . import spans
 
 COMPILE_ERROR = "compile_error"  # the code of an error whose site gives none of its own yet
+PERSONAL_SLOT_CODE = "R054"  # decisions/personal-data-handling.md §3
+PERSONAL_SLOT_MESSAGE = (
+    "rule cannot read personal slot `{slot}`{detail}; "
+    "personal slots live outside the reasoning layer so discarding a person's key erases their data"
+)
+
+
+def personal_slot_message(slot: str, *, where: str = "", table: str = "", include_code: bool = True) -> str:
+    """Format the R054 refusal sentence for a personal slot."""
+    detail = (f" ({table})" if table else "") + (f" ({PERSONAL_SLOT_CODE})" if include_code else "")
+    body = PERSONAL_SLOT_MESSAGE.format(slot=slot, detail=detail)
+    return f"{where}: {body}" if where else body
 
 
 @dataclass(frozen=True)

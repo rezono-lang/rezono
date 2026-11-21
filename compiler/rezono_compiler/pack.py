@@ -1726,9 +1726,8 @@ def condition(pack: Pack, kind: Kind, rule: ClassRule, c: Condition, errors: lis
         return
     if s.personal:
         errors.append(diagnostics.Diagnostic(
-            "R054",
-            f"{where}: rule cannot read personal slot `{s.element}` (R054); "
-            "personal slots live outside the reasoning layer so discarding a person's key erases their data",
+            diagnostics.PERSONAL_SLOT_CODE,
+            diagnostics.personal_slot_message(s.element, where=where),
         ))
         return
     f = c.facets
@@ -1744,6 +1743,12 @@ def condition(pack: Pack, kind: Kind, rule: ClassRule, c: Condition, errors: lis
 def path_end(pack: Pack, kind: str, path: list[str], where: str, errors: list[str]) -> str | None:
     for step in path:
         s = pack.slot(kind, step)
+        if s is not None and s.personal:
+            errors.append(diagnostics.Diagnostic(
+                diagnostics.PERSONAL_SLOT_CODE,
+                diagnostics.personal_slot_message(s.element, where=where),
+            ))
+            return None
         if s is None or not s.arrow:
             errors.append(f"{where}: '{step}' is not an arrow of {kind}")
             return None

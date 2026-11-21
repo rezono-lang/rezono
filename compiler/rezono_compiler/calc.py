@@ -21,7 +21,7 @@ from typing import cast
 
 
 from . import rules_dl, spans, strict_yaml, types
-from .diagnostics import COMPILE_ERROR, Diagnostic
+from .diagnostics import COMPILE_ERROR, PERSONAL_SLOT_CODE, Diagnostic, personal_slot_message
 from .names import ISO_DATE
 from .pack import CompileError, Pack, Slot, located, renamed
 
@@ -547,11 +547,8 @@ def attribute(pack: Pack, element: str, where: str) -> Slot:
     if s is None or s.arrow:
         raise CompileError(f"calc.binding: {where}: '{element}' is not an attribute of the pack")
     if s.personal:
-        msg = (
-            f"calc.binding: {where}: rule cannot read personal slot `{s.element}` (R054); "
-            "personal slots live outside the reasoning layer so discarding a person's key erases their data"
-        )
-        raise CompileError(msg, [Diagnostic("R054", msg)])
+        msg = personal_slot_message(s.element, where=f"calc.binding: {where}")
+        raise CompileError(msg, [Diagnostic(PERSONAL_SLOT_CODE, msg)])
     return s
 
 
@@ -600,11 +597,8 @@ def bind_choice(pack: Pack, parameters: Slot | None, b: dict | None, kind: str |
             want = "a text" if sql_type == "VARCHAR" else "a date"
             raise CompileError(f"calc.binding: parameter_choice: {role}: '{element}' is not {want} attribute of '{kind}'")
         if s.personal:
-            msg = (
-                f"calc.binding: parameter_choice: {role}: rule cannot read personal slot `{s.element}` (R054); "
-                "personal slots live outside the reasoning layer so discarding a person's key erases their data"
-            )
-            raise CompileError(msg, [Diagnostic("R054", msg)])
+            msg = personal_slot_message(s.element, where=f"calc.binding: parameter_choice: {role}")
+            raise CompileError(msg, [Diagnostic(PERSONAL_SLOT_CODE, msg)])
         out[role] = s
     return out
 
@@ -629,11 +623,8 @@ def bind_inputs(pack: Pack, subject: str, b: dict | None) -> dict | None:
         if not ok:
             raise CompileError(f"calc.binding: inputs.{role}: '{kind}.{name}' does not fit")
         if s is not None and s.personal:
-            msg = (
-                f"calc.binding: inputs.{role}: rule cannot read personal slot `{s.element}` (R054); "
-                "personal slots live outside the reasoning layer so discarding a person's key erases their data"
-            )
-            raise CompileError(msg, [Diagnostic("R054", msg)])
+            msg = personal_slot_message(s.element, where=f"calc.binding: inputs.{role}")
+            raise CompileError(msg, [Diagnostic(PERSONAL_SLOT_CODE, msg)])
         return s
 
     return {"kind": kind, "subject": slot("subject", None, arrow=True), "fact": slot("fact", "VARCHAR"),
@@ -819,9 +810,8 @@ def check_leaves(pack, subject, inputs, parameters, versions, rules, node, where
             if s is not None and s.personal:
                 errors.append(
                     Diagnostic(
-                        "R054",
-                        f"calc.binding: {where}: rule cannot read personal slot `{s.element}` (R054); "
-                        "personal slots live outside the reasoning layer so discarding a person's key erases their data",
+                        PERSONAL_SLOT_CODE,
+                        personal_slot_message(s.element, where=f"calc.binding: {where}"),
                     )
                 )
                 continue

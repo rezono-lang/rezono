@@ -251,8 +251,14 @@ def rule_ir(e: Epoch):
     if not isinstance(doc, dict) or doc.get("format") != "rezono.rules/1":
         # Only the compiler's rule IR has a relation catalogue; the checker's older minimal form has none.
         raise Blocked(f"{PROOFS}: the rule definitions are not the rule IR (format rezono.rules/1)")
+    bundle_doc = None
+    if e.bundle:
+        try:
+            bundle_doc = json.loads(e.bundle)
+        except (TypeError, ValueError) as err:
+            raise Blocked(f"{PROOFS}: the schema bundle is not JSON: {err}") from err
     try:
-        rules = load_rules(doc)
+        rules = load_rules(doc, bundle=bundle_doc)
         derived = derived_relations(doc, rules)
     except (ValueError, KeyError, TypeError) as err:
         raise Blocked(f"{PROOFS}: the checker refuses the rule definitions: {err!r}") from err

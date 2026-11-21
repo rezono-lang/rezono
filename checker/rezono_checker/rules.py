@@ -381,8 +381,134 @@ def _check_access_boundary(rules: Rules) -> None:
             raise ValueError(f"{rel} cannot depend on a functional derivation")
 
 
-def load_rules(doc: dict) -> dict:
-    """Read rule definitions and check their stratification. Raises ValueError on bad input."""
+def personal_tables(bundle: dict) -> dict[str, str]:
+    """The attribute tables marked `personal: true` in a schema bundle (`{table: slot_id}`).
+
+    Independent defense in depth (decisions/personal-data-handling.md §3): fails closed on
+    malformed bundle sections, non-boolean `personal` flags, personal arrows, or personal
+    attributes without a consistent table name. Raises ValueError.
+    """
+    if not isinstance(bundle, dict):
+        raise ValueError("schema bundle must be a mapping")
+    raw_kinds = bundle.get("kinds")
+    if raw_kinds is not None and not isinstance(raw_kinds, list):
+        raise ValueError("schema bundle kinds must be a list")
+    kind_tables: dict[str, str] = {}
+    for entry in raw_kinds or ():
+        if not isinstance(entry, dict):
+            raise ValueError("schema bundle kind must be a mapping")
+        kid = entry.get("id")
+        if isinstance(kid, str) and kid:
+            ktable = entry.get("table", kid)
+            if not isinstance(ktable, str) or not ktable:
+                raise ValueError(f"kind {kid!r}: table must be a non-empty string")
+            kind_tables[kid] = ktable
+
+    raw_arrows = bundle.get("arrows")
+    if raw_arrows is not None and not isinstance(raw_arrows, list):
+        raise ValueError("schema bundle arrows must be a list")
+    non_personal_tables: set[str] = set()
+    for entry in raw_arrows or ():
+        if not isinstance(entry, dict):
+            raise ValueError("schema bundle arrow must be a mapping")
+        if "personal" in entry:
+            if type(entry["personal"]) is not bool:
+                raise ValueError(f"arrow {entry.get('id', entry.get('table', ''))!r}: personal must be a boolean")
+            if entry["personal"]:
+                raise ValueError(f"arrow {entry.get('id', entry.get('table', ''))!r}: arrows cannot be marked personal")
+        if isinstance(entry.get("table"), str) and entry["table"]:
+            non_personal_tables.add(entry["table"])
+
+    raw_attrs = bundle.get("attributes")
+    if raw_attrs is not None and not isinstance(raw_attrs, list):
+        raise ValueError("schema bundle attributes must be a list")
+    tables: dict[str, str] = {}
+    for entry in raw_attrs or ():
+        if not isinstance(entry, dict):
+            raise ValueError("schema bundle attribute must be a mapping")
+        has_personal = "personal" in entry
+        if has_personal and type(entry["personal"]) is not bool:
+            raise ValueError(
+                f"attribute {entry.get('id', entry.get('table', ''))!r}: personal must be a boolean"
+            )
+        raw_table = entry.get("table")
+        kind = entry.get("kind")
+        name = entry.get("name")
+        derived_table = (
+            f"{kind_tables.get(kind, kind)}__{name}"
+            if isinstance(kind, str) and kind and isinstance(name, str) and name
+            else None
+        )
+        if not (has_personal and entry["personal"]):
+            if isinstance(raw_table, str) and raw_table:
+                non_personal_tables.add(raw_table)
+            elif derived_table:
+                non_personal_tables.add(derived_table)
+            continue
+        if "table" in entry:
+            if not isinstance(raw_table, str) or not raw_table:
+                raise ValueError(f"personal attribute {entry.get('id', '')!r}: table must be a non-empty string")
+            if derived_table is not None and raw_table != derived_table:
+                raise ValueError(
+                    f"personal attribute {entry.get('id', raw_table)!r}: table {raw_table!r} "
+                    f"does not match {derived_table!r}"
+                )
+            table = raw_table
+        elif derived_table is not None:
+            table = derived_table
+        else:
+            raise ValueError(f"personal attribute {entry.get('id', '')!r}: missing table or kind/name")
+        label = (
+            entry["id"]
+            if isinstance(entry.get("id"), str) and entry["id"]
+            else (f"{kind}.{name}" if isinstance(kind, str) and kind and isinstance(name, str) and name else table)
+        )
+        tables[table] = label
+
+    for table, label in list(tables.items()):
+        state_table = f"{table}_state"
+        if state_table not in non_personal_tables:
+            tables.setdefault(state_table, label)
+    return tables
+
+
+def check_personal_slots(rules: dict, bundle: dict) -> None:
+    """Refuse any rule whose head, body, aggregate, or functional domain references a personal attribute
+    table from `bundle` (`bundle/schema-bundle.json`, decisions/personal-data-handling.md §3, R054).
+    Raises ValueError."""
+    personal = personal_tables(bundle)
+    if not personal:
+        return
+    for func in sorted(getattr(rules, "functionals", {}).values(), key=lambda f: f.name):
+        if func.domain in personal:
+            slot = personal[func.domain]
+            raise ValueError(
+                f"{func.name}: functional domain cannot read personal slot `{slot}` ({func.domain}) (R054)"
+            )
+    for rule in sorted(rules.values(), key=lambda r: r.id):
+        if rule.head.relation in personal:
+            slot = personal[rule.head.relation]
+            raise ValueError(
+                f"{rule.id}: rule cannot reference personal slot `{slot}` ({rule.head.relation}) (R054)"
+            )
+        for b in rule.body:
+            if b.atom.relation in personal:
+                slot = personal[b.atom.relation]
+                raise ValueError(
+                    f"{rule.id}: rule cannot read personal slot `{slot}` ({b.atom.relation}) (R054)"
+                )
+        for a in rule.aggregates:
+            if a.atom.relation in personal:
+                slot = personal[a.atom.relation]
+                raise ValueError(
+                    f"{rule.id}: rule cannot read personal slot `{slot}` ({a.atom.relation}) (R054)"
+                )
+
+
+def load_rules(doc: dict, *, bundle: dict | None = None) -> dict:
+    """Read rule definitions and check their stratification. When `bundle` (`bundle/schema-bundle.json`)
+    is given, also refuse any rule referencing an attribute marked `personal: true` (R054).
+    Raises ValueError on bad input."""
     fmt = doc.get("format")
     ir = fmt is not None
     if ir and fmt not in FORMATS:
@@ -496,6 +622,8 @@ def load_rules(doc: dict) -> dict:
     if ir:
         check_worlds(doc, rules)
         _check_access_boundary(rules)
+    if bundle is not None:
+        check_personal_slots(rules, bundle)
     return rules
 
 
