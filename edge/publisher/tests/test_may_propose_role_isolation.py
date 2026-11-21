@@ -201,15 +201,6 @@ may_propose(r, "item", i) :- role__capability(r, "propose"), item(i).
     return pack_dir
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "M2: decisions/reader-served-seal-fields.md: section 2; access.for_role must strictly filter "
-        "may_propose rows and witnesses to the target role so other roles' proposal grants never leak "
-        "across roles even when all rule premises are readable."
-    ),
-)
 def test_may_propose_never_leaks_other_roles_rows_or_witnesses():
     kinds = {"item", "role"}
     columns = {
@@ -329,15 +320,6 @@ def test_may_propose_never_leaks_other_roles_rows_or_witnesses():
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "M2: decisions/reader-served-seal-fields.md: section 2; a filtered role holding propose capability "
-        "must receive its own may_propose rows in its published slice even when that role does not have "
-        "may_read(role, 'role', role)."
-    ),
-)
 def test_may_propose_self_grant_delivered_without_reading_role_kind(tmp_path: Path):
     # 1. Direct publisher access filter check: summary has capability [read, propose] and reads item-a,
     #    but has NO may_read("summary", "role", "summary").

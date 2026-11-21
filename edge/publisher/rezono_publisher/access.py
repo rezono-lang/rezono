@@ -51,6 +51,7 @@ _POSITIVE = re.compile(r"^[1-9][0-9]*$")
 
 ACCESS = "may_read"
 READ_FULL = "may_read_full"
+PROPOSE = "may_propose"
 ROLE = "role"  # the kind of the roles (std-access): `role(r)` in a read rule means every role the pack names
 # The mapping of a role to a generic capability (std-access, the multivalued slot `capability` of Role): in a
 # read rule, `role__capability(r, "c")` means every role the pack maps to capability `c` (roles in two layers).
@@ -151,6 +152,19 @@ def _calc_input_types(rules: dict) -> dict[str, str]:
     return out
 
 
+def _propose_role(key: str) -> str | None:
+    """Return the target role of a canonical 3-column may_propose key, or None if malformed."""
+    try:
+        parts = json.loads(key)
+    except (TypeError, ValueError):
+        return None
+    if (isinstance(parts, list) and len(parts) == 3
+            and all(isinstance(p, str) for p in parts)
+            and canonical_json(parts) == key):
+        return parts[0]
+    return None
+
+
 class Scope:
     """What one filtered role may read in an epoch, decided before any derived row is looked at."""
 
@@ -158,6 +172,10 @@ class Scope:
         grants = rows.get(ACCESS, ())
         if any(len(r) != 3 for r in grants):
             raise ValueError(f"{ACCESS} has three columns (role, kind, id): an element is typed")
+        propose_grants = rows.get(PROPOSE, ())
+        if any(len(r) != 3 for r in propose_grants):
+            raise ValueError(f"{PROPOSE} has three columns (role, kind, id): an element is typed")
+        self.role = role
         self.allowed = {(r[1], r[2]) for r in grants if r[0] == role}
         self.chains = ancestors(kinds, parents)
         self.columns = columns
@@ -294,6 +312,8 @@ class Scope:
             deps[r["head"]["relation"]] |= {a["relation"] for a in r.get("aggregates", ())}
 
         def full(rel, seen) -> bool:
+            if rel == PROPOSE:
+                return False
             if rel not in self.derived:
                 return rel in base
             if rel in seen:
@@ -326,7 +346,10 @@ class Scope:
 
     def usable(self, w: dict, readable: dict) -> bool:
         """A witness instance the role could check itself: readable base premises, negation and aggregates
-        only where `closes` allows. Derived positive premises are left to `choose`."""
+        only where `closes` allows. Derived positive premises are left to `choose`.
+        `may_propose` conclusions are strictly scoped to this role."""
+        if w["conclusion"]["relation"] == PROPOSE and _propose_role(w["conclusion"]["key"]) != self.role:
+            return False
         for p in w.get("premises", ()):
             rel = p["row"]["relation"]
             if p["polarity"] != "positive":
@@ -390,9 +413,32 @@ def for_role(rows: dict, kinds, parents: dict, columns: dict, rules: dict, witne
                              and row[2] == "known" and row[3] == ""
                              and _calc_value_valid(row[1], column_type)}
             chosen = choose([w for w in witnesses if scope.usable(w, keys)], scope.derived)
+    propose_keys = {key for rel, key in chosen if rel == PROPOSE}
+    if PROPOSE in scope.derived:
+        extra_role = (
+            {key_text([role])}
+            if scope.named and ROLE not in scope.derived and ROLE not in scope.withheld
+            else set()
+        ) - keys.get(ROLE, set())
+        extra_caps = (
+            {key_text([role, cap]) for cap in scope.capabilities}
+            if CAPABILITY not in scope.derived and CAPABILITY not in scope.withheld
+            else set()
+        ) - keys.get(CAPABILITY, set())
+        if extra_role or extra_caps:
+            self_keys = dict(keys)
+            if extra_role:
+                self_keys[ROLE] = keys.get(ROLE, set()) | extra_role
+            if extra_caps:
+                self_keys[CAPABILITY] = keys.get(CAPABILITY, set()) | extra_caps
+            propose_chosen = choose([w for w in witnesses if scope.usable(w, self_keys)], scope.derived)
+            propose_keys |= {key for rel, key in propose_chosen if rel == PROPOSE}
     for rel, rs in rows.items():
         if rel in scope.derived:
-            readable[rel] = [r for r in rs if (rel, key_text(r)) in chosen]
+            if rel == PROPOSE:
+                readable[rel] = [r for r in rs if len(r) == 3 and r[0] == role and key_text(r) in propose_keys]
+            else:
+                readable[rel] = [r for r in rs if (rel, key_text(r)) in chosen]
     sees = {"witnesses": sorted(chosen.values(), key=order), "hidden": []}
     if calc_ir is not None:
         sees["calc_witnesses"] = sorted(visible.values(), key=ref)
