@@ -26,7 +26,7 @@ and WHERE as the rule. It reads the final relations, so it is never part of a re
 
 from dataclasses import replace
 
-from . import feldera_names
+from . import calc_sql, feldera_names
 from .rules import BOOLEAN, Condition, calc_input_table, const_type, is_var, upper
 from .sqltext import literal, q
 
@@ -89,6 +89,59 @@ def lit_sql(term, typ):
     return literal(term)
 
 
+def _parse_rational(term):
+    num_s, _, den_s = term.partition("/")
+    return int(num_s), int(den_s or "1")
+
+
+def _sql_col_names(cols):
+    out = []
+    for c in cols:
+        if c.type == "rational":
+            out.extend([c.name + "_n", c.name + "_d"])
+        else:
+            out.append(c.name)
+    return out
+
+
+def _state_bearing_aggregate(prog, rule, agg):
+    """When a functional rule aggregates over a relation with an unconstrained `state` column,
+    return `(state_col, reason_col_or_None)` so strict Appendix A.3 four-state propagation applies."""
+    if prog.relations[rule.head.relation].role != "functional":
+        return None
+    rel = prog.relations[agg.atom.relation]
+    state_col = next(
+        (c for t, c in zip(agg.atom.terms, rel.row_columns)
+         if c.name == "state" and c.type == "string" and t == "_"),
+        None,
+    )
+    if state_col is None:
+        return None
+    reason_col = next(
+        (c for t, c in zip(agg.atom.terms, rel.row_columns)
+         if c.name == "reason" and c.type == "string" and t == "_"),
+        None,
+    )
+    return state_col, reason_col
+
+
+def has_rational(prog, relations=None):
+    """True if any selected relation or its dependencies declares a rational column."""
+    names = set(prog.relations) if relations is None else set(relations)
+    if relations is not None:
+        for n in list(names):
+            if n in prog.relations:
+                names |= prog.deps(n)
+    for n in names:
+        rel = prog.relations.get(n)
+        if rel is None:
+            continue
+        cols = rel.key + rel.values + ((rel.value,) if rel.value else ())
+        if any(c.type == "rational" for c in cols):
+            return True
+    return False
+
+
 def var_col(v):
     return "v_" + v[1:]
 
@@ -114,11 +167,12 @@ class RuleSQL:
         rename = rename or {}
         self.prog, self.rule = prog, rule
         self.frm, self.where, self.env, self.types = [], [], {}, {}
+        self.agg_states = []
         for i, b in enumerate(x for x in rule.body if x.polarity == "positive"):
             rel = prog.relations[b.atom.relation]
             alias = f"t{i}"
             on = []
-            self._match(b.atom.terms, rel.key, alias, on)
+            self._match(b.atom.terms, rel.row_columns, alias, on)
             # Split Feldera receives the exported logical name. DuckDB shares a database with the
             # original calculation, so its four-column projection needs a separate name.
             source = relation_source(rel) if dialect == "duckdb" else rel.name
@@ -156,16 +210,45 @@ class RuleSQL:
                 self.where.append(typed_condition(c, self.term(c.left, "string"), self.term(c.right, "string"), dialect))
                 continue
             t = self.types.get(c.left) or self.types.get(c.right) or const_type(c.left)
-            self.where.append(f"{self.term(c.left, t)} {OPS[c.op]} {self.term(c.right, t)}")
+            if t == "rational":
+                ln, ld = self.rat_term(c.left)
+                rn, rd = self.rat_term(c.right)
+                self.where.append(f"rezono_cmp({ln}, {ld}, {rn}, {rd}) {OPS[c.op]} 0")
+            else:
+                self.where.append(f"{self.term(c.left, t)} {OPS[c.op]} {self.term(c.right, t)}")
         for i, b in enumerate(x for x in rule.body if x.polarity == "negative"):
             rel = prog.relations[b.atom.relation]
             alias = f"n{i}"
-            conds = [f"{alias}.{q(col.name)} = {self.term(t, col.type)}" for t, col in zip(b.atom.terms, rel.key)]
+            conds = []
+            for t, col in zip(b.atom.terms, rel.row_columns):
+                if col.type == "rational":
+                    tn, td = self.rat_term(t)
+                    conds.append(f"{alias}.{q(col.name + '_n')} = {tn}")
+                    conds.append(f"{alias}.{q(col.name + '_d')} = {td}")
+                else:
+                    conds.append(f"{alias}.{q(col.name)} = {self.term(t, col.type)}")
             self.frm.append(f"LEFT JOIN {q(rename.get(rel.name, rel.name))} AS {alias} ON {' AND '.join(conds) or 'TRUE'}")
-            self.where.append(f"{alias}.{q(rel.key[0].name)} IS NULL")
+            first_col = rel.key[0]
+            first_sql = q(first_col.name + "_n") if first_col.type == "rational" else q(first_col.name)
+            self.where.append(f"{alias}.{first_sql} IS NULL")
 
     def _match(self, terms, cols, alias, where):
         for t, col in zip(terms, cols):
+            if col.type == "rational":
+                n_expr = f"{alias}.{q(col.name + '_n')}"
+                d_expr = f"{alias}.{q(col.name + '_d')}"
+                if is_var(t):
+                    if t in self.env:
+                        en, ed = self.env[t]
+                        where.append(f"{n_expr} = {en}")
+                        where.append(f"{d_expr} = {ed}")
+                    else:
+                        self.env[t], self.types[t] = (n_expr, d_expr), "rational"
+                else:
+                    rn, rd = _parse_rational(t)
+                    where.append(f"{n_expr} = CAST({rn} AS BIGINT)")
+                    where.append(f"{d_expr} = CAST({rd} AS BIGINT)")
+                continue
             expr = f"{alias}.{q(col.name)}"
             if is_var(t):
                 if t in self.env:
@@ -179,22 +262,75 @@ class RuleSQL:
         rel = self.prog.relations[a.atom.relation]
         alias = f"g{i}"
         keys, filters = [], []
-        for t, col in zip(a.atom.terms, rel.key):
+        for t, col in zip(a.atom.terms, rel.row_columns):
             if is_var(t):
                 keys.append((t, col))
             elif t != "_":
-                filters.append(f"{q(col.name)} = {lit_sql(t, col.type)}")
+                if col.type == "rational":
+                    rn, rd = _parse_rational(t)
+                    filters.append(f"{q(col.name + '_n')} = CAST({rn} AS BIGINT)")
+                    filters.append(f"{q(col.name + '_d')} = CAST({rd} AS BIGINT)")
+                else:
+                    filters.append(f"{q(col.name)} = {lit_sql(t, col.type)}")
         fn = "COUNT(*)" if a.function == "count" else f"{a.function.upper()}({q(a.over)})"
-        sel = [f"{q(col.name)} AS k{j}" for j, (_, col) in enumerate(keys)] + [f"CAST({fn} AS BIGINT) AS r"]
+        sel, group_cols, on_parts = [], [], []
+        for j, (t, col) in enumerate(keys):
+            if col.type == "rational":
+                sel.append(f"{q(col.name + '_n')} AS k{j}_n")
+                sel.append(f"{q(col.name + '_d')} AS k{j}_d")
+                group_cols.extend([q(col.name + "_n"), q(col.name + "_d")])
+                en, ed = self.env[t]
+                on_parts.append(f"{alias}.k{j}_n = {en}")
+                on_parts.append(f"{alias}.k{j}_d = {ed}")
+            else:
+                sel.append(f"{q(col.name)} AS k{j}")
+                group_cols.append(q(col.name))
+                on_parts.append(f"{alias}.k{j} = {self.env[t]}")
+        state_info = _state_bearing_aggregate(self.prog, self.rule, a)
+        sel.append(f"CAST({fn} AS BIGINT) AS r")
+        if state_info is not None:
+            state_col, reason_col = state_info
+            st_q = q(state_col.name)
+            rsn_col = q(reason_col.name) if reason_col is not None else "CAST('' AS VARCHAR)"
+            sel.extend([
+                "CAST(COUNT(*) AS BIGINT) AS cnt",
+                (f"CAST(MAX(CASE {st_q} WHEN 'invalid' THEN 3 WHEN 'unknown' THEN 2 "
+                 f"WHEN 'not_applicable' THEN 1 ELSE 0 END) AS BIGINT) AS st"),
+                f"MIN(CASE WHEN {st_q} = 'invalid' THEN {rsn_col} END) AS rsn_inv",
+                f"MIN(CASE WHEN {st_q} = 'unknown' THEN {rsn_col} END) AS rsn_unk",
+                f"MIN(CASE WHEN {st_q} = 'not_applicable' THEN {rsn_col} END) AS rsn_na",
+            ])
         sub = f"SELECT {', '.join(sel)} FROM {q(rel.name)}"
         if filters:
             sub += " WHERE " + " AND ".join(filters)
-        if keys:
-            sub += " GROUP BY " + ", ".join(q(col.name) for _, col in keys)
-        elif a.function in ("min", "max"):
+        if group_cols:
+            sub += " GROUP BY " + ", ".join(group_cols)
+        elif a.function in ("min", "max") and state_info is None:
             sub += " HAVING COUNT(*) > 0"   # a global min or max over nothing has no conclusion, not NULL
-        on = " AND ".join(f"{alias}.k{j} = {self.env[t]}" for j, (t, _) in enumerate(keys)) or "TRUE"
-        if not self.frm:
+        on = " AND ".join(on_parts) or "TRUE"
+        if state_info is not None:
+            if not self.frm:
+                self.frm.append(f"({sub}) AS {alias}")
+            else:
+                self.frm.append(f"LEFT JOIN ({sub}) AS {alias} ON {on}")
+            self.env[a.var] = f"COALESCE({alias}.r, CAST(0 AS BIGINT))"
+            if a.function in ("count", "sum"):
+                st_code = f"COALESCE({alias}.st, CAST(0 AS BIGINT))"
+                rsn = (f"CAST(CASE COALESCE({alias}.st, CAST(0 AS BIGINT)) "
+                       f"WHEN 3 THEN COALESCE({alias}.rsn_inv, 'invalid') "
+                       f"WHEN 2 THEN COALESCE({alias}.rsn_unk, 'no_value') "
+                       f"WHEN 1 THEN COALESCE({alias}.rsn_na, 'empty') "
+                       f"ELSE '' END AS VARCHAR)")
+            else:
+                st_code = (f"CASE WHEN {alias}.cnt IS NULL OR {alias}.cnt = 0 THEN CAST(1 AS BIGINT) "
+                           f"ELSE COALESCE({alias}.st, CAST(0 AS BIGINT)) END")
+                rsn = (f"CAST(CASE WHEN {alias}.cnt IS NULL OR {alias}.cnt = 0 THEN 'empty' "
+                       f"WHEN {alias}.st = 3 THEN COALESCE({alias}.rsn_inv, 'invalid') "
+                       f"WHEN {alias}.st = 2 THEN COALESCE({alias}.rsn_unk, 'no_value') "
+                       f"WHEN {alias}.st = 1 THEN COALESCE({alias}.rsn_na, 'empty') "
+                       f"ELSE '' END AS VARCHAR)")
+            self.agg_states.append((st_code, rsn))
+        elif not self.frm:
             # A body of aggregates only: no literal to join to, so the first subquery is the FROM itself. It
             # has no key, hence no GROUP BY: one row for count and sum (over nothing: 0 and NULL, read as 0
             # below), one row or none for min and max.
@@ -211,6 +347,12 @@ class RuleSQL:
     def term(self, t, typ):
         return self.env[t] if is_var(t) else lit_sql(t, typ)
 
+    def rat_term(self, t):
+        if is_var(t):
+            return self.env[t]
+        rn, rd = _parse_rational(t)
+        return f"CAST({rn} AS BIGINT)", f"CAST({rd} AS BIGINT)"
+
     def from_where(self):
         return f"FROM {' '.join(self.frm)}" + (" WHERE " + " AND ".join(self.where) if self.where else "")
 
@@ -221,14 +363,172 @@ class RuleSQL:
 def rule_select(prog, rule, rename=None, dialect="feldera"):
     rel = prog.relations[rule.head.relation]
     r = RuleSQL(prog, rule, rename, dialect)
-    return r.select([(r.term(t, c.type), c.name) for t, c in zip(rule.head.terms, rel.key)])
+    cols = []
+    for t, c in zip(rule.head.terms, rel.key):
+        if c.type == "rational":
+            tn, td = r.rat_term(t)
+            cols.append((tn, c.name + "_n"))
+            cols.append((td, c.name + "_d"))
+        else:
+            cols.append((r.term(t, c.type), c.name))
+    return r.select(cols)
+
+
+def functional_candidate_select(prog, rule, dialect="feldera"):
+    """One rule of a `role: functional` relation as candidate rows `(k..., __st, __rsn, __v)`
+    (or `(__vn, __vd)` for rational values)."""
+    rel = prog.relations[rule.head.relation]
+    r = RuleSQL(prog, rule, dialect=dialect)
+    cols = []
+    for j, (t, c) in enumerate(zip(rule.head.terms[:-1], rel.key)):
+        if c.type == "rational":
+            tn, td = r.rat_term(t)
+            cols.append((tn, f"k{j}_n"))
+            cols.append((td, f"k{j}_d"))
+        else:
+            expr = r.term(t, c.type)
+            if c.type == "string":
+                expr = f"CAST({expr} AS VARCHAR)"
+            cols.append((expr, f"k{j}"))
+    if not r.agg_states:
+        st_expr, rsn_expr = "CAST(0 AS BIGINT)", "CAST('' AS VARCHAR)"
+    elif len(r.agg_states) == 1:
+        st_expr, rsn_expr = r.agg_states[0]
+    else:
+        worst = f"GREATEST({', '.join(s for s, _ in r.agg_states)})"
+        st_expr = f"CAST({worst} AS BIGINT)"
+        rsn_expr = ("CAST(CASE "
+                    + " ".join(f"WHEN {s} = {worst} THEN {rs}" for s, rs in r.agg_states)
+                    + " ELSE '' END AS VARCHAR)")
+    cols.append((st_expr, "__st"))
+    cols.append((rsn_expr, "__rsn"))
+    vt, vc = rule.head.terms[-1], rel.value
+    if vc.type == "rational":
+        vn, vd = r.rat_term(vt)
+        cols.append((f"rezono_add_n({vn}, {vd}, CAST(0 AS BIGINT), CAST(1 AS BIGINT))", "__vn"))
+        cols.append((f"rezono_add_d({vn}, {vd}, CAST(0 AS BIGINT), CAST(1 AS BIGINT))", "__vd"))
+    elif vc.type == "string":
+        cols.append((f"CAST({r.term(vt, 'string')} AS VARCHAR)", "__v"))
+    elif vc.type == "integer":
+        cols.append((f"CAST({r.term(vt, 'integer')} AS BIGINT)", "__v"))
+    else:
+        cols.append((r.term(vt, "boolean"), "__v"))
+    return r.select(cols)
+
+
+def functional_select(prog, name, dialect="feldera"):
+    """One co-located NOT NULL `(key..., state, reason, value)` query for a `role: functional` relation,
+    LEFT JOINed over its declared closed domain (decisions/language-rezono-1.md, sections 2, 4 and 5.4)."""
+    rel = prog.relations[name]
+    dom = prog.relations[rel.domain]
+    cand_sql = "\nUNION\n".join(functional_candidate_select(prog, r, dialect) for r in prog.rules_for(name))
+    key_specs = []
+    for j, (c, dc) in enumerate(zip(rel.key, dom.key)):
+        if c.type == "rational":
+            key_specs.append((f"k{j}_n", dc.name + "_n", c.name + "_n"))
+            key_specs.append((f"k{j}_d", dc.name + "_d", c.name + "_d"))
+        else:
+            key_specs.append((f"k{j}", dc.name, c.name))
+    agg_cols = [q(ck) for ck, _, _ in key_specs] + [
+        'CAST(COUNT(*) AS BIGINT) AS "__cnt"',
+        'CAST(MAX("__st") AS BIGINT) AS "__max_st"',
+        'CAST(SUM(CASE WHEN "__st" = 0 THEN 1 ELSE 0 END) AS BIGINT) AS "__known_cnt"',
+        'MIN(CASE WHEN "__st" = 3 THEN "__rsn" END) AS "__rsn_inv"',
+        'MIN(CASE WHEN "__st" = 2 THEN "__rsn" END) AS "__rsn_unk"',
+        'MIN(CASE WHEN "__st" = 1 THEN "__rsn" END) AS "__rsn_na"',
+    ]
+    vtype = rel.value.type
+    if vtype == "rational":
+        agg_cols += [
+            'MIN(CASE WHEN "__st" = 0 THEN "__vn" END) AS "__min_vn"',
+            'MAX(CASE WHEN "__st" = 0 THEN "__vn" END) AS "__max_vn"',
+            'MIN(CASE WHEN "__st" = 0 THEN "__vd" END) AS "__min_vd"',
+            'MAX(CASE WHEN "__st" = 0 THEN "__vd" END) AS "__max_vd"',
+        ]
+    elif vtype == "boolean":
+        agg_cols += [
+            'MIN(CASE WHEN "__st" = 0 THEN CASE WHEN "__v" THEN 1 ELSE 0 END END) AS "__min_v"',
+            'MAX(CASE WHEN "__st" = 0 THEN CASE WHEN "__v" THEN 1 ELSE 0 END END) AS "__max_v"',
+        ]
+    else:
+        agg_cols += [
+            'MIN(CASE WHEN "__st" = 0 THEN "__v" END) AS "__min_v"',
+            'MAX(CASE WHEN "__st" = 0 THEN "__v" END) AS "__max_v"',
+        ]
+    group_by = ", ".join(q(ck) for ck, _, _ in key_specs)
+    agg_sql = f'SELECT {", ".join(agg_cols)} FROM "__cand" GROUP BY {group_by}'
+
+    empty_state = rel.empty_state or "unknown"
+    empty_reason = rel.empty_reason or ("empty" if empty_state == "not_applicable" else "no_value")
+    if vtype == "rational":
+        conflict = '(g."__known_cnt" > 0 AND (g."__min_vn" <> g."__max_vn" OR g."__min_vd" <> g."__max_vd"))'
+        is_known = ('(g."__cnt" IS NOT NULL AND g."__max_st" = 0 AND g."__known_cnt" > 0 '
+                    'AND g."__min_vn" = g."__max_vn" AND g."__min_vd" = g."__max_vd" AND g."__min_vd" > 0)')
+        val_selects = [
+            (f'CAST(CASE WHEN {is_known} THEN COALESCE(g."__min_vn", CAST(0 AS BIGINT)) '
+             f'ELSE CAST(0 AS BIGINT) END AS BIGINT) AS {q(rel.value.name + "_n")}'),
+            (f'CAST(CASE WHEN {is_known} THEN COALESCE(g."__min_vd", CAST(1 AS BIGINT)) '
+             f'ELSE CAST(1 AS BIGINT) END AS BIGINT) AS {q(rel.value.name + "_d")}'),
+        ]
+    else:
+        conflict = '(g."__known_cnt" > 0 AND g."__min_v" <> g."__max_v")'
+        is_known = '(g."__cnt" IS NOT NULL AND g."__max_st" = 0 AND g."__known_cnt" > 0 AND g."__min_v" = g."__max_v")'
+        if vtype == "string":
+            val_selects = [
+                f"CAST(CASE WHEN {is_known} THEN COALESCE(g.\"__min_v\", '') ELSE '' END AS VARCHAR) AS {q(rel.value.name)}"
+            ]
+        elif vtype == "integer":
+            val_selects = [
+                (f'CAST(CASE WHEN {is_known} THEN COALESCE(g."__min_v", CAST(0 AS BIGINT)) '
+                 f'ELSE CAST(0 AS BIGINT) END AS BIGINT) AS {q(rel.value.name)}')
+            ]
+        else:
+            val_selects = [
+                f'CASE WHEN {is_known} THEN (COALESCE(g."__min_v", 0) = 1) ELSE FALSE END AS {q(rel.value.name)}'
+            ]
+
+    state_expr = (
+        f'CAST(CASE WHEN g."__cnt" IS NULL THEN {literal(empty_state)} '
+        f'WHEN g."__max_st" = 3 THEN \'invalid\' '
+        f'WHEN {conflict} THEN \'invalid\' '
+        f'WHEN g."__max_st" = 2 THEN \'unknown\' '
+        f'WHEN g."__max_st" = 1 THEN \'not_applicable\' '
+        f'ELSE \'known\' END AS VARCHAR) AS "state"'
+    )
+    reason_expr = (
+        f'CAST(CASE WHEN g."__cnt" IS NULL THEN {literal(empty_reason)} '
+        f'WHEN g."__max_st" = 3 THEN COALESCE(g."__rsn_inv", \'invalid\') '
+        f'WHEN {conflict} THEN \'multiple_values\' '
+        f'WHEN g."__max_st" = 2 THEN COALESCE(g."__rsn_unk", \'no_value\') '
+        f'WHEN g."__max_st" = 1 THEN COALESCE(g."__rsn_na", \'empty\') '
+        f'ELSE \'\' END AS VARCHAR) AS "reason"'
+    )
+    dom_cols = ", ".join(q(dk) for _, dk, _ in key_specs)
+    out_keys = [f"d.{q(dk)} AS {q(ok)}" for _, dk, ok in key_specs]
+    join_on = " AND ".join(f"g.{q(ck)} = d.{q(dk)}" for ck, dk, _ in key_specs)
+    dom_source = relation_source(dom) if dialect == "duckdb" else dom.name
+    return (
+        f'WITH "__cand" AS (\n{cand_sql}\n),\n'
+        f'"__agg" AS (\n{agg_sql}\n)\n'
+        f"SELECT {', '.join(out_keys + [state_expr, reason_expr] + val_selects)}\n"
+        f"FROM (SELECT DISTINCT {dom_cols} FROM {q(dom_source)}) AS d\n"
+        f'LEFT JOIN "__agg" AS g ON {join_on}'
+    )
 
 
 def witness_select(prog, rule, dialect="feldera"):
     r = RuleSQL(prog, rule, dialect=dialect)
     if not rule.variables:
         return r.select([("TRUE", EMPTY_SUBSTITUTION)])
-    return r.select([(r.term(v, r.types[v]), var_col(v)) for v in rule.variables])
+    cols = []
+    for v in rule.variables:
+        if r.types[v] == "rational":
+            vn, vd = r.rat_term(v)
+            cols.append((vn, var_col(v) + "_n"))
+            cols.append((vd, var_col(v) + "_d"))
+        else:
+            cols.append((r.term(v, r.types[v]), var_col(v)))
+    return r.select(cols)
 
 
 def _col_defs(cols):
@@ -276,7 +576,7 @@ def functional_checks(prog, name):
     rel = prog.relations[name]
     if rel.role != "functional" or rel.conflict_policy != "block":
         return []
-    cols = ", ".join(q(c.name) for c in rel.key)
+    cols = ", ".join(q(c) for c in _sql_col_names(rel.key))
     return [(f"{name}__invalid", f"SELECT {cols} FROM {q(name)} WHERE {q('state')} = 'invalid'")]
 
 
@@ -322,7 +622,13 @@ def wants_witness(prog, rule, witnesses):
 def empty_relation(rel, dialect):
     """A declaration-only extension is empty, with typed columns and no implicit grants or NULLs."""
     empty = {"string": "", "integer": "0", "boolean": "false"}
-    cols = [f"{lit_sql(empty[c.type], c.type)} AS {q(c.name)}" for c in rel.key]
+    cols = []
+    for c in rel.key:
+        if c.type == "rational":
+            cols.append(f"CAST(0 AS BIGINT) AS {q(c.name + '_n')}")
+            cols.append(f"CAST(1 AS BIGINT) AS {q(c.name + '_d')}")
+        else:
+            cols.append(f"{lit_sql(empty[c.type], c.type)} AS {q(c.name)}")
     # Calcite requires a FROM clause before WHERE. The constant source contributes no facts.
     source = " FROM (VALUES (1)) AS seed(n)" if dialect == "feldera" else ""
     return f"SELECT {', '.join(cols)}{source} WHERE FALSE"
@@ -337,16 +643,22 @@ def feldera(prog, witnesses=False, relations=None, inputs=None, tables=True):
     used = set()
     for name in relations:
         used |= prog.deps(name)
-    stmts = _base_tables(prog, names=None if relations == prog.derived() else used) if tables else []
+    stmts = []
+    if has_rational(prog, relations):
+        stmts.append(calc_sql.feldera_functions().strip())
+    if tables:
+        stmts += _base_tables(prog, names=None if relations == prog.derived() else used)
     stmts += _input_tables(prog, inputs)
     for name in relations:
         rel = prog.relations[name]
-        if name in prog.bounds:
+        if rel.role == "functional":
+            body = functional_select(prog, name, dialect="feldera")
+        elif name in prog.bounds:
             body = unrolled(prog, name)
         else:
             body = "\nUNION\n".join(rule_select(prog, r) for r in prog.rules_for(name)) or empty_relation(rel, "feldera")
             if prog.recursive(name):
-                cols = ", ".join(f"{q(c.name)} {SQL_TYPE[c.type]} NOT NULL" for c in rel.key)
+                cols = ", ".join(_col_defs(rel.key))
                 stmts.append(f"DECLARE RECURSIVE VIEW {q(name)} ({cols});")
         stmts.append(f"CREATE MATERIALIZED VIEW {q(name)} AS\n{body};")
         for r in prog.rules_for(name):
@@ -380,8 +692,10 @@ def duckdb_tables(prog):
 
 
 def duckdb_relation(prog, name):
-    """Statements that (re)compute one derived relation as a table, from lower ones."""
+    """Statements that (re)compute one derived or functional relation as a table, from lower ones."""
     rel = prog.relations[name]
+    if rel.role == "functional":
+        return [f"CREATE OR REPLACE TABLE {q(name)} AS\n{functional_select(prog, name, dialect='duckdb')};"]
     rules = prog.rules_for(name)
     if name in prog.bounds:
         return [f"CREATE OR REPLACE TABLE {q(name)} AS\n{unrolled(prog, name, 'duckdb')};"]
@@ -394,7 +708,7 @@ def duckdb_relation(prog, name):
         raise NotImplementedError(f"{name}: the batch backend takes linear recursion with one recursive rule "
                                   "and at least one base rule")
     cte = f"{name}__rec"
-    cols = ", ".join(q(c.name) for c in rel.key)
+    cols = ", ".join(q(c) for c in _sql_col_names(rel.key))
     body = ("\nUNION\n".join(rule_select(prog, r, dialect="duckdb") for r in base) + "\nUNION\n"
             + rule_select(prog, rec[0], rename={name: cte}, dialect="duckdb"))
     return [f"CREATE OR REPLACE TABLE {q(name)} AS\nWITH RECURSIVE {q(cte)}({cols}) AS (\n{body}\n) SELECT * FROM {q(cte)};"]
@@ -403,6 +717,8 @@ def duckdb_relation(prog, name):
 def duckdb_program(prog, witnesses=False, relations=None):
     """All derived relations in evaluation order, plus witness tables, as one batch script."""
     out = [DUCKDB_MACROS] if divides(prog) else []
+    if has_rational(prog, relations):
+        out.append(calc_sql.DUCKDB_MACROS)
     for name in prog.derived():
         if relations is not None and name not in relations:
             continue
