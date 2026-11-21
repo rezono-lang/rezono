@@ -483,8 +483,7 @@ def _assert_all_rezono_modules_pinned() -> None:
 import rezono_checker
 from rezono_checker.evidence import Evidence
 from rezono_checker.rules import derived_relations, load_rules, load_seals
-from rezono_compiler import emit as compiler_emit
-from rezono_compiler import pack as compiler_pack
+from rezono_compiler import __main__ as compiler_cli
 
 _assert_all_rezono_modules_pinned()
 
@@ -496,14 +495,18 @@ build_dir = pinned_root / "build"
 if not (build_dir / "pack.yaml").is_file():
     raise FileNotFoundError("pinned checkout is missing build/pack.yaml")
 
-model = compiler_pack.read(build_dir)
-compiled = compiler_emit.compile_pack(model)
-rules_doc = json.loads(compiled.get("ir/rules.json") or EMPTY_RULES)
+compiled_dir = pinned_root / "_compiled"
+rc = compiler_cli.main(["compile", str(build_dir), str(compiled_dir)])
+if rc != 0:
+    raise RuntimeError(f"pinned build/ pack compilation failed with exit {rc}")
+rules_file = compiled_dir / "ir" / "rules.json"
+rules_doc = json.loads(rules_file.read_text(encoding="utf-8")) if rules_file.is_file() else json.loads(EMPTY_RULES)
 rules_obj = load_rules(rules_doc)
 derived = derived_relations(rules_doc, rules_obj)
 seals = load_seals(rules_doc)
-bundle_doc = json.loads(compiled["bundle/schema-bundle.json"])
-calc_doc = json.loads(compiled["ir/calc.json"]) if compiled.get("ir/calc.json") else None
+bundle_doc = json.loads((compiled_dir / "bundle" / "schema-bundle.json").read_text(encoding="utf-8"))
+calc_file = compiled_dir / "ir" / "calc.json"
+calc_doc = json.loads(calc_file.read_text(encoding="utf-8")) if calc_file.is_file() else None
 
 manifest_path = Path(payload["manifest_path"]).resolve()
 archive_root = Path(payload["archive_dir"]).resolve()
