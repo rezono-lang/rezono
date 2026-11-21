@@ -656,7 +656,10 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
                     raise DuplicateDerivation(f"{where}:{line}: {name} is declared twice (also in "
                                               f"{owners.get(name, 'the schema')})")
                 decls[name], owners[name], declared_in[name] = list(cols), module, source
-                options[name] = (None, False, False, None, None, False)
+                meta = dict(meta)
+                if (explain := meta.pop("explain", None)) is not None:
+                    explains[name] = explain
+                options[name] = (explain, False, False, None, None, False)
                 functional[name] = meta
             elif s[0] == "io":
                 io.append((where, source, *s[1:]))

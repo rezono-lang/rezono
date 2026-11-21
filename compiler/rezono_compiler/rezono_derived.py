@@ -76,6 +76,7 @@ class Lowered:
     sources: tuple[rules_dl.NativeSource, ...] = ()
     notes: dict[str, Note] = field(default_factory=dict)  # relation -> its sentence and source
     properties: dict[str, tuple[str, str]] = field(default_factory=dict)  # relation `<k>_<d>` -> (k, d)
+    note_owners: dict[str, str] = field(default_factory=dict)  # relation -> owning pack name
 
 
 class Refused(Exception):
@@ -122,17 +123,23 @@ class Signature:
     enum_type: str | None = None  # for an enum result: the pack enum id
     note_source: str | None = None  # optional @ source from declaration or selected version
     as_of: tuple[str, str] | None = None  # (valid_at, known_at) evaluation date
+    explain: str | None = None  # "materialize" or "on_demand"
+    invariant: bool = False
+    extend: bool = False
+    fold: bool = False
 
 
 def lower_pack(root: str, mods: Iterable[modules.Module], names: modules.Names, pack) -> Lowered:
     """The rules of every rezono 1 derivation of the pack being compiled, as native sources for the assembler."""
     from .pack import CompileError
 
-    root_v1 = [m for m in mods if m.pack == root and m.form is not None and m.form.get("format") == REZONO_1_FORMAT]
-    pack_as_ofs = {ao for m in root_v1 if (ao := module_as_of(m.form)) is not None}
-    default_as_of = next(iter(pack_as_ofs)) if len(pack_as_ofs) == 1 else None
-    found = [m for m in mods if m.form is not None and m.form.get("format") == REZONO_1_FORMAT
-             and any(_derivations(m.form))]
+    v1_mods = [m for m in mods if m.form is not None and m.form.get("format") == REZONO_1_FORMAT]
+    as_ofs_by_pack: dict[str, set[tuple[str, str]]] = {}
+    for m in v1_mods:
+        if (ao := module_as_of(m.form)) is not None:
+            as_ofs_by_pack.setdefault(m.pack, set()).add(ao)
+    default_as_of = {p: next(iter(aos)) for p, aos in as_ofs_by_pack.items() if len(aos) == 1}
+    found = [m for m in v1_mods if any(_derivations(m.form))]
     if not found:
         return Lowered()
     refused: list[Diagnostic] = []
@@ -146,12 +153,10 @@ def lower_pack(root: str, mods: Iterable[modules.Module], names: modules.Names, 
             message = f"{where}: cannot read the positions of its derivations"
             raise CompileError(message, [Diagnostic("R000", message, where)]) from error
         site = Site(where, text, {place["at"]: place["start"] for place in module.form["spans"]})
-        sites[module.rel] = site
-        mod_as_of = module_as_of(module.form) or default_as_of
+        sites[module.id] = site
+        mod_as_of = module_as_of(module.form) or default_as_of.get(module.pack)
         for at, decl, owner in _derivations(module.form):
             try:
-                if module.pack != root:
-                    site.refuse(at, "a derivation of an imported rezono 1 pack is not lowered yet")
                 signature = _signature(site, module, names, pack, at, decl, owner, mod_as_of)
                 if signature.relation in signatures:
                     site.refuse(at, f"{signature.relation} is derived twice")
@@ -167,7 +172,7 @@ def lower_pack(root: str, mods: Iterable[modules.Module], names: modules.Names, 
     ordered = sorted(signatures.items(), key=lambda item: (item[1].result != "set", item[0]))
     opened: set[str] | None = None
     for name, signature in ordered:
-        out = statements.setdefault(signature.module.rel, ([], []))
+        out = statements.setdefault(signature.module.id, ([], []))
         if signature.result == "functional" and opened is None:
             opened = _opened(statements, pack)
         if signature.result == "functional" and signature.domain in opened:
@@ -183,15 +188,16 @@ def lower_pack(root: str, mods: Iterable[modules.Module], names: modules.Names, 
             line, column = signature.site.place(f"{signature.at}/means" if "means" in decl else signature.at)
             lowered.notes[name] = Note(decl.get("means"), signature.note_source, signature.site.file, line, column,
                                        f"{signature.at}/means")
+            lowered.note_owners[name] = signature.module.pack
         if signature.property is not None:
             lowered.properties[name] = (signature.kind, signature.property)
     if refused:
         raise CompileError("\n".join(map(str, refused)), refused)
     sources = []
     for module in found:
-        stmts, columns = statements.get(module.rel, ([], []))
+        stmts, columns = statements.get(module.id, ([], []))
         if stmts:
-            site = sites[module.rel]
+            site = sites[module.id]
             sources.append(rules_dl.NativeSource(module.pack, module.file.stem, site.file, site.text,
                                                  tuple(stmts), tuple(columns)))
     lowered.sources = tuple(sources)
@@ -348,9 +354,54 @@ def _validate_table(site: Site, at: str, table: object, card: object) -> None:
             site.refuse(rat, f"table row needs {len(inputs)} cells and a value")
 
 
+def _options(site: Site, at: str, decl: dict, boolean: bool) -> tuple[str | None, bool, bool, bool]:
+    """Validate and extract `(explain, invariant, extend, fold)` from `decl['options']`."""
+    explain: str | None = None
+    invariant = extend = fold = False
+    raw = decl.get("options")
+    if raw is None:
+        return explain, invariant, extend, fold
+    if not isinstance(raw, list):
+        site.refuse(f"{at}/options", "options must be a list", "R048")
+    for index, option in enumerate(raw):
+        opt_at = f"{at}/options/{index}"
+        if not isinstance(option, dict):
+            site.refuse(opt_at, "invalid derivation option", "R048")
+        if set(option) == {"invariant"} and option["invariant"] is True:
+            if invariant:
+                site.refuse(opt_at, "repeated `invariant` option on derivation", "R048")
+            invariant = True
+        elif "invariant" in option:
+            site.refuse(opt_at, "`invariant intermediate` on a rezono 1 derivation is not lowered yet")
+        elif set(option) == {"extend"} and option["extend"] is True:
+            if extend:
+                site.refuse(opt_at, "repeated `extend` option on derivation", "R048")
+            extend = True
+        elif set(option) == {"explain"} and isinstance(option["explain"], str):
+            mode = option["explain"]
+            if mode == "fold":
+                if fold:
+                    site.refuse(opt_at, "repeated `explain fold` option on derivation", "R048")
+                fold = True
+            elif mode in ("materialize", "on_demand"):
+                if explain is not None:
+                    site.refuse(opt_at, "repeated `explain` storage mode on derivation", "R048")
+                explain = mode
+            else:
+                site.refuse(opt_at, f"`explain` is materialize, on_demand or fold, not {mode!r}", "R048")
+        else:
+            site.refuse(opt_at, f"option {option!r} on a rezono 1 derivation is not lowered yet")
+    if not boolean:
+        for flag, label in ((invariant, "invariant"), (extend, "extend"), (fold, "explain fold")):
+            if flag:
+                site.refuse(at, f"`{label}` applies to Bool set derivations, not functional derivations", "R048")
+    return explain, invariant, extend, fold
+
+
 def _signature(site: Site, module: modules.Module, names: modules.Names, pack, at: str, decl: dict,
                owner: dict | None, as_of: tuple[str, str] | None = None) -> Signature:
-    allowed = ({"derived", "type", "card", "value", "means", "source", "unit", "unless", "versions", "table", "totality"}
+    allowed = ({"derived", "type", "card", "value", "means", "source", "unit", "unless", "versions", "table", "totality",
+                "options"}
                | ({"params", "over"} if owner is None else set()))
     if extra := sorted(set(decl) - allowed):
         site.refuse(at, f"`{extra[0]}` on a rezono 1 derivation is not lowered yet")
@@ -358,8 +409,6 @@ def _signature(site: Site, module: modules.Module, names: modules.Names, pack, a
         site.refuse(at, "a `table` stands alone under its derived value")
     if "value" in decl and "versions" in decl:
         site.refuse(at, "a derivation cannot declare both `=` and `versions`")
-    if not any(k in decl for k in ("value", "versions", "table", "unless")):
-        site.refuse(at, "a derivation needs `=`, `versions`, `unless` or `table`")
     if "unit" in decl and (not isinstance(decl["unit"], str) or not decl["unit"]):
         site.refuse(f"{at}/unit", "unit must be non-empty text")
     card = decl.get("card")
@@ -373,6 +422,9 @@ def _signature(site: Site, module: modules.Module, names: modules.Names, pack, a
         _validate_table(site, at, decl["table"], card)
     result_type = _type(site, names, pack, module, at, decl.get("type"))
     boolean = result_type == ("scalar", "boolean") and card is None
+    explain, invariant, extend, fold = _options(site, at, decl, boolean)
+    if not extend and not any(k in decl for k in ("value", "versions", "table", "unless")):
+        site.refuse(at, "a derivation needs `=`, `versions`, `unless` or `table`")
     if "totality" in decl:
         if decl["totality"] != "total":
             site.refuse(at, f"invalid totality {decl['totality']!r}")
@@ -411,6 +463,7 @@ def _signature(site: Site, module: modules.Module, names: modules.Names, pack, a
     signature.enum_type = _enum_name(names, pack, module, decl.get("type"))
     _, signature.note_source = validate_note(site, at, decl)
     signature.as_of = as_of
+    signature.explain, signature.invariant, signature.extend, signature.fold = explain, invariant, extend, fold
     return signature
 
 
@@ -528,8 +581,14 @@ class Lowering:
     def helper_or_none(self, name: str) -> str | None:
         return name if name in self._declared_helpers else None
 
-    def declare(self, name: str, columns: list[tuple[str, str]]) -> None:
-        self.statements.append(("decl", name, columns, self.line, None, False, False, None, False, None, False))
+    def declare(self, name: str, columns: list[tuple[str, str]], *, primary: bool = False) -> None:
+        if primary:
+            self.statements.append((
+                "decl", name, columns, self.line,
+                self.sig.explain, self.sig.invariant, False, None, self.sig.extend, None, self.sig.fold,
+            ))
+        else:
+            self.statements.append(("decl", name, columns, self.line, None, False, False, None, False, None, False))
 
     def rule(self, head: str, terms: list[tuple], body: list[tuple]) -> None:
         self.statements.append(("rule", (head, terms, self.line), body, self.line))
@@ -602,10 +661,15 @@ class Lowering:
         ))
         self.columns.append(self.column)
 
+    def emit_functional_decl(self, key_columns: list[tuple[str, str]], meta: dict) -> None:
+        if self.sig.explain is not None:
+            meta["explain"] = self.sig.explain
+        self.statements.append(("functional", self.sig.relation, key_columns, self.line, meta))
+
     def emit_functional(self, at: str, meta: dict, branches: tuple[ValBranch, ...], state_rel: str | None) -> None:
         if self.sig.decl.get("totality") == "total":
             meta["conflict_policy"] = "block"
-        self.statements.append(("functional", self.sig.relation, self._key_cols, self.line, meta))
+        self.emit_functional_decl(self._key_cols, meta)
         if not branches and state_rel is None:
             self.rule(self.sig.relation, self.key_terms() + [self.sentinel_term(at)],
                       self.domain() + [("cmp", "eq", ("const", "1", "integer"), ("const", "0", "integer"))])
@@ -626,7 +690,7 @@ class Lowering:
             if sig.result == "set":
                 if "table" in decl or "unless" in decl:
                     self.site.refuse(sig.at, "`table` and `unless` on a Bool set derivation are not lowered yet")
-                self.declare(sig.relation, key_columns)
+                self.declare(sig.relation, key_columns, primary=True)
                 if status == "one":
                     ver_idx, ver = picked
                     for alternative in self.alternatives(f"{sig.at}/versions/{ver_idx}/value", ver["value"]):
@@ -661,9 +725,10 @@ class Lowering:
         if sig.result == "set":
             if "table" in decl or "unless" in decl:
                 self.site.refuse(sig.at, "`table` and `unless` on a Bool set derivation are not lowered yet")
-            self.declare(sig.relation, key_columns)
-            for alternative in self.alternatives(value_at, value):
-                self.rule(sig.relation, self.key_terms(), self.domain() + alternative)
+            self.declare(sig.relation, key_columns, primary=True)
+            if value is not None:
+                for alternative in self.alternatives(value_at, value):
+                    self.rule(sig.relation, self.key_terms(), self.domain() + alternative)
             return
         self._check_functional_domain()
         meta = {"domain": sig.domain, "value": {"name": "value", "type": sig.value_type}, "conflict_policy": "publish"}
@@ -678,14 +743,14 @@ class Lowering:
             meta |= {"empty_state": "not_applicable" if sig.optional else "unknown", "empty_reason": "no_match"}
             if decl.get("totality") == "total":
                 meta["conflict_policy"] = "block"
-            self.statements.append(("functional", sig.relation, key_columns, self.line, meta))
+            self.emit_functional_decl(key_columns, meta)
             self.one(value_at, value["agg"])
         elif set(value) == {"agg"} and isinstance(value["agg"], list) and value["agg"][:1] == ["count"]:
             if sig.value_type != "integer":
                 self.site.refuse(value_at, "a count is a whole number: declare the derivation `Int`", "R003")
             if decl.get("totality") == "total":
                 meta["conflict_policy"] = "block"
-            self.statements.append(("functional", sig.relation, key_columns, self.line, meta))
+            self.emit_functional_decl(key_columns, meta)
             self.count(value_at, value["agg"])
         elif (inline := self.try_inline_value(value_at, value)) is not None:
             lits, assigns, conds, term, missing, typ = inline
@@ -1884,7 +1949,7 @@ def notes(
         if rule_notes and rid in rule_notes:
             owner, note = rule_notes[rid]
         elif (derived_note := lowered.notes.get(rule["head"]["relation"])) is not None:
-            owner, note = root, derived_note
+            owner, note = lowered.note_owners.get(rule["head"]["relation"], root), derived_note
         else:
             continue
         if note.source is not None:
