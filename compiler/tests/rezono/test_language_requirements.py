@@ -121,6 +121,35 @@ def _refusal(directory: Path) -> str | None:
     return None
 
 
+def _state_rows(rows: set[tuple], keys: int) -> tuple[set[tuple], dict[tuple, str]]:
+    """(key..., state, reason) of every row, and the value of every known row, from (key..., state, reason, value)."""
+    states = {row[:keys + 2] for row in rows}
+    known = {row[:keys]: row[keys + 2] for row in rows if row[keys] == "known"}
+    return states, known
+
+
+def _check_functional_outcome(
+    con,
+    derived: dict[str, set[tuple]],
+    name: str,
+    keys: int,
+    expected_states: set[tuple],
+    expected_known: dict[tuple, str],
+) -> None:
+    if any(cell is None for row in con.execute(f'SELECT * FROM "{name}"').fetchall() for cell in row):
+        raise MissingRequirementLowering(f"{name}: a NULL cell in a NOT NULL functional view")
+    states, known = _state_rows(derived.get(name, set()), keys)
+    if states != expected_states or known != expected_known:
+        raise MissingRequirementLowering(json.dumps({
+            name: {
+                "states_got": sorted(states),
+                "states_want": sorted(expected_states),
+                "known_got": sorted(known.items()),
+                "known_want": sorted(expected_known.items()),
+            }
+        }, indent=2))
+
+
 LOWERING_MODULE = """\
 rezono 1
 pack minimal
@@ -169,7 +198,8 @@ require open_rack_feed(r: OpenRack)
     reason=(
         "M3: decisions/language-requirements.md: Lower rezono 1 require declarations directly "
         "into rezono.rules/2 with functional outcome relation, derived violation relation, "
-        "invariant flag, means/@ bundle metadata, Feldera co-located view, and functional_open_domain refusal"
+        "invariant flag, means/@ bundle metadata, Feldera co-located view, and functional_open_domain refusal. "
+        "Waits for rezono/test/test_rezono_1_requirements.py--test_rezono_1_requirement_parsing_and_diagnostics."
     ),
 )
 def test_lower_requirement_to_rules_ir(tmp_path):
@@ -304,24 +334,28 @@ cage_assignment:
     reason=(
         "M3: decisions/language-requirements.md: Evaluate require over closed kinds across all four "
         "states (known satisfied, known violated with checker-verified witness citing both trigger and "
-        "missing pattern, not_applicable when untriggered, unknown on missing trigger slot, invalid on conflict)"
+        "missing pattern, not_applicable when untriggered, unknown on missing trigger slot, invalid on conflict). "
+        "Waits for compiler/tests/rezono/test_language_requirements.py--test_lower_requirement_to_rules_ir."
     ),
 )
 def test_requirement_violation_witness_cites_trigger_and_missing_pattern(tmp_path):
     directory = _write_pack(tmp_path / "witness", WITNESS_MODULE, WITNESS_FACTS)
-    _, document, _, _, _, derived, explainer, manifest, read_bytes = _evaluate(directory)
+    _, document, _, _, con, derived, explainer, manifest, read_bytes = _evaluate(directory)
 
-    expected_outcome = {
-        ("rack-ok", "known", "", "true"),
-        ("rack-missing-b", "known", "", "false"),
-        ("rack-outside", "not_applicable", "no_match", ""),
-        ("rack-no-flag", "unknown", "no_value", ""),
-        ("rack-conflict", "not_applicable", "no_match", ""),
-    }
-    if derived.get("rack_dual_feed") != expected_outcome:
-        raise MissingRequirementLowering(
-            f"rack_dual_feed={sorted(derived.get('rack_dual_feed', ()))}, expected={sorted(expected_outcome)}"
-        )
+    _check_functional_outcome(
+        con, derived, "rack_dual_feed", 1,
+        expected_states={
+            ("rack-ok", "known", ""),
+            ("rack-missing-b", "known", ""),
+            ("rack-outside", "not_applicable", "no_match"),
+            ("rack-no-flag", "unknown", "no_value"),
+            ("rack-conflict", "not_applicable", "no_match"),
+        },
+        expected_known={
+            ("rack-ok",): "true",
+            ("rack-missing-b",): "false",
+        },
+    )
 
     expected_viol = {("rack-missing-b", "1", "power_feed", "at_least:1", "0")}
     if derived.get("rack_dual_feed_violation") != expected_viol:
@@ -329,9 +363,15 @@ def test_requirement_violation_witness_cites_trigger_and_missing_pattern(tmp_pat
             f"rack_dual_feed_violation={sorted(derived.get('rack_dual_feed_violation', ()))}, expected={sorted(expected_viol)}"
         )
 
-    conflict_rows = {row for row in derived.get("assigned_rack_backup", ()) if row[0] == "rack-conflict"}
-    if conflict_rows != {("rack-conflict", "invalid", "multiple_values", "")}:
-        raise MissingRequirementLowering(f"invalid input state={sorted(conflict_rows)}")
+    if any(cell is None for row in con.execute('SELECT * FROM "assigned_rack_backup"').fetchall() for cell in row):
+        raise MissingRequirementLowering("assigned_rack_backup: a NULL cell in a NOT NULL functional view")
+    conflict_states, conflict_known = _state_rows(
+        {row for row in derived.get("assigned_rack_backup", ()) if row[0] == "rack-conflict"}, 1
+    )
+    if conflict_states != {("rack-conflict", "invalid", "multiple_values")} or conflict_known:
+        raise MissingRequirementLowering(
+            f"invalid input state={sorted(conflict_states)} known={sorted(conflict_known.items())}"
+        )
     if any(row[0] == "rack-conflict" for row in derived.get("assigned_rack_backup_violation", ())):
         raise MissingRequirementLowering("invalid input must not emit a violation row")
 
@@ -402,22 +442,26 @@ origin_observation:
         "M3: decisions/language-requirements.md: Evaluate require over an observed world-open target "
         "to unknown incomplete_read without a complete sweep (never false pass or false violation), "
         "known true when positively witnessed, known false with coverage witness once complete sweep holds, "
-        "and unknown open_world on plain world open"
+        "and unknown open_world on plain world open. "
+        "Waits for compiler/tests/rezono/test_language_requirements.py--test_lower_requirement_to_rules_ir."
     ),
 )
 def test_requirement_unknown_without_complete_sweep(tmp_path):
     directory = _write_pack(tmp_path / "sweep", SWEEP_MODULE, SWEEP_FACTS)
-    _, document, _, _, _, derived, explainer, manifest, read_bytes = _evaluate(directory)
+    _, document, _, _, con, derived, explainer, manifest, read_bytes = _evaluate(directory)
 
-    expected_origin = {
-        ("svc-covered-missing", "known", "", "false"),
-        ("svc-uncovered-missing", "unknown", "incomplete_read", ""),
-        ("svc-uncovered-present", "known", "", "true"),
-    }
-    if derived.get("service_has_origin") != expected_origin:
-        raise MissingRequirementLowering(
-            f"service_has_origin={sorted(derived.get('service_has_origin', ()))}, expected={sorted(expected_origin)}"
-        )
+    _check_functional_outcome(
+        con, derived, "service_has_origin", 1,
+        expected_states={
+            ("svc-covered-missing", "known", ""),
+            ("svc-uncovered-missing", "unknown", "incomplete_read"),
+            ("svc-uncovered-present", "known", ""),
+        },
+        expected_known={
+            ("svc-covered-missing",): "false",
+            ("svc-uncovered-present",): "true",
+        },
+    )
 
     expected_viol = {("svc-covered-missing", "0", "origin_observation", "at_least:1", "0")}
     if derived.get("service_has_origin_violation") != expected_viol:
@@ -425,15 +469,15 @@ def test_requirement_unknown_without_complete_sweep(tmp_path):
             f"service_has_origin_violation={sorted(derived.get('service_has_origin_violation', ()))}"
         )
 
-    expected_unscoped = {
-        ("svc-covered-missing", "unknown", "open_world", ""),
-        ("svc-uncovered-missing", "unknown", "open_world", ""),
-        ("svc-uncovered-present", "unknown", "open_world", ""),
-    }
-    if derived.get("service_has_unscoped") != expected_unscoped:
-        raise MissingRequirementLowering(
-            f"service_has_unscoped={sorted(derived.get('service_has_unscoped', ()))}"
-        )
+    _check_functional_outcome(
+        con, derived, "service_has_unscoped", 1,
+        expected_states={
+            ("svc-covered-missing", "unknown", "open_world"),
+            ("svc-uncovered-missing", "unknown", "open_world"),
+            ("svc-uncovered-present", "unknown", "open_world"),
+        },
+        expected_known={},
+    )
     if derived.get("service_has_unscoped_violation"):
         raise MissingRequirementLowering(
             f"plain world open must never emit violation: {sorted(derived['service_has_unscoped_violation'])}"
@@ -529,41 +573,68 @@ primary_node:
     reason=(
         "M3: decisions/language-requirements.md: Enforce cardinality bounds (at least N, at most N, "
         "exactly N) with observed-count witnesses under complete sweeps, pass when in bounds, "
-        "unknown incomplete_read under incomplete sweeps, and not_applicable when untriggered"
+        "unknown incomplete_read under incomplete sweeps, and not_applicable when untriggered. "
+        "Waits for compiler/tests/rezono/test_language_requirements.py--test_lower_requirement_to_rules_ir."
     ),
 )
 def test_requirement_cardinality_bounds_and_incomplete_sweep(tmp_path):
     directory = _write_pack(tmp_path / "cardinality", CARDINALITY_MODULE, CARDINALITY_FACTS)
-    _, document, _, _, _, derived, explainer, manifest, read_bytes = _evaluate(directory)
+    _, document, _, _, con, derived, explainer, manifest, read_bytes = _evaluate(directory)
 
-    expected = {
-        "service_ha": {
-            ("svc-two", "known", "", "false"),
-            ("svc-three", "known", "", "true"),
-            ("svc-five", "known", "", "true"),
-            ("svc-unswept", "unknown", "incomplete_read", ""),
-            ("svc-standard", "not_applicable", "no_match", ""),
+    _check_functional_outcome(
+        con, derived, "service_ha", 1,
+        expected_states={
+            ("svc-two", "known", ""),
+            ("svc-three", "known", ""),
+            ("svc-five", "known", ""),
+            ("svc-unswept", "unknown", "incomplete_read"),
+            ("svc-standard", "not_applicable", "no_match"),
         },
+        expected_known={
+            ("svc-two",): "false",
+            ("svc-three",): "true",
+            ("svc-five",): "true",
+        },
+    )
+    _check_functional_outcome(
+        con, derived, "single_primary", 1,
+        expected_states={
+            ("svc-two", "known", ""),
+            ("svc-three", "known", ""),
+            ("svc-five", "known", ""),
+            ("svc-unswept", "known", ""),
+            ("svc-standard", "not_applicable", "no_match"),
+        },
+        expected_known={
+            ("svc-two",): "true",
+            ("svc-three",): "false",
+            ("svc-five",): "false",
+            ("svc-unswept",): "true",
+        },
+    )
+    _check_functional_outcome(
+        con, derived, "bounded_replicas", 1,
+        expected_states={
+            ("svc-two", "known", ""),
+            ("svc-three", "known", ""),
+            ("svc-five", "known", ""),
+            ("svc-unswept", "unknown", "incomplete_read"),
+            ("svc-standard", "not_applicable", "no_match"),
+        },
+        expected_known={
+            ("svc-two",): "true",
+            ("svc-three",): "true",
+            ("svc-five",): "false",
+        },
+    )
+
+    expected_violations = {
         "service_ha_violation": {
             ("svc-two", "0", "replica", "at_least:3", "2"),
-        },
-        "single_primary": {
-            ("svc-two", "known", "", "true"),
-            ("svc-three", "known", "", "false"),
-            ("svc-five", "known", "", "false"),
-            ("svc-unswept", "known", "", "true"),
-            ("svc-standard", "not_applicable", "no_match", ""),
         },
         "single_primary_violation": {
             ("svc-three", "0", "primary_node", "exactly:1", "2"),
             ("svc-five", "0", "primary_node", "exactly:1", "0"),
-        },
-        "bounded_replicas": {
-            ("svc-two", "known", "", "true"),
-            ("svc-three", "known", "", "true"),
-            ("svc-five", "known", "", "false"),
-            ("svc-unswept", "unknown", "incomplete_read", ""),
-            ("svc-standard", "not_applicable", "no_match", ""),
         },
         "bounded_replicas_violation": {
             ("svc-five", "0", "replica", "at_most:4", "5"),
@@ -571,7 +642,7 @@ def test_requirement_cardinality_bounds_and_incomplete_sweep(tmp_path):
     }
 
     problems = []
-    for name, want in expected.items():
+    for name, want in expected_violations.items():
         got = derived.get(name, set())
         if got != want:
             problems.append({name: {"got": sorted(got), "want": sorted(want)}})

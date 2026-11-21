@@ -78,9 +78,9 @@ RequirementOverLine = DerivedOver
 RequirementWhenLine = when Expr
 RequirementExistsLine = kw<"exists"> RequirementBound? rName ":" RuleType (where Expr)?   -- kind
                       | kw<"exists"> RequirementBound? rName in RuleRef (where Expr)?     -- relation
-RequirementBound = at kw<"least"> digits       -- at_least
-                 | at kw<"most"> digits        -- at_most
-                 | kw<"exactly"> digits        -- exactly
+RequirementBound = at kw<"least"> digits ~tokCont       -- at_least
+                 | at kw<"most"> digits ~tokCont        -- at_most
+                 | kw<"exactly"> digits ~tokCont        -- exactly
 ```
 
 - **No collision with existing `require` forms:**
