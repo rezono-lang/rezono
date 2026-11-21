@@ -209,12 +209,23 @@ A turning point is a stop where a row's outcome changes in kind, not only in siz
 
 ### When a row is the same row
 
-At two stops, a row is the same row when:
+Row pairing for both published differences (`edge/publisher/rezono_publisher/difference.py`) and turning points (`edge/publisher/rezono_publisher/turns.py`) is driven by the compiled schema (`bundle/schema-bundle.json`), never by coincidental snapshot cardinality. At two snapshots or stops, a row is the same row when:
 
-- for a row of a calculation rule's view: it has the same rule and the same subject;
-- for any other row: it has the same relation and the same key prefix, all columns but the last, and it is the only row with that prefix on each side. This is the rule by which a difference already reports `changed` (`DifferenceChange` in `contracts/explain.yaml`), so the fold and the turning points pair rows the same way.
+- **Calculation rule view:** it has the same rule and the same subject;
+- **Single-valued schema slot (`multivalued: false` in `bundle.attributes` or `bundle.arrows`):** it has the same slot relation (`<kind>__<slot>`) and the same owner key (`key[:-1]`), with one value on each side. Changing that value emits one `changed` entry (`{"key": [owner, new], "change": "changed", "was": [owner, old]}`) and pairs the two rows across stops;
+- **Multivalued schema slot (`multivalued: true` in `bundle.attributes` or `bundle.arrows`):** every row is an independent set membership identified by its full tuple `(owner, value)`. Rows with distinct values NEVER pair as `changed`, even when the set has size 1 on both sides. Replacing `{Ann}` with `{Bob}` on `Work.authors` emits the exact same membership disappearance (`removed` `["w1", "ann"]`) and appearance (`added` `["w1", "bob"]`) as replacing `{Ann, Kim}` with `{Bob, Kim}`;
+- **Kind membership relation (`<kind>`, arity 1):** rows are always independent memberships (`added` / `removed`), never `changed`;
+- **Any other multi-column relation (such as a derived relation outside the schema's slot tables):** it has the same relation and the same key prefix (`key[:-1]`), and it is the only row with that prefix on each side.
 
-Rows that cannot be paired so are a row on one side only, on each side.
+Rows that cannot be paired under these rules are a row on one side only, on each side (`removed` in the earlier snapshot, `added` in the later snapshot).
+
+#### Independent checker contract
+
+Both the publisher (`edge/publisher/rezono_publisher/difference.py`, `entries` / `plan_role`, and `turns.py`) and the independent checker (`checker/rezono_checker/difference.py`, `changes` / `check_difference(..., bundle=...)`, and `checker/rezono_checker/turns.py`) read the compiled schema bundle (`bundle/schema-bundle.json`) and enforce this exact same classification:
+
+- `rezono_checker.difference.check_difference` accepts `bundle: dict | None = None` (passed from `difference.plan` / `plan_role` using the base manifest's verified `bundle/schema-bundle.json`).
+- When `bundle` declares a slot table `<kind>__<slot>` with `multivalued: true`, the checker requires every difference entry on that relation to be `removed` or `added` and refuses any diff tree that classifies a multivalued replacement as `changed`.
+- When `bundle` declares a slot table `<kind>__<slot>` with `multivalued: false`, the checker requires a value replacement for an owner to be classified as a single `changed` entry with `was` and refuses a diff tree that splits it into `removed` + `added`.
 
 ### When two stops differ in kind
 

@@ -3,5 +3,5 @@
 choice_evidence(a, b, f, p, c, o) :-
     flow(a, b, f, p),
     choice__service(c, a), choice__function(c, f), choice__provider(c, b),
-    service__product(b, product), offer__product(o, product), offer__function(o, f), offer__port(o, p).
+    service__product(b, product), offer__product(o, product), offer__function(o, f), provides(b, f, p).
 .output choice_evidence

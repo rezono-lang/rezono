@@ -23,13 +23,16 @@ classes:
       run: {required: true}
       token: {required: true}
   HealthProbe:
-    description: An observed service state and the token to which it responds.
+    description: An observed service state or HTTP status and the token to which it responds.
     attributes:
       id: {identifier: true}
       service: {required: true}
       run: {required: true}
       token: {required: true}
-      status: {range: HealthProbeStatus, required: true}
+      status: {range: HealthProbeStatus}
+      http_status:
+        range: integer
+        description: Raw observed HTTP status code from the health probe endpoint.
       event_time:
         range: integer
         description: Source observation time in Unix seconds. Older readings without a time make the step unknown.

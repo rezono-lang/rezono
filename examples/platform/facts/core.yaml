@@ -57,19 +57,18 @@ product:
   - {id: signer}
   - {id: recovery-env}
 offer:
-  - {id: o-lb, product: loadbalancer, function: ingress, port: 443}
-  - {id: o-idp, product: keycloak, function: identity, port: 8443}
-  - {id: o-db, product: postgresql, function: database, port: 5432}
-  - {id: o-dns, product: coredns, function: dns, port: 53}
-  - {id: o-time, product: chrony, function: time, port: 123}
-  - {id: o-reg, product: registry, function: registry, port: 443}
-  - {id: o-vault, product: openbao, function: secrets, port: 8200}
-  - {id: o-cp, product: kube-control, function: control-plane, port: 6443}
-  - {id: o-gitops, product: argocd, function: gitops, port: 443}
-  - {id: o-git-https, product: forgejo, function: git, port: 443}
-  - {id: o-git-ssh, product: forgejo, function: git, port: 22}
-  - {id: o-s3, product: ceph, function: object-storage, port: 443}
-  - {id: o-sign, product: signer, function: signing, port: 443}
+  - {id: o-lb, product: loadbalancer, function: ingress}
+  - {id: o-idp, product: keycloak, function: identity}
+  - {id: o-db, product: postgresql, function: database}
+  - {id: o-dns, product: coredns, function: dns}
+  - {id: o-time, product: chrony, function: time}
+  - {id: o-reg, product: registry, function: registry}
+  - {id: o-vault, product: openbao, function: secrets}
+  - {id: o-cp, product: kube-control, function: control-plane}
+  - {id: o-gitops, product: argocd, function: gitops}
+  - {id: o-git, product: forgejo, function: git}
+  - {id: o-s3, product: ceph, function: object-storage}
+  - {id: o-sign, product: signer, function: signing}
 demand:
   - {id: d-client-ingress, product: client, function: ingress}
   - {id: d-idp-db, product: keycloak, function: database}

@@ -106,7 +106,7 @@ export function printContext(c?: Context): string[] {
 	if (!c) return [];
 	return [
 		...(c.at ? [`at ${atom(c.at)}`] : []),
-		...(c.during ? [`during ${atom(c.during)}`] : []),
+		...(c.during ? [`during ${'range' in c.during ? `${atom(c.during.range[0])}${c.during.range[1]}${atom(c.during.range[2])}` : atom(c.during)}`] : []),
 		...(c.in ? [`in ${atom(c.in)}`] : []),
 		...(c.as_known ? [`as known ${atom(c.as_known)}`] : []),
 	];

@@ -197,6 +197,36 @@ jobs:
             python scripts/fast_check.py "$task" --base "$TASK_BASE" | tee "$RUNNER_TEMP/fast.txt"
             echo "Fast check took $((SECONDS-start)) seconds and printed $(wc -l < "$RUNNER_TEMP/fast.txt") lines" | tee -a "$GITHUB_STEP_SUMMARY"
           done <<< "$assigned"
+      - name: Export scene recordings from the disposable cluster
+        if: >-
+          inputs.tasks == ''
+          || contains(fromJSON(inputs.tasks || '[]'), 'loop/tests/test_startup_safe_rounds_live.py--test_startup_safe_rounds_live')
+          || contains(fromJSON(inputs.tasks || '[]'), 'examples/platform/proof_cases/test_management_backup.py--test_management_backup_restore_readback')
+          || contains(fromJSON(inputs.tasks || '[]'), 'examples/platform/proof_cases/test_management_dataset_restored_offline.py--test_management_dataset_restored_offline')
+        shell: bash
+        env:
+          TASKS: ${{ inputs.tasks }}
+        run: |
+          set -euo pipefail
+          export REZONO_CLUSTER_KUBECONFIG="$KUBECONFIG"
+          args=(--out-dir "$RUNNER_TEMP/scene-recordings" --kubeconfig "$KUBECONFIG")
+          if [[ -z "${TASKS:-}" ]]; then
+            args+=(--require-all)
+          fi
+          PYTHONPATH="$PWD:$PWD/loop:$PWD/loop/cluster" python loop/cluster/export_scene_recordings.py "${args[@]}"
+      - name: Upload disposable cluster scene recordings
+        if: >-
+          inputs.tasks == ''
+          || contains(fromJSON(inputs.tasks || '[]'), 'loop/tests/test_startup_safe_rounds_live.py--test_startup_safe_rounds_live')
+          || contains(fromJSON(inputs.tasks || '[]'), 'examples/platform/proof_cases/test_management_backup.py--test_management_backup_restore_readback')
+          || contains(fromJSON(inputs.tasks || '[]'), 'examples/platform/proof_cases/test_management_dataset_restored_offline.py--test_management_dataset_restored_offline')
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: scene-recordings
+          path: ${{ runner.temp }}/scene-recordings/
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 14
       - name: Run added cluster tests on the base source
         if: github.event_name == 'pull_request'
         shell: bash

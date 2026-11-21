@@ -1,3 +1,3 @@
 # Pinned earlier main commit used to execute build/ (decisions/build-reconciliation.md).
 # Update only through an explicit pull request after the target commit has landed green on main.
-engine_sha: 562dc6ff1f75dbcb5ee26b73a447e58ca5ea94bb
+engine_sha: cb354e02b6fd2cb75fa9e68fb2dccc6752093f9b

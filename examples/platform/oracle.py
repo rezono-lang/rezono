@@ -1,8 +1,9 @@
 """An independent recomputation of the trial pack's derived relations.
 
-Plain Python sets and no engine: it reads facts/core.yaml and applies the rules
-of rules/core.dl by hand, one function per relation. It prints the number of
-rows per relation and, with --write, stores the rows in oracle-rows.json.
+Plain Python sets and no engine: it reads facts/core.yaml, facts/port_decision.yaml,
+and facts/*_transport_source.yaml and applies the rules of rules/core.dl by hand,
+one function per relation. It prints the number of rows per relation and, with
+--write, stores the rows in oracle-rows.json.
 
     python oracle.py [--write]
 """
@@ -18,6 +19,7 @@ from firewall_oracle import firewall_expectations
 
 HERE = Path(__file__).parent
 FACTS = yaml.safe_load((HERE / "facts" / "core.yaml").read_text())
+PORT_DECISIONS = yaml.safe_load((HERE / "facts" / "port_decision.yaml").read_text()) or {}
 
 
 def ids(kind):
@@ -43,7 +45,16 @@ role_cluster = dict(attr("platform_role", "cluster_class"))
 role_runs_images = dict(attr("platform_role", "runs_images"))
 recovery_allowed = dict(attr("function", "recovery_allowed"))
 open_by_design = dict(attr("function", "open_by_design"))
-offers = [(r["product"], r["function"], r["port"]) for r in FACTS.get("offer", [])]
+offers = [(r["product"], r["function"]) for r in FACTS.get("offer", [])]
+port_decisions = lookup(
+    ((r["product"], r["function"]), r["port"]) for r in PORT_DECISIONS.get("port_decision", [])
+)
+transport_statements = [
+    (r["product"], str(r["series"]), r["port"])
+    for path in sorted((HERE / "facts").glob("*_transport_source.yaml"))
+    for r in (yaml.safe_load(path.read_text()) or {}).get("vendor_default_transport_source", [])
+]
+transport_series = lookup((p, s) for p, s, _ in transport_statements)
 demands = [(r["product"], r["function"]) for r in FACTS.get("demand", [])]
 choices = [(r["service"], r["function"], r["provider"]) for r in FACTS.get("choice", [])]
 releases = FACTS.get("release", [])
@@ -51,8 +62,57 @@ pins = [(r["service"], r["release"]) for r in FACTS.get("pin", [])]
 artifacts = FACTS.get("artifact", [])
 role_of = dict(service_role)
 
-provides = {(s, f, p) for s, pr in service_product for opr, f, p in offers if opr == pr}
-provider = {(s, f) for s, f, _ in provides}
+stable_release = {
+    (r["id"], r["product"], r["released_on_day"]) for r in releases if r.get("stable") == "yes"
+}
+newest_day = {}
+for _, product, day in stable_release:
+    newest_day[product] = max(day, newest_day.get(product, day))
+pinned = {s for s, _ in pins}
+runs = set(pins)
+runs |= {
+    (s, r)
+    for s, product in service_product
+    if s not in pinned and product in newest_day
+    for r, p, d in stable_release
+    if p == product and d == newest_day[product]
+}
+release_product = {r["id"]: r["product"] for r in releases}
+release_day = {r["id"]: r["released_on_day"] for r in releases}
+behind_newest = {
+    (s, r)
+    for s, r in runs
+    if r in release_day
+    and release_product[r] in newest_day
+    and release_day[r] < newest_day[release_product[r]]
+}
+
+release_names = {
+    r["id"]: {str(r[k]) for k in ("version", "series") if k in r and r[k] is not None}
+    for r in releases
+}
+runs_by_service = lookup(runs)
+
+
+def _service_ports(service, product, function):
+    if (product, function) in port_decisions:
+        return port_decisions[(product, function)]
+    if service in runs_by_service:
+        names = {name for r in runs_by_service[service] for name in release_names.get(r, ())}
+        return {port for p, series, port in transport_statements if p == product and series in names}
+    if len(transport_series.get(product, ())) == 1:
+        return {port for p, _, port in transport_statements if p == product}
+    return set()
+
+
+provides = {
+    (s, f, p)
+    for s, pr in service_product
+    for opr, f in offers
+    if opr == pr
+    for p in _service_ports(s, pr, f)
+}
+provider = {(s, f) for s, pr in service_product for opr, f in offers if opr == pr}
 asks = {(s, f) for s, pr in service_product for dpr, f in demands if dpr == pr}
 chosen = {(s, f) for s, f, _ in choices}
 providers = {f: len({s for s, g in provider if g == f}) for f in ids("function")}
@@ -87,31 +147,6 @@ flow_from_step = {
     (a, b, max(service_step[a], service_step[b]))
     for a, b, _ in needs
     if a in service_step and b in service_step
-}
-
-stable_release = {
-    (r["id"], r["product"], r["released_on_day"]) for r in releases if r.get("stable") == "yes"
-}
-newest_day = {}
-for _, product, day in stable_release:
-    newest_day[product] = max(day, newest_day.get(product, day))
-pinned = {s for s, _ in pins}
-runs = set(pins)
-runs |= {
-    (s, r)
-    for s, product in service_product
-    if s not in pinned and product in newest_day
-    for r, p, d in stable_release
-    if p == product and d == newest_day[product]
-}
-release_product = {r["id"]: r["product"] for r in releases}
-release_day = {r["id"]: r["released_on_day"] for r in releases}
-behind_newest = {
-    (s, r)
-    for s, r in runs
-    if r in release_day
-    and release_product[r] in newest_day
-    and release_day[r] < newest_day[release_product[r]]
 }
 
 outside_reaches_inside = {(a, b) for a, b, za, zb, _ in crossing if za == "external" and zb != "entry"}

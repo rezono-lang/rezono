@@ -64,15 +64,6 @@ def _has_complete_witness(body: dict, expected_key: str, expected_amount_premise
     return False
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AskRestrictionNotSupported,
-    reason=(
-        "M3: decisions/ask-place-time-restrictions.md: ask supports at <place> and as known on <date>, "
-        "reports default/active restriction explicitly, returns distinct witnessed answers on corrected facts, "
-        "and returns unknown with explicit reason before first publication"
-    ),
-)
 def test_ask_as_known_on_corrected_fact_returns_distinct_witnessed_answers():
     got = _run_probe("as_known")
 
@@ -181,14 +172,6 @@ def test_ask_as_known_on_corrected_fact_returns_distinct_witnessed_answers():
         raise AskRestrictionNotSupported(json.dumps(problems, sort_keys=True))
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AskRestrictionNotSupported,
-    reason=(
-        "M3: decisions/ask-place-time-restrictions.md: ask during <period> outside every validity period "
-        "returns unknown with explicit reason (never false), while during a valid period returns known with witness"
-    ),
-)
 def test_ask_during_outside_validity_returns_unknown_with_reason_not_false():
     got = _run_probe("during")
 
