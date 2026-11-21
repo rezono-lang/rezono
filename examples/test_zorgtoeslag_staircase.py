@@ -85,7 +85,8 @@ def _role_witness_hashes(store_dir: Path, pack_name: str, manifest_id: str, role
         "pack.yaml, README.md, channels.yaml, labels/messages, and reader role, support optional "
         "as_of/known ISO dates in rezono_publisher.batch.epoch, and publish examples/zorgtoeslag-slice "
         "cleanly via rezono_publisher with green proofs and gate-served allowance rows matching "
-        "examples/zorgtoeslag-slice/reference.py."
+        "examples/zorgtoeslag-slice/reference.py. "
+        "Waits for compiler/tests/rezono/test_zorgtoeslag_slice.py--test_published_slice_gives_the_oracle."
     ),
 )
 def test_zorgtoeslag_slice_compiles_and_publishes_via_publisher(tmp_path: Path):
