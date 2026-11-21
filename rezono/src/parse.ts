@@ -18,6 +18,11 @@ import { placed, points, refused, reserved, run, spanAt, spanOf, startRun, type 
 
 export { points, type Diagnostic, type Span } from './parse-support.ts';
 
+export interface ParseOptions {
+	/** Allow Release-1 question contexts (`at`, `during`, `as known [on]`) without R015. */
+	allowContext?: boolean;
+}
+
 export interface Parsed {
 	/** Absent when a parse-level check failed. */
 	tree?: Question;
@@ -79,7 +84,9 @@ semantics.addOperation<unknown>('tree', {
 				if (axis in context) refused(c, 'R018', [axis.replace('_', ' ')]);
 				else {
 					context[axis] = value;
-					reserved(c, `${axis.replace('_', ' ')} in a question context`);
+					if (!(run.allowContext && (axis === 'at' || axis === 'during' || axis === 'as_known'))) {
+						reserved(c, `${axis.replace('_', ' ')} in a question context`);
+					}
 				}
 			}
 			ask.context = context;
@@ -96,7 +103,11 @@ semantics.addOperation<unknown>('tree', {
 	},
 	MoreBinder: (_comma, name, _colon, type) => [name.sourceString, type.sourceString],
 	Context_at: (_at, atom) => ['at', atom.tree()],
+	Context_as_known_on: (_as, _known, _on, atom) => ['as_known', atom.tree()],
 	Context_as_known: (_as, _known, atom) => ['as_known', atom.tree()],
+	Context_during_range(_during, from, op, until) {
+		return ['during', placed(this, { range: [from.tree(), op.sourceString, until.tree()] } as Expr)];
+	},
 	Context_during: (_during, atom) => ['during', atom.tree()],
 	Context_in: (_in, atom) => ['in', atom.tree()],
 	Show: (_show, list) => all(list),
@@ -313,9 +324,10 @@ export function readRule<T>(
 	at = points(text),
 	native = nativeRules.has(rule),
 	version?: '0' | '1',
-	offset = 0
+	offset = 0,
+	allowContext = false
 ): Read<T> {
-	startRun(text, spans, at, version, offset);
+	startRun(text, spans, at, version, offset, allowContext);
 	const match = (native ? nativeRuleGrammar : grammar).match(text, rule);
 	if (match.failed()) {
 		const failAt = Math.min(match.getRightmostFailurePosition(), text.length);
@@ -352,14 +364,24 @@ export function tornAt(text: string, from: number, to: number, cp: (at: number) 
 }
 
 /** Parses one question (an `ask` or a suppose line) or one check statement. */
-export function parse(text: string): Parsed {
+export function parse(text: string, options?: ParseOptions): Parsed {
 	// A text ends on its line here as in a module (v0 §11): the same test and the same R000 as module.ts.
 	const cut = torn(text);
 	if (cut) {
 		const at = points(text);
 		return { diagnostics: [tornAt(text, cut[0], cut[1], (i) => (at ? at[i] : i))], spans: new WeakMap() };
 	}
-	const { value, errors, reserved: later, spans } = readRule(text, 'Question', (m) => m.tree() as Question);
+	const { value, errors, reserved: later, spans } = readRule(
+		text,
+		'Question',
+		(m) => m.tree() as Question,
+		undefined,
+		undefined,
+		false,
+		undefined,
+		0,
+		options?.allowContext ?? false
+	);
 	if (errors.length) return { diagnostics: errors.sort(inOrder), spans };
 	return { tree: value, diagnostics: later.sort(inOrder), spans };
 }

@@ -32,6 +32,8 @@ interface Run {
 	misplaced: [Diagnostic, 'at' | 'as_known'][];
 	/** Language version when reading a module; undefined for standalone questions. */
 	version?: '0' | '1';
+	/** Allow Release-1 ask context restrictions (`at`, `during`, `as known [on]`) without R015. */
+	allowContext?: boolean;
 }
 export let run: Run;
 
@@ -84,7 +86,8 @@ export function startRun(
 	spans: WeakMap<object, Span>,
 	at: number[] | undefined,
 	version?: '0' | '1',
-	offset = 0
+	offset = 0,
+	allowContext = false
 ): void {
-	run = { text, points: at, offset, spans, ids: new WeakSet(), errors: [], reserved: [], misplaced: [], version };
+	run = { text, points: at, offset, spans, ids: new WeakSet(), errors: [], reserved: [], misplaced: [], version, allowContext };
 }
