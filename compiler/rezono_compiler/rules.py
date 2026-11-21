@@ -939,6 +939,9 @@ def _worlds(prog, declared):
             if b.polarity == "negative" and b.atom.relation in opened and not h.absence:
                 raise IRError("negation_over_open", f"{r.id}: {b.atom.relation} is open, so a missing row is unknown, "
                                                     "not false; negate it only in a relation marked @absence")
+            if b.polarity == "positive" and b.atom.relation in opened and h.role == "functional":
+                raise IRError("functional_reads_open", f"{r.id}: {b.atom.relation} is open, so its missing values are "
+                                                       "unknown; a functional derivation cannot read it positively")
         for a in r.aggregates:
             if a.atom.relation in opened and not h.absence:
                 raise IRError("aggregate_over_open", f"{r.id}: {a.atom.relation} is open, so its count or sum is only "
