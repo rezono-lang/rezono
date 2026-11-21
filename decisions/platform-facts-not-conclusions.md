@@ -96,7 +96,7 @@ provides(s, f, port) :- service__product(s, p), offer__product(o, p), offer__fun
 
   The reference-series rule and `port_unknown` follow the same pattern; their shape is the worker's.
 - A vendor statement does not prove that a running deployment listens on its port ([vendor transport evidence](platform-vendor-transport-evidence.md), "What the evidence proves"). The target claims no more: a service keeps its maker's default unless a port decision says otherwise, and that assumption is this decision.
-- `rules/choice_evidence.dl` and `rules/unique_evidence.dl` join `offer__port` to find a provider's port; they read `provides` instead.
+- `rules/choice_evidence.dl` and `rules/unique_evidence.dl` join `offer__port` to find a provider's port; in step 2 (Rules) they stay on `offer__port` alongside the two `forgejo` `git` offers (`o-git-https`, `o-git-ssh`) so no cross-port ghost rows arise, and in step 3 (Retire) they switch to `provides` atomically as duplicate `(product, function)` offers merge into one offer per pair.
 
 ### Sources first
 
@@ -110,7 +110,7 @@ On the facts of `b77fd2a` plus the sources above, `provides` holds the same 14 r
 
 ### Retire
 
-`Offer.port`, its rows, its label (`offer.port`) and the port in the oracle's `offers`; the oracle reads the port decisions and the statements as section 3 says.
+`Offer.port`, its rows, its label (`offer.port`) and the port in the oracle's `offers`; merge duplicate `(product, function)` offers (`o-git-https` and `o-git-ssh` -> one offer) and switch `rules/choice_evidence.dl`, `rules/unique_evidence.dl`, their acceptance tests and `examples/test_platform_incremental_proof.py` off `offer__port` atomically; the oracle reads the port decisions and the statements as section 3 says.
 
 ## 4. Release dates (point 2)
 
