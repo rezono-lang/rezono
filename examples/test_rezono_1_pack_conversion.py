@@ -731,10 +731,10 @@ def _assert_reader_example_converts(rel_path: str, tmp_path: Path) -> None:
 
     if str(REPO) not in sys.path:
         sys.path.insert(0, str(REPO))
-    from rezono_compiler import batch as compiler_batch
     from rezono_compiler import facts as fact_files
     from rezono_publisher import batch as publisher_batch
     from scripts import convert_pack
+    from support import expected, violations  # compiler/tests/support.py, as in examples/test_examples.py
 
     legacy_root = tmp_path / "legacy"
     _LEGACY.materialize_legacy_packs(legacy_root, (rel_path,))
@@ -763,11 +763,8 @@ def _assert_reader_example_converts(rel_path: str, tmp_path: Path) -> None:
     assert {path.stem for path in datasets} == {"valid", "errors"}, (rel_path, datasets)
     for path in datasets:
         rows = fact_files.load(model, path)
-        got = compiler_batch.violations(files, rows)
-        want = json.loads((pack_dir / "expected" / "violations" / f"{path.stem}.json").read_text(encoding="utf-8"))
-        assert {k: {tuple(str(c) for c in r) for r in v} for k, v in got.items()} == {
-            k: {tuple(str(c) for c in r) for r in v} for k, v in want.items()
-        }, (rel_path, path.stem)
+        want = expected(pack_dir / "expected" / "violations" / f"{path.stem}.json")
+        assert violations(files, rows) == want, (rel_path, path.stem)
 
 
 def _assert_subsidy_matches_legacy(tmp_path: Path, *, native_subsidy: bool) -> None:
@@ -845,7 +842,10 @@ def _assert_subsidy_matches_legacy(tmp_path: Path, *, native_subsidy: bool) -> N
 
     # Independent reference.py oracle: pinned exact relation names (zero old-or-new fallback!).
     ref = _load_python_module(subsidy_dir / "reference.py", "subsidy_reference_oracle")
-    (_, base_state), *_ = list(ref.states())
+    # The facts state, read before the generator advances: the reference applies each scenario to the same state
+    # in place, so the facts state is the first one yielded, as in examples/test_rules.py.
+    label, base_state = next(ref.states())
+    assert label == "0-applications", label
     for rel_name, want_rows in ref.rules(base_state).items():
         got_rows = sorted([str(cell) for cell in row] for row in native_sub.rows[rel_name])
         assert got_rows == want_rows, f"examples/subsidy relation {rel_name!r} diverged from reference.py"
