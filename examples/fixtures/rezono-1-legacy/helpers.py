@@ -214,10 +214,32 @@ def pack_is_rezono_1(pack_dir: Path) -> bool:
     return True
 
 
-def _pack_yaml_matches_legacy(pack_dir: Path, live_bytes: bytes, arch_bytes: bytes) -> bool:
+def _legacy_pack_non_manifest_matches(pack_rel: str, by_pack: dict[str, dict[str, bytes]]) -> bool:
+    """True iff every non-`pack.yaml` archived file of `pack_rel` exists and matches live bytes (LF-normalized)."""
+    arch_files = by_pack.get(pack_rel)
+    if arch_files is None:
+        return False
+    live_files = _archived_files_for_pack(pack_rel)
+    if set(live_files) != set(arch_files):
+        return False
+    return all(
+        normalize_lf(live_files[name].read_bytes()) == normalize_lf(arch_files[name])
+        for name in arch_files
+        if name != "pack.yaml"
+    )
+
+
+def _pack_yaml_matches_legacy(
+    pack_dir: Path,
+    live_bytes: bytes,
+    arch_bytes: bytes,
+    by_pack: dict[str, dict[str, bytes]],
+    memo: dict[str, bool],
+    visiting: set[str],
+) -> bool:
     """Compare a still-legacy pack's `pack.yaml` byte-for-byte (LF-normalized), allowing only `imports[].sha256`
-    re-pins for imported packs that have already converted to `rezono 1` (preventing rollout deadlocks while
-    catching every substantive or unconverted-pin drift)."""
+    re-pins for imports that have converted to `rezono 1` — directly or transitively through still-legacy
+    packs whose own non-`pack.yaml` files match the archive and whose own `pack.yaml` differs only in such pins."""
     live_lf = normalize_lf(live_bytes)
     arch_lf = normalize_lf(arch_bytes)
     if live_lf == arch_lf:
@@ -232,6 +254,7 @@ def _pack_yaml_matches_legacy(pack_dir: Path, live_bytes: bytes, arch_bytes: byt
         for entry in (arch_meta.get("imports") or ())
         if isinstance(entry, dict)
     }
+    repo_root = REPO.resolve()
     adjusted = live_lf.decode("utf-8")
     for entry in live_meta.get("imports") or ():
         if not isinstance(entry, dict):
@@ -242,7 +265,28 @@ def _pack_yaml_matches_legacy(pack_dir: Path, live_bytes: bytes, arch_bytes: byt
         if not (isinstance(live_sha, str) and isinstance(arch_sha, str)) or live_sha == arch_sha:
             continue
         target_dir = (pack_dir / str(entry["path"])).resolve()
-        if target_dir.is_dir() and pack_is_rezono_1(target_dir) and modules.pack_hash(target_dir) == live_sha:
+        if not target_dir.is_dir() or modules.pack_hash(target_dir) != live_sha:
+            continue
+        allowed = pack_is_rezono_1(target_dir)
+        if not allowed and target_dir.is_relative_to(repo_root):
+            target_rel = target_dir.relative_to(repo_root).as_posix()
+            if target_rel in memo:
+                allowed = memo[target_rel]
+            elif target_rel not in visiting and target_rel in by_pack:
+                visiting.add(target_rel)
+                try:
+                    allowed = _legacy_pack_non_manifest_matches(target_rel, by_pack) and _pack_yaml_matches_legacy(
+                        target_dir,
+                        (target_dir / "pack.yaml").read_bytes(),
+                        by_pack[target_rel]["pack.yaml"],
+                        by_pack,
+                        memo,
+                        visiting,
+                    )
+                finally:
+                    visiting.discard(target_rel)
+                memo[target_rel] = allowed
+        if allowed:
             adjusted = adjusted.replace(live_sha, arch_sha, 1)
     return adjusted.encode("utf-8") == arch_lf
 
@@ -278,6 +322,7 @@ def assert_legacy_packs_match_archive(pack_rels: set[str] | tuple[str, ...]) -> 
     allows only `imports[].sha256` re-pins pointing at imports that have already converted to `rezono 1`.
     """
     by_pack = read_legacy_archive()
+    memo: dict[str, bool] = {}
     drifts: list[str] = []
     for pack_rel in sorted(pack_rels):
         pack_dir = REPO / pack_rel
@@ -299,7 +344,7 @@ def assert_legacy_packs_match_archive(pack_rels: set[str] | tuple[str, ...]) -> 
             live_bytes = live_files[rel_file].read_bytes()
             arch_bytes = arch_files[rel_file]
             if rel_file == "pack.yaml":
-                ok = _pack_yaml_matches_legacy(pack_dir, live_bytes, arch_bytes)
+                ok = _pack_yaml_matches_legacy(pack_dir, live_bytes, arch_bytes, by_pack, memo, {pack_rel})
             else:
                 ok = normalize_lf(live_bytes) == normalize_lf(arch_bytes)
             if not ok:

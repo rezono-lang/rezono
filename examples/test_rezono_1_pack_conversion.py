@@ -72,7 +72,7 @@ STD_PACK_EXERCISES: dict[str, dict] = {
     "std-decision": {
         "rows": {
             "decision": [
-                {"id": "d-1", "title": "Sample", "state": "in_force", "decider": "board", "valid_from": "2026-01-01"},
+                {"id": "d-1", "title": "Sample", "state": "in_force", "decider": ["board"], "valid_from": "2026-01-01"},
             ],
             "reference_date": [
                 {"id": "now", "title": "Now", "date": "2026-06-01"},
