@@ -492,6 +492,11 @@ class Lowering:
         self.line, self.column = self.site.place(signature.at)
         self.used = {name for name, _ in signature.key}
         self.env = dict(signature.key)
+        self._param_enums: dict[str, str] = {
+            p["name"]: en
+            for p in (signature.decl.get("params") or ())
+            if isinstance(p, dict) and (en := _enum_name(names, pack, signature.module, p.get("type"))) is not None
+        }
         self._ir_vars: dict[str, str] = {name: name for name, _ in signature.key}
         self._method_scopes: list[tuple[str | None, Member, tuple | None]] = []
         self._eval_keys: list[tuple] | None = None
@@ -1036,7 +1041,7 @@ class Lowering:
             states: list[str | None] = [self.combine_states([vl.state_rel], exclude=("not_applicable",))]
             if vl.state_rel is not None:
                 na_rel = self.next_helper("na")
-                self.add_helper(na_rel, self._key_cols, self.key_terms(),
+                self.add_helper(na_rel, self._key_cols_active(), self.key_terms(),
                                 self.domain() + [self.lit(vl.state_rel, self.key_terms() + [NOT_APPLICABLE, ("var", self.fresh("r"))])])
                 na_lit = self.lit(na_rel, self.key_terms())
                 branches.extend(ValBranch((na_lit,) + b.lits, b.assigns, b.conds, b.term) for b in vr.branches)
@@ -1509,6 +1514,7 @@ class Lowering:
         if not path:
             return None
         head = path[0]
+        hits: list[tuple[tuple, tuple, list[str]]] = []
         if head in self.env:
             typ = self.env[head]
             if typ[0] == "tuple":
@@ -1518,25 +1524,23 @@ class Lowering:
                 if col not in typ[1]:
                     self.site.refuse(at, f"{head} has no column {col}", "R001")
                 ir_var, col_typ = typ[1][col]
-                return ("var", ir_var), col_typ, path[2:]
-            return self._var(head), typ, path[1:]
-        hits: list[tuple[tuple, tuple, list[str]]] = []
-        for _, member, _ in reversed(self._method_scopes):
+                hits.append((("var", ir_var), col_typ, path[2:]))
+            else:
+                hits.append((self._var(head), typ, path[1:]))
+        if self._method_scopes:
+            _, member, _ = self._method_scopes[-1]
             if member.kind is not None:
                 if self.slot(at, member.kind, head) is not None or self._prop_sig(member.kind, head) is not None:
                     hits.append((member.terms[0], ("kind", member.kind), path))
             elif member.columns and head in member.columns:
                 idx, col_typ = member.columns[head]
                 hits.append((member.terms[idx], col_typ, path[1:]))
+        if allow_top_implicit and self.sig.binder == "it" and head != "it" and self.sig.kind is not None:
+            if self.slot(at, self.sig.kind, head) is not None or self._prop_sig(self.sig.kind, head) is not None:
+                hits.append((("var", "it"), ("kind", self.sig.kind), path))
         if len(hits) > 1:
             self.site.refuse(at, f"{head} is ambiguous here; qualify it with its binder", "R011")
-        if len(hits) == 1:
-            return hits[0]
-        if allow_top_implicit and self.sig.binder == "it" and head != "it":
-            it_typ = self.env["it"]
-            if self.slot(at, it_typ[1], head) is not None or self._prop_sig(it_typ[1], head) is not None:
-                return self._var("it"), it_typ, path
-        return None
+        return hits[0] if hits else None
 
     def _walk_path(self, at: str, path: list, target: tuple | None = None, *,
                    allow_top_implicit: bool = True) -> tuple[list[tuple], tuple, bool, tuple]:
@@ -1608,7 +1612,10 @@ class Lowering:
             self.site.refuse(at, f"{'.'.join(path)} is not a set", "R003")
         return lits, term, typ, slot
 
-    def _types_compatible(self, elem_typ: tuple, slot_typ: tuple, *, elem_is_literal: bool = False) -> bool:
+    def _types_compatible(self, elem_typ: tuple, slot_typ: tuple, *, elem_is_literal: bool = False,
+                          elem_enum: str | None = None, slot_enum: str | None = None) -> bool:
+        if slot_enum is not None or elem_enum is not None:
+            return elem_enum == slot_enum
         if slot_typ[0] == "kind" and elem_typ[0] == "kind":
             return self.pack.root(elem_typ[1]) == self.pack.root(slot_typ[1])
         if slot_typ[0] == "kind" and elem_is_literal:
@@ -1616,6 +1623,74 @@ class Lowering:
         if slot_typ[0] == "scalar" and elem_typ[0] == "scalar":
             return elem_typ[1] == slot_typ[1]
         return False
+
+    def _path_semantic_type(self, at: str, path: list[str], *, allow_top_implicit: bool) -> tuple[tuple, str | None] | None:
+        resolved = self._resolve_path_head(at, path, allow_top_implicit=allow_top_implicit)
+        if resolved is None:
+            return None
+        _, typ, rest = resolved
+        enum = self._param_enums.get(path[0]) if not rest and len(path) == 1 and path[0] in self.env else None
+        for name in rest:
+            if typ[0] != "kind":
+                return None
+            slot = self.slot(at, typ[1], name)
+            if slot is not None:
+                typ = self.slot_type(slot)
+                enum = slot.enum
+                continue
+            prop = self._prop_sig(typ[1], name)
+            if prop is not None and prop.result == "functional":
+                typ = _type(self.site, self.names, self.pack, prop.module, prop.at, prop.decl.get("type"))
+                enum = prop.enum_type
+                continue
+            return None
+        return typ, enum
+
+    def _expr_semantic_type(self, at: str, node: dict) -> tuple[tuple, str | None, bool]:
+        if not isinstance(node, dict) or len(node) != 1:
+            return ("scalar", "string"), None, False
+        key = next(iter(node))
+        if key == "lit":
+            term = self.literal(at, node["lit"])
+            return ("scalar", term[2]), None, True
+        if key == "path":
+            sem = self._path_semantic_type(at, node["path"], allow_top_implicit=True)
+            if sem is not None:
+                return sem[0], sem[1], False
+            if len(node["path"]) == 1 and (enum_term := self._enum_literal(node["path"][0])) is not None:
+                matches = [e for e, vals in self.pack.enums.items() if node["path"][0] in vals]
+                return ("scalar", enum_term[2]), (matches[0] if len(matches) == 1 else self.sig.enum_type), True
+            self.site.refuse(at, f"{node['path'][0]} is not a variable here", "R001")
+        if key in ("arith", "neg"):
+            return ("scalar", "integer"), None, False
+        if key in ("cmp", "and", "or", "not", "imply", "is", "call", "in"):
+            return ("scalar", "boolean"), None, False
+        if key == "agg" and isinstance(node["agg"], list):
+            op = node["agg"][0]
+            if op == "count":
+                return ("scalar", "integer"), None, False
+            if op == "any":
+                return ("scalar", "boolean"), None, False
+        if key == "when":
+            return self._expr_semantic_type(f"{at}/when/1", node["when"][1])
+        if key == "otherwise":
+            return self._expr_semantic_type(f"{at}/otherwise/0", node["otherwise"][0])
+        return ("scalar", "string"), None, False
+
+    def _bare_membership_literal(self, at: str, elem_node: dict, slot_typ: tuple, slot_enum: str | None) -> tuple | None:
+        """Resolve an unbound bare name in `x in S` as an enum value or bare kind ID if valid."""
+        if not (isinstance(elem_node, dict) and set(elem_node) == {"path"} and len(elem_node["path"]) == 1):
+            return None
+        name = elem_node["path"][0]
+        if self._resolve_path_head(at, elem_node["path"], allow_top_implicit=True) is not None:
+            return None
+        if slot_enum is not None:
+            if name in self.pack.enums[slot_enum]:
+                return ("const", name, "string")
+            self.site.refuse(at, f"{name} is not a value of {slot_enum}", "R001")
+        if slot_typ[0] == "kind" and re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*", name):
+            return ("const", name, "string")
+        self.site.refuse(at, f"{name} is not a variable here", "R001")
 
     def _push_member_scope(self, at: str, binder: str | None, member: Member,
                            scalar_type: tuple | None = None) -> tuple[dict, dict, int]:
@@ -1656,7 +1731,7 @@ class Lowering:
             return Member([member], self.lit(kind, [member]), kind, {}, []), [], None
         if set(node) == {"path"}:
             path = node["path"]
-            if len(path) == 1 and path[0] not in self.env and self._resolve_path_head(at, path, allow_top_implicit=False) is None:
+            if len(path) == 1 and path[0] not in self.env and self._resolve_path_head(at, path, allow_top_implicit=True) is None:
                 name = path[0]
                 relation = self.names.resolve(self.sig.module.id, name) if name not in self.signatures else name
                 target = self.signatures.get(relation)
@@ -1667,7 +1742,7 @@ class Lowering:
                 terms = [("var", self.fresh(column)) for column, _ in target.key]
                 columns = {column: (index, typ) for index, (column, typ) in enumerate(target.key)}
                 return Member(terms, self.lit(relation, terms), None, columns, []), [], None
-            lits, recv_term, _, slot = self._multivalued_slot_path(at, path, allow_top_implicit=False)
+            lits, recv_term, _, slot = self._multivalued_slot_path(at, path, allow_top_implicit=True)
             if not allow_open and slot.world == "open":
                 self.site.refuse(at, f"{slot.table} is open; it cannot be negated or aggregated here", "R004")
             slot_typ = self.slot_type(slot)
@@ -1723,9 +1798,23 @@ class Lowering:
         if slot.world == "open":
             self.site.refuse(f"{at}/in/1", f"{slot.table} is open; membership cannot be negated or decided", "R004")
         slot_typ = self.slot_type(slot)
-        elem_val = self.eval_value(f"{at}/in/0", elem_node)
-        if elem_val.typ != ir_type(self.pack, slot_typ):
-            self.site.refuse(at, f"cannot test {elem_val.typ} membership in {ir_type(self.pack, slot_typ)} set", "R003")
+        bare_lit = self._bare_membership_literal(f"{at}/in/0", elem_node, slot_typ, slot.enum)
+        if bare_lit is not None:
+            elem_val = ValEval("string", (ValBranch((), (), (), bare_lit),), None)
+        else:
+            if isinstance(elem_node, dict) and set(elem_node) == {"lit"}:
+                lit_term = self.literal(f"{at}/in/0", elem_node["lit"])
+                if slot.enum is not None:
+                    if lit_term[2] != "string" or lit_term[1] not in self.pack.enums[slot.enum]:
+                        self.site.refuse(f"{at}/in/0", f"{elem_node['lit']} is not a value of {slot.enum}", "R001")
+                elif not self._types_compatible(("scalar", lit_term[2]), slot_typ, elem_is_literal=True):
+                    self.site.refuse(at, f"cannot test {lit_term[2]} membership in {slot_typ[1]} set", "R003")
+            else:
+                sem_typ, sem_enum, is_lit = self._expr_semantic_type(f"{at}/in/0", elem_node)
+                if not self._types_compatible(sem_typ, slot_typ, elem_is_literal=is_lit,
+                                              elem_enum=sem_enum, slot_enum=slot.enum):
+                    self.site.refuse(at, f"cannot test {sem_enum or sem_typ[1]} membership in {slot.enum or slot_typ[1]} set", "R003")
+            elem_val = self.eval_value(f"{at}/in/0", elem_node)
         eb, rb = self._materialize_val(elem_val), self._materialize_val(recv_val)
         s_rel = self.combine_states([elem_val.state_rel, recv_val.state_rel])
         if eb is None or rb is None:
@@ -1746,9 +1835,60 @@ class Lowering:
         base = agg[1]
         pred = agg[2] if len(agg) >= 3 else None
         binder = agg[3] if len(agg) == 4 else None
-        member, extra_lits, filters, scalar_type = self._unwrap_collection(
-            at, base, allow_open=False, binder_hint=binder)
-        if pred is None and not filters and not extra_lits:
+        filters: list[tuple[str, dict, str | None]] = []
+        cur_at, cur = f"{at}/agg/1", base
+        while isinstance(cur, dict) and set(cur) == {"filter"}:
+            inner, cond, *fb = cur["filter"]
+            filters.append((f"{cur_at}/filter/1", cond, fb[0] if fb else None))
+            cur_at, cur = f"{cur_at}/filter/0", inner
+        filters.reverse()
+        prefix_state_rel: str | None = None
+        if (isinstance(cur, dict) and set(cur) == {"path"} and cur["path"]
+                and not (len(cur["path"]) == 1 and cur["path"][0] not in self.env
+                         and self._resolve_path_head(cur_at, cur["path"], allow_top_implicit=True) is None)):
+            path = cur["path"]
+            resolved = self._resolve_path_head(cur_at, path, allow_top_implicit=True)
+            if resolved is None:
+                self.site.refuse(cur_at, f"{path[0]} is not a variable here", "R001")
+            _, typ, rest = resolved
+            if not rest:
+                self.site.refuse(cur_at, f"{'.'.join(path)} is not a set", "R003")
+            recv_path = path[:-1]
+            if recv_path:
+                recv_val = self.eval_path_val(cur_at, recv_path)
+            else:
+                recv_val = ValEval(ir_type(self.pack, typ), (ValBranch((), (), (), resolved[0]),), None)
+            recv_typ = typ
+            for hop in rest[:-1]:
+                if recv_typ[0] != "kind":
+                    self.site.refuse(cur_at, f"{'.'.join(path)} is no element", "R003")
+                s = self.slot(cur_at, recv_typ[1], hop)
+                if s is None:
+                    self.site.refuse(cur_at, f"{'.'.join(path)} has no slot {hop}", "R001")
+                recv_typ = self.slot_type(s)
+            if recv_typ[0] != "kind":
+                self.site.refuse(cur_at, f"{'.'.join(path)} is no element, so it has no slot {rest[-1]}", "R003")
+            slot = self.slot(cur_at, recv_typ[1], rest[-1])
+            if slot is None:
+                self.site.refuse(cur_at, f"{'.'.join(path)} has no slot {rest[-1]} lowered here", "R001")
+            if not slot.multivalued:
+                self.site.refuse(cur_at, f"{'.'.join(path)} is not a set", "R003")
+            if slot.world == "open":
+                self.site.refuse(cur_at, f"{slot.table} is open; it cannot be negated or aggregated here", "R004")
+            prefix_state_rel = recv_val.state_rel
+            rb = self._materialize_val(recv_val)
+            if rb is None:
+                return BoolEval(None, None, prefix_state_rel)
+            slot_typ = self.slot_type(slot)
+            elem = ("var", self.fresh(binder or "m"))
+            elem_kind = slot_typ[1] if slot_typ[0] == "kind" else None
+            scalar_type = slot_typ if slot_typ[0] == "scalar" else None
+            member = Member([elem], self.lit(slot.table, [rb.term, elem]), elem_kind, {}, [])
+            extra_lits = list(rb.lits) + list(rb.assigns) + list(rb.conds)
+        else:
+            member, extra_lits, scalar_type = self._collection_root(
+                cur_at, cur, allow_open=False, binder_hint=binder)
+        if pred is None and not filters and not extra_lits and prefix_state_rel is None:
             t_rel = self.next_helper("any_t")
             f_rel = self.next_helper("any_f")
             self.add_helper(t_rel, self._key_cols_active(), self.key_terms(),
@@ -1774,28 +1914,29 @@ class Lowering:
         inner_keys = outer_keys + member.terms
         inner_cols = outer_cols + m_cols
         inner_domain = outer_domain + extra_lits + [member.literal]
-        where_undecided: list[str] = []
+        where_undecided: list[tuple[list[tuple], str]] = []
         pass_lits: list[tuple] = []
         p_eval: BoolEval | None = None
         no_match = False
         try:
             self._eval_keys = inner_keys
             self._eval_key_cols = inner_cols
-            self._eval_domain_lits = inner_domain
             for cond_at, cond, fb in filters:
+                self._eval_domain_lits = inner_domain + pass_lits
                 scope = self._push_member_scope(cond_at, fb, member, scalar_type)
                 try:
                     w = self.eval_bool(cond_at, cond)
                 finally:
                     self._pop_member_scope(scope)
                 if w.s_rel is not None:
-                    where_undecided.append(w.s_rel)
+                    where_undecided.append((list(pass_lits), w.s_rel))
                 if w.f_all or (not w.t_all and w.t_rel is None):
                     no_match = True
                     break
                 if w.t_rel is not None:
                     pass_lits.append(self.lit(w.t_rel, inner_keys))
             if pred is not None and not no_match:
+                self._eval_domain_lits = inner_domain + pass_lits
                 scope = self._push_member_scope(f"{at}/agg/2", binder, member, scalar_type)
                 try:
                     p_eval = self.eval_bool(f"{at}/agg/2", pred)
@@ -1815,15 +1956,16 @@ class Lowering:
         t_guard = [] if t_out is None else [self.lit(t_out, outer_keys, False)]
         raw_s = self.next_helper("any_raw_s")
         st_v, rsn_v = ("var", self.fresh("st")), ("var", self.fresh("rsn"))
-        for ws in where_undecided:
+        for prior_lits, ws in where_undecided:
             for st_lit in (UNKNOWN, INVALID):
                 self.add_helper(raw_s, self._state_cols_active(), outer_keys + [st_lit, rsn_v],
-                                outer_domain + t_guard + [self.lit(ws, inner_keys + [st_lit, rsn_v])])
+                                inner_domain + prior_lits + t_guard + [self.lit(ws, inner_keys + [st_lit, rsn_v])])
         if not no_match and p_eval is not None and p_eval.s_rel is not None:
             self.add_helper(raw_s, self._state_cols_active(), outer_keys + [st_v, rsn_v],
                             inner_domain + pass_lits + t_guard + [self.lit(p_eval.s_rel, inner_keys + [st_v, rsn_v])])
         raw_s_out = self.helper_or_none(raw_s)
-        s_out = self.combine_states([raw_s_out], collapse=True) if raw_s_out is not None else None
+        inner_s_out = self.combine_states([raw_s_out], collapse=True) if raw_s_out is not None else None
+        s_out = self.combine_states([prefix_state_rel, inner_s_out])
         any_s = self._any_keys(s_out)
         f_rel = self.next_helper("any_f")
         f_body = list(outer_domain)
@@ -1900,21 +2042,29 @@ class Lowering:
         if not isinstance(coll_node, dict) or set(coll_node) != {"path"}:
             self.site.refuse(f"{at}/in/1", "membership right-hand side must be a multivalued slot path here")
         coll_lits, recv_term, _, slot = self._multivalued_slot_path(
-            f"{at}/in/1", coll_node["path"], allow_top_implicit=False)
+            f"{at}/in/1", coll_node["path"], allow_top_implicit=True)
         slot_typ = self.slot_type(slot)
-        elem_is_lit = False
-        if isinstance(elem_node, dict) and set(elem_node) == {"lit"}:
+        bare_lit = self._bare_membership_literal(f"{at}/in/0", elem_node, slot_typ, slot.enum)
+        if bare_lit is not None:
+            elem_lits, elem_term = [], bare_lit
+        elif isinstance(elem_node, dict) and set(elem_node) == {"lit"}:
             elem_lits, elem_term = [], self.literal(f"{at}/in/0", elem_node["lit"])
-            elem_typ = ("scalar", elem_term[2])
-            elem_is_lit = True
+            if slot.enum is not None:
+                if elem_term[2] != "string" or elem_term[1] not in self.pack.enums[slot.enum]:
+                    self.site.refuse(f"{at}/in/0", f"{elem_node['lit']} is not a value of {slot.enum}", "R001")
+            elif not self._types_compatible(("scalar", elem_term[2]), slot_typ, elem_is_literal=True):
+                self.site.refuse(at, f"cannot test {elem_term[2]} membership in {slot_typ[1]} set", "R003")
         elif isinstance(elem_node, dict) and set(elem_node) == {"path"} and (
-                self._resolve_path_head(f"{at}/in/0", elem_node["path"], allow_top_implicit=False) is not None):
+                self._resolve_path_head(f"{at}/in/0", elem_node["path"], allow_top_implicit=True) is not None):
             elem_lits, elem_term, _, elem_typ = self._walk_path(
-                f"{at}/in/0", elem_node["path"], allow_top_implicit=False)
+                f"{at}/in/0", elem_node["path"], allow_top_implicit=True)
+            sem = self._path_semantic_type(f"{at}/in/0", elem_node["path"], allow_top_implicit=True)
+            elem_enum = sem[1] if sem is not None else None
+            if not self._types_compatible(elem_typ, slot_typ, elem_is_literal=False,
+                                          elem_enum=elem_enum, slot_enum=slot.enum):
+                self.site.refuse(at, f"cannot test {elem_enum or elem_typ[1]} membership in {slot.enum or slot_typ[1]} set", "R003")
         else:
             self.site.refuse(f"{at}/in/0", "an operand is a variable, a slot path or a literal here")
-        if not self._types_compatible(elem_typ, slot_typ, elem_is_literal=elem_is_lit):
-            self.site.refuse(at, f"cannot test {elem_typ[1]} membership in {slot_typ[1]} set", "R003")
         return coll_lits + elem_lits + [self.lit(slot.table, [recv_term, elem_term])]
 
     def premise(self, at: str, node: dict) -> list[tuple]:
