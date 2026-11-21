@@ -621,14 +621,6 @@ extend Item
     assert known == {("a1",): "low", ("a2",): "high"}
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "M3: decisions/language-rezono-1.md: sections 2 and 5.4; compiler/rezono_compiler/rezono_derived.py "
-        "must refuse functional derivations whose `.one(...)` or `.count(...)` reads an open-world derived "
-        "Bool relation or projects an open-world slot (`slot.world == 'open'`) with R004."
-    ),
-)
 def test_rezono_1_functional_derivation_refuses_open_world_collection_and_slot(tmp_path):
     # Counter-case: the exact same `.one(col)`, `.count(...)` and `.one(slot)` derivations over a closed
     # derived Bool relation and a closed slot compile cleanly.
@@ -776,15 +768,6 @@ def test_rezono_1_functional_derivation_refuses_open_world_collection_and_slot(t
     assert not problems, "\n".join(problems)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "M3: decisions/language-rezono-1.md: section 2; compiler/rezono_compiler/rezono_derived.py "
-        "must allow implicit `it` slot paths inside Bool derived predicates declared in `kind` "
-        "(e.g. `size > 10` and slot-path equality comparisons without `it.`) while refusing unknown "
-        "identifiers with R001."
-    ),
-)
 def test_rezono_1_kind_bool_derived_allows_implicit_it_paths(tmp_path):
     case_facts = """\
 area:
