@@ -108,17 +108,6 @@ def test_the_scan_finds_each_form():
     assert refusals(text) == [(7, "piece_missing", {"path"}), (9, "unknown_rule", {"rule"})]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=(MissingRegister, AssertionError),
-    reason=(
-        "extra: decisions/checker-refusal-register.md: Write contracts/checker-refusal.yaml with the enum "
-        "RefusalCode: every code checker/rezono_checker writes literally today (\"reason\": code, find, "
-        "Unverified, Refused), each with a description and the annotations arguments and scope, as the decision "
-        "gives; and checker/rezono_checker/messages/en.json and nl.json with one sentence per code, whose "
-        "placeholders are its arguments. A new file in contracts/ follows the form of the others."
-    ),
-)
 def test_every_code_is_registered_with_a_sentence_in_both_languages():
     codes = register()
     for code, entry in sorted(codes.items()):
@@ -135,30 +124,9 @@ def test_every_code_is_registered_with_a_sentence_in_both_languages():
     assert sorted(written - set(codes)) == []
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=(MissingRegister, AssertionError),
-    reason=(
-        "extra: decisions/checker-refusal-register.md: Waits for checker/tests/test_refusal_register.py--"
-        "test_every_code_is_registered_with_a_sentence_in_both_languages. Then add rezono_checker.refusals with "
-        "Refusal (a str whose text is the English sentence, with code and arguments) and RefusalError (a "
-        "ValueError), and make every problem of checker/rezono_checker/proof.py a Refusal with a registered code: "
-        "its English sentence is today's sentence, so the text a caller reads stays the same."
-    ),
-)
 def test_proof_refuses_with_registered_codes():
     holds((PACKAGE / "proof.py").read_text("utf-8"), register())
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=(MissingRegister, AssertionError),
-    reason=(
-        "extra: decisions/checker-refusal-register.md: Waits for checker/tests/test_refusal_register.py--"
-        "test_proof_refuses_with_registered_codes (rezono_checker.refusals). Then make every problem of "
-        "checker/rezono_checker/views.py a Refusal with a registered code; its English sentence is today's "
-        "sentence."
-    ),
-)
 def test_views_refuses_with_registered_codes():
     holds((PACKAGE / "views.py").read_text("utf-8"), register())

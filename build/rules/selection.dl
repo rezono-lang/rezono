@@ -226,6 +226,47 @@ build_known_folder(run, folder) :- build_component__run(component, run), build_c
 build_selected_job(run, folder, reason) :- build_full_selection(run, reason), build_receipt(receipt),
     verified_member(receipt, m, 0, "suite"), verified_member(receipt, m, 1, folder), !build_known_folder(run, folder).
 
+// Form 3: change-to-target selection for auxiliary CI targets (decisions/tooling-does-not-decide.md section 2.3).
+// Without an admitted selection receipt, build_full_selection fires, every full_fallback target is selected,
+// and build_target_not_required stays empty (fail closed).
+.decl build_has_full_selection(run: symbol)
+.decl build_target_known(target: symbol)
+.decl build_target_selected(run: symbol, target: symbol, reason: symbol)
+.decl build_target_has_selected(run: symbol, target: symbol)
+.decl build_target_not_required(run: symbol, target: symbol)
+
+build_has_full_selection(run) :- build_full_selection(run, _).
+build_target_known(target) :- build_target_rule__target(rule, target), target != "".
+
+build_target_selected(run, target, change) :-
+    build_selection_covered(run),
+    build_path__run(change, run), build_path__path(change, path), path != "",
+    build_target_rule__target(rule, target), target != "",
+    build_target_rule__kind(rule, "direct"),
+    build_target_rule__path_prefix(rule, path).
+build_target_selected(run, target, change) :-
+    build_selection_covered(run),
+    build_path__run(change, run), build_path__path(change, path), path != "",
+    build_target_rule__target(rule, target), target != "",
+    build_target_rule__kind(rule, "direct"),
+    build_target_rule__path_prefix(rule, prefix), prefix != "",
+    build_target_rule__upper_bound(rule, upper), upper != "",
+    binary_text(path) >= binary_text(prefix),
+    binary_text(path) < binary_text(upper).
+build_target_selected(run, target, reason) :-
+    build_full_selection(run, reason),
+    build_target_rule__target(rule, target), target != "",
+    build_target_rule__kind(rule, "full_fallback").
+
+build_target_has_selected(run, target) :- build_target_selected(run, target, _).
+build_target_not_required(run, target) :-
+    build_selection_covered(run),
+    !build_has_full_selection(run),
+    build_target_known(target),
+    !build_target_has_selected(run, target).
+
 .output build_selected_job
 .output build_full_selection
 .output build_readerless_path
+.output build_target_selected
+.output build_target_not_required

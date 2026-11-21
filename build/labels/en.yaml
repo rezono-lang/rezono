@@ -5,9 +5,22 @@ build_test_file: Test file
 build_dependency: Suite dependency
 build_path: Changed path
 build_path_reader: Path reader
+build_target_rule: Build target rule
+build_target_rule.target: Target
+build_target_rule.path_prefix: Path prefix
+build_target_rule.kind: Rule kind
+build_target_rule.upper_bound: Prefix upper bound
+target_rule_kind: Target rule kind
+target_rule_kind.direct: Direct
+target_rule_kind.full_fallback: Full fallback
 build_selected_job: Selected job
 build_full_selection: Full selection reason
 build_readerless_path: Readerless changed path
+build_has_full_selection: Has full selection
+build_target_known: Known build target
+build_target_selected: Selected build target
+build_target_has_selected: Build target selected
+build_target_not_required: Build target not required
 build_task: Observed build task
 build_policy_date: Effective policy day
 build_track_rank: Track priority
