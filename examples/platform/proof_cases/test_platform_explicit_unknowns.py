@@ -100,15 +100,6 @@ def test_ambiguous_provider_produces_explicit_gap_or_unknown():
         assert row not in resolved_state.derived.get(rel, set())
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "extra: decisions/platform-five-scenes.md: admission_assumption.dl must reuse connection "
-        "classification from tenant_connection_review.dl instead of duplicating isolated, "
-        "unresolved, matrix, and unlisted profile classification rules"
-    ),
-)
 def test_admission_assumption_reuses_tenant_connection_review():
     model = compiler_pack.read(ROOT)
     program = compiler_rules.load(model.rules)

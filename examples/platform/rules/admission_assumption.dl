@@ -6,29 +6,19 @@
 admission_connection_approved(c) :-
     outbound_approval__connection(_, c).
 
+.decl admission_request_connection(request: symbol, connection: symbol, tenant: symbol, number: number, target: symbol, port: number)
+admission_request_connection(r, c, t, n, target, port) :-
+    tenant_service_request__tenant(r, t),
+    tenant_service_request__service(r, s),
+    tenant_connection_source(c, t, n),
+    tenant_request_connection__service(c, s),
+    tenant_request_connection__target(c, target),
+    tenant_request_connection__port(c, port).
+
 .decl admission_request_denied(request: symbol)
 admission_request_denied(r) :-
-    tenant_service_request__tenant(r, t),
-    tenant_service_request__service(r, s),
-    tenant_request_connection__tenant(c, t),
-    tenant_request_connection__service(c, s),
-    tenant_connection_isolated(c).
-admission_request_denied(r) :-
-    tenant_service_request__tenant(r, t),
-    tenant_service_request__service(r, s),
-    tenant_request_connection__tenant(c, t),
-    tenant_request_connection__service(c, s),
-    tenant_connection_unresolved(c).
-admission_request_denied(r) :-
-    tenant_service_request__tenant(r, t),
-    tenant_service_request__service(r, s),
-    tenant_service_request__profile(r, p),
-    tenant_profile__unlisted(p, "denied"),
-    tenant_request_connection__tenant(c, t),
-    tenant_request_connection__service(c, s),
-    !tenant_connection_matrix(c),
-    !tenant_connection_isolated(c),
-    !tenant_connection_unresolved(c).
+    admission_request_connection(r, _, t, n, target, port),
+    tenant_connection_review(t, n, target, port, "denied", _).
 admission_request_denied(r) :-
     tenant_service_request__tenant(r, t),
     tenant_service_request__service(r, s),
@@ -40,15 +30,8 @@ admission_request_denied(r) :-
 
 .decl admission_request_review(request: symbol)
 admission_request_review(r) :-
-    tenant_service_request__tenant(r, t),
-    tenant_service_request__service(r, s),
-    tenant_service_request__profile(r, p),
-    tenant_profile__unlisted(p, "review"),
-    tenant_request_connection__tenant(c, t),
-    tenant_request_connection__service(c, s),
-    !tenant_connection_matrix(c),
-    !tenant_connection_isolated(c),
-    !tenant_connection_unresolved(c),
+    admission_request_connection(r, c, t, n, target, port),
+    tenant_connection_review(t, n, target, port, "review", _),
     !admission_connection_approved(c),
     !admission_request_denied(r).
 
