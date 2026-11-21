@@ -1,15 +1,37 @@
 import type { BoundSweep, BoundSweepList, BoundSweepCell, Answer, SeriesCell } from '../../../contracts/typescript/generated/explain.ts';
 import type { ArchivedFile, Manifest, Snapshot } from '../../../contracts/typescript/generated/manifest.ts';
 import type { Bundle } from '../../../contracts/typescript/generated/bundle.ts';
+import type { RowRef } from '../../../contracts/typescript/generated/proof.ts';
+import { canonicalJson } from '../../../viewer/src/lib/canon.ts';
 import { ANSWER } from './ask.ts';
 import { roleCatalogue } from './catalogue.ts';
 import type { Read } from './expr.ts';
+import { compareKey } from './pieces.ts';
 import { StoreLimit } from './store.ts';
 
 const NAME = /^[a-z][a-z0-9]*(_[a-z0-9]+)*$/;
 const SHA256 = /^[0-9a-f]{64}$/;
 const DECIMAL = /^(0|-?[1-9][0-9]*)$/;
 const SAFE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+const ROW_LIMIT = 25_000;
+const TURNS_FORMAT = 'rezono.turns/1';
+
+export type TurnStatus = 'turns' | 'same' | 'unknown';
+export type TurnCause = 'rule' | 'version' | 'definition' | 'path' | 'count'
+	| 'contributors' | 'state' | 'presence' | 'value' | 'cap';
+export type SweepSeriesCell = SeriesCell & { row?: RowRef; turn?: TurnStatus; causes?: TurnCause[] };
+export interface SweepStart {
+	relation: string;
+	key: string[];
+}
+
+const TURN_CAUSES = new Set<TurnCause>([
+	'rule', 'version', 'definition', 'path', 'count',
+	'contributors', 'state', 'presence', 'value', 'cap'
+]);
+
+type ObjectRef = Pick<ArchivedFile, 'uri' | 'sha256'>;
+type Keyed = { key: string[] };
 
 interface Grid {
 	name: string;
@@ -27,18 +49,41 @@ interface View {
 	bundle: Bundle;
 	snaps: ReadonlyMap<string, Snapshot>;
 	compiled(file: string): ArchivedFile | undefined;
-	object(ref: ArchivedFile, category: 'bundles', decode?: (text: string) => unknown): Promise<unknown>;
+	object(ref: ObjectRef, category: 'objects' | 'bundles', decode?: (text: string) => unknown): Promise<unknown>;
 	read(key: string, sha?: string, optional?: boolean): Promise<unknown>;
+	rows(relation: string): Promise<Keyed[]>;
 	range: Read;
 }
 
 interface Point {
 	cell: BoundSweepCell;
 	diagnosis?: string;
+	manifestSha?: string;
+	manifestBody?: Record<string, unknown>;
 }
 
 function record(value: unknown): value is Record<string, unknown> {
 	return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function keyParts(value: unknown): value is string[] {
+	return Array.isArray(value) && value.every((part) => typeof part === 'string');
+}
+
+function compareCodePoints(a: string, b: string): number {
+	let i = 0, j = 0;
+	while (i < a.length && j < b.length) {
+		const ca = a.codePointAt(i)!;
+		const cb = b.codePointAt(j)!;
+		if (ca !== cb) return ca < cb ? -1 : 1;
+		i += ca > 0xffff ? 2 : 1;
+		j += cb > 0xffff ? 2 : 1;
+	}
+	return i < a.length ? 1 : j < b.length ? -1 : 0;
+}
+
+function sameTuple(a: readonly string[], b: readonly string[]): boolean {
+	return a.length === b.length && a.every((part, i) => part === b[i]);
 }
 
 function publishedGrid(text: string): Grid | undefined {
@@ -106,7 +151,8 @@ async function publishedPoint(view: View, pack: string, role: string, grid: Grid
 	const fallback: Point = { cell: { index, value, status: 'not_computed' } };
 	if (!Number.isSafeInteger(epoch)) return fallback;
 
-	async function entry(category: 'manifests' | 'diagnoses'): Promise<{checks: Check[]; status: Check['status']} | undefined> {
+	async function entry(category: 'manifests' | 'diagnoses'):
+		Promise<{checks: Check[]; status: Check['status']; sha256: string; body: Record<string, unknown>} | undefined> {
 		try {
 			const pointer = await view.read(pack + '/epochs/' + epoch + '/' + category + '/' + id + '.json', undefined, true);
 			if (!record(pointer) || pointer.format !== 'rezono.pointer/1' || pointer.id !== id
@@ -125,7 +171,12 @@ async function publishedPoint(view: View, pack: string, role: string, grid: Grid
 				|| !body.snapshots.some((entry: unknown) => record(entry) && entry.role === role && entry.relation === grid.kind)))
 				return undefined;
 			const checks = body.checks.map(({ name, status }) => ({ name, status }));
-			return { checks, status: red ? 'red' : checks.some((check) => check.status === 'warning') ? 'warning' : 'green' };
+			return {
+				checks,
+				status: red ? 'red' : checks.some((check) => check.status === 'warning') ? 'warning' : 'green',
+				sha256: pointer.sha256,
+				body
+			};
 		} catch (error) {
 			if (error instanceof StoreLimit) throw error;
 			return undefined;
@@ -135,13 +186,119 @@ async function publishedPoint(view: View, pack: string, role: string, grid: Grid
 	const green = await entry('manifests');
 	const red = await entry('diagnoses');
 	if (green && red) return fallback;
-	if (green) return { cell: { index, value, status: green.status, checks: green.checks, manifest: id } };
+	if (green) return {
+		cell: { index, value, status: green.status, checks: green.checks, manifest: id },
+		manifestSha: green.sha256,
+		manifestBody: green.body
+	};
 	if (red) return { cell: { index, value, status: 'red', checks: red.checks }, diagnosis: id };
 	return fallback;
 }
 
-export async function readPublishedSweep(view: View, pack: string, role: string, named?: string):
-	Promise<{listing: BoundSweepList; series: SeriesCell[]} | undefined> {
+async function variantRows(view: View, body: Record<string, unknown>, role: string, relation: string): Promise<Keyed[] | undefined> {
+	if (!Array.isArray(body.snapshots)) return undefined;
+	const matching = body.snapshots.filter((entry: unknown) =>
+		record(entry) && entry.role === role && entry.relation === relation);
+	if (matching.length !== 1) return undefined;
+	const snap = matching[0];
+	if (!record(snap) || snap.format !== 'json' || typeof snap.uri !== 'string'
+		|| typeof snap.sha256 !== 'string' || !SHA256.test(snap.sha256)
+		|| typeof snap.complete !== 'boolean'
+		|| (snap.full !== undefined && typeof snap.full !== 'boolean')
+		|| (!snap.complete && !snap.full)) return undefined;
+	try {
+		const raw = await view.object({ uri: snap.uri, sha256: snap.sha256 }, 'objects');
+		if (!Array.isArray(raw)) return undefined;
+		if (raw.length > ROW_LIMIT) throw new StoreLimit();
+		if (raw.some((row) => !record(row) || !keyParts(row.key) || !row.key.length)) return undefined;
+		const sorted = (raw as Keyed[]).slice().sort((a, b) => compareKey(a.key, b.key));
+		if (sorted.some((row, i) => i > 0 && compareKey(sorted[i - 1].key, row.key) === 0)) return undefined;
+		return sorted;
+	} catch (error) {
+		if (error instanceof StoreLimit) throw error;
+		return undefined;
+	}
+}
+
+function pairRow(mainRows: readonly Keyed[], stopRows: readonly Keyed[], startKey: readonly string[], isCalc: boolean): string[] | undefined {
+	const exact = stopRows.find((row) => sameTuple(row.key, startKey));
+	if (exact) return exact.key;
+	if (isCalc) {
+		if (startKey.length !== 4) return undefined;
+		const subject = startKey[0];
+		const mainCount = mainRows.filter((row) => row.key.length === 4 && row.key[0] === subject).length;
+		if (mainCount !== 1) return undefined;
+		const stopMatches = stopRows.filter((row) => row.key.length === 4 && row.key[0] === subject);
+		return stopMatches.length === 1 ? stopMatches[0].key : undefined;
+	}
+	if (startKey.length <= 1) return undefined;
+	const prefix = startKey.slice(0, -1);
+	const samePrefix = (key: readonly string[]) =>
+		key.length === startKey.length && prefix.every((part, i) => key[i] === part);
+	const mainCount = mainRows.filter((row) => samePrefix(row.key)).length;
+	if (mainCount !== 1) return undefined;
+	const stopMatches = stopRows.filter((row) => samePrefix(row.key));
+	return stopMatches.length === 1 ? stopMatches[0].key : undefined;
+}
+
+async function readTurns(
+	view: View,
+	pack: string,
+	role: string,
+	grid: Grid,
+	before: { index: number; manifest: string; sha256: string },
+	after: { index: number; manifest: string; sha256: string }
+): Promise<Map<string, TurnCause[]> | undefined> {
+	const path = pack + '/' + after.manifest + '/' + role + '/turns.json';
+	let doc: unknown;
+	try {
+		doc = await view.read(path, undefined, true);
+	} catch (error) {
+		if (error instanceof StoreLimit) throw error;
+		return undefined;
+	}
+	if (!record(doc) || Object.keys(doc).length !== 8) return undefined;
+	if (doc.format !== TURNS_FORMAT || doc.pack !== pack || doc.role !== role
+		|| doc.sweep !== grid.name || doc.base_manifest !== view.manifest.id) return undefined;
+	if (!record(doc.before) || Object.keys(doc.before).length !== 3
+		|| doc.before.index !== before.index || doc.before.manifest !== before.manifest
+		|| doc.before.sha256 !== before.sha256) return undefined;
+	if (!record(doc.after) || Object.keys(doc.after).length !== 3
+		|| doc.after.index !== after.index || doc.after.manifest !== after.manifest
+		|| doc.after.sha256 !== after.sha256) return undefined;
+	if (!Array.isArray(doc.turns)) return undefined;
+	const map = new Map<string, TurnCause[]>();
+	let prevRel = '';
+	let prevKey = '';
+	let hasPrev = false;
+	for (const entry of doc.turns) {
+		if (!record(entry) || Object.keys(entry).length !== 3) return undefined;
+		if (typeof entry.relation !== 'string' || !entry.relation.length || !view.snaps.has(entry.relation)
+			|| typeof entry.key !== 'string' || !Array.isArray(entry.causes) || !entry.causes.length) return undefined;
+		let parsedKey: unknown;
+		try { parsedKey = JSON.parse(entry.key); } catch { return undefined; }
+		if (!keyParts(parsedKey) || !parsedKey.length || canonicalJson(parsedKey) !== entry.key) return undefined;
+		if (hasPrev) {
+			const relCmp = compareCodePoints(prevRel, entry.relation);
+			if (relCmp > 0 || (relCmp === 0 && compareCodePoints(prevKey, entry.key) >= 0)) return undefined;
+		}
+		const causes: TurnCause[] = [];
+		for (let i = 0; i < entry.causes.length; i++) {
+			const cause = entry.causes[i];
+			if (typeof cause !== 'string' || !TURN_CAUSES.has(cause as TurnCause)) return undefined;
+			if (i > 0 && cause <= causes[i - 1]) return undefined;
+			causes.push(cause as TurnCause);
+		}
+		map.set(entry.relation + '\u0000' + entry.key, causes);
+		prevRel = entry.relation;
+		prevKey = entry.key;
+		hasPrev = true;
+	}
+	return map;
+}
+
+export async function readPublishedSweep(view: View, pack: string, role: string, named?: string, start?: SweepStart):
+	Promise<{listing: BoundSweepList; series: SweepSeriesCell[]; start?: RowRef} | undefined> {
 	const ref = view.compiled('ir/sweeps.json');
 	if (!ref) return undefined;
 	let grid: Grid | undefined;
@@ -151,6 +308,17 @@ export async function readPublishedSweep(view: View, pack: string, role: string,
 		return undefined;
 	}
 	if (!grid || (named !== undefined && grid.name !== named) || !await readableCell(view, grid)) return undefined;
+	let startRef: RowRef | undefined;
+	let mainRows: Keyed[] | undefined;
+	let isCalc = false;
+	if (start) {
+		if (!view.snaps.has(start.relation)) return undefined;
+		mainRows = await view.rows(start.relation);
+		if (!mainRows.some((row) => compareKey(row.key, start.key) === 0)) return undefined;
+		startRef = { relation: start.relation, key: canonicalJson(start.key) };
+		const relMeta = view.bundle.relations?.find((rel) => rel.id === start.relation);
+		isCalc = typeof relMeta?.calc === 'string' && relMeta.calc.length > 0;
+	}
 	const full = completeScope(view);
 	const points: Point[] = [];
 	for (let index = 0; index < grid.count; index++) {
@@ -160,11 +328,84 @@ export async function readPublishedSweep(view: View, pack: string, role: string,
 	}
 	const listing: BoundSweep = { name: grid.name, cell: { kind: grid.kind, id: grid.key, slot: grid.slot },
 		min: String(grid.min), max: String(grid.max), step: String(grid.step), cells: points.map(({ cell }) => cell) };
-	const series = points.map(({ cell, diagnosis }) => ({ index: cell.index, value: cell.value, status: cell.status,
-		...(cell.manifest && { manifest: cell.manifest }), ...(diagnosis && { diagnosis }) }));
-	return { listing: { manifest_id: view.manifest.id, sweeps: [listing] }, series };
+	if (!start || !mainRows || !startRef) {
+		const series = points.map(({ cell, diagnosis }) => ({ index: cell.index, value: cell.value, status: cell.status,
+			...(cell.manifest && { manifest: cell.manifest }), ...(diagnosis && { diagnosis }) }));
+		return { listing: { manifest_id: view.manifest.id, sweeps: [listing] }, series };
+	}
+
+	const pairedKeys: Array<string | undefined> = [];
+	const rowValid: boolean[] = [];
+	for (let i = 0; i < points.length; i++) {
+		const point = points[i];
+		if (full && point.manifestBody) {
+			const stopRows = await variantRows(view, point.manifestBody, role, start.relation);
+			if (stopRows !== undefined) {
+				const paired = pairRow(mainRows, stopRows, start.key, isCalc);
+				pairedKeys.push(paired ? canonicalJson(paired) : undefined);
+				rowValid.push(true);
+				continue;
+			}
+		}
+		pairedKeys.push(undefined);
+		rowValid.push(false);
+	}
+
+	const series: SweepSeriesCell[] = [];
+	for (let i = 0; i < points.length; i++) {
+		const { cell, diagnosis } = points[i];
+		const entry: SweepSeriesCell = {
+			index: cell.index,
+			value: cell.value,
+			status: cell.status,
+			...(cell.manifest && { manifest: cell.manifest }),
+			...(diagnosis && { diagnosis })
+		};
+		if (pairedKeys[i] !== undefined) {
+			entry.row = { relation: start.relation, key: pairedKeys[i]! };
+		}
+		if (i > 0) {
+			const prev = points[i - 1];
+			const curr = points[i];
+			if (full && rowValid[i - 1] && rowValid[i]
+				&& prev.cell.manifest && prev.manifestSha
+				&& curr.cell.manifest && curr.manifestSha) {
+				const turnsMap = await readTurns(
+					view, pack, role, grid,
+					{ index: i - 1, manifest: prev.cell.manifest, sha256: prev.manifestSha },
+					{ index: i, manifest: curr.cell.manifest, sha256: curr.manifestSha }
+				);
+				if (!turnsMap) {
+					entry.turn = 'unknown';
+				} else {
+					const lookupKey = pairedKeys[i] ?? pairedKeys[i - 1];
+					const found = lookupKey !== undefined
+						? turnsMap.get(start.relation + '\u0000' + lookupKey)
+						: undefined;
+					if (found) {
+						entry.turn = 'turns';
+						entry.causes = found;
+					} else {
+						entry.turn = 'same';
+					}
+				}
+			} else {
+				entry.turn = 'unknown';
+			}
+		}
+		series.push(entry);
+	}
+	return { listing: { manifest_id: view.manifest.id, sweeps: [listing] }, series, start: startRef };
 }
 
-export function sweepAnswer(term: string, name: string, manifest: string, series: SeriesCell[]): Answer {
-	return { format: ANSWER, question: term, manifest_id: manifest, delta: { kind: 'sweep', id: name }, nodes: [], series };
+export function sweepAnswer(term: string, name: string, manifest: string, series: SweepSeriesCell[], start?: RowRef): Answer {
+	return {
+		format: ANSWER,
+		question: term,
+		manifest_id: manifest,
+		...(start && { start }),
+		delta: { kind: 'sweep', id: name },
+		nodes: [],
+		series
+	};
 }
