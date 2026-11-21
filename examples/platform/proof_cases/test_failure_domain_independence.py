@@ -64,16 +64,6 @@ def leaf_pair(leaves, relation, first, second):
     return (relation, (first, second)) in leaves
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "M2: decisions/platform-dependency-gaps.md: Declare FailureDomain (is_a: Referent, domain_kind, "
-        "contained_in bound to std-part in views.yaml), derive shared_failure_domain(cluster, other, failure_type) "
-        "and failure_domain_independent(cluster, other, failure_type) in rules/dependency_gaps.dl, and collapse "
-        "std-identity aliased building codes so building failure leaves no false surviving placement."
-    ),
-)
 def test_aliased_building_codes_collapse_to_one_domain():
     """Two distinct provider building codes linked by std-identity same_as collapse to one building domain."""
     data = base_records()
@@ -118,15 +108,6 @@ def test_aliased_building_codes_collapse_to_one_domain():
     assert leaf_pair(gap_leaves, "referent__same_as", "bldg-prov-a", "bldg-prov-b")
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "M2: decisions/platform-dependency-gaps.md: Derive failure_domain_independence_unknown(cluster, other, "
-        "failure_type, reason) in rules/dependency_gaps.dl so two halls without a PowerSeparationClaim or complete "
-        "PowerChainReceipt coverage stay explicitly unknown with reason power-chain-unproven."
-    ),
-)
 def test_two_halls_without_power_evidence_are_explicitly_unknown():
     """Distinct halls with unknown or un-receipted power feeds stay explicitly unknown, never falsely independent."""
     data = base_records()
@@ -173,15 +154,6 @@ def test_two_halls_without_power_evidence_are_explicitly_unknown():
     verified(INDEPENDENCE_UNKNOWN, ("east", "west", "power", "power-chain-unproven"), state=(model_u, state_u))
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "M2: decisions/platform-dependency-gaps.md: Declare PowerFeedLink, PowerChainReceipt, and "
-        "PowerSeparationClaim in schema/dependency_gaps.yaml and prove failure_domain_independent(cluster, other, "
-        "'power') with verified witnesses from either a cited separation claim or complete power-chain coverage."
-    ),
-)
 def test_proven_power_separation_produces_verified_witness():
     """Both a cited PowerSeparationClaim and complete disjoint PowerChainReceipt coverage produce verified witnesses."""
     base = base_records()

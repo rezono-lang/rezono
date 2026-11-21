@@ -1,19 +1,54 @@
 id: https://rezono.org/examples/platform-core/dependency-gaps
 name: platform_dependency_gaps
-description: Failure-domain membership, function inventory receipts, and what-if cluster withdrawals for dependency gap checks.
+description: Failure-domain membership, typed failure domains, power feed evidence, function inventory receipts, and what-if cluster withdrawals for dependency gap checks.
 in_language: en
-imports: [linkml:types, core, placement]
+imports: [linkml:types, std-identity:identity, core, placement]
 default_range: string
 annotations:
   layer: facts
 
+enums:
+  FailureDomainKind:
+    permissible_values:
+      building:
+      hall:
+      power_feed:
+      room:
+  FailureType:
+    permissible_values:
+      building:
+      power:
+
 classes:
+  FailureDomain:
+    is_a: Referent
+    description: A typed physical or electrical failure domain whose aliases live in std-identity.
+    attributes:
+      domain_kind: {range: FailureDomainKind, required: true}
+      contained_in: {range: FailureDomain}
   FailureDomainMembership:
     description: A topology assertion or observation placing a cluster in a failure domain.
     attributes:
       id: {identifier: true}
       cluster: {range: Cluster, required: true}
       domain: {required: true}
+  PowerFeedLink:
+    description: A topology link stating that a failure domain draws power from a power-feed domain.
+    attributes:
+      id: {identifier: true}
+      domain: {range: FailureDomain, required: true}
+      feed: {range: FailureDomain, required: true}
+  PowerChainReceipt:
+    description: An observation receipt confirming complete coverage of the power chain feeding a domain.
+    attributes:
+      id: {identifier: true}
+      domain: {range: FailureDomain, required: true}
+  PowerSeparationClaim:
+    description: A cited topology assertion stating that two failure domains have independent power.
+    attributes:
+      id: {identifier: true}
+      first: {range: FailureDomain, required: true}
+      second: {range: FailureDomain, required: true}
   FunctionInventoryReceipt:
     description: An observation receipt confirming the providers and placements of a function were completely inventoried.
     attributes:
