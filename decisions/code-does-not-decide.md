@@ -50,12 +50,13 @@ An audit at commit `8d1fa9c` found the compiler, the publisher and the renderers
 | `run/ceph_storage.py` | the Ceph monitor quorum count (`3` with three or more nodes, `1` otherwise, line 47); rendering the Rook `CephCluster` JSON is a converter | (c) for the quorum count, (d) for rendering | `run/packs/cluster-shape`: `ceph_monitor_count(cluster, count)`, passed as an input to `render()` (which reads it from the pack when omitted) | `run/tests/test_ceph_monitor_count_rule.py`, M4 |
 | `run/closed_month.py` | the closed month report | (d), transitional | [closed month](run-closed-month.md); its currency literal falls under the currency row | currency row |
 | `run/order_day_review.py` | the review of an order day; it already reads `authorized` from `run/packs/dispatch` | (d), transitional | [order day review](run-order-day-review.md); its currency literals fall under the currency row | currency row |
+| `run/offline_replay.py`, `run/provider_run.py` | `delivered` classification in `execute_run()` and process exit status in `main()` (`delivered` and `cleanup == "cleaned"`) | (c) for delivery and run-outcome classification, (d) for port and loop orchestration | `run/packs/cleanup` and `std-loop` run-outcome rules; `authorized` and `cleanup` already read `run/packs/dispatch` and `run/packs/cleanup` | planner rule and test for derived `delivered` / run outcome, M4 |
 | Currency literals in `run/*.py` | `"USD"` and `"EUR"` in `closed_month.py:99`, `effective_quote.py:83` and `:125`, `order_day_review.py:121`, `:136` and `:162` | (c) | pack facts: the currencies of a run and the pair of a rate capture are facts of `run/packs/exact-quote`, next to the `CurrencyCode` enums of `run/packs/dispatch` and `run/packs/invoice-drift` | `run/tests/test_no_currency_literals.py`, M4 |
 | `k8s-admission/policy_renderer.py` | the hand-written CEL of the shipped policy | (b) once the release switches | stays only as the test expectation, as [the admission translator](k8s-admission-translator.md#order) says | the release test below |
 | `k8s-admission/admission_release.py` | nothing of its own; it composes the release from the checked publication | (d) | renders each policy with `admission_translator.translate` from the checked rule program and its binding | `k8s-admission/test_translated_policy.py::test_release_renders_the_translated_policy`, M2 |
 | The preflight oracles in `k8s-admission/` | independent CEL and API server outcomes | (b), already | covered by [the admission rules](k8s-admission-rules.md) | leave |
 
-Count: (a) 5, (b) 7, (c) 12, (d) 6, plus the admission oracles that already are oracles.
+Count: (a) 5, (b) 7, (c) 13, (d) 6, plus the admission oracles that already are oracles.
 
 ## 3. Vocabulary
 

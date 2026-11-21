@@ -322,7 +322,8 @@ class _Walk:
             self.problems.append(Refusal("piece_unreached", path=path))
 
 
-def check_proof(rules_doc: dict, sees: dict, snapshots: dict, pieces: dict, roots: dict, limit: int, fanout: int) -> list[str]:
+def check_proof(rules_doc: dict, sees: dict, snapshots: dict, pieces: dict, roots: dict, limit: int, fanout: int,
+                *, require_load_bearing: bool = True) -> list[str]:
     """Problems with one role's proof pieces; empty when they are exactly the role's proof graph.
 
     `sees` is the role's witness file, `snapshots` its snapshot bytes per relation, `pieces` the bytes per
@@ -336,6 +337,8 @@ def check_proof(rules_doc: dict, sees: dict, snapshots: dict, pieces: dict, root
         return [err.refusal]
     except ValueError:
         return [Refusal("proof_steps_invalid")]
+    if require_load_bearing and sees["witnesses"] and "load_bearing_entries" not in sees:
+        problems.append(Refusal("load_bearing_mismatch"))
     walk = _Walk(pieces, limit, fanout, problems)
     for t in TREES:
         given = roots.get(t, {})

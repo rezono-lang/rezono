@@ -1,0 +1,17 @@
+usable_witness: usable witness
+usable_witness.conclusion_rel: conclusion relation
+usable_witness.conclusion_key: conclusion key
+usable_witness.dep_count: derived premise count
+witness_premise: witness premise
+witness_premise.witness: witness
+witness_premise.premise_rel: premise relation
+witness_premise.premise_key: premise key
+witness_premise.how: polarity
+witness_dep_step: witness dependency step
+witness_dep_step.witness: witness
+witness_dep_step.step_from: step from
+witness_dep_step.step_to: step to
+witness_dep_step.dep_rel: dependency relation
+witness_dep_step.dep_key: dependency key
+founded_witness: founded witness
+load_bearing: load-bearing premise
