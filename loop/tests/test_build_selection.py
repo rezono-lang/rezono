@@ -26,7 +26,7 @@ def git(root, *args):
 
 
 def repository(root, path):
-    root.mkdir()
+    root.mkdir(parents=True)
     git(root, "init", "-q")
     for name, required in zip(SUITES, ([], ["alpha"], ["beta"], []), strict=True):
         directory = root / name
