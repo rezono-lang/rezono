@@ -220,10 +220,9 @@ class Oracle:
         vals = [self.eval(a, s, sub(k), steps) for k, a in enumerate(args)]
         if op in ("and", "or"):
             return logic(op, vals)
-        for st in STATES:
-            for v in vals:
-                if v.state == st:
-                    return Val(st, None, v.reason)
+        worst = worst_of(vals)
+        if worst is not None:
+            return worst
         xs = [v.value for v in vals]
         if op in ("add", "sub"):
             acc = xs[0]
@@ -370,18 +369,22 @@ def walk(e: dict) -> list[dict]:
     return [e] + [x for a in (e.get("args") or []) if "op" in e and e["op"] for x in walk(a)]
 
 
+def worst_of(vals: list[Val]) -> Val | None:
+    """The most severe non-known state in `vals`, with the UTF-8 byte-smallest reason (Appendix A.4)."""
+    for st in STATES:
+        reasons = [v.reason for v in vals if v.state == st]
+        if reasons:
+            return Val(st, None, min(reasons, key=lambda r: r.encode("utf-8")))
+    return None
+
+
 def logic(op: str, vals: list[Val]) -> Val:
-    for v in vals:
-        if v.state == "invalid":
-            return v
+    """Appendix A.1 & A.4: a decisive known operand wins even over invalid; otherwise the worst
+    non-known state with its UTF-8 byte-smallest reason, or the neutral boolean."""
     decisive = op == "or"  # and: a known False decides; or: a known True decides
-    if any(v.state == "known" and v.value == decisive for v in vals):
+    if any(v.state == "known" and v.value is decisive for v in vals):
         return known(decisive)
-    for st in ("unknown", "not_applicable"):
-        for v in vals:
-            if v.state == st:
-                return Val(st, None, v.reason)
-    return known(not decisive)
+    return worst_of(vals) or known(not decisive)
 
 
 def text(v) -> str:
