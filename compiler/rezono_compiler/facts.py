@@ -1087,6 +1087,10 @@ def dataset_record(entries, where: str, judged: FactSchema | None = None, kind: 
             record[name] = dataset_cell(cell, field, SQL_TYPES[slot.type], judged, slot.target if slot.inlined else None)
         else:
             sql_type = SQL_TYPES[identity.id_type] if identity is not None else None
+            if (sql_type == "VARCHAR" and isinstance(cell, dict) and cell.keys() == {"path"}
+                    and isinstance(cell["path"], list) and len(cell["path"]) == 1
+                    and isinstance(cell["path"][0], str)):
+                cell = {"lit": cell["path"][0]}
             record[name] = dataset_cell(cell, field, sql_type)
     return record
 

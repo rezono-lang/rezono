@@ -12,6 +12,9 @@ build_verified_cut(run) :- build_run__receipt(run, receipt), build_run__observed
 
 build_full_selection(run, "missing-observation-receipt") :- build_run(run), !build_verified_cut(run).
 build_full_selection(run, "unsupported-event-policy") :- build_run__event(run, "merge_group").
+build_full_selection(run, "unsupported-event-policy") :- build_run__event(run, "push").
+build_full_selection(run, "unsupported-event-policy") :- build_run__event(run, "schedule").
+build_full_selection(run, "unsupported-event-policy") :- build_run__event(run, "workflow_dispatch").
 build_full_selection(run, path) :- build_path__run(path, run), build_path__coverage(path, "unknown").
 
 // The collector can observe either diff endpoint; both manifest graphs contribute edges.

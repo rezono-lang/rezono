@@ -487,25 +487,112 @@ def test_load_startup_topology_evaluates_platform_pack_and_rejects_unknown_signe
         _select_topology_from_relations(relations_with_unknown_signed)
 
 
+def _platform_ports_and_transport_rows() -> dict[str, Any]:
+    """Load the platform pack's port_decision and vendor_default_transport_source rows for standalone fixtures."""
+    port_raw = yaml.safe_load((PLATFORM_FACTS.parent / "port_decision.yaml").read_text(encoding="utf-8"))
+    transport_rows: list[dict[str, Any]] = []
+    for path in sorted(PLATFORM_FACTS.parent.glob("*_transport_source.yaml")):
+        doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        transport_rows.extend(doc.get("vendor_default_transport_source", []))
+    return {
+        "port_decision": port_raw["port_decision"],
+        "vendor_default_transport_source": transport_rows,
+    }
+
+
 def test_load_startup_topology_does_not_merge_pack_signatures_into_external_facts(tmp_path: Path) -> None:
     # Default pack facts in examples/platform/facts/ still merge the sibling artifact_signature.yaml.
     default_topo = load_startup_topology()
     assert default_topo.unsigned_artifact == {"service": "lab", "artifact": "a-lab"}
 
     # An external custom facts file without signature rows must not silently inherit
-    # pack_root/facts/artifact_signature.yaml.
+    # pack_root/facts/artifact_signature.yaml (supplying port/transport rows isolates signature checking).
     raw = yaml.safe_load(PLATFORM_FACTS.read_text(encoding="utf-8"))
     assert "artifact_signature" not in raw and "signature_scan" not in raw
+    base_with_transport = raw | _platform_ports_and_transport_rows()
     external_without_sigs = tmp_path / "custom_core.yaml"
-    external_without_sigs.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
+    external_without_sigs.write_text(yaml.safe_dump(base_with_transport, sort_keys=False), encoding="utf-8")
     with pytest.raises(RuntimeError, match="unverified_supply|verified workload"):
         load_startup_topology(external_without_sigs)
 
     # When the external facts file provides its own signature evidence, evaluation succeeds.
     sig_raw = yaml.safe_load((PLATFORM_FACTS.parent / "artifact_signature.yaml").read_text(encoding="utf-8"))
     external_with_sigs = tmp_path / "custom_core_with_sigs.yaml"
-    external_with_sigs.write_text(yaml.safe_dump(raw | sig_raw, sort_keys=False), encoding="utf-8")
+    external_with_sigs.write_text(yaml.safe_dump(base_with_transport | sig_raw, sort_keys=False), encoding="utf-8")
     assert load_startup_topology(external_with_sigs) == default_topo
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "M2: decisions/safe-step-rounds.md: section 1; loop/startup_rounds.py load_startup_topology "
+        "must not merge examples/platform/facts/port_decision.yaml or *_transport_source.yaml into "
+        "external facts files outside pack_root/facts, and must read sibling port_decision.yaml and "
+        "*_transport_source.yaml from the external facts directory when present."
+    ),
+)
+def test_load_startup_topology_does_not_merge_pack_ports_or_transport_into_external_facts(tmp_path: Path) -> None:
+    # Counter-case: default pack facts still merge their own siblings under examples/platform/facts/.
+    default_topo = load_startup_topology()
+    assert default_topo.endpoints[0] == ("lb", "entry", 8443)
+    assert default_topo.endpoints[1] == ("idp", "platform", 8443)
+
+    core_raw = yaml.safe_load(PLATFORM_FACTS.read_text(encoding="utf-8"))
+    sig_raw = yaml.safe_load((PLATFORM_FACTS.parent / "artifact_signature.yaml").read_text(encoding="utf-8"))
+    core_with_sigs = core_raw | sig_raw
+    assert "port_decision" not in core_with_sigs and "vendor_default_transport_source" not in core_with_sigs
+
+    # 1. An external facts directory with neither port_decision.yaml nor *_transport_source.yaml must NOT
+    #    silently inherit examples/platform/facts/*_transport_source.yaml (so idp has no derived flow/port).
+    isolated_dir = tmp_path / "isolated"
+    isolated_dir.mkdir()
+    isolated_facts = isolated_dir / "custom_core.yaml"
+    isolated_facts.write_text(yaml.safe_dump(core_with_sigs, sort_keys=False), encoding="utf-8")
+    with pytest.raises(RuntimeError, match="prohibited recovery flow"):
+        load_startup_topology(isolated_facts)
+
+    # 2. An external facts directory providing its own sibling *_transport_source.yaml (port 9443 for keycloak)
+    #    but NO port_decision.yaml must NOT silently inherit examples/platform/facts/port_decision.yaml
+    #    (port 443 -> 8443 fallback); lb must fall back to the derived destination port 9443 instead.
+    kc_raw = yaml.safe_load((PLATFORM_FACTS.parent / "keycloak_transport_source.yaml").read_text(encoding="utf-8"))
+    kc_custom = {
+        "vendor_default_transport_source": [
+            {**row, "port": 9443} for row in kc_raw["vendor_default_transport_source"]
+        ],
+    }
+    no_port_dir = tmp_path / "no_port_decision"
+    no_port_dir.mkdir()
+    no_port_facts = no_port_dir / "custom_core.yaml"
+    no_port_facts.write_text(yaml.safe_dump(core_with_sigs, sort_keys=False), encoding="utf-8")
+    (no_port_dir / "keycloak_transport_source.yaml").write_text(
+        yaml.safe_dump(kc_custom, sort_keys=False), encoding="utf-8",
+    )
+    no_port_topo = load_startup_topology(no_port_facts)
+    assert dict((svc, port) for svc, _, port in no_port_topo.endpoints)["idp"] == 9443
+    assert dict((svc, port) for svc, _, port in no_port_topo.endpoints)["lb"] == 9443
+
+    # 3. Counter-case: when the external facts directory provides its own sibling port_decision.yaml and
+    #    *_transport_source.yaml, both siblings in tmp_path are read and reflected in the derived topology.
+    port_raw = yaml.safe_load((PLATFORM_FACTS.parent / "port_decision.yaml").read_text(encoding="utf-8"))
+    port_custom = {
+        "port_decision": [
+            ({**row, "port": 1443} if row["id"] == "pd-lb-ingress" else row)
+            for row in port_raw["port_decision"]
+        ],
+    }
+    own_dir = tmp_path / "own_siblings"
+    own_dir.mkdir()
+    own_facts = own_dir / "custom_core.yaml"
+    own_facts.write_text(yaml.safe_dump(core_with_sigs, sort_keys=False), encoding="utf-8")
+    (own_dir / "port_decision.yaml").write_text(yaml.safe_dump(port_custom, sort_keys=False), encoding="utf-8")
+    (own_dir / "keycloak_transport_source.yaml").write_text(
+        yaml.safe_dump(kc_custom, sort_keys=False), encoding="utf-8",
+    )
+    own_topo = load_startup_topology(own_facts)
+    by_service = {svc: port for svc, _, port in own_topo.endpoints}
+    assert by_service["lb"] == 1443
+    assert by_service["idp"] == 9443
+    assert all(case.port == 9443 for case in own_topo.cases)
 
 
 def test_build_snapshot_uses_compiler_program_and_certifies_rounds() -> None:

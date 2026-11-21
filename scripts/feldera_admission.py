@@ -9,6 +9,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 from urllib.parse import urlencode
 import zipfile
 
@@ -109,10 +110,12 @@ def only_update_schedule_test(base, head):
             and regular_blob(head, WORKFLOW_TEST) == before.replace(PUSH_ASSERTIONS, SCHEDULE_ASSERTIONS, 1))
 
 
-def api(path, *, post=False, binary=False):
+def api(path, *, post=False, binary=False, **fields):
     args = ["gh", "api", "--allow-escape-sequences"]
     if post:
         args.extend(["--method", "POST"])
+    for key, value in fields.items():
+        args.extend(["--raw-field", f"{key}={value}"])
     data = subprocess.check_output([*args, f"repos/{os.environ['GITHUB_REPOSITORY']}/{path}"])
     return data if binary or not data else json.loads(data)
 
@@ -139,11 +142,15 @@ def report_ok(data):
         return ORIGINAL <= set(selected.read_text(encoding="utf-8").splitlines()) and not verify(selected, report)
 
 
-def matches(run, head, branch, repo):
+def dispatched(run, head, branch, repo):
+    """A dispatched comparison of this revision on this branch of this repository."""
     return (run["event"] == "workflow_dispatch" and run["path"] == ORACLE and
-            run["status"] == "completed" and run["conclusion"] == "success" and
             run["repository"]["full_name"] == repo and run["head_repository"]["full_name"] == repo and
             run["head_branch"] == branch and run["head_sha"] == head)
+
+
+def matches(run, head, branch, repo):
+    return dispatched(run, head, branch, repo) and run["status"] == "completed" and run["conclusion"] == "success"
 
 
 def ran_comparison(run):
@@ -172,6 +179,25 @@ def proof(head, branch, owner):
     return None
 
 
+def started(head, branch, repo):
+    """A dispatched comparison of this revision that is queued, running or has passed."""
+    return any(dispatched(run, head, branch, repo) and (run["status"] != "completed" or run["conclusion"] == "success")
+               for run in records("actions/workflows/feldera-oracle.yml/runs", "workflow_runs",
+                                  event="workflow_dispatch", head_sha=head, branch=branch))
+
+
+def dispatch(head, branch, repo):
+    # GitHub runs a dispatch at the branch's current head and lists the run a moment later. The
+    # resume job holds its per-revision concurrency group until then, so the next one sees it.
+    api(f"actions/workflows/{Path(ORACLE).name}/dispatches", post=True, ref=branch)
+    for _ in range(30):
+        if started(head, branch, repo):
+            print(f"Started the live Feldera workflow on {branch} for {head}.")
+            return
+        time.sleep(2)
+    print(f"Dispatched the live Feldera workflow on {branch}; no run for {head} is listed yet.")
+
+
 def review(base, head, branch, owner):
     selected = selected_files(RUNNER.read_text(encoding="utf-8"))
     paths = changed(base, head)
@@ -188,6 +214,10 @@ def review(base, head, branch, owner):
     if run:
         print(f"Verified all collected Feldera cases in run {run['id']} at {head}.")
         return True
+    if owner == os.environ.get("GITHUB_REPOSITORY"):
+        print(f"A passing live Feldera report is required at {head}. Resume Feldera evidence review starts the "
+              "live Feldera workflow on this branch unless a run for this revision is queued, running or passed.")
+        return False
     print(f"Run the live Feldera workflow on this source branch at {head}; a passing report is required.")
     return False
 
@@ -225,6 +255,9 @@ def resume(event):
             # A re-run starts after its evidence. A repeat failure cannot loop on the same proof.
             api(f"actions/jobs/{job['id']}/rerun", post=True)
             print(f"Requested policy review for pull request {pr['number']} after oracle run {run['id']}.")
+        elif run is None and not started(head, branch, repo):
+            # The review blocked this head for want of a live run, and none is on its way.
+            dispatch(head, branch, repo)
 
 
 def main():

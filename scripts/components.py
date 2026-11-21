@@ -309,6 +309,8 @@ SHARED_READERS = {
     "tests/fixtures/turns/": ("checker", "edge/publisher"),
     # The verb bar of the slip (decisions/viewer-slip.md): its contract test and the page tests read it.
     "packs/std-view/": ("contracts", "tests/slip"),
+    # Bitemporal staircase reading of std-time (decisions/bitemporal-staircase-reading.md).
+    "packs/std-time/": ("tests/slip",),
     "viewer/slip/": ("compiler", "examples", "tests/slip"),
     "viewer/messages/": ("compiler", "examples", "tests/slip"),
     "tests/conformance/": ("checker", "compiler", "edge/publisher", "rezono"),

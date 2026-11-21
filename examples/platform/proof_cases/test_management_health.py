@@ -41,9 +41,6 @@ def test_management_health():
 
 
 @pytest.mark.cluster
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "M2: Depends on the shared disposable loop recorder and test_management_health. "
-    "Exercise the collector, service health and inaccessible cluster per decisions/platform-management-health.md."))
 def test_management_health_readback():
     from management_probes import live_events
 

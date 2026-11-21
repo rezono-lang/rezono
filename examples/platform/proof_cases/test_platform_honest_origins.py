@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import re
 
+import pytest
 import yaml
 
 from case_support import ROOT
@@ -104,4 +105,52 @@ def test_core_sources_has_honest_default_without_duplicate_records():
         seen.add(key)
     assert repeated_selectors == [], (
         f"core.sources.yaml has duplicate record selectors in records: {repeated_selectors}"
+    )
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason=(
+        "M2: decisions/fact-origin-required.md: PlatformStartupTarget rows in "
+        "examples/platform/facts/standard-order.yaml must carry kind: synthetic in "
+        "standard-order.sources.yaml (or be supplied from a test fixture instead of "
+        "standard-order.yaml) rather than citing decisions/safe-step-rounds.md#4 as a "
+        "non-synthetic git source."
+    ),
+)
+def test_platform_startup_target_has_honest_synthetic_or_fixture_origin():
+    standard_order_data = yaml.safe_load((FACTS / "standard-order.yaml").read_text(encoding="utf-8")) or {}
+    startup_targets = standard_order_data.get("platform_startup_target") or []
+
+    model = compiler_pack.read(ROOT)
+    entries = compiler_sources.read(model, ROOT)
+    startup_entries = [
+        entry
+        for entry in entries
+        if entry["row"]["relation"] == "platform_startup_target"
+        or entry["row"]["relation"].startswith("platform_startup_target__")
+    ]
+
+    if not startup_targets and not startup_entries:
+        return
+
+    assert startup_entries, "expected resolved compiler source entries for PlatformStartupTarget rows"
+    dishonest: list[tuple[dict, list[dict]]] = []
+    for entry in startup_entries:
+        explicit = [src for src in entry["sources"] if src.get("kind") != "pack"]
+        has_synthetic = any(
+            src.get("kind") == "synthetic"
+            and bool(str(src.get("name", "")).strip())
+            and bool(str(src.get("position", "")).strip())
+            for src in explicit
+        )
+        non_synthetic = [src for src in explicit if src.get("kind") != "synthetic"]
+        if not has_synthetic or non_synthetic:
+            dishonest.append((entry["row"], explicit))
+
+    assert dishonest == [], (
+        "PlatformStartupTarget rows in examples/platform/facts/ must carry honest kind: synthetic "
+        "origins (or be supplied from a test fixture) rather than citing a decision section as a "
+        f"non-synthetic source: {dishonest[:3]}"
     )
