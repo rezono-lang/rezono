@@ -348,10 +348,6 @@ def test_rounding_cases_of_the_contract():
         assert got[f"c{k}"]["i0"][1] == c["want"], c
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="M1: decisions/four-valued-and-or-parity.md: Waits for compiler/tests/test_four_valued_and_or_compiler.py--test_calc_sql_checker_and_feldera_follow_four_valued_and_or_conformance (DuckDB calc_sql and checker calc update to match calcoracle).",
-)
 @settings(max_examples=200, deadline=None, suppress_health_check=[HealthCheck.too_slow, HealthCheck.data_too_large])
 @given(calcgen.program(), calcgen.rows())
 def test_random_programs_give_what_the_reference_gives(doc, rows):
