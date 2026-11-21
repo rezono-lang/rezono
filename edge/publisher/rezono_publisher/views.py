@@ -428,12 +428,12 @@ def _proof(st, pack, manifest, m, role, snapshots, base=None):
         raise ValueError(f"{manifest}: witnesses for role {role}, but no rule IR")
     base = base or f"{pack}/{manifest}/{role}/views"
     try:
-        made, roots = proof.plan(doc, sees, snapshots, base) if doc or sees.get("calc_witnesses") else ([], {t: {} for t in proof.TREES})
+        made, roots = proof.plan(doc, sees, snapshots, base, base_iri=base_iri) if doc or sees.get("calc_witnesses") else ([], {t: {} for t in proof.TREES})
     except proof.TooLarge as err:
         raise Blocked(f"role {role}: proof: {err}") from err
     with timing.phase("checker"):
         problems = check_proof(doc or {"rules": []}, sees, snapshots, {k.removeprefix(base + "/"): b for k, b in made},
-                               roots, proof.PIECE, proof.FANOUT, require_load_bearing=True)
+                               roots, proof.PIECE, proof.FANOUT, base_iri=base_iri, require_load_bearing=True)
     if problems:
         raise Blocked(f"role {role}: proof: {len(problems)} (first: {'; '.join(problems[:3])})")
     trees = {t: {rel: {"uri": st.uri(f"{base}/{r['file']}"), "sha256": r["sha256"], "levels": r["levels"]}

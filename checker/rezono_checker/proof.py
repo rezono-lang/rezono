@@ -33,6 +33,8 @@ import json
 from operator import itemgetter
 import re
 
+from rezono_canon import canonical_sha256
+
 from .canon import encode_key, strict_json_loads, value_text
 from .closure import functional_instances
 from .evaluate import cells
@@ -322,8 +324,59 @@ class _Walk:
             self.problems.append(Refusal("piece_unreached", path=path))
 
 
+def load_bearing(rules_doc: dict, witnesses: list[dict], rows: dict) -> dict[tuple[str, str, str, str, str], bool]:
+    """Recompute per-premise load_bearing from a role's founded witnesses and snapshots (decisions/publish-founded-witnesses.md).
+
+    A premise (p_rel, p_key, how) with how in ('positive', 'negative') is load_bearing for conclusion
+    (c_rel, c_key) iff it appears in every founded witness of that conclusion.
+    """
+    rules = load_rules(rules_doc)
+    functionals = getattr(rules, "functionals", {})
+    by_conclusion: dict[tuple[str, str], list[set[tuple[str, str, str]]]] = {}
+    for w in witnesses:
+        c = (w["conclusion"]["relation"], w["conclusion"]["key"])
+        rule = rules.get(w["rule_id"])
+        if rule is None:
+            raise RefusalError(Refusal("unknown_rule", rule=w["rule_id"]))
+        if rule.head.relation in functionals:
+            w_steps = steps(rules_doc, [w], rows)
+            prems = {
+                (p_rel, p_key, how)
+                for c_rel, c_key, p_rel, p_key, how, *_ in w_steps
+                if (c_rel, c_key) == c and how in ("positive", "negative")
+            }
+        else:
+            theta = {b["variable"]: b["value"] for b in w.get("bindings", [])}
+            prems = set()
+            for b in rule.body:
+                terms = []
+                for t in b.atom.terms:
+                    if t.startswith("?"):
+                        if t not in theta:
+                            raise RefusalError(Refusal("proof_unbound_variable", variable=t, rule=rule.id))
+                        terms.append(theta[t])
+                    else:
+                        terms.append(t)
+                if b.polarity in ("positive", "negative"):
+                    prems.add((b.atom.relation, encode_key(tuple(terms)), b.polarity))
+        by_conclusion.setdefault(c, []).append(prems)
+    out: dict[tuple[str, str, str, str, str], bool] = {}
+    for (c_rel, c_key), prem_sets in by_conclusion.items():
+        all_prems = set().union(*prem_sets) if prem_sets else set()
+        for p_rel, p_key, how in sorted(all_prems):
+            out[(c_rel, c_key, p_rel, p_key, how)] = all((p_rel, p_key, how) in s for s in prem_sets)
+    return out
+
+
+def _with_iri(w: dict, base_iri: str | None) -> dict:
+    if not base_iri:
+        return w
+    raw = {k: v for k, v in w.items() if k != "iri"}
+    return {**raw, "iri": f"{base_iri}witness/{canonical_sha256(raw)}"}
+
+
 def check_proof(rules_doc: dict, sees: dict, snapshots: dict, pieces: dict, roots: dict, limit: int, fanout: int,
-                *, require_load_bearing: bool = True) -> list[str]:
+                *, base_iri: str | None = None, require_load_bearing: bool = True) -> list[str]:
     """Problems with one role's proof pieces; empty when they are exactly the role's proof graph.
 
     `sees` is the role's witness file, `snapshots` its snapshot bytes per relation, `pieces` the bytes per
@@ -332,13 +385,28 @@ def check_proof(rules_doc: dict, sees: dict, snapshots: dict, pieces: dict, root
     rows = {rel: read_rows(b, "json") for rel, b in snapshots.items()}
     calc = sees.get("calc_witnesses", [])
     try:
-        want = expected(sees["witnesses"] + calc, steps(rules_doc, sees["witnesses"], rows) | calc_steps(calc))
+        stamped = [_with_iri(w, base_iri) for w in sees["witnesses"]]
+        want = expected(stamped + calc, steps(rules_doc, sees["witnesses"], rows) | calc_steps(calc))
     except RefusalError as err:
         return [err.refusal]
     except ValueError:
         return [Refusal("proof_steps_invalid")]
-    if require_load_bearing and sees["witnesses"] and "load_bearing_entries" not in sees:
-        problems.append(Refusal("load_bearing_mismatch"))
+    if "load_bearing_entries" in sees or (require_load_bearing and sees["witnesses"]):
+        if "load_bearing_entries" not in sees:
+            problems.append(Refusal("load_bearing_mismatch"))
+        else:
+            expected_lb = load_bearing(rules_doc, sees["witnesses"], rows)
+            expected_entries = [
+                {
+                    "conclusion": {"relation": c_rel, "key": c_key},
+                    "premise": {"relation": p_rel, "key": p_key},
+                    "how": how,
+                    "load_bearing": bool(flag),
+                }
+                for (c_rel, c_key, p_rel, p_key, how), flag in sorted(expected_lb.items())
+            ]
+            if sees["load_bearing_entries"] != expected_entries:
+                problems.append(Refusal("load_bearing_mismatch"))
     walk = _Walk(pieces, limit, fanout, problems)
     for t in TREES:
         given = roots.get(t, {})

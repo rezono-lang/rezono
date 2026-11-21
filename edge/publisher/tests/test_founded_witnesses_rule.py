@@ -150,15 +150,6 @@ def _collect_witness_rule_eval(reads):
     return None, None
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "extra: decisions/publish-founded-witnesses.md: founded_witness and load_bearing must be derived "
-        "by a compiled Rezono rule pack over the witness graph (evaluated through rezono_compiler.batch, "
-        "not ad-hoc Python) for both multi-alternative and single-witness graphs"
-    ),
-)
 def test_witness_graph_rule_derives_founded_witness_and_load_bearing(monkeypatch):
     reads: list[tuple[object, dict[str, set[tuple[str, ...]]]]] = []
     real_read = compiler_batch.read

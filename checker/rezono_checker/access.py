@@ -45,6 +45,7 @@ from __future__ import annotations
 import json
 from collections import defaultdict
 from collections.abc import Set as AbstractSet
+from graphlib import CycleError, TopologicalSorter
 
 from .access_change import may_change_access as may_change_access
 from .calc import published_views, subject_of, version_of
@@ -447,13 +448,86 @@ def _witnessed_grants(doc: dict, role: str, chains: dict, every: dict, instances
     return out
 
 
-def check_choice(witnesses, chosen: dict) -> list[dict]:
-    """The given witnesses against the chosen proofs (`select`): the same set, or `choice_mismatch`."""
+def _founded_usable(instances, derived, usable) -> list[dict]:
+    """Every usable witness instance that is well-founded (excluding cyclic alternatives)."""
+    ok = [w for w in instances if usable(w)]
+    if not ok:
+        return []
+
+    def _ref(w: dict) -> tuple[str, str]:
+        return w["conclusion"]["relation"], w["conclusion"]["key"]
+
+    def _pos_derived(w: dict) -> set[tuple[str, str]]:
+        return {
+            (p["row"]["relation"], p["row"]["key"])
+            for p in w.get("premises", ())
+            if p["polarity"] == "positive" and p["row"]["relation"] in derived
+        }
+
+    def _lfp(pairs) -> set[tuple[str, str]]:
+        users: dict[tuple[str, str], list[int]] = defaultdict(list)
+        left: list[int] = []
+        ready: list[tuple[str, str]] = []
+        for idx, (h, ps) in enumerate(pairs):
+            left.append(len(ps))
+            if not ps:
+                ready.append(h)
+            else:
+                for p in ps:
+                    users[p].append(idx)
+        proved: set[tuple[str, str]] = set()
+        while ready:
+            h = ready.pop()
+            if h in proved:
+                continue
+            proved.add(h)
+            for idx in users.get(h, ()):
+                left[idx] -= 1
+                if left[idx] == 0:
+                    ready.append(pairs[idx][0])
+        return proved
+
+    pairs = [(_ref(w), _pos_derived(w)) for w in ok]
+    supported = _lfp(pairs)
+    # Fast path: if the conclusion dependency graph over supported witnesses is acyclic,
+    # every usable witness whose derived premises are supported is well-founded in O(W).
+    dep_graph: dict[tuple[str, str], set[tuple[str, str]]] = {}
+    supported_items: list[tuple[dict, tuple[str, str], set[tuple[str, str]]]] = []
+    for w, (h, ps) in zip(ok, pairs):
+        if h in supported and ps <= supported:
+            supported_items.append((w, h, ps))
+            dep_graph.setdefault(h, set()).update(ps)
+    try:
+        TopologicalSorter(dep_graph).prepare()
+        return [w for w, _, _ in supported_items]
+    except CycleError:
+        pass
+
+    by_head: dict[tuple[str, str], list[tuple[dict, set[tuple[str, str]]]]] = defaultdict(list)
+    for w, h, ps in supported_items:
+        by_head[h].append((w, ps))
+    out: list[dict] = []
+    for head, mine in by_head.items():
+        if len(mine) == 1:
+            out.append(mine[0][0])
+        else:
+            others = [(h, ps) for h, ps in pairs if h != head]
+            base_supported = _lfp(others)
+            for w, ps in mine:
+                if ps <= base_supported:
+                    out.append(w)
+    return out
+
+
+def check_choice(witnesses, chosen: dict, founded=None) -> list[dict]:
+    """The given witnesses against the chosen proofs (`select`): every chosen proof must be present, and
+    every witness must be a chosen proof (or, when `founded` is given, a founded alternative)."""
     text = lambda ws: {json.dumps(w, sort_keys=True) for w in ws}  # noqa: E731
     got, want = text(witnesses), text(chosen.values())
+    allowed = want if founded is None else (want | text(founded))
     out = []
-    if got - want:
-        out.append({"reason": "choice_mismatch", "detail": f"{len(got - want)} witnesses that are no chosen proof"})
+    if got - allowed:
+        out.append({"reason": "choice_mismatch", "detail": f"{len(got - allowed)} witnesses that are no founded proof"})
     if want - got:
         out.append({"reason": "choice_mismatch", "detail": f"{len(want - got)} chosen proofs missing"})
     for f in out:
@@ -674,7 +748,7 @@ def check_role(role: str, complete: dict, snapshots: dict, claimed_full, bundle:
                                    if (rel, key) in visible and len(p) == 4 and p[2:] == ("known", "")
                                    and calc_value(p[1], column_type)}
             chosen = select(instances, derived, usable)
-    findings += check_choice(witnesses, chosen)
+    findings += check_choice(witnesses, chosen, founded=_founded_usable(instances, derived, usable))
     for rel in sorted(derived & (set(every) | set(mine))):
         want = {key for key in every.get(rel, {}) if (rel, key) in chosen}
         got = set(mine.get(rel, {}))
