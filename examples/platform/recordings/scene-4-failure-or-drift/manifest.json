@@ -1,0 +1,18 @@
+{
+  "scene": 4,
+  "origin": "real",
+  "captured_on": "2026-11-21",
+  "capture_evidence": "disposable-cluster:record-backup-44935693413-1:coverage:sha256:7500d55ceab136964ad7ffec0a084b039e5d8e343cd1eeaad33bea6c9bc0ef20",
+  "expected_plans": [
+    [
+      "fence-management"
+    ],
+    [
+      "restore-copy"
+    ],
+    [
+      "verify-fence-coverage"
+    ]
+  ],
+  "expected_outcome": "success"
+}

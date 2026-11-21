@@ -1,0 +1,16 @@
+{
+  "scene": 5,
+  "origin": "hand-written",
+  "expected_plans": [
+    [
+      "check-decision-standing"
+    ],
+    [
+      "reconcile-cluster-rights"
+    ],
+    [
+      "confirm-audit-proof"
+    ]
+  ],
+  "expected_outcome": "success"
+}

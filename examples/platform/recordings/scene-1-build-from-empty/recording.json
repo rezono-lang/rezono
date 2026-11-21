@@ -1,0 +1,397 @@
+{
+  "run": "safe-start-44935693413-1",
+  "limit": 6,
+  "clock": {
+    "origin": "2026-11-21T18:35:52.171183Z",
+    "ticks_per_second": 1000000
+  },
+  "pack": {
+    "path": "../../../../packs/std-loop",
+    "sha256": "1512bdc4315125b60d28488378adc81ef4cae45b1cff71e5f12d8fe546979f70"
+  },
+  "ports": [
+    {
+      "name": "cluster-readback",
+      "version": "1.0.0",
+      "kind": "in",
+      "runs_on": "source",
+      "writes": "observation",
+      "row_source": "source",
+      "runtime": "in_process",
+      "consumes": [
+        "cluster_boundary"
+      ],
+      "produces": [
+        "loop_observation"
+      ],
+      "freshness": {
+        "cadence": "on_request"
+      },
+      "mapping_owner": "platform-loop",
+      "losses": [],
+      "secrets": []
+    },
+    {
+      "name": "cluster-apply",
+      "version": "1.0.0",
+      "kind": "effect",
+      "runs_on": "approved_plan",
+      "writes": "world",
+      "row_source": "journal",
+      "runtime": "in_process",
+      "effect": {
+        "plan": "startup-plan",
+        "apply": "startup-apply",
+        "status": "startup-status"
+      },
+      "consumes": [
+        "loop_step"
+      ],
+      "produces": [
+        "cluster_boundary"
+      ],
+      "freshness": {
+        "cadence": "on_request"
+      },
+      "mapping_owner": "platform-loop",
+      "losses": [],
+      "secrets": []
+    }
+  ],
+  "records": {
+    "loop_active_run": [
+      {
+        "id": "safe-start-44935693413-1"
+      }
+    ],
+    "loop_step": [
+      {
+        "id": "prepare-namespaces",
+        "precedes": [
+          "protect-endpoints"
+        ]
+      },
+      {
+        "id": "protect-endpoints",
+        "precedes": [
+          "expose-endpoints"
+        ]
+      },
+      {
+        "id": "expose-endpoints"
+      }
+    ],
+    "loop_requirement": [
+      {
+        "id": "protect-needs-namespaces",
+        "run": "safe-start-44935693413-1",
+        "step": "protect-endpoints",
+        "token": "startup/managed-namespaces",
+        "reason": "namespaces-before-protection"
+      },
+      {
+        "id": "expose-needs-protection",
+        "run": "safe-start-44935693413-1",
+        "step": "expose-endpoints",
+        "token": "startup/protected-endpoints",
+        "reason": "protection-before-exposure"
+      }
+    ],
+    "loop_completion": [
+      {
+        "id": "prepare-namespaces-done",
+        "run": "safe-start-44935693413-1",
+        "step": "prepare-namespaces",
+        "token": "startup/managed-namespaces",
+        "reason": "namespaces-readback"
+      },
+      {
+        "id": "protect-endpoints-done",
+        "run": "safe-start-44935693413-1",
+        "step": "protect-endpoints",
+        "token": "startup/protected-endpoints",
+        "reason": "protection-readback"
+      },
+      {
+        "id": "expose-endpoints-done",
+        "run": "safe-start-44935693413-1",
+        "step": "expose-endpoints",
+        "token": "startup/exposed-endpoints",
+        "reason": "exposure-readback"
+      }
+    ],
+    "loop_expectation": [
+      {
+        "id": "startup/managed-namespaces",
+        "value": "safe-start-44935693413-1-entry,safe-start-44935693413-1-platform,safe-start-44935693413-1-recovery,safe-start-44935693413-1-tenant"
+      },
+      {
+        "id": "startup/protected-endpoints",
+        "value": "entry/lb,platform/idp"
+      },
+      {
+        "id": "startup/exposed-endpoints",
+        "value": "entry/lb,platform/idp"
+      }
+    ]
+  },
+  "initial": {
+    "id": "opening",
+    "run": "safe-start-44935693413-1",
+    "event_time": 0,
+    "complete": true,
+    "observations": [
+      {
+        "run": "safe-start-44935693413-1",
+        "sweep": "opening",
+        "port": "cluster-readback",
+        "reason": "opening/sha256:08e8677cd9d7dd3ae030f484e0cf194ec3a318fd285f9e2b69defb87324f55a5",
+        "observation": {
+          "id": "cluster-readback/opening/managed-namespaces",
+          "subject": "prepare-namespaces",
+          "attribute": "managed_namespaces",
+          "value": {
+            "state": "unknown",
+            "reason": "no_value"
+          },
+          "event_time": "2026-11-21T18:35:52.171183Z",
+          "source": {
+            "kind": "tool",
+            "name": "cluster-readback",
+            "position": "opening/sha256:08e8677cd9d7dd3ae030f484e0cf194ec3a318fd285f9e2b69defb87324f55a5"
+          },
+          "expectation": {
+            "relation": "loop_expectation__value",
+            "key": "[\"startup/managed-namespaces\"]"
+          }
+        }
+      },
+      {
+        "run": "safe-start-44935693413-1",
+        "sweep": "opening",
+        "port": "cluster-readback",
+        "reason": "opening/sha256:08e8677cd9d7dd3ae030f484e0cf194ec3a318fd285f9e2b69defb87324f55a5",
+        "observation": {
+          "id": "cluster-readback/opening/protected-endpoints",
+          "subject": "protect-endpoints",
+          "attribute": "protected_endpoints",
+          "value": {
+            "state": "unknown",
+            "reason": "no_value"
+          },
+          "event_time": "2026-11-21T18:35:52.171183Z",
+          "source": {
+            "kind": "tool",
+            "name": "cluster-readback",
+            "position": "opening/sha256:08e8677cd9d7dd3ae030f484e0cf194ec3a318fd285f9e2b69defb87324f55a5"
+          },
+          "expectation": {
+            "relation": "loop_expectation__value",
+            "key": "[\"startup/protected-endpoints\"]"
+          }
+        }
+      },
+      {
+        "run": "safe-start-44935693413-1",
+        "sweep": "opening",
+        "port": "cluster-readback",
+        "reason": "opening/sha256:08e8677cd9d7dd3ae030f484e0cf194ec3a318fd285f9e2b69defb87324f55a5",
+        "observation": {
+          "id": "cluster-readback/opening/exposed-endpoints",
+          "subject": "expose-endpoints",
+          "attribute": "exposed_endpoints",
+          "value": {
+            "state": "unknown",
+            "reason": "no_value"
+          },
+          "event_time": "2026-11-21T18:35:52.171183Z",
+          "source": {
+            "kind": "tool",
+            "name": "cluster-readback",
+            "position": "opening/sha256:08e8677cd9d7dd3ae030f484e0cf194ec3a318fd285f9e2b69defb87324f55a5"
+          },
+          "expectation": {
+            "relation": "loop_expectation__value",
+            "key": "[\"startup/exposed-endpoints\"]"
+          }
+        }
+      }
+    ]
+  },
+  "sweeps": [
+    {
+      "id": "namespaces",
+      "run": "safe-start-44935693413-1",
+      "event_time": 4298236,
+      "complete": true,
+      "observations": [
+        {
+          "run": "safe-start-44935693413-1",
+          "sweep": "namespaces",
+          "port": "cluster-readback",
+          "reason": "namespaces/sha256:c93b4fd7aa2f60bf62bdcee30890fd94eb0e06e3b4e7f64f566b2a04c95ff7be",
+          "observation": {
+            "id": "cluster-readback/namespaces/managed-namespaces",
+            "subject": "prepare-namespaces",
+            "attribute": "managed_namespaces",
+            "value": {
+              "state": "known",
+              "value": "safe-start-44935693413-1-entry,safe-start-44935693413-1-platform,safe-start-44935693413-1-recovery,safe-start-44935693413-1-tenant"
+            },
+            "event_time": "2026-11-21T18:35:56.469419Z",
+            "source": {
+              "kind": "tool",
+              "name": "cluster-readback",
+              "position": "namespaces/sha256:c93b4fd7aa2f60bf62bdcee30890fd94eb0e06e3b4e7f64f566b2a04c95ff7be"
+            },
+            "expectation": {
+              "relation": "loop_expectation__value",
+              "key": "[\"startup/managed-namespaces\"]"
+            }
+          }
+        },
+        {
+          "run": "safe-start-44935693413-1",
+          "sweep": "namespaces",
+          "port": "cluster-readback",
+          "reason": "namespaces/sha256:c93b4fd7aa2f60bf62bdcee30890fd94eb0e06e3b4e7f64f566b2a04c95ff7be",
+          "observation": {
+            "id": "cluster-readback/namespaces/protected-endpoints",
+            "subject": "protect-endpoints",
+            "attribute": "protected_endpoints",
+            "value": {
+              "state": "unknown",
+              "reason": "no_value"
+            },
+            "event_time": "2026-11-21T18:35:56.469419Z",
+            "source": {
+              "kind": "tool",
+              "name": "cluster-readback",
+              "position": "namespaces/sha256:c93b4fd7aa2f60bf62bdcee30890fd94eb0e06e3b4e7f64f566b2a04c95ff7be"
+            },
+            "expectation": {
+              "relation": "loop_expectation__value",
+              "key": "[\"startup/protected-endpoints\"]"
+            }
+          }
+        },
+        {
+          "run": "safe-start-44935693413-1",
+          "sweep": "namespaces",
+          "port": "cluster-readback",
+          "reason": "namespaces/sha256:c93b4fd7aa2f60bf62bdcee30890fd94eb0e06e3b4e7f64f566b2a04c95ff7be",
+          "observation": {
+            "id": "cluster-readback/namespaces/exposed-endpoints",
+            "subject": "expose-endpoints",
+            "attribute": "exposed_endpoints",
+            "value": {
+              "state": "unknown",
+              "reason": "no_value"
+            },
+            "event_time": "2026-11-21T18:35:56.469419Z",
+            "source": {
+              "kind": "tool",
+              "name": "cluster-readback",
+              "position": "namespaces/sha256:c93b4fd7aa2f60bf62bdcee30890fd94eb0e06e3b4e7f64f566b2a04c95ff7be"
+            },
+            "expectation": {
+              "relation": "loop_expectation__value",
+              "key": "[\"startup/exposed-endpoints\"]"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "protected",
+      "run": "safe-start-44935693413-1",
+      "event_time": 7755266,
+      "complete": true,
+      "observations": [
+        {
+          "run": "safe-start-44935693413-1",
+          "sweep": "protected",
+          "port": "cluster-readback",
+          "reason": "protected/sha256:7deaa38f81d86d0d5ca6951983922e512979fb09b561cfb7103f57cb5055da97",
+          "observation": {
+            "id": "cluster-readback/protected/protected-endpoints",
+            "subject": "protect-endpoints",
+            "attribute": "protected_endpoints",
+            "value": {
+              "state": "known",
+              "value": "entry/lb,platform/idp"
+            },
+            "event_time": "2026-11-21T18:35:59.926449Z",
+            "source": {
+              "kind": "tool",
+              "name": "cluster-readback",
+              "position": "protected/sha256:7deaa38f81d86d0d5ca6951983922e512979fb09b561cfb7103f57cb5055da97"
+            },
+            "expectation": {
+              "relation": "loop_expectation__value",
+              "key": "[\"startup/protected-endpoints\"]"
+            }
+          }
+        },
+        {
+          "run": "safe-start-44935693413-1",
+          "sweep": "protected",
+          "port": "cluster-readback",
+          "reason": "protected/sha256:7deaa38f81d86d0d5ca6951983922e512979fb09b561cfb7103f57cb5055da97",
+          "observation": {
+            "id": "cluster-readback/protected/exposed-endpoints",
+            "subject": "expose-endpoints",
+            "attribute": "exposed_endpoints",
+            "value": {
+              "state": "unknown",
+              "reason": "no_value"
+            },
+            "event_time": "2026-11-21T18:35:59.926449Z",
+            "source": {
+              "kind": "tool",
+              "name": "cluster-readback",
+              "position": "protected/sha256:7deaa38f81d86d0d5ca6951983922e512979fb09b561cfb7103f57cb5055da97"
+            },
+            "expectation": {
+              "relation": "loop_expectation__value",
+              "key": "[\"startup/exposed-endpoints\"]"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "ready",
+      "run": "safe-start-44935693413-1",
+      "event_time": 17617409,
+      "complete": true,
+      "observations": [
+        {
+          "run": "safe-start-44935693413-1",
+          "sweep": "ready",
+          "port": "cluster-readback",
+          "reason": "ready/sha256:27f871c243b705f6f01cd00fd2ad7e74bff14d344d7959bf45b156a33520f233",
+          "observation": {
+            "id": "cluster-readback/ready/exposed-endpoints",
+            "subject": "expose-endpoints",
+            "attribute": "exposed_endpoints",
+            "value": {
+              "state": "known",
+              "value": "entry/lb,platform/idp"
+            },
+            "event_time": "2026-11-21T18:36:09.788592Z",
+            "source": {
+              "kind": "tool",
+              "name": "cluster-readback",
+              "position": "ready/sha256:27f871c243b705f6f01cd00fd2ad7e74bff14d344d7959bf45b156a33520f233"
+            },
+            "expectation": {
+              "relation": "loop_expectation__value",
+              "key": "[\"startup/exposed-endpoints\"]"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

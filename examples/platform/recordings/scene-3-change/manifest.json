@@ -1,0 +1,16 @@
+{
+  "scene": 3,
+  "origin": "hand-written",
+  "expected_plans": [
+    [
+      "preview-difference"
+    ],
+    [
+      "apply-safe-step"
+    ],
+    [
+      "verify-post-change"
+    ]
+  ],
+  "expected_outcome": "success"
+}
