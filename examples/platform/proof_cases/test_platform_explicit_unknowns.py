@@ -33,8 +33,12 @@ def _transitive_deps(program, relation: str) -> set[str]:
 
 
 def _ambiguous_provider_records() -> dict[str, list[dict]]:
+    from management_probes import _committed
+
+    has_offer_port = "port" in _committed().kinds["offer"].slots
     function = lambda key: {"id": key, "recovery_allowed": NO, "open_by_design": NO}
     service = lambda key, product: {"id": key, "product": product, "role": "app-role", "step": 1}
+    offer = {"id": "o-login", "product": "idp-app", "function": "login", **({"port": 443} if has_offer_port else {})}
     return {
         "zone": [{"id": "inner", "outside": NO, "entry_boundary": NO, "isolated_recovery": NO, "workload": "yes"}],
         "cluster_class": [{"id": "shared"}],
@@ -42,7 +46,7 @@ def _ambiguous_provider_records() -> dict[str, list[dict]]:
                            "build_authority": NO}],
         "function": [function("login")],
         "product": [{"id": "shop-app"}, {"id": "idp-app"}],
-        "offer": [{"id": "o-login", "product": "idp-app", "function": "login", "port": 443}],
+        "offer": [offer],
         "demand": [{"id": "d-login", "product": "shop-app", "function": "login"}],
         # Two services offer login, with no Choice record selecting between them.
         "service": [service("shop", "shop-app"), service("idp-a", "idp-app"), service("idp-b", "idp-app")],
