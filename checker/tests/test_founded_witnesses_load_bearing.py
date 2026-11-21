@@ -59,15 +59,6 @@ RULES_DOC = {
 }
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "extra: decisions/publish-founded-witnesses.md (#1445): checker/rezono_checker/proof.py must "
-        "verify load_bearing flags projected from the witness-graph relation and refuse forged flags "
-        "with refusal code load_bearing_mismatch"
-    ),
-)
 def test_checker_verifies_load_bearing_and_refuses_load_bearing_mismatch():
     # anchor(a) appears in BOTH founded witnesses -> load_bearing=True.
     # edge(b,a) and edge(a,b) each appear in only one founded witness -> load_bearing=False.

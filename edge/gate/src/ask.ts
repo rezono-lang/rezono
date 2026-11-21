@@ -49,6 +49,7 @@ export interface Edge {
 	how: string;
 	position: number;
 	value?: string;
+	load_bearing?: boolean;
 }
 /** The proof graph of one role in one manifest. */
 export interface Graph {
@@ -86,6 +87,7 @@ export interface AnswerStep {
 	how: string;
 	position: number;
 	value?: string;
+	load_bearing?: boolean;
 }
 /** One page of an answer (contracts/explain.yaml, Answer). */
 export interface Answer extends Omit<ContractAnswer, 'nodes' | 'steps'> {
@@ -157,6 +159,7 @@ function applies(q: Question, start: RowRef, conclusion: boolean): boolean {
 
 /** The value of an edge as a field, or nothing: only text is a value, and an edge without one states none. */
 const valued = (value: unknown) => (typeof value === 'string' ? { value } : {});
+const loadBearing = (flag: unknown) => (typeof flag === 'boolean' ? { load_bearing: flag } : {});
 const far = (d: Direction, e: Edge) => (d === 'back' ? e.p : e.c);
 const near = (d: Direction, e: Edge) => (d === 'back' ? e.c : e.p);
 /** Edges in the order a walk this way reads them: by far end, `how`, `position`, then near end. */
@@ -312,7 +315,7 @@ export async function walk(g: Graph, t: Trace, starts: RowRef[], page: { limit: 
 	const steps = [...read.filter((e) => on.has(idOf(far(dir, e)))), ...late]
 		.filter((e) => shown(far(dir, e)) && shown(near(dir, e)))
 		.sort((a, b) => byRef(a.c, b.c) || byText(a.how, b.how) || a.position - b.position || byRef(a.p, b.p))
-		.map((e) => ({ conclusion: plain(e.c), premise: plain(e.p), how: e.how, position: e.position, ...valued(e.value) }));
+		.map((e) => ({ conclusion: plain(e.c), premise: plain(e.p), how: e.how, position: e.position, ...valued(e.value), ...loadBearing(e.load_bearing) }));
 	const found = (await Promise.all(nodes.map((n) => g.witness(n)))).filter((w) => w !== undefined);
 	const witnesses = found.filter((w): w is Witness => !isCalc(w));
 	const calc = found.filter(isCalc);

@@ -909,13 +909,21 @@ def _check_graph(proof, rules, findings, calc_witnesses=(), calc_views=frozenset
     calc_views = set(calc_views)
     for rule in rules.values():
         calc_views.update(rule.calc_inputs)
+    root = (proof["root"]["relation"], proof["root"]["key"]) if proof["root"] else None
     by_conclusion = {}
+    seen_witnesses = set()
     for i, w in enumerate(proof.get("witnesses", [])):
         if w is None:
             continue
         ref = (w["conclusion"]["relation"], w["conclusion"]["key"])
-        if ref in by_conclusion:
-            findings.append({"reason": "duplicate_witness", "witness": i, "relation": ref[0], "key": ref[1]})
+        if root is not None:
+            if ref in by_conclusion:
+                findings.append({"reason": "duplicate_witness", "witness": i, "relation": ref[0], "key": ref[1]})
+        else:
+            wid = canonical_sha256({k: v for k, v in w.items() if k != "iri"} if "iri" in w else w)
+            if wid in seen_witnesses:
+                findings.append({"reason": "duplicate_witness", "witness": i, "relation": ref[0], "key": ref[1]})
+            seen_witnesses.add(wid)
         by_conclusion.setdefault(ref, i)
     calculated = {}
     for i, w in enumerate(calc_witnesses):
@@ -923,7 +931,6 @@ def _check_graph(proof, rules, findings, calc_witnesses=(), calc_views=frozenset
         if ref in calculated or ref in by_conclusion:
             findings.append({"reason": "duplicate_witness", "witness": i, "relation": ref[0], "key": ref[1]})
         calculated.setdefault(ref, w)
-    root = (proof["root"]["relation"], proof["root"]["key"]) if proof["root"] else None
     if root and root not in by_conclusion:
         findings.append({"reason": "root_not_derived", "relation": root[0], "key": root[1]})
     for h in proof.get("hidden", []):
@@ -932,14 +939,17 @@ def _check_graph(proof, rules, findings, calc_witnesses=(), calc_views=frozenset
 
     derived = {r.head.relation for r in rules.values()}
     proved = by_conclusion.keys() | calculated.keys()
-    graph = {ref: {(p["relation"], p["key"]) for p in w.get("premises", ())
-                   if (p["relation"], p["key"]) in proved} for ref, w in calculated.items()}
+    calc_graph = {ref: {(p["relation"], p["key"]) for p in w.get("premises", ())
+                        if (p["relation"], p["key"]) in proved} for ref, w in calculated.items()}
+    graph = {ref: set(deps) for ref, deps in calc_graph.items()}
+    witness_pairs = []
     for i, w in enumerate(proof.get("witnesses", [])):
         if w is None:
             continue
         ref = (w["conclusion"]["relation"], w["conclusion"]["key"])
         rule = rules.get(w["rule_id"])
         graph.setdefault(ref, set())
+        w_deps = set()
         for p in w.get("premises", []):
             row = (p["row"]["relation"], p["row"]["key"])
             if p["polarity"] != "positive":
@@ -951,13 +961,57 @@ def _check_graph(proof, rules, findings, calc_witnesses=(), calc_views=frozenset
                 continue
             if row in proved:
                 graph[ref].add(row)
+                w_deps.add(row)
             elif row[0] in derived:
                 findings.append({"reason": "unproven_premise", "witness": i, "relation": row[0], "key": row[1]})
+        witness_pairs.append((ref, w_deps))
     try:
         TopologicalSorter({k: sorted(v) for k, v in sorted(graph.items())}).prepare()
     except CycleError as e:
-        rows = sorted(set(e.args[1]))
-        findings.append({"reason": "cycle", "rows": [{"relation": r, "key": k} for r, k in rows]})
+        if root is not None:
+            rows = sorted(set(e.args[1]))
+            findings.append({"reason": "cycle", "rows": [{"relation": r, "key": k} for r, k in rows]})
+        else:
+            all_pairs = [*witness_pairs, *calc_graph.items()]
+
+            def _lfp(pairs) -> set:
+                users: dict = {}
+                left: list[int] = []
+                ready: list = []
+                for idx, (ph, ps) in enumerate(pairs):
+                    left.append(len(ps))
+                    if not ps:
+                        ready.append(ph)
+                    else:
+                        for p in ps:
+                            users.setdefault(p, []).append(idx)
+                supported: set = set()
+                while ready:
+                    ph = ready.pop()
+                    if ph in supported:
+                        continue
+                    supported.add(ph)
+                    for idx in users.get(ph, ()):
+                        left[idx] -= 1
+                        if left[idx] == 0:
+                            ready.append(pairs[idx][0])
+                return supported
+
+            by_head: dict = {}
+            for h, ps in all_pairs:
+                by_head.setdefault(h, []).append(ps)
+            unfounded_rows = set()
+            for h, dep_list in by_head.items():
+                others = [(oh, ops) for oh, ops in all_pairs if oh != h]
+                base_supported = _lfp(others)
+                for deps in dep_list:
+                    if not (deps <= base_supported):
+                        unfounded_rows.add(h)
+            if unfounded_rows:
+                findings.append({
+                    "reason": "cycle",
+                    "rows": [{"relation": r, "key": k} for r, k in sorted(unfounded_rows)],
+                })
 
     if root is None:
         return  # an epoch's witness set: no root to reach from

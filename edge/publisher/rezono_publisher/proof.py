@@ -42,6 +42,7 @@ import hashlib
 import json
 from collections import defaultdict
 
+from rezono_canon import canonical_sha256
 from rezono_compiler import rules as ir
 from rezono_compiler import trace
 
@@ -171,7 +172,15 @@ def engine_rows(prog, relation: str, snapshot: bytes) -> list[tuple]:
     return [tuple(r["key"]) + tuple(cell(r.get("values", {}).get(c, {})) for c in values) for r in json.loads(snapshot)]
 
 
-def plan(rules_doc: dict | None, sees: dict, snapshots: dict, base: str, limit: int = PIECE, fanout: int = FANOUT):
+def _with_iri(w: dict, base_iri: str | None) -> dict:
+    if not base_iri:
+        return w
+    raw = {k: v for k, v in w.items() if k != "iri"}
+    return {**raw, "iri": f"{base_iri}witness/{canonical_sha256(raw)}"}
+
+
+def plan(rules_doc: dict | None, sees: dict, snapshots: dict, base: str, limit: int = PIECE, fanout: int = FANOUT,
+         *, base_iri: str | None = None):
     """The pieces of one role and the `proof` part of its view index.
 
     `rules_doc` is the manifest's rule IR (None without rules), `sees` the role's witness file, `snapshots`
@@ -184,7 +193,8 @@ def plan(rules_doc: dict | None, sees: dict, snapshots: dict, base: str, limit: 
     if witnesses:
         prog = ir.load(rules_doc)
         step_rows += trace.steps(prog, witnesses, {rel: engine_rows(prog, rel, b) for rel, b in snapshots.items()}, valued=True)
-    by_tree = rows(witnesses + calc, step_rows)
+    stamped = [_with_iri(w, base_iri) for w in witnesses]
+    by_tree = rows(stamped + calc, step_rows)
     pieces, roots = [], {t: {} for t in TREES}
     for t in TREES:
         for rel, rs in by_tree[t].items():

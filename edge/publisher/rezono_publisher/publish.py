@@ -524,7 +524,15 @@ def plan(e: Epoch, store, roles: dict[str, str], base: dict | None = None,
         mode = roles[role]
         if mode == access.COMPLETE:
             data = complete  # the checked bytes themselves
-            sees, full = {"witnesses": chosen, "hidden": []}, frozenset(rows)
+            if doc is not None:
+                founded_by_row, truncated, lb_map = access.evaluate_founded(instances, derived)
+                all_founded = [w for head in sorted(founded_by_row) for w in founded_by_row[head]]
+            else:
+                founded_by_row, truncated, lb_map = {}, set(), access._LoadBearingMap()
+                all_founded = chosen
+            sees, full = {"witnesses": all_founded, "hidden": [], "load_bearing": lb_map}, frozenset(rows)
+            if truncated:
+                sees["witnesses_truncated"] = sorted(truncated)
             if calc_doc is not None:
                 sees["calc_witnesses"] = calcs
         elif mode == access.FILTERED:
@@ -544,19 +552,12 @@ def plan(e: Epoch, store, roles: dict[str, str], base: dict | None = None,
             uri = put(object_key(e.pack, data[rel]), data[rel])
             snapshots.append({"relation": rel, "role": role, "complete": mode == access.COMPLETE, "full": rel in full,
                               "uri": uri, "sha256": sha256(data[rel]), "format": "json"})
-        sees_doc = dict(sees)
+        lb_map = sees.get("load_bearing")
+        sees_doc = {k: v for k, v in sees.items() if k != "load_bearing"}
         if sees["witnesses"]:
-            _, lb_rows = witness_graph.evaluate(sees["witnesses"], derived)
-            lb_entries = []
-            seen_prems: set[tuple[str, str, str, str, str]] = set()
-            for w in sees["witnesses"]:
-                c_rel, c_key = access.ref(w)
-                for p in w.get("premises", ()):
-                    entry = (c_rel, c_key, p["row"]["relation"], p["row"]["key"], p["polarity"])
-                    if entry not in seen_prems:
-                        seen_prems.add(entry)
-                        lb_entries.append((entry, entry in lb_rows))
-            lb_entries.sort(key=lambda item: item[0])
+            if lb_map is None:
+                lb_map = access.load_bearing(sees["witnesses"], derived)
+            lb_items = lb_map.tuple_items() if hasattr(lb_map, "tuple_items") else sorted(lb_map.items())
             sees_doc["load_bearing_entries"] = [
                 {
                     "conclusion": {"relation": c_rel, "key": c_key},
@@ -564,7 +565,7 @@ def plan(e: Epoch, store, roles: dict[str, str], base: dict | None = None,
                     "how": how,
                     "load_bearing": bool(flag),
                 }
-                for (c_rel, c_key, p_rel, p_key, how), flag in lb_entries
+                for (c_rel, c_key, p_rel, p_key, how), flag in lb_items
             ]
         body = canonical(sees_doc)
         uri = put(object_key(e.pack, body), body)

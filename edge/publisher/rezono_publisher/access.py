@@ -41,11 +41,13 @@ from collections import defaultdict
 from decimal import Decimal
 from math import gcd
 
-from rezono_canon import canonical_json
+from rezono_canon import canonical_json, canonical_sha256
 from rezono_compiler import rank
+
+MAX_WITNESSES_PER_CONCLUSION = 64
 from rezono_compiler.rules import INT
 
-from . import calc_scope
+from . import calc_scope, witness_graph
 
 _POSITIVE = re.compile(r"^[1-9][0-9]*$")
 
@@ -103,18 +105,138 @@ def ancestors(kinds, parents: dict) -> dict[str, list[str]]:
     return out
 
 
+def _choose_ranked(instances, derived) -> tuple[dict[tuple[str, str], dict], dict[tuple[str, str], int]]:
+    """For every derivable row its chosen witness and rank via `rezono_compiler.rank.choose`."""
+    instances = list(instances)
+    inst = [(ref(w), {(p["row"]["relation"], p["row"]["key"]) for p in w.get("premises", ())
+                      if p["polarity"] == "positive" and p["row"]["relation"] in derived},
+             (w["rule_id"], json.dumps([b["value"] for b in w.get("bindings", ())])))
+            for w in instances]
+    raw = rank.choose(inst)
+    return {head: instances[i] for head, (_, i) in raw.items()}, {head: r for head, (r, _) in raw.items()}
+
+
 def choose(instances, derived) -> dict[tuple[str, str], dict]:
     """For every derivable row one witness: least rank, then least (rule id, binding values).
 
     The one selector of the explainer (rezono_compiler.rank, formal.md §3), over witness instances as the
     engine gives them. An instance whose derived premise has no chosen proof is never chosen.
     """
+    return _choose_ranked(instances, derived)[0]
+
+
+def _pos_derived_premises(w: dict, derived) -> set[tuple[str, str]]:
+    return {
+        (p["row"]["relation"], p["row"]["key"])
+        for p in w.get("premises", ())
+        if p["polarity"] == "positive" and p["row"]["relation"] in derived
+    }
+
+
+def _witness_hash(w: dict) -> str:
+    return witness_graph.witness_hash(w)
+
+
+class _LoadBearingMap(dict):
+    """JSON-serializable dict storing canonical string keys while accepting 5-tuple lookups."""
+
+    @staticmethod
+    def _encode(key) -> str:
+        if isinstance(key, tuple):
+            return json.dumps(list(key), separators=(",", ":"), ensure_ascii=False)
+        return key
+
+    def __getitem__(self, key):
+        return super().__getitem__(self._encode(key))
+
+    def __contains__(self, key) -> bool:
+        return super().__contains__(self._encode(key))
+
+    def get(self, key, default=None):
+        return super().get(self._encode(key), default)
+
+    def tuple_items(self) -> list[tuple[tuple[str, str, str, str, str], bool]]:
+        return sorted((tuple(json.loads(k)), bool(v)) for k, v in self.items())
+
+
+def _lb_map_from_rows(witnesses: list[dict], lb_rows: set[tuple[str, str, str, str, str]]) -> _LoadBearingMap:
+    """Project derived `load_bearing/5` rows onto every premise of `witnesses`."""
+    out = _LoadBearingMap()
+    seen: set[tuple[str, str, str, str, str]] = set()
+    for w in witnesses:
+        c_rel, c_key = ref(w)
+        for p in w.get("premises", ()):
+            entry = (c_rel, c_key, p["row"]["relation"], p["row"]["key"], p["polarity"])
+            if entry not in seen:
+                seen.add(entry)
+                out[_LoadBearingMap._encode(entry)] = entry in lb_rows
+    return out
+
+
+def evaluate_founded(
+    instances,
+    derived,
+    *,
+    cap: int = MAX_WITNESSES_PER_CONCLUSION,
+) -> tuple[dict[tuple[str, str], list[dict]], set[tuple[str, str]], _LoadBearingMap]:
+    """Derive `founded_witness/3` and `load_bearing/5` via the compiled `witness-graph` Rezono rule pack.
+
+    Orders each conclusion's founded witnesses deterministically (chosen witness first, then by rank,
+    rule_id, canonical bindings, witness hash), caps at `cap`, and projects `load_bearing/5` onto
+    every premise of the kept founded witnesses.
+    """
     instances = list(instances)
-    inst = [(ref(w), {(p["row"]["relation"], p["row"]["key"]) for p in w.get("premises", ())
-                      if p["polarity"] == "positive" and p["row"]["relation"] in derived},
-             (w["rule_id"], json.dumps([b["value"] for b in w.get("bindings", ())])))
-            for w in instances]
-    return {head: instances[i] for head, (_, i) in rank.choose(inst).items()}
+    if not instances:
+        return {}, set(), _LoadBearingMap()
+    founded_rows, lb_rows = witness_graph.evaluate(instances, derived)
+    if not founded_rows:
+        return {}, set(), _LoadBearingMap()
+    primary, ranks = _choose_ranked(instances, derived)
+    by_head: dict[tuple[str, str], dict[str, dict]] = defaultdict(dict)
+    for w in instances:
+        c_rel, c_key = ref(w)
+        h_sha = _witness_hash(w)
+        if (c_rel, c_key, h_sha) in founded_rows and h_sha not in by_head[(c_rel, c_key)]:
+            by_head[(c_rel, c_key)][h_sha] = w
+
+    out: dict[tuple[str, str], list[dict]] = {}
+    truncated: set[tuple[str, str]] = set()
+    for head in sorted(by_head):
+        deduped = by_head[head]
+        primary_sha = _witness_hash(primary[head]) if head in primary else None
+
+        def sort_key(item: tuple[str, dict]):
+            h_sha, w = item
+            w_rank = 1 + max((ranks[p] for p in _pos_derived_premises(w, derived) if p in ranks), default=0)
+            return (
+                0 if h_sha == primary_sha else 1,
+                w_rank,
+                w["rule_id"],
+                canonical_json(w.get("bindings", ())),
+                h_sha,
+            )
+
+        ordered = [w for _, w in sorted(deduped.items(), key=sort_key)]
+        if len(ordered) > cap:
+            ordered = ordered[:cap]
+            truncated.add(head)
+        out[head] = ordered
+    all_founded = [w for head in sorted(out) for w in out[head]]
+    return out, truncated, _lb_map_from_rows(all_founded, lb_rows)
+
+
+def founded(instances, derived, *, cap: int = MAX_WITNESSES_PER_CONCLUSION) -> tuple[dict[tuple[str, str], list[dict]], set[tuple[str, str]]]:
+    """Every distinct founded witness per derivable row, chosen witness first (decisions/publish-founded-witnesses.md)."""
+    out, truncated, _ = evaluate_founded(instances, derived, cap=cap)
+    return out, truncated
+
+
+def load_bearing(witnesses: list[dict], derived=()) -> _LoadBearingMap:
+    """Derive per-premise `load_bearing/5` over `witnesses` via the compiled `witness-graph` Rezono rule pack."""
+    if not witnesses:
+        return _LoadBearingMap()
+    _, lb_rows = witness_graph.evaluate(list(witnesses), derived)
+    return _lb_map_from_rows(witnesses, lb_rows)
 
 
 def _calc_value_valid(text: str, column_type: str) -> bool:
@@ -377,9 +499,9 @@ def for_role(rows: dict, kinds, parents: dict, columns: dict, rules: dict, witne
     readable = {rel: [r for r in rs if scope.readable(rel, r)] for rel, rs in rows.items()
                 if rel not in scope.derived and rel not in scope.calc_inputs}
     keys = {rel: {key_text(r[:nkey.get(rel, len(r))]) for r in rs} for rel, rs in readable.items()}
-    chosen = choose([w for w in witnesses if scope.usable(w, keys)], scope.derived)
+    founded_by_row, truncated, lb_map = evaluate_founded([w for w in witnesses if scope.usable(w, keys)], scope.derived)
     if calc_ir is not None:
-        visible = calc_visible(scope, calc_ir, calc_witnesses, set(chosen))
+        visible = calc_visible(scope, calc_ir, calc_witnesses, set(founded_by_row))
         for rel in sorted(calc_scope.published_views(calc_ir)):
             readable[rel] = [r for r in rows.get(rel, ()) if (rel, key_text(r)) in visible]
         if scope.calc_inputs:
@@ -389,11 +511,14 @@ def for_role(rows: dict, kinds, parents: dict, columns: dict, rules: dict, witne
                 keys[rel] = {key_text(row) for row in readable.get(rel, ()) if len(row) == 4
                              and row[2] == "known" and row[3] == ""
                              and _calc_value_valid(row[1], column_type)}
-            chosen = choose([w for w in witnesses if scope.usable(w, keys)], scope.derived)
+            founded_by_row, truncated, lb_map = evaluate_founded([w for w in witnesses if scope.usable(w, keys)], scope.derived)
     for rel, rs in rows.items():
         if rel in scope.derived:
-            readable[rel] = [r for r in rs if (rel, key_text(r)) in chosen]
-    sees = {"witnesses": sorted(chosen.values(), key=order), "hidden": []}
+            readable[rel] = [r for r in rs if (rel, key_text(r)) in founded_by_row]
+    all_founded = [w for head in sorted(founded_by_row) for w in founded_by_row[head]]
+    sees = {"witnesses": all_founded, "hidden": [], "load_bearing": lb_map}
+    if truncated:
+        sees["witnesses_truncated"] = sorted(truncated)
     if calc_ir is not None:
         sees["calc_witnesses"] = sorted(visible.values(), key=ref)
     return readable, sees, scope.full

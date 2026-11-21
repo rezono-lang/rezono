@@ -18,14 +18,6 @@ ROOT = Path(__file__).resolve().parents[2]
 ASK_TS = (ROOT / "edge" / "gate" / "src" / "ask.ts").as_uri()
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "extra: decisions/publish-founded-witnesses.md (#1445): edge/gate/src/ask.ts must project "
-        "published load_bearing flags verbatim onto AnswerStep and never derive load_bearing itself"
-    ),
-)
 def test_gate_ask_only_reads_published_load_bearing_flags():
     script = f"""
 import {{ ask, memoryGraph }} from {json.dumps(ASK_TS)};

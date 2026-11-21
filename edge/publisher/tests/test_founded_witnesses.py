@@ -71,14 +71,6 @@ RULES = {
 }
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "extra: decisions/publish-founded-witnesses.md (#1445): founded_witness over the witness graph "
-        "must publish every distinct founded witness (chosen first) and exclude cyclic alternatives"
-    ),
-)
 def test_for_role_publishes_all_founded_witnesses_excluding_cyclic():
     # Case 1: and-or-two-rules — near(a,b) has two founded witnesses: near_in(a,b) (chosen) and near_out(a,b).
     # Case 2: finite-alternatives-on-a-cycle — reach(a,a) has founded reach_edge(a,a) & reach_step(a,b,a),
@@ -123,15 +115,6 @@ def test_for_role_publishes_all_founded_witnesses_excluding_cyclic():
     ], "founded alternatives must be published in deterministic order and cyclic reach_step(a,a,a) excluded"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "extra: decisions/publish-founded-witnesses.md (#1445): role-with-a-hidden-alternative must satisfy "
-        "two-world non-interference (restricted role sees identical output with or without hidden alternative) "
-        "and role-relative load_bearing projected from the witness-graph relation"
-    ),
-)
 def test_role_with_hidden_alternative_has_zero_count_leak_and_role_relative_load_bearing():
     cols = {**COLUMNS, "edge_in": ("node", None), "edge_out": ("node", None)}
     rules = {
