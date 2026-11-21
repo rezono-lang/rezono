@@ -691,7 +691,7 @@ def test_day_number_field_counter_uses_compiler_model_not_regex(tmp_path: Path):
         "type DayStamp = Int\n"
         "type DayLabel = Text\n\n"
         "kind Entry world closed\n"
-        "  id: Text key\n"
+        "  id: Text identifier\n"
         "  effective_day: DayStamp\n"
         "  label_day: DayLabel\n"
         "  recorded_on: Date\n",
