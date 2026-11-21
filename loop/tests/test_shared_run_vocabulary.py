@@ -250,3 +250,71 @@ def test_an_effect_is_attempted_once_per_plan(tmp_path):
         assert ((RUN, PLAN) in {row[:2] for row in rows.get("effect_discarded", set())}) is discarded, case
         states = {row[2] for row in rows.get("effect_state", set()) if row[:2] == (RUN, PLAN)}
         assert states == {state}, case
+
+
+def test_effect_stale_readback_between_attempts_cannot_settle(tmp_path):
+    """A readback between an earlier claimed attempt and a later sent/unknown attempt never settles the plan."""
+    model = shell(tmp_path, "effect-latest-reader", PERMIT_RULE)
+
+    def records(attempts, readbacks):
+        receipts = sorted({tick for _, tick in readbacks})
+        return {
+            "loop_active_run": [{"id": RUN}],
+            "loop_step": [{"id": "sign"}],
+            "loop_completion": [{"id": "def-sign", "run": RUN, "step": "sign", "token": "signed",
+                                 "reason": "def-sign"}],
+            "loop_expectation": [{"id": "signed", "value": "yes"}],
+            "loop_effect_plan": [{"id": PLAN, "run": RUN, "step": "sign", "reason": "statement"}],
+            "loop_effect_attempt": [
+                {"id": f"attempt-{idx}", "run": RUN, "plan": PLAN, "sent_at": sent_at,
+                 "outcome": outcome, "source": "journal"}
+                for idx, (outcome, sent_at) in enumerate(attempts, start=1)
+            ],
+            "loop_sweep_receipt": [{"id": f"cut-{tick}", "run": RUN, "event_time": tick} for tick in receipts],
+            "loop_effect_readback": [
+                {"id": f"readback-{idx}", "run": RUN, "plan": PLAN, "observed_at": tick,
+                 "state": state, "receipt": f"cut-{tick}", "source": "store"}
+                for idx, (state, tick) in enumerate(readbacks, start=1)
+            ],
+        }
+
+    cases = [
+        # Stale expected readback between claimed@5 and sent@10 must leave the plan pending.
+        ("stale_expected_between_claimed_and_sent",
+         [("claimed", 5), ("sent", 10)], [("expected", 7)],
+         "10", "readback-missing", False, False, "unknown"),
+        # Stale other readback between claimed@5 and unknown@10 must not discard the plan.
+        ("stale_other_between_claimed_and_unknown",
+         [("claimed", 5), ("unknown", 10)], [("other", 7)],
+         "10", "readback-missing", False, False, "unknown"),
+        # Stale before readback between claimed@5 and sent@10 must not report still-before.
+        ("stale_before_between_claimed_and_sent",
+         [("claimed", 5), ("sent", 10)], [("before", 7)],
+         "10", "readback-missing", False, False, "unknown"),
+        # Readback at the exact tick of the latest attempt does not settle it.
+        ("readback_at_latest_attempt_tick",
+         [("claimed", 5), ("sent", 10)], [("expected", 10)],
+         "10", "readback-missing", False, False, "unknown"),
+        # Stale other@7 must not block a fresh expected@12 after sent@10 from confirming.
+        ("stale_other_superseded_by_fresh_expected",
+         [("claimed", 5), ("sent", 10)], [("other", 7), ("expected", 12)],
+         "10", None, True, False, "applied"),
+        # Stale expected@7 must not settle ahead of a fresh other@12 after unknown@10.
+        ("stale_expected_superseded_by_fresh_other",
+         [("claimed", 5), ("unknown", 10)], [("expected", 7), ("other", 12)],
+         "10", None, False, True, "failed"),
+        # Fresh before@12 after sent@10 reports still-before.
+        ("fresh_before_after_latest_attempt",
+         [("claimed", 5), ("sent", 10)], [("before", 12)],
+         "10", "still-before", False, False, "unknown"),
+    ]
+
+    for name, attempts, readbacks, latest, pending, confirmed, discarded, state in cases:
+        _, rows, _ = evaluate(model, records(attempts, readbacks))
+        assert rows.get("effect_latest_attempt") == {(RUN, PLAN, latest)}, name
+        assert {row[2] for row in rows.get("effect_pending", set()) if row[:2] == (RUN, PLAN)} == (
+            {pending} if pending else set()), name
+        assert ((RUN, PLAN) in {row[:2] for row in rows.get("effect_confirmed", set())}) is confirmed, name
+        assert ((RUN, PLAN) in {row[:2] for row in rows.get("effect_discarded", set())}) is discarded, name
+        states = {row[2] for row in rows.get("effect_state", set()) if row[:2] == (RUN, PLAN)}
+        assert states == {state}, name
