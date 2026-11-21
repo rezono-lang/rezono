@@ -720,22 +720,37 @@ def test_backup_recorder_uses_object_timestamp_pack_params_and_compiled(
     backup_relations = (
         "backup_copy__taken",
         "backup_decision__max_age_days",
-        "backup_plan__interval_days",
-        "backup_plan__retention_days",
         "managed_backup_state",
         "managed_backup_restored",
         "managed_backup_route",
     )
 
+    from rezono_compiler import facts as compiler_facts
+
     def _run_backup(
         *, observed_active_authority: bool
-    ) -> tuple[set[tuple[str, str]], list[dict[str, set[tuple[str, ...]]]], list[Any], list[dict[str, Any]]]:
+    ) -> tuple[
+        set[tuple[str, str]],
+        list[dict[str, set[tuple[str, ...]]]],
+        list[dict[str, list[tuple[Any, ...]]]],
+        list[Any],
+        list[dict[str, Any]],
+    ]:
         requested_names: list[Any] = []
         seen, snapshots = _capture_batch_reads(
             monkeypatch,
             extra_relations=backup_relations,
             on_read=lambda _pack, names, _snap: requested_names.append(names),
         )
+        admitted_rows: list[dict[str, list[tuple[Any, ...]]]] = []
+        real_rows_of = compiler_facts.rows_of
+
+        def capture_rows_of(model: Any, records: dict[str, Any], *args: Any, **kwargs: Any) -> Any:
+            tables = real_rows_of(model, records, *args, **kwargs)
+            admitted_rows.append({name: list(vals) for name, vals in tables.items()})
+            return tables
+
+        monkeypatch.setattr(compiler_facts, "rows_of", capture_rows_of)
         state_box: dict[str, Any] = {"scaled": False, "stored": {}}
 
         class FakeBackupCluster(_BaseFakeCluster):
@@ -836,10 +851,10 @@ def test_backup_recorder_uses_object_timestamp_pack_params_and_compiled(
             ) from exc
         cluster = state_box["cluster"]
         assert cluster.recorded_jobs, "record_management_backup.py did not call record_job"
-        return seen, snapshots, requested_names, cluster.recorded_jobs[-1][1]
+        return seen, snapshots, admitted_rows, requested_names, cluster.recorded_jobs[-1][1]
 
     # Scenario A: stale stored object (max_age_days + 1 days old) derives too-old via management_probes.compiled.
-    seen_a, snaps_a, req_names_a, events_a = _run_backup(observed_active_authority=False)
+    seen_a, snaps_a, admitted_a, req_names_a, events_a = _run_backup(observed_active_authority=False)
     assert {
         (PLATFORM_PACK_NAME, "managed_backup_state"),
         (PLATFORM_PACK_NAME, "managed_backup_restored"),
@@ -850,13 +865,24 @@ def test_backup_recorder_uses_object_timestamp_pack_params_and_compiled(
         "(reading all derived relations through batch.read(con, prog)), not a custom subset evaluator"
     )
     rows_a = snaps_a[-1]
-    assert {row[1] for row in rows_a["backup_copy__taken"]} == {old_day} and old_day != today, (
+    assert {row[1] for row in rows_a.get("backup_copy__taken", set())} == {old_day} and old_day != today, (
         f"backup_copy__taken must record the stored object's real date ({old_day}), not as_of ({today}); "
-        f"got {rows_a['backup_copy__taken']!r}"
+        f"got {rows_a.get('backup_copy__taken')!r}"
     )
-    assert {row[1] for row in rows_a["backup_decision__max_age_days"]} == {str(max_age_days)}
-    assert {row[1] for row in rows_a["backup_plan__interval_days"]} == {str(interval_days)}
-    assert {row[1] for row in rows_a["backup_plan__retention_days"]} == {str(retention_days)}
+    assert {row[1] for row in rows_a.get("backup_decision__max_age_days", set())} == {str(max_age_days)}, (
+        f"backup_decision__max_age_days must match pack fact {max_age_days}; "
+        f"got {rows_a.get('backup_decision__max_age_days')!r}"
+    )
+    assert admitted_a, "record_management_backup.py must admit input facts through rezono_compiler.facts.rows_of"
+    fact_tables_a = admitted_a[-1]
+    assert {str(row[1]) for row in fact_tables_a.get("backup_plan__interval_days", ())} == {str(interval_days)}, (
+        f"backup_plan__interval_days must match pack fact {interval_days}; "
+        f"got {fact_tables_a.get('backup_plan__interval_days')!r}"
+    )
+    assert {str(row[1]) for row in fact_tables_a.get("backup_plan__retention_days", ())} == {str(retention_days)}, (
+        f"backup_plan__retention_days must match pack fact {retention_days}; "
+        f"got {fact_tables_a.get('backup_plan__retention_days')!r}"
+    )
     assert rows_a["managed_backup_state"] == {("management-backup-plan", "too-old")}, rows_a["managed_backup_state"]
     backup_id = "management-copy-404-1"
     trial_id = "management-trial-404-1"
@@ -886,7 +912,7 @@ def test_backup_recorder_uses_object_timestamp_pack_params_and_compiled(
     )
 
     # Scenario B: observing active_authority=True propagates into recovered-read (not hardcoded False).
-    _, _, _, events_b = _run_backup(observed_active_authority=True)
+    _, _, _, _, events_b = _run_backup(observed_active_authority=True)
     recovered_active, = [e for e in events_b if e["kind"] == "recovered-read"]
     assert recovered_active.get("active_authority") is True, (
         f"recovered-read must record the observed active_authority value, got {recovered_active!r}"
