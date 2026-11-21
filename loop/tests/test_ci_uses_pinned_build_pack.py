@@ -383,6 +383,7 @@ def _render_step_env(step_env: dict, *, base_sha: str, head_sha: str) -> dict[st
         "github.sha": head_sha,
         "github.event.pull_request.base.sha": base_sha,
         "github.event.pull_request.head.sha": head_sha,
+        "github.event.pull_request.updated_at": "2026-11-21T12:00:00Z",
         "github.event.merge_group.base_sha": "",
         "github.event.merge_group.head_sha": "",
         "github.event.before": "",

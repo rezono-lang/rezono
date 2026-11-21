@@ -258,7 +258,7 @@ jobs:
       has_node: ${{ steps.matrix.outputs.has_node }}
       pytest: ${{ steps.matrix.outputs.pytest }}
       has_pytest: ${{ steps.matrix.outputs.has_pytest }}
-      python_editable: ${{ steps.matrix.outputs.python_editable }}
+      python_editable: ${{ steps.build_base.outputs.python_editable }}
       cluster_mode: ${{ steps.cluster.outputs.mode }}
       cluster_tasks: ${{ steps.cluster.outputs.tasks }}
       role_publication: ${{ steps.role_publication.outputs.required }}
@@ -316,13 +316,15 @@ jobs:
             echo
             python -I scripts/red_list.py --milestones
           } | tee -a "$GITHUB_STEP_SUMMARY"
-      # What must run and what counts as run come from the base, as the pack
-      # warnings do: a candidate cannot weaken its own count through
-      # scripts/components.py. The base scripts sit in a hidden directory of the
-      # checkout, so they read the candidate's tree. The candidate's own copy
-      # runs its regressions below and executes the shards; a change to the
-      # matrix or inventory format must stay readable by the base until it lands.
-      - name: Take the build rules from the base
+      # What counts as run comes from the base, as the pack warnings do: a
+      # candidate cannot weaken its own count through scripts/components.py. The
+      # base scripts sit in a hidden directory of the checkout, so they read the
+      # candidate's tree. Suite selection executes build/ on the pinned earlier
+      # main engine commit read from build/engine-pin.yaml via
+      # loop/ci_discover.py, failing closed to the full suite universe on engine
+      # or publication failure.
+      - id: build_base
+        name: Take the build rules from the base
         shell: bash
         env:
           POLICY: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
@@ -331,13 +333,29 @@ jobs:
           mkdir -p .build-base
           git archive "$POLICY" scripts | tar -x -C .build-base --strip-components=1
           echo "Build rules from $POLICY, scripts/components.py blob $(git rev-parse "$POLICY:scripts/components.py")"
+          raw_packages=$(python3 .build-base/components.py python-packages)
+          editable=""
+          while IFS= read -r package; do
+            [[ -n "$package" ]] && editable+=" -e $package"
+          done < <(printf '%s\n' "$raw_packages" | tr -s '[:space:]' '\n')
+          echo "python_editable=${editable# }" >> "$GITHUB_OUTPUT"
+      # Install the locked Python and Node toolchain (including rezono/node_modules
+      # and the cached oracle) before running the pinned build pack, the base-policy
+      # checks, and the selection's own regressions.
+      - uses: ./.github/workflows/python-environment
+        with:
+          editable: ${{ steps.build_base.outputs.python_editable }}
+          oracle: 'true'
+          save-cache: 'true'
       - id: matrix
+        name: Select component jobs from the pinned build pack
         env:
           GITHUB_BASE_REF: ${{ github.base_ref }}
           MERGE_GROUP_BASE_SHA: ${{ github.event.merge_group.base_sha }}
           MERGE_GROUP_HEAD_SHA: ${{ github.event.merge_group.head_sha }}
           GITHUB_EVENT_BEFORE: ${{ github.event.before }}
-        run: python3 .build-base/components.py ci-matrix
+          GITHUB_EVENT_TIME: ${{ github.event.pull_request.updated_at || github.event.merge_group.head_commit.timestamp || github.event.head_commit.timestamp }}
+        run: python3 loop/ci_discover.py ci-matrix
       - name: Select the role-publication proof
         id: role_publication
         env:
@@ -370,11 +388,6 @@ jobs:
           fi
       # The selection's own regressions run whatever it selects: a pull request
       # that changes only scripts or workflows may select no component job.
-      - uses: ./.github/workflows/python-environment
-        with:
-          editable: ${{ steps.matrix.outputs.python_editable }}
-          oracle: ${{ contains(fromJSON(steps.matrix.outputs.python).*.folder, 'compiler') || contains(fromJSON(steps.matrix.outputs.python).*.folder, 'examples') }}
-          save-cache: 'true'
       - name: Test candidate selection and exact-once evidence
         run: python -I .github/workflows/tests/test_components.py
       # These examples run pytest, so they wait for the locked environment.

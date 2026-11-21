@@ -53,6 +53,12 @@ SOURCE_POLICY = {
     # task; for a suite, select_tests.py chooses the cluster tests and nothing counts them.
     # ci.yml runs red_list.py to decide whether the milestones and skips hold.
     "scripts/fast_check.py", "loop/cluster/select_tests.py", "scripts/red_list.py",
+    # ci.yml runs loop/ci_discover.py to select CI suites via the pinned build/ pack;
+    # protecting the cutover/pin libraries and pin file prevents unlabelled pull requests
+    # from weakening CI suite selection (loop/ci_discover.py joins SOURCE_POLICY once its
+    # pinned node_modules cutover lands).
+    "loop/build_cutover.py", "loop/build_pinned_runner.py",
+    "loop/build_job_matrix.py", "build/engine-pin.yaml",
 }
 POLICY = SOURCE_POLICY | {
     ".github/workflows/red-policy.yml",
