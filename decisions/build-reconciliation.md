@@ -102,4 +102,68 @@ All four relations are declared in `build/rules/progress.dl` (over `build/schema
 
 ### Role-scoped publication (`std-access`)
 
-`build/pack.yaml` imports `packs/std-access`. `build/facts/roles.yaml` declares at least the `coordinator` role (capabilities `[read, agent]`) and the `owner` role (capabilities `[read, review, administer]`). `build/rules/access.dl` grants `may_read` and `may_read_full` to every role holding the `read` capability across `role` and every input kind required to derive milestone progress, `release_1_done`, off-board release-1 work, task states and claim-release relations (without exposing protected admission tables to filtered roles). Publishing `build/` with `"may_read"` roles for `coordinator` and `owner` gives both roles the snapshots and checker-verified witnesses for all of those relations, while any role without the `read` capability receives none.
+`build/pack.yaml` imports `packs/std-access`. `build/facts/roles.yaml` declares at least the `coordinator` role (capabilities `[read, agent]`) and the `owner` role (capabilities `[read, review, administer]`). `build/rules/access.dl` grants `may_read` and `may_read_full` to every role holding the `read` capability across `role` and every input kind required to derive milestone progress, `release_1_done`, off-board release-1 work, task states, claim-release relations and the pull request landing gate (without exposing protected admission tables to filtered roles). Publishing `build/` with `"may_read"` roles for `coordinator` and `owner` gives both roles the snapshots and checker-verified witnesses for all of those relations, while any role without the `read` capability receives none.
+
+## Pull request landing gate
+
+Whether a pull request at a specific commit may land, and whether a coordinator may enqueue or dequeue it in the merge queue, are derived conclusions in `build/` with checker-verified proofs — never ad-hoc script decisions. `build/pack.yaml` imports `packs/std-review` (pinned by hash) alongside `packs/std-access`, `packs/std-decision` and `packs/std-loop`. [Pre-landing review](checker-and-access-review.md) · [Review library](../packs/std-review/pack.yaml) · [Decision library](../packs/std-decision/pack.yaml) · [Effect protocol](../contracts/effect.yaml) · [Claim model](../formal/Claims.tla)
+
+### Readings and findings in `std-review`
+
+Commit-bound independent readings and correctness findings are facts in `packs/std-review/schema/review.yaml` (layer `facts`, carrying no day numbers), evaluated by `packs/std-review/rules/commit_review.dl` without blocking publication via `@invariant` so contradictory or open findings produce an explicit `invalid` conclusion with a proof:
+
+| Kind | Slots and semantics |
+| --- | --- |
+| `CommitReading` | `id`, `change` (`Change`, required), `commit_sha` (required), `reviewer` (required), `outcome` (`ReadingOutcome`: `clean` or `finding`, required), `source` (required). An independent reading counts for `(change, commit_sha)` only when `reviewer` differs from `change.author`, `outcome = "clean"`, and `source` is non-empty. A reading for another commit SHA or by the change's own author never satisfies `head_sha`. |
+| `ReviewFinding` | `id`, `change` (`Change`, required), `commit_sha` (required), `reporter` (required), `subject` (required), `kind` (`FindingKind`: `correctness` or `advisory`, required), `status` (`FindingStatus`: `open` or `resolved`, required), `source` (required). |
+
+`packs/std-review/rules/commit_review.dl` derives and exports:
+
+- `commit_reading_valid(change, commit_sha, reviewer)`: an independent `clean` `CommitReading` (`reviewer != author`, non-empty `source`) for `(change, commit_sha)` with no conflicting `finding` reading on that pair.
+- `correctness_finding_open(change, commit_sha, finding)`: an `open` `correctness` `ReviewFinding` with non-empty `source` for `(change, commit_sha)` (or a `CommitReading` with `outcome = "finding"` and non-empty `source`).
+- `finding_contradiction(change, commit_sha)`: contradictory review evidence for `(change, commit_sha)` — either two `ReviewFinding` rows for the same `(change, commit_sha, subject)` with opposite statuses (`open` and `resolved`), or two `CommitReading` rows for `(change, commit_sha)` with opposite outcomes (`clean` and `finding`), or a `clean` `CommitReading` alongside an `open` `correctness` `ReviewFinding`.
+
+### Observed kinds for the landing gate and merge-queue effects
+
+Declared in `build/schema/landing_gate.yaml` (importing `selection`, `std-review:review`, `std-decision:decision`, `std-loop:effect` and `std-loop:round_progress`):
+
+| Kind | Independent origin and acceptance question |
+| --- | --- |
+| `BuildPullRequest` | One candidate pull request bound to a `BuildRun` cut (`id`, `run`, `change` (`Change`), 40-hex `head_sha`, `checks_state` (`BuildChecksState`: `green`, `red`, `pending`, `unknown`), non-empty `source`). |
+| `BuildPrTouchedPath` | One path touched by a pull request (`id`, `pull_request` (`BuildPullRequest`), `path`, `is_test` (`BuildPathTestFlag`: `yes` or `no`), non-empty `source`), distinguishing test evidence from non-test files per [pre-landing review](checker-and-access-review.md). |
+| `BuildLandingPolicy` | A steering/policy rule bound to a `std-decision` `Decision` (`id`, `decision` (`Decision`), `path_prefix`, optional `upper_bound` for directory prefix ranges using `binary_text` as in `BuildTargetRule`, and `reading_policy` (`BuildReadingPolicy`: `require` or `none`)). Active on the cut only when `in_force_on(decision, date)` holds at `build_policy_date_at_cut(run, date)`. |
+| `BuildCoordinatorClaim` | One durable coordinator claim over a pull request at a verified cut (`id`, `run`, `pull_request` (`BuildPullRequest`), `coordinator`, 40-hex `generation`, `observed_at`, non-empty `source`). One coordinator per PR: two distinct coordinators claiming the same PR in one run conflict, so neither holds a unique claim. |
+| `BuildMergeQueueRequest` | One coordinator's request to enqueue or dequeue a pull request (`id`, `run`, `pull_request` (`BuildPullRequest`), `coordinator`, `action` (`MergeQueueAction`: `enqueue` or `dequeue`), `plan` (`LoopEffectPlan`), `step` (`LoopStep`)). |
+
+### Derived `may_land` conclusion and merge-queue effects
+
+Declared in `build/rules/landing_gate.dl` (with labels in `build/labels/en.yaml`, shapes in `build/channels.yaml` and `may_read`/`may_read_full` grants in `build/rules/access.dl`), every row carries a checker-verified witness:
+
+- **`may_land(run, pr, head_sha, state, reason)`:** Evaluates every `BuildPullRequest` at a verified `BuildRun` cut (`build_verified_cut(run)`):
+  1. **`invalid`** (highest precedence):
+     - `("invalid", "contradictory-findings")` when `finding_contradiction(change, head_sha)` holds;
+     - `("invalid", "open-correctness-finding")` when `correctness_finding_open(change, head_sha, _)` holds without contradiction.
+  2. **`unknown`** (when not `invalid`):
+     - `("unknown", "landing-policy-unknown")` when no `BuildLandingPolicy` decision is in force at `build_policy_date_at_cut(run, date)` (fail closed: never assume no reading is required without an active policy);
+     - `("unknown", "missing-independent-reading")` when an in-force `BuildLandingPolicy` with `reading_policy = "require"` matches a non-test `BuildPrTouchedPath` (`is_test = "no"`) of `pr` and no `commit_reading_valid(change, head_sha, _)` holds for that exact `head_sha` (waiting for a reviewer — never silently true and never forged);
+     - `("unknown", "checks-not-green")` when reading requirements are satisfied (or not triggered) and `checks_state` is `"pending"` or `"unknown"`.
+  3. **`not_applicable`** (when not `invalid` and not `unknown`):
+     - `("not_applicable", "checks-red")` when `checks_state = "red"`.
+  4. **`known`** (when not `invalid`, active policy is in force, `checks_state = "green"`, and any required independent reading for that exact `head_sha` is recorded):
+     - `("known", "independent-reading-verified")` when a reading was required and satisfied;
+     - `("known", "no-reading-required")` when no touched non-test path requires pre-landing reading under the active policy.
+- **Merge-queue effects (`std-loop`):** `build/rules/landing_gate.dl` extends `std-loop`'s `effect_permitted(run, step, plan, reason)` and exports `build_merge_queue_effect_plan(run, pr, coordinator, action, plan)`:
+  - An `enqueue` request is permitted (`"merge-queue-enqueue"`) if and only if the requesting `coordinator` holds the unique durable `BuildCoordinatorClaim` for `(run, pr)` at the cut tick, `may_land(run, pr, head_sha, "known", _)` holds, and `plan` belongs to `(run, step)`.
+  - A `dequeue` request is permitted (`"merge-queue-dequeue"`) if and only if the requesting `coordinator` holds the unique durable `BuildCoordinatorClaim` for `(run, pr)` at the cut tick, `may_land(run, pr, head_sha, state, _)` holds with `state != "known"`, and `plan` belongs to `(run, step)`.
+  - A second coordinator without a durable claim for `pr` — or either coordinator during a two-coordinator claim conflict — receives neither `effect_permitted`, nor `effect_planned`, nor `build_merge_queue_effect_plan`.
+  - Once permitted and `unblocked`, `std-loop`'s `effect_planned`, `LoopEffectAttempt`, receipted `LoopEffectReadback`, `effect_confirmed`, `effect_pending`, `effect_discarded` and `effect_state` govern single-attempt consumption and post-effect verification.
+
+### Red tests for the landing gate (`extra`)
+
+All three tests live in `loop/tests/test_build_pr_landing_gate.py` and carry `extra:` so release 1 is not blocked:
+
+| Test | Expects |
+| --- | --- |
+| `test_may_land_is_unknown_when_required_reading_for_head_sha_is_missing` | For a PR touching a protected non-test path under an in-force `BuildLandingPolicy` with green checks, `may_land` evaluates to `"unknown"` (`"missing-independent-reading"`) when no reading exists, when only a stale commit reading exists, or when only a self-reading by the author exists; adding an independent `clean` reading for the exact `head_sha` yields `may_land` `"known"` with a checker-verified witness. |
+| `test_may_land_is_invalid_when_open_finding_exists_or_findings_contradict` | `may_land` evaluates to `"invalid"` (`"open-correctness-finding"`) when an open correctness `ReviewFinding` exists for `(change, head_sha)` and to `"invalid"` (`"contradictory-findings"`) when findings or readings contradict for `(change, head_sha)`, each with a checker-verified witness and never `"known"`. |
+| `test_second_coordinator_without_claim_receives_no_merge_queue_effect` | The coordinator holding the unique durable `BuildCoordinatorClaim` receives `effect_planned` and `build_merge_queue_effect_plan` for both `enqueue` (when `may_land` is `"known"`) and `dequeue` (when `may_land` is `"invalid"`), and settles via `effect_confirmed` / `effect_state(..., "applied", ...)` after a receipted `LoopEffectReadback`; a second coordinator without a claim receives no enqueue or dequeue effect. |
