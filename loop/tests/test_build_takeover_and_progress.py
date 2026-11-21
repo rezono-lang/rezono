@@ -312,19 +312,6 @@ def test_coordinator_reader_uses_published_relations_and_fails_closed_to_safe_mo
         )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingProgressRelations,
-    reason=(
-        "extra: decisions/build-reconciliation.md: Milestone progress and release-1 completion. Declare "
-        "BuildMilestone, BuildProgressScan, BuildRedTest and BuildGreenTransition in build/schema/progress.yaml "
-        "(with labels in build/labels/en.yaml and channels in build/channels.yaml) and derive "
-        "build_milestone_progress(run, milestone, green_count, red_count) and release_1_done(run, scan) in "
-        "build/rules/progress.dl. Count distinct turned-green and still-red tests per milestone (M1, M2, M3, M4, "
-        "extra, later) at a verified cut with proofs; derive release_1_done iff all four M1-M4 milestones exist "
-        "and zero red tests carry M1-M4 (red extra/later tests do not block it)."
-    ),
-)
 def test_build_pack_derives_milestone_progress_and_release_1_done_with_proofs(tmp_path):
     required = {"BuildMilestone", "BuildProgressScan", "BuildRedTest", "BuildGreenTransition"}
     if not required <= _declared_kinds():
@@ -407,22 +394,6 @@ def test_build_pack_derives_milestone_progress_and_release_1_done_with_proofs(tm
     assert stale_rows["reader"]["release_1_done"] == []
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingOffboardAndRolePublication,
-    reason=(
-        "extra: decisions/build-reconciliation.md: Off-board release-1 work and role publication. Waits for "
-        "loop/tests/test_build_takeover_and_progress.py--"
-        "test_build_pack_derives_milestone_progress_and_release_1_done_with_proofs. Declare BuildOffboardWork "
-        "in build/schema/progress.yaml and derive build_offboard_work_count(run, item, completed, total, "
-        "remaining) and build_offboard_work_unknown(run, item, reason) in build/rules/progress.dl so observable "
-        "off-board release-1 work (e.g. rezono-1-migration 0 of N) gets its count and unobservable or incomplete "
-        "work gets an explicit unknown row with reason. Import packs/std-access in build/pack.yaml, declare "
-        "coordinator and owner roles in build/facts/roles.yaml, and grant may_read and may_read_full in "
-        "build/rules/access.dl so both coordinator and owner read the progress, release_1_done, off-board, task "
-        "and claim-release relations with verified proofs while an unprivileged role reads none."
-    ),
-)
 def test_build_pack_derives_offboard_work_and_publishes_for_coordinator_and_owner_roles(tmp_path):
     if "BuildOffboardWork" not in _declared_kinds():
         raise MissingOffboardAndRolePublication("build/schema lacks BuildOffboardWork")
