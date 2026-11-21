@@ -94,8 +94,29 @@ def leaves(want):
     return pieces, roots
 
 
+def _lb_entries(witnesses):
+    seen = {}
+    for w in witnesses:
+        c = w["conclusion"]
+        for p in w.get("premises", ()):
+            key = (c["relation"], c["key"], p["row"]["relation"], p["row"]["key"], p["polarity"])
+            seen[key] = True
+    return [
+        {"conclusion": {"relation": cr, "key": ck}, "premise": {"relation": pr, "key": pk},
+         "how": how, "load_bearing": flag}
+        for (cr, ck, pr, pk, how), flag in sorted(seen.items())
+    ]
+
+
 def check(pieces, roots, witnesses=WITNESSES, limit=65536, fanout=128):
-    return check_proof(RULES, {"witnesses": witnesses}, SNAPSHOTS, pieces, roots, limit, fanout)
+    return check_proof(RULES, {"witnesses": witnesses, "load_bearing_entries": _lb_entries(witnesses)},
+                       SNAPSHOTS, pieces, roots, limit, fanout)
+
+
+def test_missing_load_bearing_entries_is_refused():
+    pieces, roots = leaves(expected(WITNESSES, steps(RULES, WITNESSES, rows())))
+    problems = check_proof(RULES, {"witnesses": WITNESSES}, SNAPSHOTS, pieces, roots, 65536, 128)
+    assert any(getattr(p, "code", None) == "load_bearing_mismatch" for p in problems), problems
 
 
 def test_the_exact_trees_pass():
@@ -209,7 +230,7 @@ def test_trees_with_calculations_pass_and_a_missing_calculation_is_found():
     """The witness tree holds both kinds, unchanged; a calculation without premises is a witness only."""
     want = expected(WITNESSES + CALC, steps(RULES, WITNESSES, rows()) | calc_steps(CALC))
     pieces, roots = leaves(want)
-    sees = {"witnesses": WITNESSES, "calc_witnesses": CALC}
+    sees = {"witnesses": WITNESSES, "calc_witnesses": CALC, "load_bearing_entries": _lb_entries(WITNESSES)}
     assert check_proof(RULES, sees, SNAPSHOTS, pieces, roots, 65536, 128) == []
     assert "c__zero" in roots["witness"] and "c__zero" not in roots["back"]
     # Without the calculation witnesses the same trees are not the role's graph: trees for nothing.
@@ -263,7 +284,8 @@ def weighed_rows():
 
 def weighed_check(want):
     pieces, roots = leaves(want)
-    return check_proof(WEIGHED, {"witnesses": WEIGHED_WITNESSES}, WEIGHED_SNAPSHOTS, pieces, roots, 65536, 128)
+    return check_proof(WEIGHED, {"witnesses": WEIGHED_WITNESSES, "load_bearing_entries": _lb_entries(WEIGHED_WITNESSES)},
+                       WEIGHED_SNAPSHOTS, pieces, roots, 65536, 128)
 
 
 def test_a_contributes_edge_of_a_sum_or_a_min_carries_the_cell_the_aggregate_reads():

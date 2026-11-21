@@ -411,14 +411,6 @@ def test_rules_v2_refuses_min_int64_constant_and_accepts_symmetric_bound():
     assert not problems, "\n".join(problems)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "M3: decisions/language-rezono-1.md: sections 2 and 5.4; compiler/rezono_compiler/rules.py "
-        "must refuse any rezono.rules/2 program where a functional relation rule positively reads an "
-        "open-world base or derived relation."
-    ),
-)
 def test_rules_v2_refuses_functional_rule_reading_open_relation():
     # Counter-case: a functional derivation over a closed domain reading closed base and closed derived
     # relations loads cleanly.

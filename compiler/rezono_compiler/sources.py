@@ -294,19 +294,23 @@ def collected(entries) -> list[dict]:
 
 
 def file_entries(pack: Pack, path: Path, data: dict | None = None, *, metadata=UNSET,
-                 relative: Path | None = None, dataset=UNSET) -> list[dict]:
+                 relative: Path | None = None, dataset=UNSET,
+                 as_of: str | None = None, known: str | None = None) -> list[dict]:
     companion = path.with_suffix(".sources.yaml")
     if metadata is UNSET and companion.exists():
         metadata = strict_yaml.read(companion)
     resolved_dataset = facts.dataset_at(path) if dataset is UNSET else dataset
     return text_entries(pack, relative.as_posix() if relative is not None else path.name,
                         "" if resolved_dataset is not None else path.read_text("utf-8"), data,
-                        metadata=metadata, dataset=resolved_dataset)
+                        metadata=metadata, dataset=resolved_dataset, as_of=as_of, known=known)
 
 
 def text_entries(pack: Pack, name: str, text: str, data: dict | None = None, *, metadata=UNSET,
-                 dataset: facts.DatasetForm | None = None) -> list[dict]:
+                 dataset: facts.DatasetForm | None = None,
+                 as_of: str | None = None, known: str | None = None) -> list[dict]:
     """The same row/source reader on supplied text, without file or network access."""
+    import datetime
+
     path = Path(name)
     judged = facts.schema(pack)
     raw = data
@@ -319,7 +323,11 @@ def text_entries(pack: Pack, name: str, text: str, data: dict | None = None, *, 
     own_sources = {}
     decided_sources: dict[tuple[str, int, str | None], list[dict]] = {}
     if isinstance(raw, dict) and raw.get("format") in facts.DATASET_FORMATS:
-        data, pointers, decided_cells = facts.located_scalar_dataset_with_decides(judged, raw)
+        as_of_date = datetime.date.fromisoformat(as_of) if as_of is not None else None
+        known_date = datetime.date.fromisoformat(known) if known is not None else None
+        data, pointers, decided_cells = facts.located_scalar_dataset_with_decides(
+            judged, raw, as_of=as_of_date, known=known_date,
+        )
         own_sources = cited(raw, path.name)
         decided_sources = _decide_sources(raw, path.name, decided_cells, dataset, authored_lines, path)
     elif data is None:
@@ -433,10 +441,11 @@ def text_entries(pack: Pack, name: str, text: str, data: dict | None = None, *, 
     return collected(out)
 
 
-def read(pack: Pack, pack_dir: str | Path) -> list[dict]:
+def read(pack: Pack, pack_dir: str | Path, *, as_of: str | None = None, known: str | None = None) -> list[dict]:
     pack_dir = Path(pack_dir)
     return collected(e for path, dataset in facts.files_with_datasets(pack_dir)
-                     for e in file_entries(pack, path, relative=path.relative_to(pack_dir), dataset=dataset))
+                     for e in file_entries(pack, path, relative=path.relative_to(pack_dir), dataset=dataset,
+                                           as_of=as_of, known=known))
 
 
 def compile_sources(pack: Pack, pack_dir: str | Path) -> str:

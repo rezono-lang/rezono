@@ -142,9 +142,9 @@ def _derived_sets(
     """Build Bool set signatures declared by native/derived rezono 1 sources."""
     sigs: dict[str, rezono_derived.Signature] = {}
     dummy_site = rezono_derived.Site("", "", {})
-    mod_by_stem = {m.file.stem: m for m in mods}
+    mod_by_stem = {(m.pack, m.file.stem): m for m in mods}
     for src in (*native, *derived):
-        module = mod_by_stem.get(src.stem)
+        module = mod_by_stem.get((src.pack, src.stem))
         for stmt in src.statements:
             if stmt[0] != "decl":
                 continue

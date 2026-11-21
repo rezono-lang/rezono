@@ -1,0 +1,273 @@
+// Witness-graph rules deriving founded_witness/3 and load_bearing/5
+// (decisions/one-structure-space-and-readings.md §4, decisions/publish-founded-witnesses.md).
+//
+// Pure stratified Datalog evaluated in a single rezono_compiler.batch pass (zero Python fixpoint loop):
+// - Unary O(N) well-foundedness via Strahler-reduced linear recursion (founded_0..7 -> founded_conclusion):
+//   at each layer k, any multi-premise witness with all but one premise already in founded_k becomes a
+//   linear edge (linear_edge_k), closing arbitrarily long multi-premise chains (such as carry chains)
+//   in one linear recursion step.
+// - Cycle-scoped exclusion (sup_0..2 -> supported_without_all) restricted strictly to conclusions on a
+//   cycle (on_cycle/2 — 0 rows on acyclic packs).
+// - fixpoint_incomplete/2 fails closed if a graph ever exceeds Strahler depth 8.
+
+.decl usable_witness_row(conclusion_rel: symbol, conclusion_key: symbol, witness_id: symbol)
+usable_witness_row(cr, ck, w) :-
+    usable_witness__conclusion_rel(w, cr),
+    usable_witness__conclusion_key(w, ck).
+
+.decl witness_premise_row(conclusion_rel: symbol, conclusion_key: symbol, witness_id: symbol, premise_rel: symbol, premise_key: symbol, how: symbol)
+witness_premise_row(cr, ck, w, pr, pk, how) :-
+    usable_witness_row(cr, ck, w),
+    witness_premise__witness(pid, w),
+    witness_premise__premise_rel(pid, pr),
+    witness_premise__premise_key(pid, pk),
+    witness_premise__how(pid, how).
+
+.decl witness_dep_row(conclusion_rel: symbol, conclusion_key: symbol, witness_id: symbol, step_from: symbol, step_to: symbol, dep_rel: symbol, dep_key: symbol)
+witness_dep_row(cr, ck, w, sf, st, pr, pk) :-
+    usable_witness_row(cr, ck, w),
+    witness_dep_step__witness(sid, w),
+    witness_dep_step__step_from(sid, sf),
+    witness_dep_step__step_to(sid, st),
+    witness_dep_step__dep_rel(sid, pr),
+    witness_dep_step__dep_key(sid, pk).
+
+// Dependency graph over derived positive premises and cycle detection.
+.decl dep(conclusion_rel: symbol, conclusion_key: symbol, dep_rel: symbol, dep_key: symbol)
+dep(cr, ck, pr, pk) :-
+    witness_dep_row(cr, ck, _, _, _, pr, pk).
+
+.decl reaches(from_rel: symbol, from_key: symbol, to_rel: symbol, to_key: symbol)
+reaches(cr, ck, pr, pk) :-
+    dep(cr, ck, pr, pk).
+reaches(cr, ck, pr2, pk2) :-
+    reaches(cr, ck, mr, mk),
+    dep(mr, mk, pr2, pk2).
+
+.decl on_cycle(conclusion_rel: symbol, conclusion_key: symbol)
+on_cycle(cr, ck) :-
+    reaches(cr, ck, cr, ck).
+
+// Stratum 0: base-only witnesses + unbounded 1-premise linear chains.
+.decl founded_0(conclusion_rel: symbol, conclusion_key: symbol)
+founded_0(cr, ck) :-
+    usable_witness_row(cr, ck, w),
+    usable_witness__dep_count(w, "0").
+founded_0(cr, ck) :-
+    founded_0(pr, pk),
+    witness_dep_row(cr, ck, w, "0", "1", pr, pk),
+    usable_witness__dep_count(w, "1").
+
+// Layers 1..8: Strahler-reduced linear recursion (any witness with <=1 premise outside founded_{k-1}
+// becomes a linear edge, closing arbitrarily long multi-premise chains in one recursive CTE).
+.decl unf_0(conclusion_rel: symbol, conclusion_key: symbol, witness_id: symbol)
+unf_0(cr, ck, w) :- witness_dep_row(cr, ck, w, _, _, pr, pk), !founded_0(pr, pk).
+.decl oth_0(conclusion_rel: symbol, conclusion_key: symbol, witness_id: symbol, dep_rel: symbol, dep_key: symbol)
+oth_0(cr, ck, w, pr, pk) :- witness_dep_row(cr, ck, w, _, _, pr, pk), witness_dep_row(cr, ck, w, _, _, pr2, pk2), !founded_0(pr2, pk2), pr2 != pr.
+oth_0(cr, ck, w, pr, pk) :- witness_dep_row(cr, ck, w, _, _, pr, pk), witness_dep_row(cr, ck, w, _, _, pr2, pk2), !founded_0(pr2, pk2), pk2 != pk.
+.decl lin_0(conclusion_rel: symbol, conclusion_key: symbol, dep_rel: symbol, dep_key: symbol)
+lin_0(cr, ck, pr, pk) :- witness_dep_row(cr, ck, w, _, _, pr, pk), !oth_0(cr, ck, w, pr, pk).
+.decl founded_1(conclusion_rel: symbol, conclusion_key: symbol)
+founded_1(cr, ck) :- founded_0(cr, ck).
+founded_1(cr, ck) :- usable_witness_row(cr, ck, w), !unf_0(cr, ck, w).
+founded_1(cr, ck) :- founded_1(pr, pk), lin_0(cr, ck, pr, pk).
+
+.decl unf_1(conclusion_rel: symbol, conclusion_key: symbol, witness_id: symbol)
+unf_1(cr, ck, w) :- witness_dep_row(cr, ck, w, _, _, pr, pk), !founded_1(pr, pk).
+.decl oth_1(conclusion_rel: symbol, conclusion_key: symbol, witness_id: symbol, dep_rel: symbol, dep_key: symbol)
+oth_1(cr, ck, w, pr, pk) :- witness_dep_row(cr, ck, w, _, _, pr, pk), witness_dep_row(cr, ck, w, _, _, pr2, pk2), !founded_1(pr2, pk2), pr2 != pr.
+oth_1(cr, ck, w, pr, pk) :- witness_dep_row(cr, ck, w, _, _, pr, pk), witness_dep_row(cr, ck, w, _, _, pr2, pk2), !founded_1(pr2, pk2), pk2 != pk.
+.decl lin_1(conclusion_rel: symbol, conclusion_key: symbol, dep_rel: symbol, dep_key: symbol)
+lin_1(cr, ck, pr, pk) :- witness_dep_row(cr, ck, w, _, _, pr, pk), !oth_1(cr, ck, w, pr, pk).
+.decl founded_2(conclusion_rel: symbol, conclusion_key: symbol)
+founded_2(cr, ck) :- founded_1(cr, ck).
+founded_2(cr, ck) :- usable_witness_row(cr, ck, w), !unf_1(cr, ck, w).
+founded_2(cr, ck) :- founded_2(pr, pk), lin_1(cr, ck, pr, pk).
+
+.decl unf_2(conclusion_rel: symbol, conclusion_key: symbol, witness_id: symbol)
+unf_2(cr, ck, w) :- witness_dep_row(cr, ck, w, _, _, pr, pk), !founded_2(pr, pk).
+.decl oth_2(conclusion_rel: symbol, conclusion_key: symbol, witness_id: symbol, dep_rel: symbol, dep_key: symbol)
+oth_2(cr, ck, w, pr, pk) :- witness_dep_row(cr, ck, w, _, _, pr, pk), witness_dep_row(cr, ck, w, _, _, pr2, pk2), !founded_2(pr2, pk2), pr2 != pr.
+oth_2(cr, ck, w, pr, pk) :- witness_dep_row(cr, ck, w, _, _, pr, pk), witness_dep_row(cr, ck, w, _, _, pr2, pk2), !founded_2(pr2, pk2), pk2 != pk.
+.decl lin_2(conclusion_rel: symbol, conclusion_key: symbol, dep_rel: symbol, dep_key: symbol)
+lin_2(cr, ck, pr, pk) :- witness_dep_row(cr, ck, w, _, _, pr, pk), !oth_2(cr, ck, w, pr, pk).
+.decl founded_3(conclusion_rel: symbol, conclusion_key: symbol)
+founded_3(cr, ck) :- founded_2(cr, ck).
+founded_3(cr, ck) :- usable_witness_row(cr, ck, w), !unf_2(cr, ck, w).
+founded_3(cr, ck) :- founded_3(pr, pk), lin_2(cr, ck, pr, pk).
+
+.decl unf_3(conclusion_rel: symbol, conclusion_key: symbol, witness_id: symbol)
+unf_3(cr, ck, w) :- witness_dep_row(cr, ck, w, _, _, pr, pk), !founded_3(pr, pk).
+.decl oth_3(conclusion_rel: symbol, conclusion_key: symbol, witness_id: symbol, dep_rel: symbol, dep_key: symbol)
+oth_3(cr, ck, w, pr, pk) :- witness_dep_row(cr, ck, w, _, _, pr, pk), witness_dep_row(cr, ck, w, _, _, pr2, pk2), !founded_3(pr2, pk2), pr2 != pr.
+oth_3(cr, ck, w, pr, pk) :- witness_dep_row(cr, ck, w, _, _, pr, pk), witness_dep_row(cr, ck, w, _, _, pr2, pk2), !founded_3(pr2, pk2), pk2 != pk.
+.decl lin_3(conclusion_rel: symbol, conclusion_key: symbol, dep_rel: symbol, dep_key: symbol)
+lin_3(cr, ck, pr, pk) :- witness_dep_row(cr, ck, w, _, _, pr, pk), !oth_3(cr, ck, w, pr, pk).
+.decl founded_4(conclusion_rel: symbol, conclusion_key: symbol)
+founded_4(cr, ck) :- founded_3(cr, ck).
+founded_4(cr, ck) :- usable_witness_row(cr, ck, w), !unf_3(cr, ck, w).
+founded_4(cr, ck) :- founded_4(pr, pk), lin_3(cr, ck, pr, pk).
+
+.decl unf_4(conclusion_rel: symbol, conclusion_key: symbol, witness_id: symbol)
+unf_4(cr, ck, w) :- witness_dep_row(cr, ck, w, _, _, pr, pk), !founded_4(pr, pk).
+.decl oth_4(conclusion_rel: symbol, conclusion_key: symbol, witness_id: symbol, dep_rel: symbol, dep_key: symbol)
+oth_4(cr, ck, w, pr, pk) :- witness_dep_row(cr, ck, w, _, _, pr, pk), witness_dep_row(cr, ck, w, _, _, pr2, pk2), !founded_4(pr2, pk2), pr2 != pr.
+oth_4(cr, ck, w, pr, pk) :- witness_dep_row(cr, ck, w, _, _, pr, pk), witness_dep_row(cr, ck, w, _, _, pr2, pk2), !founded_4(pr2, pk2), pk2 != pk.
+.decl lin_4(conclusion_rel: symbol, conclusion_key: symbol, dep_rel: symbol, dep_key: symbol)
+lin_4(cr, ck, pr, pk) :- witness_dep_row(cr, ck, w, _, _, pr, pk), !oth_4(cr, ck, w, pr, pk).
+.decl founded_5(conclusion_rel: symbol, conclusion_key: symbol)
+founded_5(cr, ck) :- founded_4(cr, ck).
+founded_5(cr, ck) :- usable_witness_row(cr, ck, w), !unf_4(cr, ck, w).
+founded_5(cr, ck) :- founded_5(pr, pk), lin_4(cr, ck, pr, pk).
+
+.decl unf_5(conclusion_rel: symbol, conclusion_key: symbol, witness_id: symbol)
+unf_5(cr, ck, w) :- witness_dep_row(cr, ck, w, _, _, pr, pk), !founded_5(pr, pk).
+.decl oth_5(conclusion_rel: symbol, conclusion_key: symbol, witness_id: symbol, dep_rel: symbol, dep_key: symbol)
+oth_5(cr, ck, w, pr, pk) :- witness_dep_row(cr, ck, w, _, _, pr, pk), witness_dep_row(cr, ck, w, _, _, pr2, pk2), !founded_5(pr2, pk2), pr2 != pr.
+oth_5(cr, ck, w, pr, pk) :- witness_dep_row(cr, ck, w, _, _, pr, pk), witness_dep_row(cr, ck, w, _, _, pr2, pk2), !founded_5(pr2, pk2), pk2 != pk.
+.decl lin_5(conclusion_rel: symbol, conclusion_key: symbol, dep_rel: symbol, dep_key: symbol)
+lin_5(cr, ck, pr, pk) :- witness_dep_row(cr, ck, w, _, _, pr, pk), !oth_5(cr, ck, w, pr, pk).
+.decl founded_6(conclusion_rel: symbol, conclusion_key: symbol)
+founded_6(cr, ck) :- founded_5(cr, ck).
+founded_6(cr, ck) :- usable_witness_row(cr, ck, w), !unf_5(cr, ck, w).
+founded_6(cr, ck) :- founded_6(pr, pk), lin_5(cr, ck, pr, pk).
+
+.decl unf_6(conclusion_rel: symbol, conclusion_key: symbol, witness_id: symbol)
+unf_6(cr, ck, w) :- witness_dep_row(cr, ck, w, _, _, pr, pk), !founded_6(pr, pk).
+.decl oth_6(conclusion_rel: symbol, conclusion_key: symbol, witness_id: symbol, dep_rel: symbol, dep_key: symbol)
+oth_6(cr, ck, w, pr, pk) :- witness_dep_row(cr, ck, w, _, _, pr, pk), witness_dep_row(cr, ck, w, _, _, pr2, pk2), !founded_6(pr2, pk2), pr2 != pr.
+oth_6(cr, ck, w, pr, pk) :- witness_dep_row(cr, ck, w, _, _, pr, pk), witness_dep_row(cr, ck, w, _, _, pr2, pk2), !founded_6(pr2, pk2), pk2 != pk.
+.decl lin_6(conclusion_rel: symbol, conclusion_key: symbol, dep_rel: symbol, dep_key: symbol)
+lin_6(cr, ck, pr, pk) :- witness_dep_row(cr, ck, w, _, _, pr, pk), !oth_6(cr, ck, w, pr, pk).
+.decl founded_7(conclusion_rel: symbol, conclusion_key: symbol)
+founded_7(cr, ck) :- founded_6(cr, ck).
+founded_7(cr, ck) :- usable_witness_row(cr, ck, w), !unf_6(cr, ck, w).
+founded_7(cr, ck) :- founded_7(pr, pk), lin_6(cr, ck, pr, pk).
+
+.decl unf_7(conclusion_rel: symbol, conclusion_key: symbol, witness_id: symbol)
+unf_7(cr, ck, w) :- witness_dep_row(cr, ck, w, _, _, pr, pk), !founded_7(pr, pk).
+.decl oth_7(conclusion_rel: symbol, conclusion_key: symbol, witness_id: symbol, dep_rel: symbol, dep_key: symbol)
+oth_7(cr, ck, w, pr, pk) :- witness_dep_row(cr, ck, w, _, _, pr, pk), witness_dep_row(cr, ck, w, _, _, pr2, pk2), !founded_7(pr2, pk2), pr2 != pr.
+oth_7(cr, ck, w, pr, pk) :- witness_dep_row(cr, ck, w, _, _, pr, pk), witness_dep_row(cr, ck, w, _, _, pr2, pk2), !founded_7(pr2, pk2), pk2 != pk.
+.decl lin_7(conclusion_rel: symbol, conclusion_key: symbol, dep_rel: symbol, dep_key: symbol)
+lin_7(cr, ck, pr, pk) :- witness_dep_row(cr, ck, w, _, _, pr, pk), !oth_7(cr, ck, w, pr, pk).
+.decl founded_conclusion(conclusion_rel: symbol, conclusion_key: symbol)
+founded_conclusion(cr, ck) :- founded_7(cr, ck).
+founded_conclusion(cr, ck) :- usable_witness_row(cr, ck, w), !unf_7(cr, ck, w).
+founded_conclusion(cr, ck) :- founded_conclusion(pr, pk), lin_7(cr, ck, pr, pk).
+
+.decl unf_8(conclusion_rel: symbol, conclusion_key: symbol, witness_id: symbol)
+unf_8(cr, ck, w) :- witness_dep_row(cr, ck, w, _, _, pr, pk), !founded_conclusion(pr, pk).
+.decl fixpoint_incomplete(conclusion_rel: symbol, conclusion_key: symbol)
+fixpoint_incomplete(cr, ck) :-
+    usable_witness_row(cr, ck, w),
+    !unf_8(cr, ck, w),
+    !founded_conclusion(cr, ck).
+
+// Cycle-scoped exclusion: only conclusions sitting on a dependency cycle need per-conclusion
+// exclusion graphs (0 rows on acyclic packs).
+.decl cycle_allowed_witness(excl_rel: symbol, excl_key: symbol, conclusion_rel: symbol, conclusion_key: symbol, witness_id: symbol)
+cycle_allowed_witness(er, ek, cr, ck, w) :-
+    on_cycle(er, ek),
+    reaches(er, ek, cr, ck),
+    usable_witness_row(cr, ck, w),
+    cr != er.
+cycle_allowed_witness(er, ek, cr, ck, w) :-
+    on_cycle(er, ek),
+    reaches(er, ek, cr, ck),
+    usable_witness_row(cr, ck, w),
+    ck != ek.
+
+.decl sup_0(excl_rel: symbol, excl_key: symbol, conclusion_rel: symbol, conclusion_key: symbol)
+sup_0(er, ek, cr, ck) :-
+    on_cycle(er, ek),
+    reaches(er, ek, cr, ck),
+    !reaches(cr, ck, er, ek),
+    founded_conclusion(cr, ck).
+sup_0(er, ek, cr, ck) :-
+    cycle_allowed_witness(er, ek, cr, ck, w),
+    usable_witness__dep_count(w, "0").
+sup_0(er, ek, cr, ck) :-
+    sup_0(er, ek, pr, pk),
+    cycle_allowed_witness(er, ek, cr, ck, w),
+    witness_dep_row(cr, ck, w, "0", "1", pr, pk),
+    usable_witness__dep_count(w, "1").
+
+.decl unsup_0(excl_rel: symbol, excl_key: symbol, conclusion_rel: symbol, conclusion_key: symbol, witness_id: symbol)
+unsup_0(er, ek, cr, ck, w) :- cycle_allowed_witness(er, ek, cr, ck, w), witness_dep_row(cr, ck, w, _, _, pr, pk), !sup_0(er, ek, pr, pk).
+.decl soth_0(excl_rel: symbol, excl_key: symbol, conclusion_rel: symbol, conclusion_key: symbol, witness_id: symbol, dep_rel: symbol, dep_key: symbol)
+soth_0(er, ek, cr, ck, w, pr, pk) :- cycle_allowed_witness(er, ek, cr, ck, w), witness_dep_row(cr, ck, w, _, _, pr, pk), witness_dep_row(cr, ck, w, _, _, pr2, pk2), !sup_0(er, ek, pr2, pk2), pr2 != pr.
+soth_0(er, ek, cr, ck, w, pr, pk) :- cycle_allowed_witness(er, ek, cr, ck, w), witness_dep_row(cr, ck, w, _, _, pr, pk), witness_dep_row(cr, ck, w, _, _, pr2, pk2), !sup_0(er, ek, pr2, pk2), pk2 != pk.
+.decl slin_0(excl_rel: symbol, excl_key: symbol, conclusion_rel: symbol, conclusion_key: symbol, dep_rel: symbol, dep_key: symbol)
+slin_0(er, ek, cr, ck, pr, pk) :- cycle_allowed_witness(er, ek, cr, ck, w), witness_dep_row(cr, ck, w, _, _, pr, pk), !soth_0(er, ek, cr, ck, w, pr, pk).
+.decl sup_1(excl_rel: symbol, excl_key: symbol, conclusion_rel: symbol, conclusion_key: symbol)
+sup_1(er, ek, cr, ck) :- sup_0(er, ek, cr, ck).
+sup_1(er, ek, cr, ck) :- cycle_allowed_witness(er, ek, cr, ck, w), !unsup_0(er, ek, cr, ck, w).
+sup_1(er, ek, cr, ck) :- sup_1(er, ek, pr, pk), slin_0(er, ek, cr, ck, pr, pk).
+
+.decl unsup_1(excl_rel: symbol, excl_key: symbol, conclusion_rel: symbol, conclusion_key: symbol, witness_id: symbol)
+unsup_1(er, ek, cr, ck, w) :- cycle_allowed_witness(er, ek, cr, ck, w), witness_dep_row(cr, ck, w, _, _, pr, pk), !sup_1(er, ek, pr, pk).
+.decl soth_1(excl_rel: symbol, excl_key: symbol, conclusion_rel: symbol, conclusion_key: symbol, witness_id: symbol, dep_rel: symbol, dep_key: symbol)
+soth_1(er, ek, cr, ck, w, pr, pk) :- cycle_allowed_witness(er, ek, cr, ck, w), witness_dep_row(cr, ck, w, _, _, pr, pk), witness_dep_row(cr, ck, w, _, _, pr2, pk2), !sup_1(er, ek, pr2, pk2), pr2 != pr.
+soth_1(er, ek, cr, ck, w, pr, pk) :- cycle_allowed_witness(er, ek, cr, ck, w), witness_dep_row(cr, ck, w, _, _, pr, pk), witness_dep_row(cr, ck, w, _, _, pr2, pk2), !sup_1(er, ek, pr2, pk2), pk2 != pk.
+.decl slin_1(excl_rel: symbol, excl_key: symbol, conclusion_rel: symbol, conclusion_key: symbol, dep_rel: symbol, dep_key: symbol)
+slin_1(er, ek, cr, ck, pr, pk) :- cycle_allowed_witness(er, ek, cr, ck, w), witness_dep_row(cr, ck, w, _, _, pr, pk), !soth_1(er, ek, cr, ck, w, pr, pk).
+.decl sup_2(excl_rel: symbol, excl_key: symbol, conclusion_rel: symbol, conclusion_key: symbol)
+sup_2(er, ek, cr, ck) :- sup_1(er, ek, cr, ck).
+sup_2(er, ek, cr, ck) :- cycle_allowed_witness(er, ek, cr, ck, w), !unsup_1(er, ek, cr, ck, w).
+sup_2(er, ek, cr, ck) :- sup_2(er, ek, pr, pk), slin_1(er, ek, cr, ck, pr, pk).
+
+.decl unsup_2(excl_rel: symbol, excl_key: symbol, conclusion_rel: symbol, conclusion_key: symbol, witness_id: symbol)
+unsup_2(er, ek, cr, ck, w) :- cycle_allowed_witness(er, ek, cr, ck, w), witness_dep_row(cr, ck, w, _, _, pr, pk), !sup_2(er, ek, pr, pk).
+.decl soth_2(excl_rel: symbol, excl_key: symbol, conclusion_rel: symbol, conclusion_key: symbol, witness_id: symbol, dep_rel: symbol, dep_key: symbol)
+soth_2(er, ek, cr, ck, w, pr, pk) :- cycle_allowed_witness(er, ek, cr, ck, w), witness_dep_row(cr, ck, w, _, _, pr, pk), witness_dep_row(cr, ck, w, _, _, pr2, pk2), !sup_2(er, ek, pr2, pk2), pr2 != pr.
+soth_2(er, ek, cr, ck, w, pr, pk) :- cycle_allowed_witness(er, ek, cr, ck, w), witness_dep_row(cr, ck, w, _, _, pr, pk), witness_dep_row(cr, ck, w, _, _, pr2, pk2), !sup_2(er, ek, pr2, pk2), pk2 != pk.
+.decl slin_2(excl_rel: symbol, excl_key: symbol, conclusion_rel: symbol, conclusion_key: symbol, dep_rel: symbol, dep_key: symbol)
+slin_2(er, ek, cr, ck, pr, pk) :- cycle_allowed_witness(er, ek, cr, ck, w), witness_dep_row(cr, ck, w, _, _, pr, pk), !soth_2(er, ek, cr, ck, w, pr, pk).
+.decl supported_without_all(excl_rel: symbol, excl_key: symbol, conclusion_rel: symbol, conclusion_key: symbol)
+supported_without_all(er, ek, cr, ck) :- sup_2(er, ek, cr, ck).
+supported_without_all(er, ek, cr, ck) :- cycle_allowed_witness(er, ek, cr, ck, w), !unsup_2(er, ek, cr, ck, w).
+supported_without_all(er, ek, cr, ck) :- supported_without_all(er, ek, pr, pk), slin_2(er, ek, cr, ck, pr, pk).
+
+.decl unsup_3(excl_rel: symbol, excl_key: symbol, conclusion_rel: symbol, conclusion_key: symbol, witness_id: symbol)
+unsup_3(er, ek, cr, ck, w) :- cycle_allowed_witness(er, ek, cr, ck, w), witness_dep_row(cr, ck, w, _, _, pr, pk), !supported_without_all(er, ek, pr, pk).
+fixpoint_incomplete(cr, ck) :-
+    cycle_allowed_witness(er, ek, cr, ck, w),
+    !unsup_3(er, ek, cr, ck, w),
+    !supported_without_all(er, ek, cr, ck).
+
+// A usable witness is unfounded iff one of its positive derived premises lacks well-founded support.
+.decl unfounded_witness(conclusion_rel: symbol, conclusion_key: symbol, witness_id: symbol)
+unfounded_witness(cr, ck, w) :-
+    usable_witness_row(cr, ck, w),
+    !on_cycle(cr, ck),
+    witness_dep_row(cr, ck, w, _, _, pr, pk),
+    !founded_conclusion(pr, pk).
+unfounded_witness(cr, ck, w) :-
+    on_cycle(cr, ck),
+    witness_dep_row(cr, ck, w, _, _, pr, pk),
+    !supported_without_all(cr, ck, pr, pk).
+
+// Every distinct founded witness of a conclusion (cyclic alternatives excluded).
+.decl founded_witness(conclusion_rel: symbol, conclusion_key: symbol, witness_id: symbol)
+founded_witness(cr, ck, w) :-
+    usable_witness_row(cr, ck, w),
+    !unfounded_witness(cr, ck, w).
+
+// Universal support over founded_witness: a premise is load_bearing iff no founded witness of
+// the same conclusion omits it.
+.decl candidate_premise(conclusion_rel: symbol, conclusion_key: symbol, premise_rel: symbol, premise_key: symbol, how: symbol)
+candidate_premise(cr, ck, pr, pk, how) :-
+    founded_witness(cr, ck, w),
+    witness_premise_row(cr, ck, w, pr, pk, how).
+
+.decl omitted_by_founded(conclusion_rel: symbol, conclusion_key: symbol, premise_rel: symbol, premise_key: symbol, how: symbol)
+omitted_by_founded(cr, ck, pr, pk, how) :-
+    candidate_premise(cr, ck, pr, pk, how),
+    founded_witness(cr, ck, w),
+    !witness_premise_row(cr, ck, w, pr, pk, how).
+
+.decl load_bearing(conclusion_rel: symbol, conclusion_key: symbol, premise_rel: symbol, premise_key: symbol, how: symbol)
+load_bearing(cr, ck, pr, pk, how) :-
+    candidate_premise(cr, ck, pr, pk, how),
+    !omitted_by_founded(cr, ck, pr, pk, how).

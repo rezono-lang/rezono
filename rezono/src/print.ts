@@ -2,7 +2,7 @@ import { printDeclaration } from './module-components.ts';
 import { printHeader } from './module-header.ts';
 import type { Decl, Module } from './module.ts';
 
-export { grouping, print, printExpr } from './print-expression.ts';
+export { grouping, print, printContext, printExpr } from './print-expression.ts';
 
 /**
  * The normal form of a module (v0 §2, §11): one statement on one line, two spaces for each block, no blank

@@ -136,6 +136,7 @@
   "proof_functional_key_malformed": "ongeldige functionele conclusiesleutel in bewijs voor {rule}",
   "proof_piece_limit_invalid": "bewijs: een stuklimiet van {limit} bytes, niet 1 tot {bound}",
   "proof_rows_mismatch": "{tree}/{relation}: de rijen zijn niet de bewijsgraaf van de rol",
+  "load_bearing_mismatch": "de gepubliceerde draagkrachtvlaggen van premissen komen niet overeen met de gefundeerde getuigen van de rol",
   "proof_steps_invalid": "bewijs: stappen konden niet worden gereconstrueerd",
   "proof_tree_missing": "{tree}/{relation}: geen boom",
   "proof_tree_unexpected": "{tree}/{relation}: een boom voor niets",

@@ -957,6 +957,13 @@ def _worlds(prog, declared):
     for n, rel in out.items():
         if rel.role == "functional" and out[rel.domain].world != "closed":
             raise IRError("functional_open_domain", f"{n}: functional domain {rel.domain} must have world 'closed'")
+    for r in sorted(prog.rules.values(), key=lambda r: r.id):
+        if out[r.head.relation].role != "functional":
+            continue
+        for b in r.body:
+            if b.polarity == "positive" and b.atom.relation in opened:
+                raise IRError("functional_reads_open", f"{r.id}: {b.atom.relation} is open, so its missing values are "
+                                                       "unknown; a functional derivation cannot read it positively")
     return out
 
 
