@@ -285,8 +285,8 @@ def _functional_candidates(rules, func, rows, witness=None, groups=None):
             if any(t.startswith("?") and t not in theta for t in key_terms):
                 continue
             dom_key = tuple(theta[t] if t.startswith("?") else t for t in key_terms)
+            val_term = r.head.terms[n]
             if row_state == "known":
-                val_term = r.head.terms[n]
                 cand_val = theta[val_term] if val_term.startswith("?") else val_term
                 if func.value_type == "rational":
                     cand_state, _, canon_val = _classify_rational_candidate(cand_val)
@@ -301,7 +301,14 @@ def _functional_candidates(rules, func, rows, witness=None, groups=None):
                     by_key.setdefault(dom_key, []).append(theta)
             else:
                 states_by_key.setdefault(dom_key, set()).add(row_state)
-                by_key_state.setdefault(dom_key, []).append((theta, row_state))
+                effective_state = row_state
+                if func.value_type == "rational" and (not val_term.startswith("?") or val_term in theta):
+                    cand_val = theta[val_term] if val_term.startswith("?") else val_term
+                    cand_state, _, _ = _classify_rational_candidate(cand_val)
+                    if cand_state != "known":
+                        rat_states_by_key.setdefault(dom_key, set()).add(cand_state)
+                        effective_state = closure._worse_state(row_state, cand_state)
+                by_key_state.setdefault(dom_key, []).append((theta, effective_state))
         rule_instances[r.id] = by_key
         state_instances[r.id] = by_key_state
     result = (values_by_key, states_by_key, rat_states_by_key, rule_instances, state_instances)
