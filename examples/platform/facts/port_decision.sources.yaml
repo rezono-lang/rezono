@@ -1,0 +1,5 @@
+default:
+  kind: git
+  name: rezono-lang/rezono
+  revision: dbac8a77492843cfe1532f60e2959e3a9dd9696e
+  position: decisions/platform-facts-not-conclusions.md#3-ports-point-1
