@@ -306,16 +306,6 @@ def _aggregate_proof_hash(answer: dict, conclusion_key: str) -> str:
     return aggregates[0]["contributors_sha256"]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "M3: decisions/local-sum-explanation-parity.md: Opening a published archive with an aggregate sum over "
-        "a value column outside the key (hours(member, task; h) -> member_hours(member, total)) via local gate "
-        "edge/gate/src/local.ts must return HTTP 200 with the exact same contributing tasks, hours, and "
-        "contributors_sha256 proof hash as the role-published proof steps."
-    ),
-)
 def test_local_gate_sum_explanation_matches_published_proof_steps(tmp_path):
     """Same publication, same role: local Why? route matches published proof steps on tasks, hours, and proof hash."""
     expected_hashes, expected_contributors = _build_verified_sum_publication(tmp_path)
