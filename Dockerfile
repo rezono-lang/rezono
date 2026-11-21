@@ -5,9 +5,9 @@
 # The image is a local tool and is never published; README.md gives the commands that build and start it, and
 # .github/workflows/quickstart-image.yml runs scripts/check-quickstart.sh in it.
 # Node 24 comes from the same pinned image as deploy/profiles/kubernetes/run/toolchain.Containerfile.
-FROM --platform=linux/amd64 node:24.22.3-trixie-slim@sha256:af02d57b57719b9657a45199a79264a9437940cd55b3c7b3fc99615654f124a0 AS node
+FROM --platform=linux/amd64 node:26.13.1-trixie-slim@sha256:e6bedef217677b276c591795e169840edd9096dbf13f29df8ef8d1856b8820bc AS node
 
-FROM --platform=linux/amd64 buildpack-deps:24.04-scm@sha256:94ed690dd634b8b2f531eaa742fde9b1264077cd8ea695a3b960bd104ae4c481
+FROM --platform=linux/amd64 buildpack-deps:26.04-scm@sha256:d4ac7970aaf4e0865b0493cfdc569e30888e51a59b4e402cf30f927af26f332b
 
 RUN apt-get -o Acquire::Retries=5 update \
  && DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Retries=5 install -y --no-install-recommends jq \
