@@ -659,13 +659,6 @@ def test_health_recorder_records_http_status_and_lets_pack_classify(
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="M2: decisions/code-does-not-decide.md: record_management_backup.py must use the stored object's real "
-    "timestamp, read max_age_days/interval_days/retention_days from pack facts, observe active_authority, record "
-    "outcomes as a judgement event, and evaluate through management_probes.compiled.",
-)
 def test_backup_recorder_uses_object_timestamp_pack_params_and_compiled(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
