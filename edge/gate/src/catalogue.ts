@@ -82,12 +82,21 @@ function worldOf(value: unknown): World | undefined {
 	return value === 'open' || value === 'closed' ? value : undefined;
 }
 
-function semanticOf(value: unknown, visibleKinds: ReadonlySet<string>): SemanticType | undefined {
+function semanticOf(
+	value: unknown,
+	visibleKinds: ReadonlySet<string>,
+	visibleEnums: ReadonlySet<string>,
+	visibleDerived: ReadonlySet<string>
+): SemanticType | undefined {
 	if (value === null || typeof value !== 'object' || Array.isArray(value)) return undefined;
 	const raw = value as Record<string, unknown>;
 	if (typeof raw.case !== 'string' || typeof raw.base !== 'string') return undefined;
 	if (raw.case === 'ref' && typeof raw.target !== 'string') return undefined;
 	if (raw.target !== undefined && (typeof raw.target !== 'string' || !visibleKinds.has(raw.target))) return undefined;
+	if (raw.case === 'enum' && typeof raw.enum !== 'string') return undefined;
+	if (raw.enum !== undefined && (typeof raw.enum !== 'string' || !visibleEnums.has(raw.enum))) return undefined;
+	if (raw.case === 'derived' && typeof raw.derived !== 'string') return undefined;
+	if (raw.derived !== undefined && (typeof raw.derived !== 'string' || !visibleDerived.has(raw.derived))) return undefined;
 	const out: SemanticType = { case: raw.case, base: raw.base };
 	if (typeof raw.range === 'string') out.range = raw.range;
 	if (typeof raw.enum === 'string') out.enum = raw.enum;
@@ -324,21 +333,65 @@ export function roleCatalogue(bundle: Bundle, snapshots: RoleSnapshot[]): RoleCa
 	const slotWorld = (table: string, declared: unknown): World => full.has(table) ? worldOf(declared) ?? 'closed' : 'open';
 	const visible = new Set((bundle.kinds ?? []).filter((kind) => scoped.has(kind.id)).map((kind) => kind.id));
 
-	const attributes: Slot[] = (bundle.attributes ?? [])
-		.filter((slot) => visible.has(slot.kind) && scoped.has(slot.table))
+	const visibleAttributesRaw = (bundle.attributes ?? [])
+		.filter((slot) => visible.has(slot.kind) && scoped.has(slot.table));
+	const visibleArrowsRaw = (bundle.arrows ?? [])
+		.filter((slot) => visible.has(slot.kind) && visible.has(slot.target) && scoped.has(slot.table));
+	const visibleRelationsRaw = (bundle.relations ?? [])
+		.filter((relation) => scoped.has(relation.id));
+
+	const visibleDerived = new Set<string>();
+	for (const relation of visibleRelationsRaw) {
+		visibleDerived.add(relation.id);
+		if (typeof relation.calc === 'string' && relation.calc.length > 0) {
+			visibleDerived.add(relation.calc);
+		}
+	}
+
+	const declaredEnums = new Set((bundle.enums ?? []).map((entry) => entry.id));
+	const visibleEnums = new Set<string>();
+	const collectSemanticEnum = (value: unknown): void => {
+		if (value === null || typeof value !== 'object' || Array.isArray(value)) return;
+		const raw = value as Record<string, unknown>;
+		if (typeof raw.case !== 'string' || typeof raw.base !== 'string') return;
+		if (raw.case === 'ref' && typeof raw.target !== 'string') return;
+		if (raw.target !== undefined && (typeof raw.target !== 'string' || !visible.has(raw.target))) return;
+		if (raw.case === 'derived' && typeof raw.derived !== 'string') return;
+		if (raw.derived !== undefined && (typeof raw.derived !== 'string' || !visibleDerived.has(raw.derived))) return;
+		if (typeof raw.enum === 'string' && declaredEnums.has(raw.enum)) {
+			visibleEnums.add(raw.enum);
+		}
+	};
+	for (const slot of visibleAttributesRaw) {
+		if (typeof slot.enum === 'string' && declaredEnums.has(slot.enum)) {
+			visibleEnums.add(slot.enum);
+		}
+		collectSemanticEnum(slot.semantic);
+	}
+	for (const slot of visibleArrowsRaw) {
+		collectSemanticEnum(slot.semantic);
+	}
+	for (const relation of visibleRelationsRaw) {
+		collectSemanticEnum(relation.semantic);
+		for (const col of relation.columns ?? []) {
+			collectSemanticEnum(col.semantic);
+		}
+	}
+
+	const attributes: Slot[] = visibleAttributesRaw
 		.map(({ id, kind, name, table, type, schema_type, enum: enumerated, minimum, maximum, patterns, required, multivalued, world, currency, semantic }) => {
-			const scopedSemantic = semanticOf(semantic, visible);
+			const scopedSemantic = semanticOf(semantic, visible, visibleEnums, visibleDerived);
+			const scopedEnum = typeof enumerated === 'string' && visibleEnums.has(enumerated) ? enumerated : undefined;
 			return {
-				id, kind, name, table, type, schema_type, enum: enumerated, minimum, maximum, patterns, required, multivalued,
+				id, kind, name, table, type, schema_type, enum: scopedEnum, minimum, maximum, patterns, required, multivalued,
 				...(typeof currency === 'string' && currency.length > 0 && { currency }),
 				...(scopedSemantic && { semantic: scopedSemantic }),
 				world: slotWorld(table, world)
 			};
 		});
-	const arrows: Slot[] = (bundle.arrows ?? [])
-		.filter((slot) => visible.has(slot.kind) && visible.has(slot.target) && scoped.has(slot.table))
+	const arrows: Slot[] = visibleArrowsRaw
 		.map(({ id, kind, name, table, target, required, multivalued, world, semantic }) => {
-			const scopedSemantic = semanticOf(semantic, visible);
+			const scopedSemantic = semanticOf(semantic, visible, visibleEnums, visibleDerived);
 			return {
 				id, kind, name, table, target, required, multivalued,
 				...(scopedSemantic && { semantic: scopedSemantic }),
@@ -364,19 +417,17 @@ export function roleCatalogue(bundle: Bundle, snapshots: RoleSnapshot[]): RoleCa
 			};
 		});
 
-	const enums = new Set(attributes.flatMap((slot) => slot.enum ? [slot.enum] : []));
-	const relations: DeclaredRelation[] = (bundle.relations ?? [])
-		.filter((relation) => scoped.has(relation.id))
+	const relations: DeclaredRelation[] = visibleRelationsRaw
 		.map(({ id, world, calc, outcome, semantic, columns }) => {
-			const scopedSemantic = semanticOf(semantic, visible);
+			const scopedSemantic = semanticOf(semantic, visible, visibleEnums, visibleDerived);
 			return {
 				id,
 				world: full.has(id) ? worldOf(world) : 'open' as const,
 				...(typeof calc === 'string' && calc.length > 0 && { calc }),
 				...(typeof outcome === 'string' && visible.has(outcome) && { outcome }),
 				...(scopedSemantic && { semantic: scopedSemantic }),
-				columns: columns.map(({ name, currency, semantic: colSemantic }) => {
-					const scopedColSemantic = semanticOf(colSemantic, visible);
+				columns: (columns ?? []).map(({ name, currency, semantic: colSemantic }) => {
+					const scopedColSemantic = semanticOf(colSemantic, visible, visibleEnums, visibleDerived);
 					return {
 						name,
 						...(typeof currency === 'string' && currency.length > 0 && { currency }),
@@ -392,7 +443,7 @@ export function roleCatalogue(bundle: Bundle, snapshots: RoleSnapshot[]): RoleCa
 		attributes,
 		arrows,
 		relations,
-		enums: (bundle.enums ?? []).filter((entry) => enums.has(entry.id)).map(({ id, values }) => ({ id, values }))
+		enums: (bundle.enums ?? []).filter((entry) => visibleEnums.has(entry.id)).map(({ id, values }) => ({ id, values }))
 	};
 }
 
@@ -433,6 +484,8 @@ export function roleBundle(bundle: Bundle, snapshots: RoleSnapshot[]): RoleBundl
 		...catalogue.attributes.map((slot) => slot.id),
 		...catalogue.arrows.map((slot) => slot.id),
 		...catalogue.relations.map((relation) => relation.id),
+		...catalogue.enums.map((entry) => entry.id),
+		...catalogue.enums.flatMap((entry) => entry.values ?? []),
 		...rules.map((rule) => rule.id)
 	]);
 	const labels: Label[] = (bundle.labels ?? [])
@@ -526,11 +579,48 @@ export function roleBundle(bundle: Bundle, snapshots: RoleSnapshot[]): RoleBundl
 		readableRuleRelations
 	);
 
+	const readableReasonColumn = new Map<string, number>();
+	for (const relation of catalogue.relations) {
+		if (!readableRuleRelations.has(relation.id)) continue;
+		const cols = relation.columns ?? [];
+		const reasonIdx = cols.findIndex((col) => col.name === 'reason');
+		if (reasonIdx >= 0) {
+			readableReasonColumn.set(relation.id, reasonIdx);
+		} else if (typeof relation.outcome === 'string' && relation.outcome.length > 0 && cols.length > 2) {
+			readableReasonColumn.set(relation.id, 2);
+		}
+	}
+	const visibleReasonCodes = new Set<string>();
+	const addReasonTerm = (term: { kind?: string; value?: unknown } | undefined): void => {
+		if (term && term.kind === 'constant' && typeof term.value === 'string' && term.value.length > 0) {
+			visibleReasonCodes.add(term.value);
+		}
+	};
+	for (const rule of rules) {
+		const headRelation = rule.head ? rule.head.relation : rule.relation;
+		if (typeof headRelation === 'string') {
+			const reasonIdx = readableReasonColumn.get(headRelation);
+			if (reasonIdx !== undefined) addReasonTerm(rule.head?.terms?.[reasonIdx]);
+		}
+		for (const literal of rule.body ?? []) {
+			if (literal.kind !== 'atom' || typeof literal.relation !== 'string') continue;
+			const reasonIdx = readableReasonColumn.get(literal.relation);
+			if (reasonIdx === undefined) continue;
+			addReasonTerm(literal.terms?.[reasonIdx]);
+		}
+	}
+
 	const allowMessage = (id: string): boolean => {
 		const parts = id.split('.');
 		if (id.startsWith('check.') || allChecks.has(id) || parts.some((part) => allChecks.has(part))) return false;
 		if (hiddenRuleMessages.has(id) || hiddenReaderMessages.has(id) || hiddenChannelMessages.has(id)) return false;
 		if (parts[0] === 'explain' && parts[1] && hiddenQuestionTerms.has(parts[1])) return false;
+
+		if (parts[0] === 'reason') {
+			if (parts.length < 2) return false;
+			const code = id.slice('reason.'.length);
+			if (!code.length || !visibleReasonCodes.has(code)) return false;
+		}
 
 		if (parts[0] === 'rule' && parts.length >= 2) {
 			const rest = id.slice('rule.'.length);
