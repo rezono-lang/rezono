@@ -37,6 +37,7 @@ updates:
       - /rezono
       - "/tools/mcp*"
       - "/tools/repl*"
+      - /viewer/messages
     schedule:
       interval: weekly
     groups:
