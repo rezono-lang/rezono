@@ -6,6 +6,7 @@ kinds:
   - {kind: build_dependency, shape: rect}
   - {kind: build_path, shape: rect}
   - {kind: build_path_reader, shape: rect}
+  - {kind: build_target_rule, shape: rect}
   - {kind: build_task, shape: rect}
   - {kind: build_policy_date, shape: rect}
   - {kind: build_track_rank, shape: rect}
