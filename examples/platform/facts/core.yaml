@@ -119,14 +119,16 @@ service:
   - {id: restore-bad, product: app, role: recovery, step: 2}
 release:
   - {id: distribution-3.0.0, product: registry, released_on_day: 1, stable: 'yes', version: 3.0.0}
-  - {id: keycloak-25, product: keycloak, released_on_day: 100, stable: 'yes'}
+  - {id: keycloak-25, product: keycloak, released_on_day: 100, stable: 'yes', version: 25.0.0}
   - {id: keycloak-26, product: keycloak, released_on_day: 200, stable: 'yes', version: 26.0.0}
   - {id: keycloak-27rc, product: keycloak, released_on_day: 250, stable: 'no'}
-  - {id: postgresql-16, product: postgresql, released_on_day: 50, stable: 'yes', series: '16'}
-  - {id: postgresql-17, product: postgresql, released_on_day: 150, stable: 'yes', series: '17'}
+  - {id: postgresql-16, product: postgresql, released_on_day: 50, stable: 'yes', version: '16.0', series: '16'}
+  - {id: postgresql-17, product: postgresql, released_on_day: 150, stable: 'yes', version: '17.0', series: '17'}
+  - {id: kube-control-1.32.13, product: kube-control, stable: 'yes', version: 1.32.13, series: '1.32'}
 pin:
   - {id: pin-reg, service: reg, release: distribution-3.0.0}
   - {id: pin-db-git, service: db-git, release: postgresql-16}
+  - {id: pin-cp, service: cp, release: kube-control-1.32.13}
 choice:
   - {id: c-idp-db, service: idp, function: database, provider: db-idp}
   - {id: c-git-db, service: git, function: database, provider: db-git}

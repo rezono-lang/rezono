@@ -59,6 +59,8 @@ def test_product_licence_follows_the_selected_release(tmp_path):
     assert ("postgresql-16.0", "16") in snapshot(original, "vendor_licence_notice__series")
     assert any(row[:6] == ("idp", "keycloak", "26.0.0", "exact-scenario-release", "project-source", "Apache-2.0")
                for row in rows)
+    assert any(row[:6] == ("cp", "kube-control", "1.32.13", "exact-scenario-release", "project-source", "Apache-2.0")
+               for row in rows)
     assert any(row[:5] == ("store", "ceph", "19.2.0", "reference-source-release", "per-path-notices")
                for row in rows)
     bucket, manifest = original

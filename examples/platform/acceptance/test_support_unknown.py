@@ -5,6 +5,7 @@ def test_support_unknown():
     rows, _ = evidence()
     # The scenario selects these releases. None has a vendor support statement.
     releases = {
+        ("cp", "kube-control-1.32.13"),
         ("db-git", "postgresql-16"),
         ("db-idp", "postgresql-17"),
         ("idp", "keycloak-26"),

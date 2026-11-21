@@ -90,7 +90,9 @@ flow_from_step = {
 }
 
 stable_release = {
-    (r["id"], r["product"], r["released_on_day"]) for r in releases if r.get("stable") == "yes"
+    (r["id"], r["product"], r["released_on_day"])
+    for r in releases
+    if r.get("stable") == "yes" and "released_on_day" in r
 }
 newest_day = {}
 for _, product, day in stable_release:
@@ -105,7 +107,7 @@ runs |= {
     if p == product and d == newest_day[product]
 }
 release_product = {r["id"]: r["product"] for r in releases}
-release_day = {r["id"]: r["released_on_day"] for r in releases}
+release_day = {r["id"]: r["released_on_day"] for r in releases if "released_on_day" in r}
 behind_newest = {
     (s, r)
     for s, r in runs

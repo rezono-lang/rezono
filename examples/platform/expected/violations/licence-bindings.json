@@ -2,12 +2,14 @@
   "licence_release_binding__notice__reference": [
     ["bind-distribution-3.0.0", "distribution-3.0.0"],
     ["bind-keycloak-26", "keycloak-26.0.0"],
+    ["bind-kube-control-1.32.13", "kube-control-1.32.13"],
     ["bind-postgresql-16", "postgresql-16.0"],
     ["bind-postgresql-17", "postgresql-17.0"]
   ],
   "licence_release_binding__selected_release__reference": [
     ["bind-distribution-3.0.0", "distribution-3.0.0"],
     ["bind-keycloak-26", "keycloak-26"],
+    ["bind-kube-control-1.32.13", "kube-control-1.32.13"],
     ["bind-postgresql-16", "postgresql-16"],
     ["bind-postgresql-17", "postgresql-17"]
   ],

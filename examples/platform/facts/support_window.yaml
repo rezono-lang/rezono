@@ -1,2 +1,2 @@
 supported_service_release:
-  - {id: cp-kubernetes-1.32.13, service: cp, product: kubernetes, series: '1.32', version: 1.32.13}
+  - {id: cp-kubernetes-1.32.13, service: cp, product: kube-control, series: '1.32', version: 1.32.13}
