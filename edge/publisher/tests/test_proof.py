@@ -51,7 +51,20 @@ def graph():
                                    "contributors_sha256": "-", "result": f"known:{degree[a]}"}]} for a in NODES]
     snapshots = {"e": snapshot(EDGES), "v": snapshot([(a,) for a in NODES]), "path": snapshot(EDGES),
                  "deg": snapshot([(a, str(degree[a])) for a in NODES])}
-    return doc, {"witnesses": witnesses, "hidden": []}, snapshots
+    return doc, {"witnesses": witnesses, "hidden": [], "load_bearing_entries": _lb_entries(witnesses)}, snapshots
+
+
+def _lb_entries(witnesses):
+    seen = {}
+    for w in witnesses:
+        c = w["conclusion"]
+        for p in w.get("premises", ()):
+            seen[(c["relation"], c["key"], p["row"]["relation"], p["row"]["key"], p["polarity"])] = True
+    return [
+        {"conclusion": {"relation": cr, "key": ck}, "premise": {"relation": pr, "key": pk},
+         "how": how, "load_bearing": flag}
+        for (cr, ck, pr, pk, how), flag in sorted(seen.items())
+    ]
 
 
 def calc(relation, subject, value, premises=()):
@@ -297,10 +310,11 @@ def test_a_contributes_row_of_a_sum_carries_its_value_and_a_changed_one_is_refus
     doc = rules_dl.read_program(WEIGHED, "test.dl", {"v": [("x", "string")],
                                                      "w": [("x", "string"), ("y", "string"), ("w", "integer")]}, "test")
     aggregate = {"relation": "w", "position": 0, "group_key": k("a"), "count": 2, "contributors_sha256": "-", "result": "-"}
-    sees = {"witnesses": [{"conclusion": {"relation": name, "key": k("a", n)}, "rule_id": name,
-                           "bindings": [{"variable": "?x", "value": "a"}, {"variable": "?n", "value": n}],
-                           "premises": [{"row": {"relation": "v", "key": k("a")}, "polarity": "positive", "stratum": 0}],
-                           "aggregates": [aggregate]} for name, n in (("deg", "2"), ("load", "-1"))], "hidden": []}
+    ws = [{"conclusion": {"relation": name, "key": k("a", n)}, "rule_id": name,
+           "bindings": [{"variable": "?x", "value": "a"}, {"variable": "?n", "value": n}],
+           "premises": [{"row": {"relation": "v", "key": k("a")}, "polarity": "positive", "stratum": 0}],
+           "aggregates": [aggregate]} for name, n in (("deg", "2"), ("load", "-1"))]
+    sees = {"witnesses": ws, "hidden": [], "load_bearing_entries": _lb_entries(ws)}
     snapshots = {"v": snapshot([("a",)]), "w": snapshot([("a", "p", "3"), ("a", "q", "-4"), ("b", "p", "5")]),
                  "load": snapshot([("a", "-1")]), "deg": snapshot([("a", "2")])}
     made, roots = proof.plan(doc, sees, snapshots, "")
