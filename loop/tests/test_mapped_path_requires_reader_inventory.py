@@ -126,7 +126,7 @@ def published_selection(directory, source, submitted, evidence):
     receipt, objects = evidence
     build = directory / "build"
     shutil.copytree(ROOT / "build", build)
-    for name in ("std-decision", "std-loop", "std-order", "std-access"):
+    for name in ("std-decision", "std-loop", "std-order", "std-access", "std-review"):
         shutil.copytree(ROOT / "packs" / name, directory / "packs" / name)
     (build / "facts").mkdir(exist_ok=True)
     (build / "facts/input.yaml").write_text(yaml.safe_dump(submitted), encoding="utf-8")

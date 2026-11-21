@@ -914,7 +914,7 @@ def test_ci_discover_shard_counts_come_from_build_facts_via_single_renderer(tmp_
     repo = tmp_path / "shard-repo"
     repo.mkdir()
     shutil.copytree(BUILD_DIR, repo / "build")
-    for pack_name in ("std-access", "std-decision", "std-loop", "std-order", "std-time"):
+    for pack_name in ("std-access", "std-decision", "std-loop", "std-order", "std-review", "std-time"):
         src = ROOT / "packs" / pack_name
         if src.is_dir():
             shutil.copytree(src, repo / "packs" / pack_name)
