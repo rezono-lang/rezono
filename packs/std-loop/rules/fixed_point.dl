@@ -33,6 +33,13 @@ possible_progress(run) :-
     loop_batch_deferral__cut(deferral, cut), step_safety_current_cut(run, cut), !waiting_done(run, step),
     current_step_safety_check(run, step, cut, _, "proved", _), !step_safety_blocked(run, step, cut).
 
+// A pending effect of an unfinished step keeps the fixed point open until a readback settles it.
+possible_progress(run) :-
+    effect_pending(run, plan, _),
+    loop_effect_plan__run(plan, run),
+    loop_effect_plan__step(plan, step),
+    !waiting_done(run, step).
+
 .decl fixed_point(run: symbol, sweep: symbol, step: symbol, token: symbol, requirement: symbol)
 fixed_point(run, sweep, step, token, requirement) :-
     loop_sweep_receipt__run(sweep, run), loop_sweep_receipt__event_time(sweep, _),

@@ -68,22 +68,41 @@ def cores(prog):
     return comps  # Tarjan yields a component after every component it reads
 
 
+VIEW_WEIGHTS = {
+    "relation": 1,
+    "witness": 1,
+    "outcome": 1,
+    "functional": 1,
+    "functional_aggregate": 2,
+}
+
+
 def views_by_kind(prog, name):
-    """The engine views one derived relation costs, by kind: itself, its materialized witnesses and its
-    checks, of an outcome or of a bound (rules_sql.views is their sum)."""
-    return {"relation": 1, "witness": sum(1 for r in prog.rules_for(name) if sql.wants_witness(prog, r, "materialize")),
-            "outcome": len(sql.checks(prog, name))}
+    """The engine views one derived or functional relation costs, by kind: itself, its materialized
+    witnesses and its checks, of an outcome, conflict_policy=block, or a bound."""
+    rel = prog.relations[name]
+    witnesses = sum(1 for r in prog.rules_for(name) if sql.wants_witness(prog, r, "materialize"))
+    outcomes = len(sql.checks(prog, name))
+    if rel.role == "functional":
+        kind = "functional_aggregate" if sql.is_functional_aggregate(prog, name) else "functional"
+        return {kind: 1, "witness": witnesses, "outcome": outcomes}
+    return {"relation": 1, "witness": witnesses, "outcome": outcomes}
+
+
+def view_weight(prog, name):
+    """Weighted engine.view_budget cost of one relation (decisions/language-rezono-1.md, section 5.2)."""
+    return sum(VIEW_WEIGHTS[k] * n for k, n in views_by_kind(prog, name).items())
 
 
 def partition(prog, budget, previous=None, cost=None, whole=None, unit="views", *, relations=None):
     """Parts as lists of derived relations (see the module docstring). `previous` is the partition of an
     earlier compile (lists of relation names, by part place; an empty list for a place without a part).
     A part's place is stable: an empty part in the middle stays as an empty list. `cost` weighs a derived
-    relation (default: its views), `budget` bounds a part and `whole` the program in one pipeline, which
+    relation (default: its view_weight), `budget` bounds a part and `whole` the program in one pipeline, which
     also holds what is not a rule (default: `budget`). `relations` can restrict this partition to one
     evaluation phase, provided it contains every member of each recursive core it touches. Raises TooBig
     for a recursive core above the budget; a relation above it that is not recursive gets a part of its own."""
-    cost = cost or (lambda n: sql.views(prog, n))
+    cost = cost or (lambda n: view_weight(prog, n))
     whole = budget if whole is None else whole
     comps = cores(prog)
     order = prog.derived()
@@ -176,7 +195,7 @@ def partition(prog, budget, previous=None, cost=None, whole=None, unit="views", 
 def over_budget(prog, parts, budget, cost=None):
     """The parts of a partition above the budget, as (relation, cost): each holds one relation that is
     not recursive (see `partition`). The compiler warns for each."""
-    cost = cost or (lambda n: sql.views(prog, n))
+    cost = cost or (lambda n: view_weight(prog, n))
     return [(p[0], sum(cost(n) for n in p)) for p in parts if sum(cost(n) for n in p) > budget]
 
 
@@ -203,15 +222,20 @@ def plan(prog, parts, upstream=frozenset()):
 def export_select(prog, part, relation=q):
     """The export of a part: one row per exported row, tagged with its relation, every column as text
     (a0, a1, …), plus a row '#epoch' per epoch marker. The relay reads it as one ordered stream."""
-    width = max(len(prog.relations[r].key) for r in part["exports"])
+    width = max(len(prog.relations[r].row_columns) for r in part["exports"])
     sel = []
     for r in part["exports"]:
         rel = prog.relations[r]
-        cols = [
-            f"CAST(CASE WHEN {q(c.name)} THEN 'true' ELSE 'false' END AS VARCHAR)"
-            if c.type == "boolean" else f"CAST({q(c.name)} AS VARCHAR)"
-            for c in rel.key
-        ]
+        cols = []
+        for c in rel.row_columns:
+            if c.type == "boolean":
+                cols.append(f"CAST(CASE WHEN {q(c.name)} THEN 'true' ELSE 'false' END AS VARCHAR)")
+            elif c.type == "rational":
+                num, den = q(c.name + "_n"), q(c.name + "_d")
+                cols.append(f"CASE WHEN {den} = 1 THEN CAST({num} AS VARCHAR) "
+                            f"ELSE CAST({num} AS VARCHAR) || '/' || CAST({den} AS VARCHAR) END")
+            else:
+                cols.append(f"CAST({q(c.name)} AS VARCHAR)")
         cols += ["CAST('' AS VARCHAR)"] * (width - len(cols))
         columns = ", ".join(f"{c} AS a{j}" for j, c in enumerate(cols))
         sel.append(f"SELECT CAST('{r}' AS VARCHAR) AS rel, {columns} FROM {relation(sql.relation_source(rel))}")
@@ -222,9 +246,9 @@ def export_select(prog, part, relation=q):
 
 
 def decode(prog, relation, cells):
-    """An exported row back in the types of its relation: the text columns a0, a1, … in key order."""
-    parse = {"integer": int, "boolean": BOOLEAN.__getitem__, "string": str}
-    return tuple(parse[c.type](v) for c, v in zip(prog.relations[relation].key, cells))
+    """An exported row back in the types of its relation: the text columns a0, a1, … in row-column order."""
+    parse = {"integer": int, "boolean": BOOLEAN.__getitem__, "string": str, "rational": str, "date": str}
+    return tuple(parse[c.type](v) for c, v in zip(prog.relations[relation].row_columns, cells))
 
 
 def export_sql(prog, exports):

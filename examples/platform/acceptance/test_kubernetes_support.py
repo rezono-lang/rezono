@@ -128,7 +128,11 @@ def test_register_difference_is_support_drift():
     premises = {item["row"]["relation"] for witness in proof["witnesses"] for item in witness["premises"]}
     assert {"series_support_reference__support_end", "series_support_source__support_end"} <= premises
 
-    entries = sources.file_entries(model, ROOT / "facts/kubernetes_support.yaml")
-    register = [entry for entry in entries if "series_support_reference" in json.dumps(entry)]
-    assert register and all(item["kind"] == "pack" and item["name"] == "facts/kubernetes_support.yaml"
-                            for entry in register for item in entry["sources"])
+    fact_file = ROOT / "facts/kubernetes_support.yaml"
+    assert fact_file.with_suffix(".sources.yaml").exists()
+    entries = sources.file_entries(model, fact_file)
+    register = [entry for entry in entries if entry["row"]["relation"].split("__", 1)[0] == "series_support_reference"]
+    assert register and all(entry["sources"] for entry in register)
+    allowed = sources.kinds() - {"pack", "scenario"}
+    assert not sources.missing_origins(model, register, ROOT)
+    assert all(item["kind"] in allowed for entry in register for item in entry["sources"])

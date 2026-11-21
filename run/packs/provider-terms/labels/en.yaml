@@ -1,0 +1,49 @@
+usage_detail_type: Usage-billed detail type
+quote_policy: Provider quote policy
+quote_policy.mode: Quote mode
+order_status: Provider order status
+order_status.outcome: Run outcome
+order: Provider order
+order.expiration_us: Order expiration in microseconds
+order.day_end_us: Approved day end in microseconds
+order.status: Order status
+order_detail: Order detail
+order_detail.order: Order
+order_detail.detail_type: Detail type
+order_has_detail: Order has detail
+detail_has_type: Detail has type
+order_has_usage_detail: Order has usage-billed detail
+invalid_order: Invalid order
+conflicted_quote_policy: Conflicted quote policy
+order_has_expiration: Order has expiration
+order_has_day_end: Order has approved day end
+order_has_valid_quote_policy: Order has valid quote policy
+order_guarantee: Order quote guarantee
+no_guarantee: Order quote refusal reason
+order_has_status: Order has status
+conflicted_order_status: Conflicted order status
+ambiguous_order_status: Ambiguous order status
+known_order_status: Known order status
+order_outcome: Order outcome
+renew_field_block: Renew field block rule
+renew_field_block.blocked_when: Blocking boolean value
+renew_field_block.code: Blocking code
+service: Provider service
+service.deadline_us: Cleanup deadline in microseconds
+service.expiration_us: Paid expiration in microseconds
+service.engaged_known: Engagement status known
+service.engaged_up_to_us: Engagement end in microseconds
+service_renew_flag: Service renew flag
+service_renew_flag.service: Service
+service_renew_flag.field: Renew field name
+service_renew_flag.value: Observed boolean value
+conflicted_renew_field_block: Conflicted renew field block
+service_has_renew_flag: Service has renew flag
+ambiguous_renew_flag: Ambiguous service renew flag
+service_has_expiration: Service has expiration
+ambiguous_service_expiration: Ambiguous service expiration
+service_engaged_known: Service engagement known
+service_engaged_unknown: Service engagement unknown
+service_has_known_engagement: Service has known engagement
+ambiguous_service_engagement: Ambiguous service engagement
+renewal_block: Renewal block

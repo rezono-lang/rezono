@@ -303,9 +303,17 @@ def full_relations(doc: dict, columns: dict, kinds_full: set, relations: set, wi
     rests on (`calc.sources`): such a view is no base relation. It is full if its subject kind is and each
     of its sources is, a premise view by this same rule; without known sources it is not."""
     calc = calc or {}
-    derived = {r["name"] for r in doc.get("relations", ()) if r.get("role") == "derived"}
+    derived = {r["name"] for r in doc.get("relations", ()) if r.get("role") in ("derived", "functional")}
     calc_inputs = {r["name"] for r in doc.get("relations", ()) if r.get("role") == "calc"}
     deps: dict[str, set[str]] = {}
+    invalid_functional: set[str] = set()
+    for r in doc.get("relations", ()):
+        if r.get("role") == "functional":
+            domain = r.get("domain")
+            if isinstance(domain, str) and domain:
+                deps.setdefault(r["name"], set()).add(domain)
+            else:
+                invalid_functional.add(r["name"])
     for r in doc.get("rules", ()):
         reads = deps.setdefault(r["head"]["relation"], set())
         reads.update(b["relation"] for b in r["body"])
@@ -322,7 +330,7 @@ def full_relations(doc: dict, columns: dict, kinds_full: set, relations: set, wi
                 reached.add(x)
                 if x in derived:
                     todo.extend(deps.get(x, ()))
-        return all(x in derived or x in base for x in reached)
+        return all((x in derived and x not in invalid_functional) or x in base for x in reached)
 
     verdict: dict[str, bool] = {}
 
@@ -564,7 +572,8 @@ def check_role(role: str, complete: dict, snapshots: dict, claimed_full, bundle:
         return all(k is None or reads(k, v) for k, v in zip(cols, parts, strict=True))
 
     relations = doc.get("relations", ())
-    derived = {r["name"] for r in relations if r.get("role") == "derived"}
+    derived = {r["name"] for r in relations if r.get("role") in ("derived", "functional")}
+    functional = {r["name"] for r in relations if r.get("role") == "functional"}
     explicit = any(r["name"] == READ_FULL for r in relations)
     if explicit:
         instances = list(instances)
@@ -623,7 +632,26 @@ def check_role(role: str, complete: dict, snapshots: dict, claimed_full, bundle:
     reads_rows = {rel: {encode_key(p[:width.get(rel, len(p))]) for p, _ in rs.values() if readable(rel, p)}
                   for rel, rs in every.items() if rel not in derived and rel not in calc_inputs and rel in columns}
 
+    func_deps: dict[str, set[str]] = {}
+    invalid_functional: set[str] = set()
+    for r in relations:
+        if r.get("role") == "functional":
+            domain = r.get("domain")
+            if isinstance(domain, str) and domain:
+                func_deps.setdefault(r["name"], set()).add(domain)
+            else:
+                invalid_functional.add(r["name"])
+    for r in doc.get("rules", ()):
+        head_rel = r["head"]["relation"]
+        if head_rel in functional:
+            deps = func_deps.setdefault(head_rel, set())
+            deps.update(b["relation"] for b in r.get("body", ()))
+            deps.update(a["relation"] for a in r.get("aggregates", ()))
+
     def usable(w: dict) -> bool:
+        head_rel = w["conclusion"]["relation"]
+        if head_rel in functional and (head_rel in invalid_functional or not (func_deps.get(head_rel, set()) <= full)):
+            return False
         for p in w.get("premises", ()):
             rel = p["row"]["relation"]
             if p["polarity"] != "positive":

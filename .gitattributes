@@ -11,6 +11,7 @@ packs/*/labels/*.yaml pack-definition
 packs/*/messages/*.mf2 pack-definition
 # Rule libraries also exist outside declared packs.
 packs/std-access/rules/*.dl pack-definition
+packs/std-budget/rules/*.dl pack-definition
 packs/std-decision/rules/*.dl pack-definition
 packs/std-explain/rules/*.dl pack-definition
 packs/std-identity/rules/*.dl pack-definition

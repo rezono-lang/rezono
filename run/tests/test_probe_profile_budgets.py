@@ -34,7 +34,7 @@ def recorded_design(*, automatic_term=True, covered=True, physical=True):
                         {"id": "install", "precedes": ["cleanup"]}, {"id": "cleanup"}],
         "probe_storage_variant": [{"id": "assisted", "storage": "shared-store", "installation": "assisted"},
                                   {"id": "automatic", "storage": "shared-store", "installation": "automatic"}],
-        "reference_date": [{"id": "planning-day", "title": DAY, "day": 20260115}],
+        "reference_date": [{"id": "planning-day", "title": DAY, "date": DAY, "day": 20260115}],
         "probe_snapshot": [{"id": "planning-cut", "profile": PROFILE, "reference_date": "planning-day",
                             "membership_complete": "complete"}],
     }
@@ -109,7 +109,7 @@ def test_probe_profile_terms_follow_the_governing_snapshot(tmp_path):
     # install budget were still in force. Both end on the planning day, so neither may be published.
     design = recorded_design(physical=False)
     records, approved = design["profile-design.yaml"], design["profile-decisions.yaml"]
-    records["reference_date"].append({"id": "earlier-day", "title": "2026-01-10", "day": 20260110})
+    records["reference_date"].append({"id": "earlier-day", "title": "2026-01-10", "date": "2026-01-10", "day": 20260110})
     records["probe_snapshot"].append({"id": "earlier-cut", "profile": PROFILE, "reference_date": "earlier-day",
                                       "membership_complete": "partial"})
     assisted = next(row for row in approved["decision"] if row["id"] == "decide-assisted-install")
@@ -127,7 +127,7 @@ def test_probe_profile_counts_and_findings_follow_the_governing_snapshot(tmp_pat
     # has no coverage. Counts and missing-term findings may rest only on the governing snapshot.
     design = recorded_design(automatic_term=False)
     records = design["profile-design.yaml"]
-    records["reference_date"].append({"id": "later-day", "title": "2026-01-20", "day": 20260120})
+    records["reference_date"].append({"id": "later-day", "title": "2026-01-20", "date": "2026-01-20", "day": 20260120})
     records["probe_snapshot"].append({"id": "later-cut", "profile": PROFILE, "reference_date": "later-day",
                                       "membership_complete": "partial"})
     current = checked(PACK, tmp_path / "later-partial", design)

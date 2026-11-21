@@ -1,0 +1,7 @@
+name: engine-epoch
+version: 0.1.0
+default_language: en
+imports:
+  - name: std-loop
+    path: ../packs/std-loop
+    sha256: 1512bdc4315125b60d28488378adc81ef4cae45b1cff71e5f12d8fe546979f70

@@ -221,6 +221,12 @@ def test_scene_decisions_are_std_decision_facts(tmp_path):
     assert decisions, "examples/platform/facts/ must declare std-decision 'decision' rows for the five scenes"
     assert subjects, "examples/platform/facts/ must declare std-decision 'subject' rows"
     assert reference_dates, "examples/platform/facts/ must declare a std-decision 'reference_date' row"
+    for row in reference_dates:
+        ref_date = _iso_day(row.get("date"), f"reference_date {row.get('id')!r} date")
+        expected_day = int(ref_date.replace("-", ""))
+        assert row.get("day") == expected_day, (
+            f"Reference date {row.get('id')!r} day must equal {expected_day}"
+        )
     assert bindings, "examples/platform/facts/ must declare 'platform_decision_binding' rows for the five scenes"
 
     subject_ids = {row["id"] for row in subjects}

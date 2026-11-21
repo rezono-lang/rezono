@@ -243,6 +243,20 @@ def admitted_rows(evidence) -> dict[str, list[tuple]]:
         raise Blocked(f"rezono:evidence: {e}") from e
 
 
+def origin_check(model, fact_sources: list[dict], pack_dir: Path) -> dict:
+    """Check row `rezono:origins`: count of main's fact rows without origin (decisions/fact-origin-required.md §5)."""
+    from rezono_compiler import sources as provenance
+
+    violations = provenance.missing_origin_count(provenance.missing_origins(model, fact_sources, pack_dir))
+    if violations == 0:
+        status = "green"
+    elif model.language_version == "0":
+        status = "warning"
+    else:
+        status = "red"
+    return {"name": "rezono:origins", "status": status, "violations": violations}
+
+
 def epoch(pack_dir, *, epoch: int, knowledge_time: str, sources, proposal: str = "",
           base_manifest: str = "", evidence=None) -> Epoch:
     import duckdb
@@ -335,6 +349,8 @@ def epoch(pack_dir, *, epoch: int, knowledge_time: str, sources, proposal: str =
         calc_witnesses = calculate(calc_program, db, duckdb.connect(), rows)
 
     timing.switch("compile")  # the hashes of what the epoch was made with: the compiler's sources, the pack
+    fact_sources = provenance.read(model, pack_dir)  # where each base row comes from, never the engine's
+    checks.append(origin_check(model, fact_sources, pack_dir))
     return Epoch(
         pack=model.meta["name"], theory=model.meta["theory"], epoch=epoch, knowledge_time=knowledge_time,
         pack_sha256=tree_sha256(pack_dir), definition_sha256=definition_sha256(pack_dir),
@@ -348,7 +364,7 @@ def epoch(pack_dir, *, epoch: int, knowledge_time: str, sources, proposal: str =
         rules=files.get("ir/rules.json") or EMPTY_RULES,  # never empty: see publish.verify
         sweeps=files.get("ir/sweeps.json", ""), seals=tuple(s.kind for s in model.seals),
         calc=files.get("ir/calc.json", ""), calc_witnesses=calc_witnesses, assets=asset_files(pack_dir),
-        fact_sources=provenance.read(model, pack_dir),  # where each base row comes from, never the engine's
+        fact_sources=fact_sources,
         evidence=evidence)
 
 

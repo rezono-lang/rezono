@@ -9,20 +9,22 @@ import { spellName, spellQualifiedName } from './rule-names.ts';
 
 // Precedence, lowest first (§4). A node prints in parentheses where the place it stands in needs a higher level.
 const COND = 0;
-const IMPLY = 1;
-const OR = 2;
-const AND = 3;
-const NOT = 4;
-const TEST = 5;
-const RANGE = 6;
-const ADD = 7;
-const MUL = 8;
-const UNARY = 9;
-const POST = 10;
-const DOTTED = 11;
+const OTHERWISE = 1;
+const IMPLY = 2;
+const OR = 3;
+const AND = 4;
+const NOT = 5;
+const TEST = 6;
+const RANGE = 7;
+const ADD = 8;
+const MUL = 9;
+const UNARY = 10;
+const POST = 11;
+const DOTTED = 12;
 
 function level(e: Expr): number {
 	if ('when' in e) return COND;
+	if ('otherwise' in e) return OTHERWISE;
 	if ('imply' in e) return IMPLY;
 	if ('or' in e) return OR;
 	if ('and' in e) return AND;
@@ -31,7 +33,8 @@ function level(e: Expr): number {
 	if ('range' in e) return RANGE;
 	if ('arith' in e) return e.arith[0] === '+' || e.arith[0] === '-' ? ADD : MUL;
 	if ('neg' in e) return UNARY;
-	if ('timesel' in e || 'filter' in e) return POST;
+	if ('timesel' in e) return POST;
+	if ('filter' in e) return e.filter[2] !== undefined ? DOTTED : POST;
 	return DOTTED;
 }
 
@@ -41,7 +44,7 @@ function level(e: Expr): number {
  */
 function expr(e: Expr, min: number, last: boolean): string {
 	const text = bare(e, last);
-	return level(e) < min || ('filter' in e && !last) ? `(${text})` : text;
+	return level(e) < min || ('filter' in e && e.filter[2] === undefined && !last) ? `(${text})` : text;
 }
 /**
  * What a slot or an aggregate is read from. A literal that is not one word stands in parentheses: `3.count()`
@@ -58,16 +61,18 @@ function bare(e: Expr, last: boolean): string {
 	if ('kind' in e) return spellQualifiedName(e.kind);
 	if ('dot' in e) return `${base(e.dot[0])}.${e.dot[1]}`;
 	if ('agg' in e) {
-		const [name, of, arg] = e.agg;
-		return `${base(of)}.${name}(${arg ? whole(arg) : ''})`;
+		const [name, of, arg, binder] = e.agg;
+		return `${base(of)}.${name}(${arg ? `${binder ? `${binder}: ` : ''}${whole(arg)}` : ''})`;
 	}
 	if ('call' in e) return `${spellQualifiedName(e.call[0], true)}(${e.call[1].map(whole).join(', ')})`;
+	if ('as' in e) return `${whole(e.as[0])} as ${e.as[1]}`;
 	if ('timesel' in e) {
 		const [base, sel] = e.timesel;
 		return [expr(base, DOTTED, false), ...(sel.at ? [`at ${atom(sel.at)}`] : []), ...(sel.as_known ? [`as known ${atom(sel.as_known)}`] : [])].join(' ');
 	}
 	if ('filter' in e) {
-		const [set, cond] = e.filter;
+		const [set, cond, binder] = e.filter;
+		if (binder !== undefined) return `${base(set)}.where(${binder}: ${whole(cond)})`;
 		// The set is a path with or without a time selection; a filter of a filter needs its parentheses.
 		return `${'timesel' in set ? expr(set, POST, false) : expr(set, DOTTED, false)} where ${whole(cond)}`;
 	}
@@ -86,6 +91,7 @@ function bare(e: Expr, last: boolean): string {
 	if ('and' in e) return e.and.map((x, i) => expr(x, NOT, last && i === e.and.length - 1)).join(' and ');
 	if ('or' in e) return e.or.map((x, i) => expr(x, AND, last && i === e.or.length - 1)).join(' or ');
 	if ('imply' in e) return `${expr(e.imply[0], OR, false)} => ${expr(e.imply[1], IMPLY, last)}`;
+	if ('otherwise' in e) return `${expr(e.otherwise[0], IMPLY, false)} otherwise ${expr(e.otherwise[1], COND, last)}`;
 	const [c, a, b] = e.when;
 	return `when ${whole(c)} then ${whole(a)} else ${whole(b)}`;
 }
@@ -139,6 +145,7 @@ export function grouping(e: Expr): string {
 	if ('or' in e) return e.or.map(g).join(' or ');
 	if ('not' in e) return `not ${g(e.not)}`;
 	if ('imply' in e) return `${g(e.imply[0])} => ${g(e.imply[1])}`;
+	if ('otherwise' in e) return `${g(e.otherwise[0])} otherwise ${g(e.otherwise[1])}`;
 	if ('cmp' in e) return `${g(e.cmp[1])} ${e.cmp[0]} ${g(e.cmp[2])}`;
 	if ('in' in e) return `${g(e.in[0])} in ${g(e.in[1])}`;
 	if ('is' in e) return `${g(e.is[0])} is ${e.is[1]}`;
@@ -146,5 +153,6 @@ export function grouping(e: Expr): string {
 	if ('arith' in e) return `${g(e.arith[1])} ${e.arith[0]} ${g(e.arith[2])}`;
 	if ('neg' in e) return `-${g(e.neg)}`;
 	if ('when' in e) return `when ${g(e.when[0])} then ${g(e.when[1])} else ${g(e.when[2])}`;
+	if ('as' in e) return `${g(e.as[0])} as ${e.as[1]}`;
 	return whole(e);
 }

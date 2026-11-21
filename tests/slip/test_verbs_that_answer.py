@@ -31,20 +31,6 @@ def line_of(page, relation, key):
     return line
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=(MissingSlipPage, AssertionError),
-    reason=(
-        "extra: decisions/viewer-slip.md: Waits for tests/slip/test_role_part_of_bundle.py--test_role_part_of_bundle, "
-        "tests/slip/test_head_status_and_hash.py--test_head_status_and_hash, "
-        "tests/slip/test_message_filled.py--test_message_filled and, for the page itself, "
-        "tests/slip/test_slip_rule_row.py--test_slip_rule_row. "
-        "Then show on each line of viewer/slip/ the verbs whose question the reader answers for that line, in "
-        "the order and with the keys of Sheets.verbs, and open an answer as a table on its key, as "
-        "decisions/viewer-slip.md, section The verbs, says. The page holds no name of a question. "
-        "Expectation: tests/fixtures/slip and packs/std-view/sheets.yaml."
-    ),
-)
 def test_verbs_that_answer(tmp_path):
     store, _ = publish_main(tmp_path)
     busy = {"relation": "busy", "key": ["group-a"]}

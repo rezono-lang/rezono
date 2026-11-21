@@ -12,6 +12,7 @@ test = ["pytest>=8"]
 
 [project.scripts]
 rezono-publish = "rezono_publisher.__main__:main"
+rezono-suppose = "rezono_publisher.suppose:main"
 
 [tool.setuptools]
 packages = ["rezono_publisher"]

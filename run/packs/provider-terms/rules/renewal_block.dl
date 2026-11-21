@@ -1,0 +1,121 @@
+// Derive blocking codes for a provider service against its cleanup deadline.
+
+.decl conflicted_renew_field_block(field: symbol)
+conflicted_renew_field_block(f) :-
+    renew_field_block__blocked_when(f, a),
+    renew_field_block__blocked_when(f, b),
+    a != b.
+conflicted_renew_field_block(f) :-
+    renew_field_block__code(f, a),
+    renew_field_block__code(f, b),
+    a != b.
+
+.decl service_has_renew_flag(service: symbol, field: symbol)
+service_has_renew_flag(s, field) :-
+    service_renew_flag__service(flag, s),
+    service_renew_flag__field(flag, field),
+    service_renew_flag__value(flag, _).
+
+.decl ambiguous_renew_flag(service: symbol, field: symbol)
+ambiguous_renew_flag(s, field) :-
+    service_renew_flag__service(flag, s),
+    service_renew_flag__field(flag, field),
+    service_renew_flag__value(flag, a),
+    service_renew_flag__value(flag, b),
+    a != b.
+ambiguous_renew_flag(s, field) :-
+    service_renew_flag__service(f1, s),
+    service_renew_flag__service(f2, s),
+    f1 != f2,
+    service_renew_flag__field(f1, field),
+    service_renew_flag__field(f2, field).
+
+.decl service_has_expiration(service: symbol)
+service_has_expiration(s) :- service__expiration_us(s, _).
+
+.decl ambiguous_service_expiration(service: symbol)
+ambiguous_service_expiration(s) :-
+    service__expiration_us(s, a),
+    service__expiration_us(s, b),
+    a != b.
+
+.decl service_engaged_known(service: symbol)
+service_engaged_known(s) :- service__engaged_known(s, TRUE).
+
+.decl service_engaged_unknown(service: symbol)
+service_engaged_unknown(s) :- service__engaged_known(s, FALSE).
+
+.decl service_has_known_engagement(service: symbol)
+service_has_known_engagement(s) :-
+    service_engaged_known(s),
+    !service_engaged_unknown(s).
+
+.decl ambiguous_service_engagement(service: symbol)
+ambiguous_service_engagement(s) :-
+    service__engaged_up_to_us(s, a),
+    service__engaged_up_to_us(s, b),
+    a != b.
+
+.decl renewal_block(service: symbol, code: symbol)
+
+// A configured renew field matches its blocking boolean value.
+renewal_block(s, code) :-
+    service(s),
+    service_renew_flag__service(flag, s),
+    service_renew_flag__field(flag, field),
+    service_renew_flag__value(flag, val),
+    !ambiguous_renew_flag(s, field),
+    renew_field_block(field),
+    renew_field_block__blocked_when(field, val),
+    renew_field_block__code(field, code),
+    !conflicted_renew_field_block(field).
+
+// Any required renew field is missing, non-boolean, ambiguous, or conflicted.
+renewal_block(s, "renewal_unknown") :-
+    service(s),
+    renew_field_block(field),
+    !service_has_renew_flag(s, field).
+renewal_block(s, "renewal_unknown") :-
+    service(s),
+    renew_field_block(field),
+    ambiguous_renew_flag(s, field).
+renewal_block(s, "renewal_unknown") :-
+    service(s),
+    renew_field_block(field),
+    conflicted_renew_field_block(field).
+
+// Missing or ambiguous expiration date.
+renewal_block(s, "expiration_unknown") :-
+    service(s),
+    !service_has_expiration(s).
+renewal_block(s, "expiration_unknown") :-
+    service(s),
+    ambiguous_service_expiration(s).
+
+// Paid period ends at or before the cleanup deadline (expiration counts from UTC midnight).
+renewal_block(s, "period_ends_before_deadline") :-
+    service(s),
+    !ambiguous_service_expiration(s),
+    service__expiration_us(s, exp_us),
+    service__deadline_us(s, deadline_us),
+    exp_us <= deadline_us.
+
+// Missing, ill-typed, or ambiguous engagement date.
+renewal_block(s, "engagement_unknown") :-
+    service(s),
+    !service_has_known_engagement(s).
+renewal_block(s, "engagement_unknown") :-
+    service(s),
+    ambiguous_service_engagement(s).
+
+// Commitment extends beyond the paid expiration date.
+renewal_block(s, "engaged_beyond_expiration") :-
+    service(s),
+    !ambiguous_service_expiration(s),
+    service_has_known_engagement(s),
+    !ambiguous_service_engagement(s),
+    service__expiration_us(s, exp_us),
+    service__engaged_up_to_us(s, engaged_us),
+    engaged_us > exp_us.
+
+.output renewal_block

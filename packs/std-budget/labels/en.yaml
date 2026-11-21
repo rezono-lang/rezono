@@ -1,0 +1,27 @@
+# Neutral labels of std-budget. A domain gives its own words in its own labels and messages.
+revision: revision
+revision.base: base
+revision.head: head
+budget_entry: budget entry
+budget_entry.budget: budget
+budget_entry.cell: cell
+budget_entry.ceiling: ceiling
+budget_entry.revision: revision
+budget_reading: budget reading
+budget_reading.budget: budget
+budget_reading.cell: cell
+budget_reading.observed: observed
+budget_reading.revision: revision
+budget_ceiling: budget ceiling
+budget_observed: budget observed
+has_base_ceiling: has base ceiling
+has_head_ceiling: has head ceiling
+has_base_observed: has base observed
+has_head_observed: has head observed
+budget_cell: budget cell
+budget_raised: budget raised
+budget_exceeded: budget exceeded
+budget_ratchet_violation: budget ratchet violation
+budget_missing_head: budget missing head
+budget_slack: budget slack
+budget_within: budget within

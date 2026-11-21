@@ -66,6 +66,7 @@ export class Session {
 	private fetcher?: Promise<Fetch>;
 	private selected?: Pin;
 	private page?: Page;
+	private last?: Answer;
 	done = false;
 
 	constructor(connection: Connection, role: string, locked?: LockedPin, options: { pageSize?: number; rowSourceLimit?: number } = {}) {
@@ -78,6 +79,10 @@ export class Session {
 
 	get pin(): Pin | undefined {
 		return this.selected;
+	}
+
+	get lastAnswer(): Answer | undefined {
+		return this.last;
 	}
 
 	private fetch(): Promise<Fetch> {
@@ -93,6 +98,7 @@ export class Session {
 	}
 
 	async use(pack: string, chosen: string): Promise<Pin> {
+		this.last = undefined;
 		if (this.locked && this.locked.pack !== pack) throw new ReplError('publication does not match the locked pin');
 		const manifest = chosen === 'latest'
 			? await this.head(pack)
@@ -126,6 +132,7 @@ export class Session {
 		if (answer.format !== 'rezono.answer/1' || answer.manifest_id !== pin.manifest || !Array.isArray(answer.nodes))
 			throw new ReplError('gate returned an answer for a different publication or format');
 		this.page = answer.next || rowSource ? { pin, head, next: answer.next, request, rowSource } : undefined;
+		this.last = answer;
 		return answer;
 	}
 
@@ -189,12 +196,23 @@ export class Session {
 		const head = await this.head(pin.pack);
 		const params = new URLSearchParams({ m: pin.manifest });
 		const index = await this.read<BoundSweepList>(`/${encoded(pin.pack)}/sweeps?${params}`);
-		if (index.manifest_id !== pin.manifest || !Array.isArray(index.sweeps) || index.sweeps.length !== 1 || this.selected !== pin)
+		if (index.manifest_id !== pin.manifest || !Array.isArray(index.sweeps) || index.sweeps.length === 0 || this.selected !== pin)
 			throw new ReplError(NOT_FOUND);
-		return this.namedAt(pin, 'sweep', { sweep: index.sweeps[0].name }, head);
+		const names = index.sweeps
+			.map((entry) => entry?.name)
+			.filter((entry): entry is string => typeof entry === 'string' && /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/.test(entry));
+		if (names.length !== index.sweeps.length)
+			throw new ReplError(NOT_FOUND);
+		if (names.length > 1) {
+			if (!sameHead(await this.head(pin.pack), head) || this.selected !== pin)
+				throw new ReplError('the publication changed during the question; ask again');
+			throw new ReplError(`several sweeps are available (${names.join(', ')}); give a name with :sweep <name>`);
+		}
+		return this.namedAt(pin, 'sweep', { sweep: names[0] }, head);
 	}
 
 	async search(relation: string, prefix: string): Promise<string[]> {
+		this.last = undefined;
 		const pin = this.current();
 		const head = await this.head(pin.pack);
 		const query = new URLSearchParams({ starts: prefix, limit: '50' });
@@ -258,10 +276,12 @@ export class Session {
 	}
 
 	async exec(line: string): Promise<string[]> {
+		this.last = undefined;
 		try {
 			if (this.done) throw new ReplError('the session has ended');
 			return (await this.run(line)).map(terminalLine);
 		} catch (error) {
+			this.last = undefined;
 			return [`error: ${error instanceof ReplError ? error.message : 'gate request failed'}`];
 		}
 	}

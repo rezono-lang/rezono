@@ -1,0 +1,31 @@
+default:
+  kind: git
+  name: rezono-lang/rezono
+  revision: acb44d165dcd521505aeb920fd3c71330273ab12
+  position: decisions/platform-clusters.md
+records:
+  - of: {kind: cluster_flow_transport, id: fleet-registration}
+    kind: synthetic
+    name: decisions/platform-clusters.md
+    revision: acb44d165dcd521505aeb920fd3c71330273ab12
+    position: size-at-the-tenant-design-checkpoint
+  - of: {kind: cluster_flow_transport, id: fleet-apply}
+    kind: synthetic
+    name: decisions/platform-clusters.md
+    revision: acb44d165dcd521505aeb920fd3c71330273ab12
+    position: size-at-the-tenant-design-checkpoint
+  - of: {kind: cluster_flow_transport, id: control-plane}
+    kind: synthetic
+    name: decisions/platform-clusters.md
+    revision: acb44d165dcd521505aeb920fd3c71330273ab12
+    position: size-at-the-tenant-design-checkpoint
+  - of: {kind: cluster_flow_transport, id: vm-disk}
+    kind: synthetic
+    name: decisions/platform-clusters.md
+    revision: acb44d165dcd521505aeb920fd3c71330273ab12
+    position: size-at-the-tenant-design-checkpoint
+  - of: {kind: cluster_flow_transport, id: persistent-volume}
+    kind: synthetic
+    name: decisions/platform-clusters.md
+    revision: acb44d165dcd521505aeb920fd3c71330273ab12
+    position: size-at-the-tenant-design-checkpoint

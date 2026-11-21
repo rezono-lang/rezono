@@ -1,0 +1,36 @@
+id: https://rezono.org/std-loop/watchdog
+name: std_loop_watchdog
+description: Single-effect inactivity watchdog targets, activity readings and open effects (decisions/tooling-does-not-decide.md).
+imports: [linkml:types]
+default_range: string
+annotations:
+  layer: facts
+
+enums:
+  WatchdogWorkPending:
+    permissible_values:
+      "yes": {}
+      "no": {}
+
+classes:
+  WatchdogTarget:
+    description: A watchdog evaluation target at an observation cut with a window and pending-work flag.
+    attributes:
+      id: {identifier: true}
+      run: {required: true}
+      cut_tick: {range: integer, required: true}
+      window_seconds: {range: integer, required: true}
+      work_pending: {range: WatchdogWorkPending, required: true}
+      receipt: {description: The identity of the loop sweep receipt verifying this cut.}
+  WatchdogActivity:
+    description: An observed activity tick for a watchdog target.
+    attributes:
+      id: {identifier: true}
+      target: {range: WatchdogTarget, required: true}
+      activity_tick: {range: integer, required: true}
+  WatchdogActiveEffect:
+    description: An existing open watchdog effect recorded for a target.
+    attributes:
+      id: {identifier: true}
+      target: {range: WatchdogTarget, required: true}
+      created_at: {range: integer, required: true}

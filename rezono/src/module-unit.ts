@@ -1,10 +1,12 @@
 import { bare, declaration, leafDeclaration, named, type ModuleComponent } from './module-support.ts';
 
 type UnitDecl = { unit: string; is: string };
+type DefaultUnitDecl = { default_unit: string };
 
 export const unit = {
-	lineRules: ['UnitLine'],
+	lineRules: ['DefaultUnitLine', 'UnitLine'],
 	grammar: String.raw`
+  DefaultUnitLine = kw<"default"> kw<"unit"> typeName
   UnitLine = kw<"unit"> typeName "=" UnitBody
   UnitBody = kw<"money"> kw<"minor">? typeName (kw<"per"> name)?  -- money
            | kw<"integer">                                         -- integer
@@ -13,6 +15,7 @@ export const unit = {
            | Expr                                                   -- quantity
   `,
 	actions: {
+		DefaultUnitLine: (_d, _u, t) => named(t, { line: 'default_unit', default_unit: t.sourceString }),
 		UnitLine(_k, t, _eq, body) {
 			// A quantity is an expression: read as one, so that what v0 reserves in it is an R015 at its span. The form
 			// keeps its text.
@@ -25,5 +28,8 @@ export const unit = {
 			return named(t, { line: 'unit', unit: t.sourceString, is: bare(body).replace(/\s+/g, ' ') });
 		}
 	},
-	declarations: { unit: declaration<UnitDecl>('unit', leafDeclaration, d => [`unit ${d.unit} = ${d.is}`]) }
+	declarations: {
+		unit: declaration<UnitDecl>('unit', leafDeclaration, d => [`unit ${d.unit} = ${d.is}`]),
+		default_unit: declaration<DefaultUnitDecl>('default_unit', leafDeclaration, d => [`default unit ${d.default_unit}`]),
+	}
 } satisfies ModuleComponent;

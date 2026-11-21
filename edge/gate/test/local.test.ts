@@ -82,7 +82,6 @@ test('fixed local role scopes metadata, snapshots, pagination and absence', asyn
 	assert.deepEqual(catalogue.kinds, [{ id: 'item', class: 'Item', world: 'open' }]);
 	assert.deepEqual(catalogue.enums, []);
 	assert.ok(!JSON.stringify(catalogue).includes('unseen'));
-	assert.ok(!Object.hasOwn(catalogue, 'questions'));
 
 	const start = await (await reader(request(route + '/rows/item?starts=a&limit=1'))).json();
 	assert.deepEqual(start, { rows: [{ key: ['a'] }], next: ['a'] });

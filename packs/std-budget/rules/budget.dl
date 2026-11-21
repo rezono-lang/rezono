@@ -1,0 +1,60 @@
+// Rules of std-budget (decisions/tooling-does-not-decide.md, Form 1: monotonically shrinking budget).
+// Base relations come from BudgetEntry(id, budget, cell, ceiling, revision) and
+// BudgetReading(id, budget, cell, observed, revision), where revision is "base" or "head".
+
+.decl budget_ceiling(budget: symbol, cell: symbol, revision: symbol, ceiling: number)
+budget_ceiling(b, c, r, n) :- budget_entry(e), budget_entry__budget(e, b), budget_entry__cell(e, c),
+    budget_entry__revision(e, r), budget_entry__ceiling(e, n).
+
+.decl budget_observed(budget: symbol, cell: symbol, revision: symbol, observed: number)
+budget_observed(b, c, r, n) :- budget_reading(x), budget_reading__budget(x, b), budget_reading__cell(x, c),
+    budget_reading__revision(x, r), budget_reading__observed(x, n).
+
+.decl has_base_ceiling(budget: symbol, cell: symbol)
+has_base_ceiling(b, c) :- budget_ceiling(b, c, "base", _).
+
+.decl has_head_ceiling(budget: symbol, cell: symbol)
+has_head_ceiling(b, c) :- budget_ceiling(b, c, "head", _).
+
+.decl has_base_observed(budget: symbol, cell: symbol)
+has_base_observed(b, c) :- budget_observed(b, c, "base", _).
+
+.decl has_head_observed(budget: symbol, cell: symbol)
+has_head_observed(b, c) :- budget_observed(b, c, "head", _).
+
+// Any cell known from a ceiling (base or head) or an observation (base or head).
+.decl budget_cell(budget: symbol, cell: symbol)
+budget_cell(b, c) :- budget_ceiling(b, c, _, _).
+budget_cell(b, c) :- budget_observed(b, c, _, _).
+
+// Head ceiling exceeds base ceiling (an absent base ceiling is treated as 0).
+.decl budget_raised(budget: symbol, cell: symbol)
+budget_raised(b, c) :- budget_ceiling(b, c, "base", bc), budget_ceiling(b, c, "head", hc), hc > bc.
+budget_raised(b, c) :- budget_ceiling(b, c, "head", hc), !has_base_ceiling(b, c), hc > 0.
+
+// Head observed count exceeds head ceiling (an absent head ceiling is treated as 0).
+.decl budget_exceeded(budget: symbol, cell: symbol)
+budget_exceeded(b, c) :- budget_observed(b, c, "head", obs), budget_ceiling(b, c, "head", hc), obs > hc.
+budget_exceeded(b, c) :- budget_observed(b, c, "head", obs), !has_head_ceiling(b, c), obs > 0.
+
+// Head observed count exceeds base observed count (an absent base reading is treated as 0),
+// preventing slack left behind by earlier fixes from hiding new findings.
+.decl budget_ratchet_violation(budget: symbol, cell: symbol)
+budget_ratchet_violation(b, c) :- budget_observed(b, c, "base", bo), budget_observed(b, c, "head", ho), ho > bo.
+budget_ratchet_violation(b, c) :- budget_observed(b, c, "head", ho), !has_base_observed(b, c), ho > 0.
+
+// Cell has a ceiling or base observation but no head BudgetReading (fail closed; absence is never 0).
+.decl budget_missing_head(budget: symbol, cell: symbol)
+budget_missing_head(b, c) :- budget_cell(b, c), !has_head_observed(b, c).
+
+// Head observed count is strictly below a non-raised head ceiling (an advisory hint to lower the ceiling).
+// Requires an explicit head observation; a missing head reading is never treated as 0.
+.decl budget_slack(budget: symbol, cell: symbol)
+budget_slack(b, c) :- budget_ceiling(b, c, "head", hc), budget_observed(b, c, "head", ho), ho < hc, !budget_raised(b, c).
+
+// Cell has an explicit head observation and satisfies all budget invariants (fail closed).
+.decl budget_within(budget: symbol, cell: symbol)
+budget_within(b, c) :- has_head_observed(b, c),
+    !budget_raised(b, c), !budget_exceeded(b, c), !budget_ratchet_violation(b, c).
+
+.output budget_raised, budget_exceeded, budget_ratchet_violation, budget_missing_head, budget_slack, budget_within

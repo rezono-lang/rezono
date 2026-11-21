@@ -1,0 +1,107 @@
+// Role-scoped read rights for the build pack (std-access, decisions/build-reconciliation.md).
+// Any role holding the generic `read` capability reads the input kinds required for milestone progress,
+// release-1 completion, off-board release-1 work, task states and claim-release relations, with matching
+// full-kind coverage (decisions/central-read-access.md). Protected admission inputs stay withheld.
+
+.decl may_read(role: symbol, kind: symbol, element: symbol)
+may_read(r, "role", x) :- role__capability(r, "read"), role(x).
+
+// Run, cut receipt, policy date, decisions and citations.
+may_read(r, "build_run", x) :- role__capability(r, "read"), build_run(x).
+may_read(r, "build_component", x) :- role__capability(r, "read"), build_component(x).
+may_read(r, "build_test_file", x) :- role__capability(r, "read"), build_test_file(x).
+may_read(r, "build_policy_date", x) :- role__capability(r, "read"), build_policy_date(x).
+may_read(r, "decision", x) :- role__capability(r, "read"), decision(x).
+may_read(r, "reference_date", x) :- role__capability(r, "read"), reference_date(x).
+may_read(r, "build_citation_scan", x) :- role__capability(r, "read"), build_citation_scan(x).
+may_read(r, "build_decision_citation", x) :- role__capability(r, "read"), build_decision_citation(x).
+may_read(r, "build_red_citation", x) :- role__capability(r, "read"), build_red_citation(x).
+
+// Milestone progress, release-1 completion and off-board work.
+may_read(r, "build_milestone", x) :- role__capability(r, "read"), build_milestone(x).
+may_read(r, "build_progress_scan", x) :- role__capability(r, "read"), build_progress_scan(x).
+may_read(r, "build_red_test", x) :- role__capability(r, "read"), build_red_test(x).
+may_read(r, "build_green_transition", x) :- role__capability(r, "read"), build_green_transition(x).
+may_read(r, "build_offboard_work", x) :- role__capability(r, "read"), build_offboard_work(x).
+
+// Tasks, ordering and std-loop / std-order inputs.
+may_read(r, "build_task", x) :- role__capability(r, "read"), build_task(x).
+may_read(r, "build_track_rank", x) :- role__capability(r, "read"), build_track_rank(x).
+may_read(r, "build_queue_limit", x) :- role__capability(r, "read"), build_queue_limit(x).
+may_read(r, "build_queue_listing", x) :- role__capability(r, "read"), build_queue_listing(x).
+may_read(r, "build_queue_pull", x) :- role__capability(r, "read"), build_queue_pull(x).
+may_read(r, "build_queue_reading", x) :- role__capability(r, "read"), build_queue_reading(x).
+may_read(r, "loop_active_run", x) :- role__capability(r, "read"), loop_active_run(x).
+may_read(r, "loop_batch_deferral", x) :- role__capability(r, "read"), loop_batch_deferral(x).
+may_read(r, "loop_completion", x) :- role__capability(r, "read"), loop_completion(x).
+may_read(r, "loop_deadline", x) :- role__capability(r, "read"), loop_deadline(x).
+may_read(r, "loop_expectation", x) :- role__capability(r, "read"), loop_expectation(x).
+may_read(r, "loop_goal", x) :- role__capability(r, "read"), loop_goal(x).
+may_read(r, "loop_observation", x) :- role__capability(r, "read"), loop_observation(x).
+may_read(r, "loop_pending_operation", x) :- role__capability(r, "read"), loop_pending_operation(x).
+may_read(r, "loop_refusal", x) :- role__capability(r, "read"), loop_refusal(x).
+may_read(r, "loop_requirement", x) :- role__capability(r, "read"), loop_requirement(x).
+may_read(r, "loop_step", x) :- role__capability(r, "read"), loop_step(x).
+may_read(r, "loop_step_safety_check", x) :- role__capability(r, "read"), loop_step_safety_check(x).
+may_read(r, "loop_sweep", x) :- role__capability(r, "read"), loop_sweep(x).
+may_read(r, "loop_sweep_receipt", x) :- role__capability(r, "read"), loop_sweep_receipt(x).
+may_read(r, "ordered", x) :- role__capability(r, "read"), ordered(x).
+
+// Claims and claim release confirmation.
+may_read(r, "build_claim", x) :- role__capability(r, "read"), build_claim(x).
+may_read(r, "build_claim_activity", x) :- role__capability(r, "read"), build_claim_activity(x).
+may_read(r, "build_claim_lease", x) :- role__capability(r, "read"), build_claim_lease(x).
+may_read(r, "build_claim_pull_reading", x) :- role__capability(r, "read"), build_claim_pull_reading(x).
+may_read(r, "build_claim_delete", x) :- role__capability(r, "read"), build_claim_delete(x).
+may_read(r, "build_claim_ref_read", x) :- role__capability(r, "read"), build_claim_ref_read(x).
+
+// Explicit full-kind read coverage for every full-kind grant above.
+.decl may_read_full(role: symbol, kind: symbol)
+may_read_full(r, "role") :- role__capability(r, "read").
+
+may_read_full(r, "build_run") :- role__capability(r, "read").
+may_read_full(r, "build_component") :- role__capability(r, "read").
+may_read_full(r, "build_test_file") :- role__capability(r, "read").
+may_read_full(r, "build_policy_date") :- role__capability(r, "read").
+may_read_full(r, "decision") :- role__capability(r, "read").
+may_read_full(r, "reference_date") :- role__capability(r, "read").
+may_read_full(r, "build_citation_scan") :- role__capability(r, "read").
+may_read_full(r, "build_decision_citation") :- role__capability(r, "read").
+may_read_full(r, "build_red_citation") :- role__capability(r, "read").
+
+may_read_full(r, "build_milestone") :- role__capability(r, "read").
+may_read_full(r, "build_progress_scan") :- role__capability(r, "read").
+may_read_full(r, "build_red_test") :- role__capability(r, "read").
+may_read_full(r, "build_green_transition") :- role__capability(r, "read").
+may_read_full(r, "build_offboard_work") :- role__capability(r, "read").
+
+may_read_full(r, "build_task") :- role__capability(r, "read").
+may_read_full(r, "build_track_rank") :- role__capability(r, "read").
+may_read_full(r, "build_queue_limit") :- role__capability(r, "read").
+may_read_full(r, "build_queue_listing") :- role__capability(r, "read").
+may_read_full(r, "build_queue_pull") :- role__capability(r, "read").
+may_read_full(r, "build_queue_reading") :- role__capability(r, "read").
+may_read_full(r, "loop_active_run") :- role__capability(r, "read").
+may_read_full(r, "loop_batch_deferral") :- role__capability(r, "read").
+may_read_full(r, "loop_completion") :- role__capability(r, "read").
+may_read_full(r, "loop_deadline") :- role__capability(r, "read").
+may_read_full(r, "loop_expectation") :- role__capability(r, "read").
+may_read_full(r, "loop_goal") :- role__capability(r, "read").
+may_read_full(r, "loop_observation") :- role__capability(r, "read").
+may_read_full(r, "loop_pending_operation") :- role__capability(r, "read").
+may_read_full(r, "loop_refusal") :- role__capability(r, "read").
+may_read_full(r, "loop_requirement") :- role__capability(r, "read").
+may_read_full(r, "loop_step") :- role__capability(r, "read").
+may_read_full(r, "loop_step_safety_check") :- role__capability(r, "read").
+may_read_full(r, "loop_sweep") :- role__capability(r, "read").
+may_read_full(r, "loop_sweep_receipt") :- role__capability(r, "read").
+may_read_full(r, "ordered") :- role__capability(r, "read").
+
+may_read_full(r, "build_claim") :- role__capability(r, "read").
+may_read_full(r, "build_claim_activity") :- role__capability(r, "read").
+may_read_full(r, "build_claim_lease") :- role__capability(r, "read").
+may_read_full(r, "build_claim_pull_reading") :- role__capability(r, "read").
+may_read_full(r, "build_claim_delete") :- role__capability(r, "read").
+may_read_full(r, "build_claim_ref_read") :- role__capability(r, "read").
+
+.output may_read

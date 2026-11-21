@@ -1,0 +1,122 @@
+// Publication gates of fate (c) derived as std-loop refusals on write-forms
+// (decisions/loop-engine-epoch.md, sections 3.3 and 3.4).
+// Every refusal waits until the step producing its verdict is done and cites the culprit record.
+
+.decl epoch_has_run_check(run: symbol, step: symbol, check: symbol)
+.decl epoch_has_role_check(run: symbol, step: symbol, role: symbol, check: symbol)
+.decl epoch_stable_surface(
+    run: symbol,
+    surface: symbol,
+    change_class: symbol,
+    before_major: number,
+    before_minor: number,
+    before_patch: number,
+    after_major: number,
+    after_minor: number,
+    after_patch: number
+)
+
+// A run-scoped check refuses write-forms once its step is done when red, unknown, or green with violations.
+derived_refusal(run, "write-forms", record) :-
+    done(run, step, _),
+    epoch_check__run(record, run),
+    epoch_check__step(record, step),
+    epoch_check__outcome(record, "red").
+derived_refusal(run, "write-forms", record) :-
+    done(run, step, _),
+    epoch_check__run(record, run),
+    epoch_check__step(record, step),
+    epoch_check__outcome(record, "unknown").
+derived_refusal(run, "write-forms", record) :-
+    done(run, step, _),
+    epoch_check__run(record, run),
+    epoch_check__step(record, step),
+    epoch_check__outcome(record, "green"),
+    epoch_check__violations(record, violations),
+    violations != 0.
+
+// A role-scoped check refuses write-forms once its step is done when red, unknown, or green with violations.
+derived_refusal(run, "write-forms", record) :-
+    done(run, step, _),
+    epoch_role_check__run(record, run),
+    epoch_role_check__step(record, step),
+    epoch_role_check__outcome(record, "red").
+derived_refusal(run, "write-forms", record) :-
+    done(run, step, _),
+    epoch_role_check__run(record, run),
+    epoch_role_check__step(record, step),
+    epoch_role_check__outcome(record, "unknown").
+derived_refusal(run, "write-forms", record) :-
+    done(run, step, _),
+    epoch_role_check__run(record, run),
+    epoch_role_check__step(record, step),
+    epoch_role_check__outcome(record, "green"),
+    epoch_role_check__violations(record, violations),
+    violations != 0.
+
+// Unknown is not green: a required check with no recorded verdict refuses once its step is done.
+epoch_has_run_check(run, step, check) :-
+    epoch_check__run(record, run),
+    epoch_check__step(record, step),
+    epoch_check__check(record, check),
+    epoch_check__source(record, source),
+    source != "".
+
+epoch_has_role_check(run, step, role, check) :-
+    epoch_role_check__run(record, run),
+    epoch_role_check__step(record, step),
+    epoch_role_check__role(record, role),
+    epoch_role_check__check(record, check),
+    epoch_role_check__source(record, source),
+    source != "".
+
+derived_refusal(run, "write-forms", req) :-
+    done(run, step, _),
+    epoch_required_check__step(req, step),
+    epoch_required_check__check(req, check),
+    epoch_required_check__scope(req, "run"),
+    !epoch_has_run_check(run, step, check).
+
+derived_refusal(run, "write-forms", req) :-
+    done(run, step, _),
+    epoch_role__run(role, run),
+    epoch_required_check__step(req, step),
+    epoch_required_check__check(req, check),
+    epoch_required_check__scope(req, "role"),
+    !epoch_has_role_check(run, step, role, check).
+
+// Surface compatibility gate for stable packs (earlier major >= 1; 0.y.z packs are not refused).
+epoch_stable_surface(run, surface, change_class, bm, bn, bp, am, an, ap) :-
+    done(run, "check", _),
+    epoch_surface__run(surface, run),
+    epoch_surface__class(surface, change_class),
+    epoch_surface__before_major(surface, bm),
+    epoch_surface__before_minor(surface, bn),
+    epoch_surface__before_patch(surface, bp),
+    epoch_surface__after_major(surface, am),
+    epoch_surface__after_minor(surface, an),
+    epoch_surface__after_patch(surface, ap),
+    bm >= 1.
+
+// R033: major surface changes of a stable pack are refused.
+derived_refusal(run, "write-forms", surface) :-
+    epoch_stable_surface(run, surface, "major", _, _, _, _, _, _).
+
+// A minor surface change of a stable pack requires a higher major, or the same major and higher minor.
+derived_refusal(run, "write-forms", surface) :-
+    epoch_stable_surface(run, surface, "minor", bm, _, _, am, _, _),
+    am < bm.
+derived_refusal(run, "write-forms", surface) :-
+    epoch_stable_surface(run, surface, "minor", bm, bn, _, bm, an, _),
+    an <= bn.
+
+// A patch surface change of a stable pack requires any higher version.
+derived_refusal(run, "write-forms", surface) :-
+    epoch_stable_surface(run, surface, "patch", bm, _, _, am, _, _),
+    am < bm.
+derived_refusal(run, "write-forms", surface) :-
+    epoch_stable_surface(run, surface, "patch", bm, bn, _, bm, an, _),
+    an < bn.
+derived_refusal(run, "write-forms", surface) :-
+    epoch_stable_surface(run, surface, "patch", bm, bn, bp, bm, bn, ap),
+    ap <= bp.

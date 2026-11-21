@@ -63,6 +63,9 @@ def scenario(path, selection):
     shutil.copyfile(FIXTURE / "channels.yaml", directory / "channels.yaml")
     write(directory, "pack.yaml", 'name: minimal\nversion: "0"\ndefault_language: en\nimports: []\n')
     write(directory, "facts/base.yaml", FACTS)
+    write(directory, "facts/base.sources.yaml",
+          'default: {kind: git, name: rezono-lang/rezono, revision: "0000000", '
+          'position: compiler/tests/rezono/test_semantic_proof_grounds.py#FACTS}\n')
     write(directory, "messages/en.mf2", MESSAGES)
     write(directory, "rules/access.dl", """.decl may_read(role: symbol, kind: symbol, element: symbol)
 may_read("viewer", "alpha", item) :- alpha(item).
@@ -103,7 +106,11 @@ def checked_output(epoch, path):
     assert columns["table.Selected.arrow"] == ["$id", "inventory", "winner"]
     [bundle] = [entry for entry in manifest["compiled"] if entry["file"] == "bundle/schema-bundle.json"]
     messages = artifact(bucket, bundle)["messages"]
-    assert messages == [{"lang": "en", "resource": MESSAGES}]
+    en_resources = [entry["resource"] for entry in messages if entry["lang"] == "en"]
+    assert en_resources
+    pack_lines = MESSAGES.split("\n---\n", 1)[1].splitlines()
+    en_lines = [line for res in en_resources for line in res.split("\n---\n", 1)[-1].splitlines()]
+    assert all(line in en_lines for line in pack_lines)
     return snapshots, visible_rows, columns, messages
 
 

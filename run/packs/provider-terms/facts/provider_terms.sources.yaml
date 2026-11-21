@@ -1,0 +1,5 @@
+default:
+  kind: git
+  name: rezono-lang/rezono
+  revision: 48054aa6ec2859e6487cc9621ba6c7c9e4720661
+  position: decisions/run-price-enforcement.md#conditions-for-the-ovhcloud-guarantee

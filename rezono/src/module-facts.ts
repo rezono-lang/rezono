@@ -1,4 +1,5 @@
 import type { Node } from 'ohm-js';
+import { printDecideDecl, readDecideDecl, type DecideDecl } from './module-decide.ts';
 import { printSourceDecl, readSourceDecl, type SourceDecl } from './module-source.ts';
 import { block, declaration, named, printRow, printSource, type Build, type Logical, type ModuleComponent } from './module-support.ts';
 import { placed, refused } from './parse-support.ts';
@@ -33,7 +34,7 @@ export interface FactRow {
 
 interface Dataset {
 	dataset: string;
-	decls: (FactTable | SourceDecl)[];
+	decls: (FactTable | SourceDecl | DecideDecl)[];
 }
 
 /** A dash: an omitted slot, or in a source column the value of the source declaration. */
@@ -90,8 +91,9 @@ function readDataset(line: Logical, build: Build): Dataset {
 	const dataset = build.strip<Dataset>(line.read!);
 	dataset.decls = line.block.flatMap((child) => {
 		if (child.read!.line === 'source') return [readSourceDecl(child, build)];
+		if (child.read!.line === 'decide') return [readDecideDecl(child, build)];
 		if (child.read!.line !== 'facts') {
-			build.refuse(child, 'a fact table or a source');
+			build.refuse(child, 'a fact table, a source or a decide block');
 			return [];
 		}
 		const table = readFactTable(child, build);
@@ -202,10 +204,14 @@ export const facts = {
 	},
 	trailingRules: ['AssignLine'],
 	declarations: {
-		dataset: declaration<Dataset>('dataset', readDataset, d => block(`dataset ${spellName(d.dataset)}`, d.decls.flatMap((decl) => ('fields' in decl ? printSourceDecl(decl) : printFactTable(decl))))),
+		dataset: declaration<Dataset>('dataset', readDataset, d => block(`dataset ${spellName(d.dataset)}`, d.decls.flatMap((decl) => ('fields' in decl ? printSourceDecl(decl) : 'decide' in decl ? printDecideDecl(decl) : printFactTable(decl))))),
 		facts: declaration<FactTable>('columns', readFactTable, printFactTable),
-		fact: declaration<FactRow>('set', readFactRow, d => block(`fact ${d.fact} ${d.id}${printContexts(d)}`,
-			d.set.map((s) => `${s.slot} = ${printExpr(s.value)}${printSource(s.source)}`)
-		))
+		fact: {
+			read: readFactRow,
+			print: (decl) => 'fact' in decl && 'set' in decl
+				? block(`fact ${(decl as FactRow).fact} ${(decl as FactRow).id}${printContexts(decl as FactRow)}`,
+					(decl as FactRow).set.map((s) => `${s.slot} = ${printExpr(s.value)}${printSource(s.source)}`))
+				: undefined
+		}
 	}
 } satisfies ModuleComponent;

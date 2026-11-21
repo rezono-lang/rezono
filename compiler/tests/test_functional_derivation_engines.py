@@ -190,17 +190,6 @@ FACTS = {
 }
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingFunctionalDerivationEngines,
-    reason="M3: decisions/language-rezono-1.md: Lower rezono.rules/2 functional derivations to one co-located NOT NULL "
-           "`(key..., state, reason, value)` view on DuckDB and Feldera (with rational `(n BIGINT, d BIGINT)` columns "
-           "using calc_sql/udf.rs, never inside DECLARE RECURSIVE VIEW, LEFT JOIN over closed domain, and strict "
-           "four-state aggregate propagation per Appendix A.3), plus Soufflé test oracle lowering for the non-rational "
-           "fragment (`string`/`integer`/`boolean`) in compiler/tests/souffle.py. Read sections 2, 4, 5.2, 5.4 and 8. "
-           "Waits for compiler/tests/test_functional_derivation_ir.py--test_functional_derivation_ir_and_stratification "
-           "and examples/test_calculation_engine_parity.py.",
-)
 def test_functional_derivation_duckdb_souffle_and_feldera():
     # Counter-case: rezono.rules/1 plain Bool relation emits zero state/reason columns on DuckDB, Feldera and Soufflé.
     v1_prog = ir.load({

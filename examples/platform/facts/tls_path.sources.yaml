@@ -1,0 +1,4 @@
+default:
+  kind: synthetic
+  name: decisions/platform-source-and-scenario-cases.md
+  position: tls-comparison-synthetic-case

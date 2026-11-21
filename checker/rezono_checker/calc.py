@@ -98,20 +98,21 @@ def constant(e: dict) -> Val:
 
 def logic(op: str, vals: list[Val]) -> Val:
     """and: false as soon as one argument is a known false; or: true as soon as one is a known true.
-    Invalid comes first; then unknown, then not_applicable, each with the first argument's reason."""
-    worst = worst_of(vals)
-    if worst and worst.state == "invalid":
-        return worst
+    Otherwise the highest severity state (invalid > unknown > not_applicable) with the UTF-8 byte-smallest reason."""
     decisive = op == "or"
     if any(v.state == "known" and v.value is decisive for v in vals):
         return known(decisive)
-    return worst or known(not decisive)
+    return worst_of(vals) or known(not decisive)
 
 
 def worst_of(vals: list[Val]) -> Val | None:
-    """The most severe state that is not known, with the reason of the first argument that has it."""
+    """The most severe state that is not known, with the UTF-8 byte-smallest reason among operands in that state."""
     top = max((SEVERITY[v.state] for v in vals), default=0)
-    return next((Val(v.state, None, v.reason) for v in vals if SEVERITY[v.state] == top), None) if top else None
+    if not top:
+        return None
+    winning = [v for v in vals if SEVERITY[v.state] == top]
+    reason = min((v.reason for v in winning), key=lambda r: r.encode("utf-8"))
+    return Val(winning[0].state, None, reason)
 
 
 def apply(op: str, args: list[Val]) -> Val:

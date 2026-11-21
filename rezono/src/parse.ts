@@ -136,6 +136,9 @@ semantics.addOperation<unknown>('tree', {
 	Cond(_when, c, _then, a, _else, b) {
 		return placed(this, { when: [c.tree(), a.tree(), b.tree()] } as Expr);
 	},
+	Otherwise_otherwise(a, _op, b) {
+		return placed(this, { otherwise: [a.tree(), b.tree()] } as Expr);
+	},
 	Imply_imply(a, _op, b) {
 		return placed(this, { imply: [a.tree(), b.tree()] } as Expr);
 	},
@@ -192,12 +195,18 @@ semantics.addOperation<unknown>('tree', {
 	TimeAt: (_at, atom) => atom.tree(),
 	TimeKnown: (_as, _known, atom) => atom.tree(),
 	Filter: (_where, e) => e.tree(),
-	Dotted_where(base, _dot, _where, _open, cond, _close) {
-		return placed(this, { filter: [base.tree(), cond.tree()] } as Expr);
+	Dotted_where(base, _dot, _where, _open, arg, _close) {
+		const [cond, binder] = arg.tree() as [Expr, string | undefined];
+		return placed(this, { filter: binder === undefined ? [base.tree(), cond] : [base.tree(), cond, binder] } as Expr);
 	},
 	Dotted_agg(base, _dot, agg) {
-		const [name, ...arg] = agg.tree() as [string, ...Expr[]];
-		return placed(this, { agg: [name, base.tree(), ...arg] } as Expr);
+		const [name, expr, binder] = agg.tree() as [string, Expr | undefined, string | undefined];
+		return placed(
+			this,
+			{
+				agg: expr === undefined ? [name, base.tree()] : binder === undefined ? [name, base.tree(), expr] : [name, base.tree(), expr, binder]
+			} as Expr
+		);
 	},
 	Dotted_name(base, _dot, name) {
 		const b = base.tree() as Expr;
@@ -206,8 +215,12 @@ semantics.addOperation<unknown>('tree', {
 		return placed(this, { dot: [b, readRuleName(name)] } as Expr);
 	},
 	Agg(name, _open, arg, _close) {
-		if (name.sourceString === 'one' && arg.numChildren) refused(arg.child(0), 'R000', ['`)`']);
-		return [name.sourceString, ...arg.children.map((a) => a.tree())];
+		if (!arg.numChildren) return [name.sourceString];
+		const [expr, binder] = arg.child(0).tree() as [Expr, string | undefined];
+		return binder === undefined ? [name.sourceString, expr] : [name.sourceString, expr, binder];
+	},
+	AggArg(binder, _colon, expr) {
+		return [expr.tree(), binder.numChildren ? binder.child(0).sourceString : undefined];
 	},
 	Atom(e) {
 		const text = e.sourceString;
@@ -230,8 +243,14 @@ semantics.addOperation<unknown>('tree', {
 		}
 	},
 	Atom_paren: (_open, e, _close) => e.tree(),
-	Call(name, _open, args, _close) {
+	Call_plain(name, _open, args, _close) {
 		return placed(this, { call: [name.sourceString, all(args)] } as Expr);
+	},
+	RoundCall(fn, _end, _open, first, _commas, rest, _close) {
+		return placed(this, { call: [fn.sourceString, [first.tree() as Expr, ...rest.children.map((c) => c.tree() as Expr)]] } as Expr);
+	},
+	RoundArg_as(e, _as, target) {
+		return placed(this, { as: [e.tree() as Expr, target.sourceString] } as Expr);
 	}
 });
 
@@ -246,7 +265,7 @@ nativeRuleSemantics.extendOperation<unknown>('tree', {
 	wildcard(_mark) {
 		return placed(this, { wildcard: true });
 	},
-	Call(name, _open, args, _close) {
+	Call_native(name, _open, args, _close) {
 		return placed(this, { call: [name.tree(), all(args)] } as Expr);
 	},
 	NativeCallName_schema(kind, _dot, member) {

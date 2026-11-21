@@ -93,3 +93,7 @@ build_claim_release_pending(run, branch, "still-present") :- build_claim_delete_
     !build_claim_release_settled(run, branch), build_claim_still_present(run, branch).
 build_claim_release_pending(run, branch, "readback-missing") :- build_claim_delete_effective(run, branch, _, _),
     !build_claim_release_settled(run, branch), !build_claim_still_present(run, branch).
+
+.output build_claim_released
+.output build_claim_release_discarded
+.output build_claim_release_pending

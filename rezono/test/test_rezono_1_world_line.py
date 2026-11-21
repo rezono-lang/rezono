@@ -65,17 +65,6 @@ class MissingWorldLineHint(AssertionError):
     """The reader did not warn at `world closed` on a rezono 1 kind, warned elsewhere, or changed the form."""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingWorldLineHint,
-    reason="M3: decisions/language-rezono-1-defaults.md: Waits for "
-           "compiler/tests/rezono/test_rezono_1_world_default.py--test_rezono_1_kind_without_world_lowers_closed and "
-           "for a planner to remove `world closed` from the rezono 1 source of rezono/test/test_rezono_1_examples.py. "
-           "In rezono/src/, give W114 with the hint `hint.leave_out` at the words `world closed` on a kind line of a "
-           "rezono 1 module (adding W114 to rezono/messages/en.json and nl.json; W107 stays reserved for deprecated "
-           "declarations); keep `world: closed` in the form and its printed text as written; give no warning for a "
-           "kind without the line, for `world open`, or in rezono 0. Read section 3.",
-)
 def test_rezono_1_world_closed_gives_w114():
     result = subprocess.run(
         ["node", "--input-type=module", "-e", PROBE, json.dumps([REZONO_0, WRITTEN, LEFT_OUT])],

@@ -25,14 +25,6 @@ class MissingCompleteBy(AssertionError):
     """The reader did not read or print `complete by` on a rezono 1 kind, or accepted it without `world open`."""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingCompleteBy,
-    reason="M3: decisions/language-rezono-1-defaults.md: In rezono/src/, read `world open, complete by <relation>` "
-           "on a kind line of a rezono 1 module into the kind's form member `complete` (the relation's name) beside "
-           "`world: open`, print it back as `kind <K> world open, complete by <relation>`, and refuse `complete by` "
-           "without `world open` before it with R000. Read section 2, The scope.",
-)
 def test_rezono_1_complete_by_reads_into_the_form():
     covered, without_world, closed = read_modules(COVERED, WITHOUT_WORLD, CLOSED)
     problems = []

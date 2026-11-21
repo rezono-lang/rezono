@@ -32,19 +32,6 @@ CASES = [
 ]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingClusterBaseCheck,
-    reason=(
-        "extra: decisions/cluster-test-evidence.md: section 2. Add loop/cluster/base_check.py [--root ROOT] "
-        "SELECTION, which runs the cluster items of a selection file (one pytest node id per line, as "
-        "scripts/red_before.py prepare writes it) with --rezono-cluster -m cluster and reads each outcome from "
-        "a JUnit report: 0 without a cluster item or when one fails and none skips, 1 when one skips or all "
-        "pass (counting a Skipped cluster test: report from loop/rezono_cluster.py as a skip, not as the base "
-        "failing). .github/workflows/disposable-cluster.yml already calls loop/cluster/base_check.py on pull "
-        "requests once it exists, so write only in loop/cluster/base_check.py."
-    ),
-)
 def test_cluster_base_check(tmp_path):
     script = CLUSTER / "base_check.py"
     if not script.is_file():

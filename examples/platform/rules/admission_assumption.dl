@@ -1,0 +1,171 @@
+// Ordered capacity admission for tenant service requests.
+// Uses request_ordinal (submitted_at UTC instant, tenant, service) and the typed admission inputs
+// offered_cores, pool_cores and outbound_approval while keeping landing_sighting independent.
+
+.decl admission_connection_approved(connection: symbol)
+admission_connection_approved(c) :-
+    outbound_approval__connection(_, c).
+
+.decl admission_request_connection(request: symbol, connection: symbol, tenant: symbol, number: number, target: symbol, port: number)
+admission_request_connection(r, c, t, n, target, port) :-
+    tenant_service_request__tenant(r, t),
+    tenant_service_request__service(r, s),
+    tenant_connection_source(c, t, n),
+    tenant_request_connection__service(c, s),
+    tenant_request_connection__target(c, target),
+    tenant_request_connection__port(c, port).
+
+.decl admission_request_denied(request: symbol)
+admission_request_denied(r) :-
+    admission_request_connection(r, _, t, n, target, port),
+    tenant_connection_review(t, n, target, port, "denied", _).
+admission_request_denied(r) :-
+    tenant_service_request__tenant(r, t),
+    tenant_service_request__service(r, s),
+    tenant_service_request__profile(r, p),
+    tenant_request_item__tenant(i, t),
+    tenant_request_item__service(i, s),
+    tenant_request_item__size(i, z),
+    !tenant_profile__size(p, z).
+
+.decl admission_request_review(request: symbol)
+admission_request_review(r) :-
+    admission_request_connection(r, c, t, n, target, port),
+    tenant_connection_review(t, n, target, port, "review", _),
+    !admission_connection_approved(c),
+    !admission_request_denied(r).
+
+.decl admission_request_eligible(request: symbol)
+admission_request_eligible(r) :-
+    request_ordinal(r, _),
+    !admission_request_denied(r),
+    !admission_request_review(r).
+
+.decl admission_item_cores(request: symbol, request_item: symbol, offer: symbol, cores: number)
+admission_item_cores(r, ri, o, n) :-
+    tenant_service_request__tenant(r, t),
+    tenant_service_request__service(r, s),
+    tenant_request_item__tenant(ri, t),
+    tenant_request_item__service(ri, s),
+    tenant_request_item__item(ri, item),
+    tenant_request_item__size(ri, size),
+    tenant_catalog_offer__item(o, item),
+    tenant_catalog_offer__size(o, size),
+    offered_cores__cores(o, n).
+
+.decl admission_request_cores(request: symbol, cores: number)
+admission_request_cores(r, total) :-
+    request_ordinal(r, _),
+    total = sum n : { admission_item_cores(r, _, _, n) }.
+
+.decl admission_step(request: symbol, step: number)
+admission_step(r, step) :-
+    request_ordinal(r, ordinal),
+    step = ordinal - 1.
+
+.decl admission_transition(pool: symbol, step: number, lo: number, hi: number, charge: number)
+admission_transition(pool, step, 0, cap, 0) :-
+    pool_cores__cores(pool, cap),
+    admission_step(r, step),
+    !admission_request_eligible(r).
+admission_transition(pool, step, 0, cap, 0) :-
+    pool_cores__cores(pool, cap),
+    admission_step(r, step),
+    admission_request_eligible(r),
+    admission_request_cores(r, 0).
+admission_transition(pool, step, 0, cap, 0) :-
+    pool_cores__cores(pool, cap),
+    admission_step(r, step),
+    admission_request_eligible(r),
+    admission_request_cores(r, cost),
+    cost > cap.
+admission_transition(pool, step, 0, hi, 0) :-
+    pool_cores__cores(pool, cap),
+    admission_step(r, step),
+    admission_request_eligible(r),
+    admission_request_cores(r, cost),
+    cost > 0,
+    cost <= cap,
+    hi = cost - 1.
+admission_transition(pool, step, cost, cap, cost) :-
+    pool_cores__cores(pool, cap),
+    admission_step(r, step),
+    admission_request_eligible(r),
+    admission_request_cores(r, cost),
+    cost > 0,
+    cost <= cap.
+
+.decl admission_after(pool: symbol, step: number, free: number)
+admission_after(pool, 0, cap) :-
+    pool_cores__cores(pool, cap).
+admission_after(pool, next_step, next_free) :-
+    admission_after(pool, step, free),
+    step < 32,
+    next_step = step + 1,
+    admission_transition(pool, step, lo, hi, charge),
+    free >= lo,
+    free <= hi,
+    next_free = free - charge.
+
+.decl request_outcome(request: symbol, status: symbol)
+request_outcome(r, "denied") :-
+    pool_cores(_),
+    request_ordinal(r, _),
+    admission_request_denied(r).
+request_outcome(r, "review") :-
+    pool_cores(_),
+    request_ordinal(r, _),
+    admission_request_review(r).
+request_outcome(r, "landed") :-
+    admission_step(r, step),
+    admission_request_eligible(r),
+    admission_request_cores(r, cost),
+    admission_after(_, step, free),
+    free >= cost.
+request_outcome(r, "capacity") :-
+    admission_step(r, step),
+    admission_request_eligible(r),
+    admission_request_cores(r, cost),
+    admission_after(_, step, free),
+    free < cost.
+
+.decl landed_request(request: symbol)
+landed_request(r) :-
+    request_outcome(r, "landed").
+
+.decl free_cores(pool: symbol, cores: number)
+free_cores(pool, free) :-
+    admission_after(pool, step, free),
+    total = count : { request_ordinal(_, _) },
+    step = total.
+
+.output request_outcome
+.output landed_request
+.output free_cores
+
+// The admission operator reads the ordered request intake, catalog, policy and pool inputs in full.
+may_read("operator", "offered_cores", x) :- offered_cores(x).
+may_read("operator", "outbound_approval", x) :- outbound_approval(x).
+may_read("operator", "pool_cores", x) :- pool_cores(x).
+may_read("operator", "tenant_catalog_item", x) :- tenant_catalog_item(x).
+may_read("operator", "tenant_catalog_offer", x) :- tenant_catalog_offer(x).
+may_read("operator", "tenant_profile", x) :- tenant_profile(x).
+may_read("operator", "tenant_request_connection", x) :- tenant_request_connection(x).
+may_read("operator", "tenant_request_item", x) :- tenant_request_item(x).
+may_read("operator", "tenant_review_decision", x) :- tenant_review_decision(x).
+may_read("operator", "tenant_reviewer", x) :- tenant_reviewer(x).
+may_read("operator", "tenant_service_request", x) :- tenant_service_request(x).
+may_read("operator", "tenant_zone_link", x) :- tenant_zone_link(x).
+
+may_read_full("operator", "offered_cores") :- capability("read").
+may_read_full("operator", "outbound_approval") :- capability("read").
+may_read_full("operator", "pool_cores") :- capability("read").
+may_read_full("operator", "tenant_catalog_item") :- capability("read").
+may_read_full("operator", "tenant_catalog_offer") :- capability("read").
+may_read_full("operator", "tenant_profile") :- capability("read").
+may_read_full("operator", "tenant_request_connection") :- capability("read").
+may_read_full("operator", "tenant_request_item") :- capability("read").
+may_read_full("operator", "tenant_review_decision") :- capability("read").
+may_read_full("operator", "tenant_reviewer") :- capability("read").
+may_read_full("operator", "tenant_service_request") :- capability("read").
+may_read_full("operator", "tenant_zone_link") :- capability("read").

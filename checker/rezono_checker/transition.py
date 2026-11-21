@@ -23,6 +23,8 @@ class Refused(ValueError):
 class Relation:
     role: str
     columns: tuple[str, ...]
+    head_columns: tuple[str, ...] = ()
+    domain: str | None = None
 
 
 def _text(value) -> bool:
@@ -64,14 +66,16 @@ def _pin_observation(certificate, context) -> None:
 
 
 def _catalogue(program) -> dict[str, Relation]:
-    if program["format"] != "rezono.rules/1" or not isinstance(program["relations"], list):
+    fmt = program["format"]
+    if fmt not in ("rezono.rules/1", "rezono.rules/2") or not isinstance(program["relations"], list):
         raise Refused("malformed_definition")
+    allowed_roles = ("base", "derived", "functional") if fmt == "rezono.rules/2" else ("base", "derived")
     catalogue = {}
     for entry in program["relations"]:
         name, role, key = entry["name"], entry["role"], entry["key"]
         if not _text(name) or name in catalogue:
             raise Refused("malformed_definition")
-        if role not in ("base", "derived") or entry.get("values"):
+        if role not in allowed_roles or entry.get("values"):
             # The certificate provides keyed rows and ordinary witnesses, not calculation or value evidence.
             raise Refused("unsupported_snapshot_relation")
         if not isinstance(key, list) or not key:
@@ -83,7 +87,16 @@ def _catalogue(program) -> dict[str, Relation]:
         # decisions/boolean-rule-inputs.md: a boolean rule column holds the canonical text true or false.
         if any(column not in ("string", "integer", "rational", "boolean") for column in types):
             raise Refused("malformed_definition")
-        catalogue[name] = Relation(role, types)
+        if role == "functional":
+            domain = entry.get("domain")
+            val = entry.get("value")
+            if (not _text(domain) or not isinstance(val, dict) or not _text(val.get("name"))
+                    or val.get("type") not in ("string", "integer", "rational", "boolean")):
+                raise Refused("malformed_definition")
+            catalogue[name] = Relation(role, types + ("string", "string", val["type"]),
+                                       types + (val["type"],), domain)
+        else:
+            catalogue[name] = Relation(role, types, types)
     return catalogue
 
 
@@ -91,32 +104,55 @@ def _rule_scope(rules, catalogue, invariants, worlds) -> None:
     safety = closure.dependencies(rules, invariants)
     required = set(invariants)
     for rule in rules.values():
-        atoms = (rule.head, *(item.atom for item in (*rule.body, *rule.aggregates)))
-        for atom in atoms:
-            relation = catalogue.get(atom.relation)
-            if relation is None or len(relation.columns) != len(atom.terms):
+        head_rel = catalogue.get(rule.head.relation)
+        if head_rel is None or len(head_rel.head_columns) != len(rule.head.terms):
+            raise Refused("malformed_definition")
+        for item in (*rule.body, *rule.aggregates):
+            relation = catalogue.get(item.atom.relation)
+            if relation is None or len(relation.columns) != len(item.atom.terms):
                 raise Refused("malformed_definition")
         required.update(item.atom.relation for item in rule.body if item.polarity == "negative")
         required.update(item.atom.relation for item in rule.aggregates)
+        if head_rel.role == "functional":
+            if head_rel.domain is not None:
+                required.add(head_rel.domain)
+            required.update(item.atom.relation for item in (*rule.body, *rule.aggregates))
         if rule.head.relation in safety:
-            required.update(atom.relation for atom in atoms)
+            required.add(rule.head.relation)
+            required.update(item.atom.relation for item in (*rule.body, *rule.aggregates))
     # A closed modeled table is sufficient here. This cut carries no coverage receipt for open reads.
     if any(worlds[name] == "open" for name in required):
         raise Refused("missing_scope_coverage")
 
 
+def _typed_part(part, column: str) -> None:
+    if not isinstance(part, str):
+        raise Refused("malformed_row_key")
+    if column == "integer" and (not INTEGER.fullmatch(part) or not BIGINT[0] <= int(part) <= BIGINT[1]):
+        raise Refused("malformed_row_key")
+    if column == "rational" and not calc_value(part, "rational"):
+        raise Refused("malformed_row_key")
+    if column == "boolean" and part not in ("true", "false"):
+        raise Refused("malformed_row_key")
+
+
 def _key(value, relation: Relation) -> Key:
     if not isinstance(value, (list, tuple)) or len(value) != len(relation.columns):
         raise Refused("malformed_row_key")
+    if relation.role == "functional":
+        n = len(relation.columns) - 3
+        for part, column in zip(value[:n], relation.columns[:n], strict=True):
+            _typed_part(part, column)
+        state, reason, val = value[n:]
+        if state not in ("known", "unknown", "not_applicable", "invalid") or not isinstance(reason, str):
+            raise Refused("malformed_row_key")
+        if state == "known":
+            _typed_part(val, relation.columns[-1])
+        elif val != "":
+            raise Refused("malformed_row_key")
+        return tuple(value)
     for part, column in zip(value, relation.columns, strict=True):
-        if not isinstance(part, str):
-            raise Refused("malformed_row_key")
-        if column == "integer" and (not INTEGER.fullmatch(part) or not BIGINT[0] <= int(part) <= BIGINT[1]):
-            raise Refused("malformed_row_key")
-        if column == "rational" and not calc_value(part, "rational"):
-            raise Refused("malformed_row_key")
-        if column == "boolean" and part not in ("true", "false"):
-            raise Refused("malformed_row_key")
+        _typed_part(part, column)
     return tuple(value)
 
 

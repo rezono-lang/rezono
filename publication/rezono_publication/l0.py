@@ -59,6 +59,9 @@ CORE_REASONS = {  # §2.3: always in scope, with the states each may label
     "no_row_applies": ("unknown",),
     "ambiguous_date": ("invalid",),
     "empty": ("not_applicable",),
+    "no_value": ("not_applicable", "unknown"),
+    "no_match": ("not_applicable", "unknown"),
+    "multiple_values": ("invalid",),
     "added_later": ("not_applicable", "unknown", "invalid"),
 }
 CORE_TYPES = {"Text", "Bool", "Integer", "Ratio", "Date", "DateTime", "Quantity", "Money", "Period", "Enum"}
@@ -110,7 +113,7 @@ _CURRENCY_SIGN = {"EUR": "€", "GBP": "£", "INR": "₹", "KRW": "₩", "ILS": 
                   "RUB": "₽", "TRY": "₺", "UAH": "₴", "VND": "₫", "KZT": "₸", "GEL": "₾", "AZN": "₼"}
 # contracts/source.yaml `Source`, restated (as checker/rezono_checker/sources.py does) so the reader imports no
 # contract code (§1).
-_SOURCE_KINDS = {"git", "pack", "scenario", "proposal", "query", "tool", "person", "document"}
+_SOURCE_KINDS = {"git", "pack", "scenario", "proposal", "query", "tool", "person", "document", "synthetic"}
 _SOURCE_FIELDS = {"kind", "name", "revision", "position", "url", "retrieved_at", "fragment_sha256", "ownership",
                   "licence", "attribution"}
 _URL = re.compile(r"https?://[^\s/?#]+([/?#][^\s]*)?")
@@ -395,7 +398,7 @@ def check_schema(doc: dict, *, versioned: bool = True, allow_legacy: bool = Fals
     """Validate a schema document (§2.1–§2.3, §3.6, §3.7) and return its schema id.
 
     `versioned=False` is a reader that does not implement versioned kinds: it rejects the schema, never ignores
-    the member (V07). `allow_legacy=True` accepts a pre-rename sealed publication's `reckon` member.
+    the member (V07). `allow_legacy=True` accepts a pre-rename sealed publication's legacy schema key (`LEGACY_SCHEMA_KEY`).
     """
     if not isinstance(doc, dict):
         _fail("schema", "a schema document is an object")
@@ -476,6 +479,12 @@ def check_schema(doc: dict, *, versioned: bool = True, allow_legacy: bool = Fals
         # Its slots hang under it as `#<slot>` and its elements as `/<id>` (§3.4, §5), so it ends in neither.
         if "iri" in kind and (set("#?") & set(kind["iri"]) or kind["iri"].endswith("/")):
             _fail(name, "`iri` has no `#` or `?` and does not end in `/`")
+        if "iri" in kind and (
+            kind["iri"] == f"{base}witness"
+            or kind["iri"].startswith(f"{base}witness/")
+            or kind["iri"].startswith(f"{base}m-")
+        ):
+            _fail(name, "`iri` cannot use reserved `<base>witness` or `<base>m-` space")
         if not isinstance(kind.get("slots"), dict):
             _fail(name, "`slots` is required (maybe `{}`)")
         for slot_name, slot in kind["slots"].items():

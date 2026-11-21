@@ -26,7 +26,7 @@
 import { canonicalJson } from '../../viewer/src/lib/canon.ts';
 import { outputSchema, schemaId, type AnswerSchema } from './answer-schema.ts';
 import { isError, type Checked } from './check.ts';
-import { baseTypeOf, inPart, NOT_READ_IN_FULL, sameDim, slotType, snake, typeOf, type Schema, type SlotDef, type Ty, type TypeDef } from './schema.ts';
+import { baseTypeOf, dimText, inPart, NOT_READ_IN_FULL, slotType, snake, type Schema, type SlotDef, type Ty, type TypeDef } from './schema.ts';
 import type { Declared } from './table.ts';
 import { isAsk, isCheck, type Expr } from './tree.ts';
 
@@ -87,6 +87,10 @@ const OPEN_WORLD = 'open_world';
 const NO_OUTCOME = 'no_outcome';
 /** Why a shown amount that no decimal of its type holds is unknown (§8a). */
 const NOT_EXACT = 'not_exact';
+/** Why an exact number outside the shared symmetric 64-bit bound `±(2^63 - 1)` is unknown (refinements §3.4C). */
+const BEYOND_EXACT_BOUND = 'beyond_exact_bound';
+/** Shared symmetric 64-bit exact-number bound `2^63 - 1` (`9223372036854775807`). */
+const EXACT_BOUND = 9223372036854775807n;
 /** What a row gives for a slot: one value, or the members of a many-valued slot (a state stands for the whole set). */
 export type Cell = V | V[];
 
@@ -134,6 +138,8 @@ const times = (a: Frac, b: Frac): Frac => frac(a.n * b.n, a.d * b.d);
 const over = (a: Frac, b: Frac): Frac => frac(a.n * b.d, a.d * b.n);
 const plus = (a: Frac, b: Frac, sign = 1n): Frac => frac(a.n * b.d + sign * b.n * a.d, a.d * b.d);
 const sign = (x: bigint): number => (x < 0n ? -1 : x > 0n ? 1 : 0);
+const inExactBound = (f: Frac): boolean => f.n >= -EXACT_BOUND && f.n <= EXACT_BOUND && f.d >= 1n && f.d <= EXACT_BOUND;
+const boundedFrac = (f: Frac): V => (inExactBound(f) ? known(f) : { s: 'unknown', reason: BEYOND_EXACT_BOUND });
 
 /** `12`, `0.5`, `1/3`, `-2.50`: a number as it is written. */
 function exact(text: string): Frac | undefined {
@@ -513,7 +519,7 @@ export function reader(checked: Pick<Checked, 'typed' | 'heads'>, schema: Schema
 		if (ty.t === 'bool') return bool(text === 'true');
 		if (ty.t === 'num') {
 			const f = amount(schema, text);
-			if (f) return known(f);
+			if (f) return boundedFrac(f);
 		}
 		if (ty.t === 'ref') return known({ id: /^[A-Z][A-Za-z0-9]*:\x60(.*)\x60$/s.exec(text)?.[1] ?? text });
 		if (ty.t === 'val') return known(/^(?:[A-Z][A-Za-z0-9]*)?"/.test(text) ? unquote(text.slice(text.indexOf('"'))) : text);
@@ -563,7 +569,7 @@ export function reader(checked: Pick<Checked, 'typed' | 'heads'>, schema: Schema
 		});
 	}
 
-	function aggregate(e: { agg: [string, Expr] | [string, Expr, Expr] }): V {
+	function aggregate(e: { agg: [string, Expr] | [string, Expr, Expr] | [string, Expr, Expr, string] }): V {
 		const [name, of, arg] = e.agg;
 		const base = ex(of);
 		const set = members(base);
@@ -592,7 +598,7 @@ export function reader(checked: Pick<Checked, 'typed' | 'heads'>, schema: Schema
 			const counted = arg === undefined ? set : filterSet(set, ty, arg);
 			return strict(
 				[...counted.flatMap((m) => (m.maybe ? [m.maybe as V] : [])), ...counted.map(plain)],
-				() => known(frac(BigInt(counted.length)))
+				() => boundedFrac(frac(BigInt(counted.length)))
 			);
 		}
 		// `sum`, `min`, `max` and `one` are strict in the members (A.3), and in whether each one is a member:
@@ -601,7 +607,7 @@ export function reader(checked: Pick<Checked, 'typed' | 'heads'>, schema: Schema
 		const values = arg === undefined ? set.map(plain) : set.map(each);
 		return strict([...undecided, ...values], () => {
 			const all = values.map((v) => (v as { v: Known }).v);
-			if (name === 'sum') return known(all.reduce<Frac>((sum, x) => plus(sum, number(x)), frac(0n)));
+			if (name === 'sum') return boundedFrac(all.reduce<Frac>((sum, x) => plus(sum, number(x)), frac(0n)));
 			const dt = isDateTime(schema, tyOf(arg ?? of));
 			if (name === 'one') {
 				if (!all.length) return { s: 'unknown', reason: 'no_match' };
@@ -635,19 +641,37 @@ export function reader(checked: Pick<Checked, 'typed' | 'heads'>, schema: Schema
 	}
 
 	function round(e: { call: [string, Expr[]] }): V {
-		const [x, mode] = e.call[1];
-		const ty = tyOf(x);
-		return strict([ex(x)], (v) => {
-			if (ty.t !== 'num') throw new NotEvaluated('round of something that is not a number');
-			const named = mode && 'path' in mode ? mode.path[0] : schema.rounding?.money;
+		const [fn, args] = e.call;
+		const [arg0, mode] = args;
+		const inner = 'as' in arg0 ? arg0.as[0] : arg0;
+		const explicitTarget = 'as' in arg0 ? arg0.as[1] : undefined;
+		const ty = tyOf(e);
+		const innerTy = tyOf(inner);
+		return strict([ex(inner)], (v) => {
+			if (innerTy.t !== 'num') throw new NotEvaluated(`${fn} of something that is not a number`);
+			const named =
+				fn === 'floor' || fn === 'ceil'
+					? fn
+					: mode && 'path' in mode
+						? mode.path[0]
+						: schema.rounding?.money;
 			if (named === undefined) throw new NotEvaluated('round(x) needs the rounding of the pack; write round(x, half_even), or declare it');
-			// The places of the value's type: its own type, or the pack's first type of its dimension.
+			// Target type is deterministic: explicit `as TargetType`, the expression's own named type,
+			// `schema.default_units[dimText(dim)]`, or integer for dimensionless values. Never alphabetical.
 			const types = schema.types ?? {};
-			const type = ty.name ?? Object.keys(types).sort().find((n) => ((t: Ty) => t.t === 'num' && sameDim(t.dim, ty.dim))(typeOf(schema, n)));
-			const def: TypeDef | undefined = type === undefined ? undefined : types[type];
+			const targetName =
+				explicitTarget ??
+				(ty.t === 'num' ? ty.name : undefined) ??
+				innerTy.name ??
+				(Object.keys(innerTy.dim).length ? schema.default_units?.[dimText(innerTy.dim)] : undefined);
+			const def: TypeDef | undefined = targetName === undefined ? undefined : types[targetName];
 			const unit = unitFactor(def);
-			const scaled = times(over(number(v), unit), frac(10n ** BigInt(def?.scale ?? '0')));
-			return known(over(times(frac(roundTo(scaled, named)), unit), frac(10n ** BigInt(def?.scale ?? '0'))));
+			const scaleFactor = frac(10n ** BigInt(def?.scale ?? '0'));
+			const scaled = times(over(number(v), unit), scaleFactor);
+			if (!inExactBound(scaled)) return { s: 'unknown', reason: BEYOND_EXACT_BOUND };
+			const rounded = frac(roundTo(scaled, named));
+			if (!inExactBound(rounded)) return { s: 'unknown', reason: BEYOND_EXACT_BOUND };
+			return boundedFrac(over(times(rounded, unit), scaleFactor));
 		});
 	}
 	/** How many storage units one unit of a type is: its factor, or for money per unit one over that unit's factor. */
@@ -695,23 +719,28 @@ export function reader(checked: Pick<Checked, 'typed' | 'heads'>, schema: Schema
 		if ('not' in e) return not(ex(e.not));
 		// `a => b` is `not a or b` (§7); its operands keep their places.
 		if ('imply' in e) return or([not(ex(e.imply[0])), ex(e.imply[1])]);
-		if ('neg' in e) return strict([ex(e.neg)], (x) => known(frac(-number(x).n, number(x).d)));
+		if ('otherwise' in e) {
+			const a = ex(e.otherwise[0]);
+			return a.s === 'not_applicable' ? ex(e.otherwise[1]) : a;
+		}
+		if ('neg' in e) return strict([ex(e.neg)], (x) => boundedFrac(frac(-number(x).n, number(x).d)));
 		if ('arith' in e) {
 			const [op, a, b] = e.arith;
 			return strict([ex(a), ex(b)], (x, y) => {
 				const [p, q] = [number(x), number(y)];
-				if (op === '+' || op === '-') return known(plus(p, q, op === '+' ? 1n : -1n));
-				if (op === '*') return known(times(p, q));
+				if (op === '+' || op === '-') return boundedFrac(plus(p, q, op === '+' ? 1n : -1n));
+				if (op === '*') return boundedFrac(times(p, q));
 				// A division by zero is invalid (S1 §2); no row caused it.
-				return q.n === 0n ? { s: 'invalid', reason: '' } : known(over(p, q));
+				return q.n === 0n ? { s: 'invalid', reason: '' } : boundedFrac(over(p, q));
 			});
 		}
 		if ('when' in e) {
 			const c = ex(e.when[0]);
 			return c.s !== 'known' ? c : ex(e.when[c.v === true ? 1 : 2]);
 		}
+		if ('as' in e) throw new NotEvaluated('`as <Type>` is only valid as a target type on `round`, `floor`, or `ceil`');
 		const [name, args] = e.call;
-		if (name === 'round') return round(e);
+		if (name === 'round' || name === 'floor' || name === 'ceil') return round(e);
 		const rule = schema.rules![name];
 		return strict(args.map(ex), (...ids) => {
 			const key = ids.map((v) => (v as Ref).id);
@@ -734,11 +763,13 @@ export function reader(checked: Pick<Checked, 'typed' | 'heads'>, schema: Schema
 	return { ex, within, target, spent: () => steps };
 }
 
-/** A whole number from a fraction, by a named rounding (v0 §5f). */
+/** A whole number from a fraction, by a named rounding (v0 §5f) or `floor`/`ceil`. */
 function roundTo(f: Frac, mode: string): bigint {
 	const down = f.n >= 0n ? f.n / f.d : -((-f.n + f.d - 1n) / f.d);
 	const rest = plus(f, frac(down), -1n);
 	if (rest.n === 0n) return down;
+	if (mode === 'floor') return down;
+	if (mode === 'ceil') return down + 1n;
 	const half = sign(rest.n * 2n - rest.d);
 	if (mode === 'down') return f.n >= 0n ? down : down + 1n;
 	if (mode === 'up') return f.n >= 0n ? down + 1n : down;
@@ -941,12 +972,16 @@ export function tabulate(declared: Declared, data: Data, budget: { steps?: numbe
 		const read = reader(declared, schema, out, budget.steps, { note: (fact) => facts.push(fact), steps });
 		const ty: Ty = { t: 'ref', kind: table.kind };
 		const relation = relationOf(table.kind, table.slot);
-		const outputs = table.rows.map((row) => read.ex(row.value) as V & { s: 'known' });
+		const outputs: V[] = table.rows.map((row) => read.ex(row.value));
 		const outTy = slotType(schema, schema.kinds[table.kind].slots[table.slot]);
 		const outDt = isDateTime(schema, outTy);
-		const same = (i: number, j: number): boolean => order(outputs[i].v, outputs[j].v, outDt) === 0;
-		// `priority`: the place of a row's output in the order of the output enum.
-		const rank = (i: number): number => table.order!.indexOf(outputs[i].v as string);
+		const same = (i: number, j: number): boolean => sameValue(outputs[i], outputs[j], outDt);
+		// `priority`: the place of a known row's output in the order of the output enum.
+		const knownRank = (i: number): number => {
+			if (!table.order) return i;
+			const pos = table.order.indexOf((outputs[i] as { s: 'known'; v: unknown }).v as string);
+			return pos < 0 ? Number.POSITIVE_INFINITY : pos;
+		};
 		const cells = new Map<string, Cell>();
 		const rows = new Map<string, RowWitness[]>();
 		for (const id of idsOf(out, table.kind)) {
@@ -974,11 +1009,21 @@ export function tabulate(declared: Declared, data: Data, budget: { steps?: numbe
 				value = worst(undecided.map((d) => d.v)) ?? { s: 'unknown', reason: NO_ROW_APPLIES, cause };
 				from = undecided;
 			} else if (table.policy === 'unique') value = applying.length > 1 ? { s: 'invalid', reason: EXCEPTION_CONFLICT, cause } : outputs[applying[0].i];
-			else {
-				// `first`: the first row that applies; `priority`: the one whose output comes first in the enum's
-				// order. An undecided row that would win if it applied, with another output, leaves the value undecided.
-				const r = table.policy === 'first' ? applying[0] : applying.reduce((best, d) => (rank(d.i) < rank(best.i) ? d : best));
-				const wins = undecided.filter((d) => (table.policy === 'first' ? d.i < r.i && !same(d.i, r.i) : rank(d.i) < rank(r.i)));
+			else if (table.policy === 'priority') {
+				// `priority`: among applying rows, non-known outputs propagate strictly (A.3) and known outputs win by
+				// enum order. An undecided row with a non-known output or a higher-priority known output leaves the value undecided.
+				const applyingNonKnown = applying.filter((d) => outputs[d.i].s !== 'known');
+				const applyingKnown = applying.filter((d) => outputs[d.i].s === 'known');
+				const r = applyingKnown.length ? applyingKnown.reduce((best, d) => (knownRank(d.i) < knownRank(best.i) ? d : best)) : undefined;
+				const pickedRank = r ? knownRank(r.i) : Number.POSITIVE_INFINITY;
+				const wins = undecided.filter((d) => outputs[d.i].s !== 'known' || knownRank(d.i) < pickedRank);
+				const issues: V[] = [...applyingNonKnown.map((d) => outputs[d.i]), ...wins.map((d) => d.v)];
+				value = issues.length ? worst(issues)! : outputs[r!.i];
+				from = issues.length ? [...applyingNonKnown, ...wins].sort((a, b) => a.i - b.i) : [r!];
+			} else {
+				// `first`: the first row that applies. An undecided row above it with another output leaves the value undecided.
+				const r = applying[0];
+				const wins = undecided.filter((d) => d.i < r.i && !same(d.i, r.i));
 				value = wins.length ? worst(wins.map((d) => d.v))! : outputs[r.i];
 				from = wins.length ? wins : [r];
 			}

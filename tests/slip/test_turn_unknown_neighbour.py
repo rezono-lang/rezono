@@ -27,18 +27,6 @@ EXPECTED = [  # (index, status, turn, causes, row key at the stop)
 ]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=(MissingServedTurns, AssertionError),
-    reason=(
-        "extra: decisions/viewer-slip.md: Waits for edge/publisher/tests/test_turning_points.py--test_turning_points and "
-        "checker/tests/test_turn_check.py--test_turning_points_checked. Then write a rezono.turns/1 object per "
-        "role, sweep and pair of neighbouring stops in a sweep run (edge/publisher/rezono_publisher/sweep.py), "
-        "check it with the checker, and let sweep in the local reader (edge/gate/src/sweep.ts) take a start row "
-        "(relation= and key=) and give each SeriesCell its row, turn and causes, as decisions/viewer-slip.md, "
-        "section Turning points, says. Expectation: tests/fixtures/slip, stops written by hand."
-    ),
-)
 def test_turn_unknown_neighbour(tmp_path):
     store, manifest, done = publish_sweeps(tmp_path)
     drop_variant(store, next(vid for vid, _ in done if vid.startswith("v-item_amount-03-")))

@@ -11,7 +11,7 @@ import re
 from collections.abc import Iterable, Mapping, Sequence, Set
 from typing import TYPE_CHECKING
 
-from . import rezono_exceptions, rezono_module
+from . import rezono_derived, rezono_exceptions, rezono_module
 from .diagnostics import Diagnostic
 from .names import ISO_DATE
 from .rezono_lowering import Refuse
@@ -59,24 +59,31 @@ def _is_calc_derived(item: object) -> bool:
     return isinstance(item, dict) and not isinstance(item.get("table"), dict)
 
 
-def _subject_of_decl(decl: object) -> tuple[str, list[tuple[int, dict]]] | None:
+def _subject_of_decl(decl: object, form: dict | None = None) -> tuple[str, list[tuple[int, dict]]] | None:
+    """The subject kind and the calculated values of a kind or an extension; in rezono 1 a derived value without
+    calculation members is no calculation (rezono_derived.py)."""
     if not isinstance(decl, dict):
         return None
     kind_name = decl.get("extend") if "extend" in decl else decl.get("kind") if "kind" in decl else None
     if not isinstance(kind_name, str):
         return None
-    derived = [(idx, dv) for idx, dv in enumerate(decl.get("derived") or []) if _is_calc_derived(dv)]
+    derived = [(idx, dv) for idx, dv in enumerate(decl.get("derived") or [])
+               if _is_calc_derived(dv) and not rezono_derived.is_derivation(form, dv)]
     return (kind_name, derived) if derived else None
 
 
 def has_calculation(form: dict) -> bool:
     """Whether a module form carries an `as of` line, a row-backed parameter, or any non-table derived value."""
-    if form.get("format") not in (rezono_module.IDENTIFIER_FORMAT, *rezono_module.NATIVE_FORMATS):
+    if form.get("format") not in (
+        rezono_module.IDENTIFIER_FORMAT,
+        *rezono_module.NATIVE_FORMATS,
+        rezono_module.REZONO_1_FORMAT,
+    ):
         return False
     for decl in form["module"]["decls"]:
         if isinstance(decl, dict) and ("asOf" in decl or "param" in decl):
             return True
-        if _subject_of_decl(decl) is not None:
+        if _subject_of_decl(decl, form) is not None:
             return True
     return False
 
@@ -103,7 +110,7 @@ def module_rules(form: dict) -> tuple[str | None, set[str]]:
     subject: str | None = None
     rules: set[str] = set()
     for decl in form["module"]["decls"]:
-        found = _subject_of_decl(decl)
+        found = _subject_of_decl(decl, form)
         if found is None:
             continue
         kind_name, derived = found
@@ -330,7 +337,7 @@ def validate_derived(dv: object, at: str, refuse: Refuse) -> bool:
     return ok
 
 
-def validate_module(decls: list, refuse: Refuse) -> None:
+def validate_module(decls: list, refuse: Refuse, form: dict | None = None) -> None:
     """Check module-level calculation constraints: one subject, one parameter source, at most one `as of`."""
     first_subject: str | None = None
     first_source: tuple[str, str, str] | None = None
@@ -358,7 +365,7 @@ def validate_module(decls: list, refuse: Refuse) -> None:
                     f"and {src[0]}.{src[1]} by {src[2]} (R050)",
                     SECTION,
                 )
-        found = _subject_of_decl(decl)
+        found = _subject_of_decl(decl, form)
         if found is None:
             continue
         kind_name, _ = found
@@ -682,7 +689,7 @@ def lower_module(
             else:
                 doc["as_of"] = {"valid_at": decl["asOf"], "known_at": decl["known"]}
             continue
-        found = _subject_of_decl(decl)
+        found = _subject_of_decl(decl, form)
         if found is None:
             continue
         kind_name, derived_list = found

@@ -26,7 +26,7 @@ def git(root, *args):
 
 
 def repository(root, path):
-    root.mkdir()
+    root.mkdir(parents=True)
     git(root, "init", "-q")
     for name, required in zip(SUITES, ([], ["alpha"], ["beta"], []), strict=True):
         directory = root / name
@@ -84,9 +84,9 @@ def published(tmp, records, evidence=None):
     in the archive and returns the Evidence that the batch boundary admits (decisions/admission-transport.md)."""
     build = tmp / "build"
     shutil.copytree(ROOT / "build", build)
-    for pack in ("std-loop", "std-order", "std-decision"):
+    for pack in ("std-loop", "std-order", "std-decision", "std-access"):
         shutil.copytree(ROOT / "packs" / pack, tmp / "packs" / pack)
-    (build / "facts").mkdir()
+    (build / "facts").mkdir(exist_ok=True)
     (build / "facts" / "input.yaml").write_text(yaml.safe_dump(records), encoding="utf-8")
     archive = store.FileStore(tmp / "archive")
     handoff = {} if evidence is None else {"evidence": evidence(archive)}

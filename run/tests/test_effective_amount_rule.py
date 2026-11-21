@@ -38,19 +38,6 @@ def pack_reads(monkeypatch):
     return seen
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "M4: decisions/code-does-not-decide.md, row run/effective_quote.py. Derive "
-        "effective_amount(quote, currency, numerator, denominator) in run/packs/exact-quote from the quote total "
-        "and the selected rate capture, exactly and without machine-word overflow, as the pack's digit columns "
-        "already do for the total; which pair a capture converts is a pack fact (section 3), not a literal. "
-        "run/effective_quote.py keeps quote_at as the reader: it selects the effective editions through std-time "
-        "as today, reads effective_amount through rezono_compiler.batch.read and publishes reduced pairs. Keep "
-        "run/tests/test_effective_currency.py green. Today line 126 multiplies in Python (AssertionError)."
-    ),
-)
 def test_effective_amount_comes_from_the_quote_pack(monkeypatch):
     seen = pack_reads(monkeypatch)
     quote = implementation("effective_quote.py", "quote_at")

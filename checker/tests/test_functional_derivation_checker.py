@@ -134,19 +134,6 @@ def _checker_imports_publisher() -> list[str]:
     return hits
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingFunctionalDerivationChecker,
-    reason="M3: decisions/language-rezono-1.md: Extend checker/rezono_checker/ for rezono.rules/2 `role: functional`: "
-           "generalize outcome_total/outcome_state to multi-key closed domains in check.py, allow `invalid` with "
-           "complete conflict witness under conflict_policy=publish while failing rezono:proofs under block, cover "
-           "domain + candidate/guard inputs in closure.py, align evaluate._fold to strict four-state propagation "
-           "(Appendix A.3), refuse may_read AND may_read_full on functional/calc in rules.py, enforce full-read "
-           "visibility for functional derivations in access.py (without importing rezono_publisher), rebuild "
-           "functional/conflict proof trees in proof.py, and admit rezono.rules/2 functional relations in "
-           "transition.py. Read sections 2, 3.5, 4, 5.4 and 8. "
-           "Waits for compiler/tests/test_functional_derivation_ir.py--test_functional_derivation_ir_and_stratification.",
-)
 def test_checker_verifies_functional_derivation_and_access():
     # Counter-case: checker never imports rezono_publisher (independent trust boundary).
     assert _checker_imports_publisher() == []

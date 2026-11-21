@@ -122,6 +122,26 @@ def reads(prog, relation):
     return {b.atom.relation for r in prog.rules_for(relation) for b in r.body}
 
 
+def local_reads(prog, relation):
+    """The relations `relation` reads, expanding any non-extensible helper defined in the same module."""
+    module = prog.relations[relation].module
+    seen, found = {relation}, set()
+    pending = list(reads(prog, relation))
+    while pending:
+        name = pending.pop()
+        if name == relation:
+            found.add(name)
+            continue
+        rel = prog.relations[name]
+        if rel.module == module and not rel.extend and prog.rules_for(name):
+            if name not in seen:
+                seen.add(name)
+                pending.extend(reads(prog, name))
+        else:
+            found.add(name)
+    return found
+
+
 # std-order: precedes is a strict partial order, and a rank increases along it.
 
 def steps(edges, levels=()):
@@ -140,7 +160,8 @@ def ordered(edges, ranks=()):
 
 def test_the_order_axioms_read_the_relation_that_holds_the_view(order):
     assert {n for n, r in order.relations.items() if r.invariant} >= {'order_cycle', 'rank_conflict'}
-    assert reads(order, 'before') == {'std_order_ordered_precedes', 'before'}
+    assert reads(order, 'before') == {'direct_before', 'before'}
+    assert local_reads(order, 'before') == {'std_order_ordered_precedes', 'before', 'stated_precedes'}
     assert reads(order, 'rank_conflict') == {'before', 'std_order_ordered_rank'}
 
 

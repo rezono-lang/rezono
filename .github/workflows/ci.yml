@@ -380,6 +380,23 @@ jobs:
       # These examples run pytest, so they wait for the locked environment.
       - name: Test the candidate rules for added tests on the base source
         run: python -I scripts/test_red_before.py
+      - name: Check shrink-only shortcut budgets against the base
+        shell: bash
+        env:
+          POLICY: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
+          BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before || github.sha }}
+        run: |
+          set -euo pipefail
+          # Run the check as the base has it, so a change to loop/shortcut_budgets.py cannot
+          # weaken the check that judges that same change.
+          if [[ "$BASE" =~ ^0+$ ]]; then
+            BASE="$POLICY"
+          fi
+          echo "Shortcut budgets from $POLICY, loop/shortcut_budgets.py blob $(git rev-parse "$POLICY:loop/shortcut_budgets.py")"
+          mkdir -p .shortcut-budget-base
+          trap 'rm -rf .shortcut-budget-base' EXIT
+          git show "$POLICY:loop/shortcut_budgets.py" > .shortcut-budget-base/shortcut_budgets.py
+          python -I .shortcut-budget-base/shortcut_budgets.py --root . --base "$BASE"
       - name: Collect each selected Python component once
         if: steps.matrix.outputs.has_pytest == 'true'
         env:
@@ -629,8 +646,9 @@ jobs:
         env:
           REZONO_HYPOTHESIS_PROFILE: ci
           PYTHONHASHSEED: '0'
-          # The base of loop/tests/test_decision_heads.py: the pull request's base, or the merge group's base.
+          # The base of loop/tests/test_decision_heads.py and loop/tests/test_shortcut_budgets.py: the pull request's base, or the merge group's base.
           DECISION_HEADS_BASE: ${{ matrix.component.folder == 'loop' && (github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before) || '' }}
+          SHORTCUT_BUDGET_BASE: ${{ matrix.component.folder == 'loop' && (github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before) || '' }}
           COMPONENT: ${{ matrix.component.folder }}
           KIND: ${{ matrix.component.kind }}
           SHARD: ${{ matrix.component.shard }}

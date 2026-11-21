@@ -34,6 +34,22 @@ review_phase.owner: owner
 review_policy: review policy
 review_policy.kind: kind
 review_policy.policy: policy
+evidence_requirement: evidence requirement
+evidence_requirement.change: change
+evidence_requirement.evidence_kind: evidence kind
+evidence_requirement.commit_sha: commit hash
+evidence_attestation: evidence attestation
+evidence_attestation.change: change
+evidence_attestation.evidence_kind: evidence kind
+evidence_attestation.commit_sha: commit hash
+evidence_attestation.outcome: outcome
+evidence_attestation.source: source
+evidence_required: evidence required
+evidence_passed: evidence passed
+evidence_failed: evidence failed
+evidence_current: evidence current
+evidence_stale: evidence stale
+evidence_missing: evidence missing
 review_dismissed: dismissed
 review_active: active
 review_current: current
@@ -41,6 +57,18 @@ review_valid: valid
 review_lab_owner: owner in the lab phase
 review_self: review by an author
 review_blind: review without read access
+review_unauthorized: review without authority
+grant_introduced: grant introduced by a change
+grant_founding: founding grant
+grant_ended_on: grant ended on review day
+grant_held_on: grant held on review day
+review_lacks_may_review: role lacks review right
+review_founded_authority: review authorised by a founding grant
+founded_valid_current: valid current review on founding grants
+founded_current_verdict: valid current verdict on founding grants
+founded_accepted_on: accepted on founding grants on day
+grant_counts_for: grant counts for review
+review_has_grant: review has counting grant
 valid_current_verdict: valid current verdict
 change_accepted: accepted
 change_rejected: rejected
@@ -59,3 +87,6 @@ policy: publication policy
 policy.require: review required
 policy.mark: marked when not accepted
 policy.none: no review needed
+evidence_outcome: evidence outcome
+evidence_outcome.passed: passed
+evidence_outcome.failed: failed

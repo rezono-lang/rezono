@@ -1,0 +1,5 @@
+default:
+  kind: git
+  name: rezono-lang/rezono
+  revision: 56b854bba8cd97107364f0a916ba1d3bc42d4477
+  position: decisions/platform-vendor-support-statement.md#what-is-recorded

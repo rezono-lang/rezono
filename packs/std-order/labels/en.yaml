@@ -4,6 +4,8 @@ ordered.precedes: precedes
 ordered.rank: rank
 ordered.on_scale: scale
 scale: scale
+stated_precedes: stated precedes
+direct_before: directly before
 before: before
 comparable: comparable
 order_cycle: cycle in the order

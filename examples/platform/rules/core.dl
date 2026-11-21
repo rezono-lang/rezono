@@ -39,6 +39,9 @@ firewall_rule(za, zb, p) :- crossing(_, _, za, zb, p).
 .decl in_zone_policy(a: symbol, b: symbol, port: number)
 in_zone_policy(a, b, p) :- flow(a, b, _, p), zone_of(a, z), zone_of(b, z).
 
+// A provider starts before whoever needs it (std-order).
+stated_precedes(b, a) :- needs(a, b, _).
+
 // A flow holds from the later step of its two ends.
 .decl flow_from_step(a: symbol, b: symbol, n: number)
 flow_from_step(a, b, n) :- needs(a, b, _), service__step(a, n), service__step(b, m), n >= m.
@@ -72,10 +75,20 @@ authenticates(s) :- asks(s, f), f = "identity".
 authenticates(s) :- provider(s, f), f = "identity".
 .decl unauthenticated_target(b: symbol, f: symbol)
 unauthenticated_target(b, f) :- crossing(_, b, _, _, p), provides(b, f, p), function__open_by_design(f, o), o = "no", !authenticates(b).
+.decl scanned(x: symbol)
+scanned(x) :- signature_scan__covers(_, x).
+.decl could_verify(x: symbol, s: symbol)
+could_verify(x, s) :- artifact__for_service(x, s), artifact__built_by(x, b), service__role(b, r),
+    platform_role__build_authority(r, "yes").
 .decl verified(s: symbol)
-verified(s) :- artifact__for_service(x, s), artifact__built_by(x, b), service__role(b, rb), platform_role__build_authority(rb, "yes"), artifact__signed(x, y), y = "yes".
+verified(s) :- could_verify(x, s), artifact_signature__artifact(_, x).
+// @absence
+.decl supply_unknown(s: symbol)
+supply_unknown(s) :- service__role(s, r), platform_role__runs_images(r, "yes"), !verified(s),
+    could_verify(x, s), !scanned(x).
+// @absence
 .decl unverified_supply(s: symbol)
-unverified_supply(s) :- service__role(s, r), platform_role__runs_images(r, y), y = "yes", !verified(s).
+unverified_supply(s) :- service__role(s, r), platform_role__runs_images(r, "yes"), !verified(s), !supply_unknown(s).
 .decl build_reaches_tenant(a: symbol, b: symbol)
 build_reaches_tenant(a, b) :- flow(a, b, _, _), service__role(a, r), platform_role__build_authority(r, "yes"),
     zone_of(b, z), zone__workload(z, "yes").

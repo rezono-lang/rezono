@@ -6,8 +6,17 @@ kinds:
   - {kind: build_dependency, shape: rect}
   - {kind: build_path, shape: rect}
   - {kind: build_path_reader, shape: rect}
+  - {kind: build_target_rule, shape: rect}
   - {kind: build_task, shape: rect}
   - {kind: build_policy_date, shape: rect}
   - {kind: build_track_rank, shape: rect}
   - {kind: build_queue_limit, shape: rect}
   - {kind: build_queue_reading, shape: rect}
+  - {kind: build_milestone, shape: rect}
+  - {kind: build_progress_scan, shape: rect}
+  - {kind: build_red_test, shape: rect}
+  - {kind: build_green_transition, shape: rect}
+  - {kind: build_offboard_work, shape: rect}
+  - {kind: build_citation_scan, shape: rect}
+  - {kind: build_decision_citation, shape: rect}
+  - {kind: build_red_citation, shape: rect}

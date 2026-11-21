@@ -1,0 +1,40 @@
+// Commit-pinned evidence currency (decisions/tooling-does-not-decide.md, Form 2).
+// An attestation counts as passed only when its outcome is "passed" and its source is non-empty.
+// A failed attestation blocks currency even if a passed attestation also exists for the same triple.
+
+.decl evidence_required(change: symbol, evidence_kind: symbol, commit_sha: symbol)
+evidence_required(c, k, sha) :- evidence_requirement(r),
+    evidence_requirement__change(r, c),
+    evidence_requirement__evidence_kind(r, k),
+    evidence_requirement__commit_sha(r, sha).
+
+.decl evidence_passed(change: symbol, evidence_kind: symbol, commit_sha: symbol)
+evidence_passed(c, k, sha) :- evidence_attestation(a),
+    evidence_attestation__change(a, c),
+    evidence_attestation__evidence_kind(a, k),
+    evidence_attestation__commit_sha(a, sha),
+    evidence_attestation__outcome(a, "passed"),
+    evidence_attestation__source(a, src),
+    src != "".
+
+.decl evidence_failed(change: symbol, evidence_kind: symbol, commit_sha: symbol)
+evidence_failed(c, k, sha) :- evidence_attestation(a),
+    evidence_attestation__change(a, c),
+    evidence_attestation__evidence_kind(a, k),
+    evidence_attestation__commit_sha(a, sha),
+    evidence_attestation__outcome(a, "failed").
+
+.decl evidence_current(change: symbol, evidence_kind: symbol, commit_sha: symbol)
+evidence_current(c, k, sha) :- evidence_required(c, k, sha),
+    evidence_passed(c, k, sha),
+    !evidence_failed(c, k, sha).
+
+.decl evidence_stale(change: symbol, evidence_kind: symbol, commit_sha: symbol)
+evidence_stale(c, k, sha) :- evidence_required(c, k, sha),
+    evidence_passed(c, k, other_sha),
+    other_sha != sha,
+    !evidence_current(c, k, sha).
+
+.decl evidence_missing(change: symbol, evidence_kind: symbol, commit_sha: symbol)
+evidence_missing(c, k, sha) :- evidence_required(c, k, sha),
+    !evidence_current(c, k, sha).

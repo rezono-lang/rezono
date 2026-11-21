@@ -103,13 +103,18 @@ def main(argv=None) -> int:
             updates = facts.ingress(model, facts.load(model, args.facts))
             print(json.dumps({feldera_names.physical(t): rows for t, rows in updates.items()}, indent=2))
     except (pack.CompileError, facts.LoadError) as e:
-        print(f"error: {e}", file=sys.stderr)
+        if e.diagnostics and all(d.code == "R053" for d in e.diagnostics):
+            for line in str(e).splitlines():
+                print(f"error: {line}", file=sys.stderr)
+        else:
+            print(f"error: {e}", file=sys.stderr)
         return 1
     return 0
 
 
 def compile_files(model, args) -> dict[str, str]:
-    from . import strict_yaml
+    from rezono_canon import canonical_json
+    from . import sources, strict_yaml
 
     budget, profile, previous = emit.MAX_VIEWS, None, None
     if args.profile:
@@ -120,8 +125,16 @@ def compile_files(model, args) -> dict[str, str]:
     if args.previous:
         previous = emit.previous_parts(json.loads(args.previous.read_text(encoding="utf-8")))
     files = emit.compile_pack(model, budget, previous, profile)
-    from . import sources
-    files["generated/sources.json"] = sources.compile_sources(model, args.pack)
+    entries = sources.read(model, args.pack)
+    missing = sources.missing_origins(model, entries, args.pack)
+    if missing:
+        diags = sources.origin_diagnostics(model, missing)
+        lines = [sources.format_origin_diagnostic(item, diag) for item, diag in zip(missing, diags, strict=True)]
+        if model.language_version != "0":
+            raise pack.CompileError("\n".join(lines), diags)
+        for line in lines:
+            print(f"warning: {line}", file=sys.stderr)
+    files["generated/sources.json"] = canonical_json(entries) + "\n"
     # Going over the budget warns. Only a recursive core above it blocks (in the partition);
     # integrity and the calculation rules are not split yet.
     plan = json.loads(files.get("engine/pipelines.json", "{}"))

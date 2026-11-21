@@ -88,7 +88,15 @@ ceph_device(c, m, d) :- member(c, m, _), machine__data_disk(m, d).
 .decl api_address(cluster: symbol, address: symbol)
 api_address(c, a) :- member(c, m, "controller"), machine__address(m, a).
 
+.decl ceph_device_count(cluster: symbol, devices: number)
+ceph_device_count(c, n) :- cluster(c), !has_problem(c), n = count : { ceph_device(c, _, _) }.
+
+.decl ceph_monitor_count(cluster: symbol, count: number)
+ceph_monitor_count(c, 3) :- ceph_device_count(c, n), n >= 3.
+ceph_monitor_count(c, 1) :- ceph_device_count(c, n), n >= 1, n < 3.
+
 .output member
 .output ceph_device
 .output api_address
 .output shape_problem
+.output ceph_monitor_count

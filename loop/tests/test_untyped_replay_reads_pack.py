@@ -2,22 +2,6 @@
 import pytest
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "M2: decisions/code-does-not-decide.md, row loop/replay.py. replay() computes known, done and ready of "
-        "an untyped recording in Python (loop/replay.py lines 55 to 77) and takes its outcome from "
-        "loop.round_outcome. Read the requirements, completion tokens and evidence as std-loop records "
-        "(loop_step, loop_requirement, loop_completion, loop_expectation, loop_observation, as "
-        "loop/typed_recording.py admits them) and read done, round_outcome and the frontier relation of "
-        "packs/std-loop (ready, or unblocked once loop/tests/test_ready_requires_checked_batch_member.py has "
-        "switched its readers) through rezono_compiler.batch.read for every sweep. The answer stays the "
-        "hand-calculated one of "
-        "loop/tests/test_replay.py. Lands with loop/tests/test_round_outcome_from_pack.py. Today replay() calls "
-        "the Python outcome (AssertionError)."
-    ),
-)
 def test_untyped_replay_reads_the_loop_pack(monkeypatch):
     from rezono_compiler import batch
 

@@ -20,12 +20,14 @@ pytest.importorskip("duckdb")
 
 
 def reference(precedes, rank):
-    """Compute the order relations by fixpoint: before is the transitive closure of precedes; comparable
-    is before in either direction; order_cycle is what comes before itself; rank_conflict is a pair in
-    that closure whose ranks do not increase (if a comes before b and both have a rank)."""
-    before = set(precedes)
+    """Compute the order relations by fixpoint: stated_precedes is empty in the standalone theory;
+    direct_before is precedes; before is the transitive closure of direct_before; comparable is before
+    in either direction; order_cycle is what comes before itself; rank_conflict is a pair in that
+    closure whose ranks do not increase (if a comes before b and both have a rank)."""
+    direct_before = set(precedes)
+    before = set(direct_before)
     while True:
-        more = {(a, d) for a, b in before for c, d in precedes if b == c} - before
+        more = {(a, d) for a, b in before for c, d in direct_before if b == c} - before
         if not more:
             break
         before |= more
@@ -33,6 +35,8 @@ def reference(precedes, rank):
     for e, n in rank:
         ranks.setdefault(e, set()).add(n)
     return {
+        "stated_precedes": set(),
+        "direct_before": direct_before,
         "before": before,
         "comparable": before | {(b, a) for a, b in before},
         "order_cycle": {(a,) for a, b in before if a == b},
@@ -76,7 +80,8 @@ def test_the_theory_is_fact_free_and_compiles_on_its_own():
     assert '"ordered__precedes"' in files["engine/tables.sql"] and '"ordered__rank"' in files["engine/tables.sql"]
     prog = program()
     assert sorted(r.name for r in prog.relations.values() if r.role == "derived") == [
-        "before", "comparable", "order_cycle", "rank_conflict"]
+        "before", "comparable", "direct_before", "order_cycle", "rank_conflict", "stated_precedes"]
+    assert prog.relations["stated_precedes"].extend
     assert sorted(r.name for r in prog.relations.values() if getattr(r, "invariant", False)) == ["order_cycle", "rank_conflict"]
     assert [q["term"] for q in theory.questions] == ["order_grounds", "order_reach"]
 

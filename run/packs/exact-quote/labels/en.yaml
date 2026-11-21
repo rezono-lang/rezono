@@ -36,3 +36,53 @@ normalized_column: normalized amount column
 normalized_prefix: verified amount prefix
 complete_amount: completely verified amount
 amount_digit: amount digit
+rate_operand: rate operand
+rate_operand.numerator: numerator
+rate_operand.denominator: denominator
+amount_part: amount part
+amount_part.numerator: numerator
+amount_part.denominator: denominator
+quote_currency: quote currency
+quote_currency.currency: currency
+publication_currency: price publication currency
+publication_currency.currency: currency
+rate_pair: accepted rate pair
+rate_pair.base: base currency
+rate_pair.target: target currency
+rate_capture: rate capture
+rate_capture.quote: quote
+rate_capture.base: base currency
+rate_capture.target: target currency
+rate_digit: rate operand digit record
+rate_digit.rate: rate capture
+rate_digit.operand: operand
+rate_digit.position: decimal position
+rate_digit.value: digit value
+effective_carry: effective amount decimal carry record
+effective_carry.quote: quote
+effective_carry.currency: currency
+effective_carry.part: amount part
+effective_carry.position: decimal position
+effective_carry.value: carry value
+valid_rate_digit: valid rate digit
+conflicted_rate_digit: conflicting rate digits
+rate_positive_part: positive rate operand
+valid_rate_capture: valid rate capture
+converted_term: contribution to converted numerator
+converted_position: converted numerator position
+effective_column: effective amount column before decimal carry
+eff_carry: effective amount decimal carry
+conflicted_eff_carry: conflicting effective carry records
+eff_column_position: effective amount column position
+eff_next_position: next effective decimal position
+eff_normalized_column: normalized effective amount column
+eff_normalized_prefix: verified effective amount prefix
+complete_eff_amount: completely verified effective amount
+micros_pad: millionths zero pad position
+effective_digit: effective amount digit
+ten_power: power of ten
+part_overflow: effective amount part beyond machine word
+part_term: contribution to effective amount part
+effective_part_present: verified effective amount part within machine word
+effective_part_value: effective amount part value
+effective_amount: effective quote amount

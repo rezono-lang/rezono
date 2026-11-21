@@ -1,0 +1,361 @@
+"""`derived` written in `rezono 1` lowers to `rezono.rules/2`: single-key derived properties in `extend` as
+functional relations `<k>_<d>` over their kind, module-level multi-key declarations as `Bool` sets or as functional
+relations over their `over` domain, `.one()` and `.one(expr)`, method-form `.where(...)` and `.count(pred)`,
+a relation read as its tuple set, and `means` with `@` on a derivation
+(decisions/language-rezono-1.md sections 2, 4 and 8 step 4; decisions/language-rezono-1-refinements.md sections 1,
+3.1 and 3.3; decisions/language-readable-rules.md section 2).
+
+The module, the fact rows and every expected row below are written by hand from those decisions:
+- a slot path gives `known` with the slot's value, `unknown no_value` for a missing required slot and
+  `not_applicable no_value` for a missing optional one (language-rezono-1.md section 2);
+- `S.one()` and `S.one(expr)` give `known` for one distinct value, `invalid multiple_values` for more than one, and
+  `no_match` for none: `unknown` when the declared type is `T`, `not_applicable` when it is `T?`; a row whose
+  membership is undecided makes the result undecided (refinements section 3.3, strict in row membership);
+- `S.count(pred)` counts the rows where `pred` is true, gives `known 0` for none, and is undecided when `pred` is
+  undecided for a row, here `unknown no_value` from a missing required slot (refinements section 3.1);
+- a `Bool` derivation stays a plain set without state columns, and every functional derivation has exactly one row
+  per key of its closed domain (language-rezono-1.md sections 2 and 4);
+- a functional derivation over an open domain is refused with `functional_open_domain` (section 2 and 5.4);
+- `means` lowers to the message of the clause in the default language and `@` to the `source` of the bundle's rule
+  entry, so the witness of a conclusion reaches its article (language-readable-rules.md section 2).
+DuckDB runs the compiled pack; Soufflé, where installed, runs the same rule IR as the independent oracle."""
+
+import json
+import os
+from pathlib import Path
+import re
+import shutil
+import subprocess
+
+from linkml.validator import Validator
+from linkml.validator.plugins import JsonschemaValidationPlugin
+from linkml_runtime.linkml_model.meta import SchemaDefinition
+from linkml_runtime.loaders import yaml_loader
+import pytest
+
+import souffle
+from expression_packs import ROOT, register
+from rezono_compiler import batch, emit, pack, rules, rules_sql, scenarios
+from support import FIXTURE
+
+MODULE = """\
+rezono 1
+pack minimal
+
+kind Area
+kind Item
+  area: Area
+  parent: Item?
+kind Link
+  src: Item
+  dst: Item
+kind Choice
+  owner: Item
+  area: Area
+  target: Item
+
+extend s: Item
+  derived home: Area = s.area
+  derived up: Item? = s.parent
+  derived chooses: Int = Choice.count(owner = s)
+  derived out_links: Int = Link.count(src = s)
+
+extend l: Link
+  derived goal: Item = l.dst
+
+extend g: Area
+  derived askers: Int = asks.count(r = g)
+
+derived asks(a: Item, r: Area): Bool = a.area = r
+
+derived chosen(a: Item, r: Area): Item?
+  over asks(a, r)
+  = Choice.where(owner = a and area = r).one(target)
+  means "{$a} chose a target in {$r}." @ policy#art-3
+
+derived peer(a: Item, r: Area): Item
+  over asks(a, r)
+  = Item.where(area = r and it != a).one()
+"""
+SENTENCE = "{$a} chose a target in {$r}."
+SOURCE = "policy#art-3"
+
+FACTS = """\
+area:
+  - {id: north}
+  - {id: south}
+  - {id: east}
+  - {id: west}
+item:
+  - {id: ann, area: north, parent: bob}
+  - {id: bob, area: north}
+  - {id: cid, area: south}
+  - {id: dan, area: east}
+  - {id: eve, area: east}
+link:
+  - {id: l1, src: ann, dst: bob}
+  - {id: l2, src: bob, dst: cid}
+  - {id: l3, src: ann}
+  - {id: l4, dst: bob}
+choice:
+  - {id: c1, owner: ann, area: north, target: bob}
+  - {id: c2, owner: cid, area: south, target: ann}
+  - {id: c3, owner: cid, area: south, target: bob}
+  - {id: c4, owner: bob, area: south, target: cid}
+  - {id: c5, owner: dan, target: ann}
+"""
+FACT_SOURCE = ('default: {kind: git, name: rezono-lang/rezono, revision: "0000000", '
+               'position: compiler/tests/rezono/test_lower_rezono_1_derived.py#FACTS}\n')
+
+# Single-key derived properties: relation `<k>_<d>`, its kind as domain, and the value type of the declaration.
+PROPERTIES = {
+    "item_home": ("item", "string"),
+    "item_up": ("item", "string"),
+    "item_chooses": ("item", "integer"),
+    "item_out_links": ("item", "integer"),
+    "link_goal": ("link", "string"),
+    "area_askers": ("area", "integer"),
+}
+# Module-level functional derivations: their `over` domain and value type.
+MULTI_KEY = {"chosen": ("asks", "string"), "peer": ("asks", "string")}
+
+# (key..., state, reason) per row; the value of a known row follows in KNOWN.
+EXPECTED = {
+    # s.area: every item has its required area.
+    "item_home": {("ann", "known", ""), ("bob", "known", ""), ("cid", "known", ""), ("dan", "known", ""),
+                  ("eve", "known", "")},
+    # s.parent is optional: absent -> not_applicable no_value.
+    "item_up": {("ann", "known", ""), ("bob", "not_applicable", "no_value"), ("cid", "not_applicable", "no_value"),
+                ("dan", "not_applicable", "no_value"), ("eve", "not_applicable", "no_value")},
+    # Choice.count(owner = s): every choice has its owner; no choice -> known 0.
+    "item_chooses": {("ann", "known", ""), ("bob", "known", ""), ("cid", "known", ""), ("dan", "known", ""),
+                     ("eve", "known", "")},
+    # Link.count(src = s): l4 has no src, so `src = s` is unknown for every s and every count is undecided.
+    "item_out_links": {("ann", "unknown", "no_value"), ("bob", "unknown", "no_value"), ("cid", "unknown", "no_value"),
+                       ("dan", "unknown", "no_value"), ("eve", "unknown", "no_value")},
+    # l.dst is required: l3 has none -> unknown no_value.
+    "link_goal": {("l1", "known", ""), ("l2", "known", ""), ("l3", "unknown", "no_value"), ("l4", "known", "")},
+    # asks.count(r = g): the tuples of asks per area; west has none -> known 0.
+    "area_askers": {("north", "known", ""), ("south", "known", ""), ("east", "known", ""), ("west", "known", "")},
+    # Choice.where(owner = a and area = r).one(target) over asks, declared Item?:
+    # one choice -> known; none -> not_applicable no_match; two targets -> invalid multiple_values;
+    # c5 has owner dan and no area, so its membership for (dan, east) is unknown -> unknown no_value.
+    # c4 (bob, south) lies outside the domain asks and gives no row.
+    "chosen": {("ann", "north", "known", ""), ("bob", "north", "not_applicable", "no_match"),
+               ("cid", "south", "invalid", "multiple_values"), ("dan", "east", "unknown", "no_value"),
+               ("eve", "east", "not_applicable", "no_match")},
+    # Item.where(area = r and it != a).one() over asks, declared Item: nobody else in south -> unknown no_match.
+    "peer": {("ann", "north", "known", ""), ("bob", "north", "known", ""), ("cid", "south", "unknown", "no_match"),
+             ("dan", "east", "known", ""), ("eve", "east", "known", "")},
+}
+KNOWN = {
+    "item_home": {("ann",): "north", ("bob",): "north", ("cid",): "south", ("dan",): "east", ("eve",): "east"},
+    "item_up": {("ann",): "bob"},
+    "item_chooses": {("ann",): "1", ("bob",): "1", ("cid",): "2", ("dan",): "1", ("eve",): "0"},
+    "link_goal": {("l1",): "bob", ("l2",): "cid", ("l4",): "bob"},
+    "area_askers": {("north",): "2", ("south",): "1", ("east",): "2", ("west",): "0"},
+    "chosen": {("ann", "north"): "bob"},
+    "peer": {("ann", "north"): "bob", ("bob", "north"): "ann", ("dan", "east"): "eve", ("eve", "east"): "dan"},
+}
+ASKS = {("ann", "north"), ("bob", "north"), ("cid", "south"), ("dan", "east"), ("eve", "east")}
+
+# A functional derivation over an open kind, and one over a Bool relation that reads an open kind.
+OPEN_PROPERTY = """\
+rezono 1
+pack minimal
+
+kind Area
+kind Item world open
+  area: Area
+
+extend s: Item
+  derived home: Area = s.area
+"""
+OPEN_OVER = """\
+rezono 1
+pack minimal
+
+kind Area
+kind Item world open
+  area: Area
+
+derived pair(a: Item, r: Area): Bool = a.area = r
+
+derived pick(a: Item, r: Area): Item?
+  over pair(a, r)
+  = Item.where(area = r).one()
+"""
+
+
+class MissingRezono1DerivedLowering(AssertionError):
+    """`derived` in rezono 1 did not lower to rezono.rules/2 as decisions/language-rezono-1.md gives it."""
+
+
+def _validate(schema_name: str, instance: dict, target_class: str) -> list[str]:
+    definition = yaml_loader.load(str(ROOT / "contracts" / schema_name), target_class=SchemaDefinition)
+    validator = Validator(definition, validation_plugins=[JsonschemaValidationPlugin(closed=True)])
+    return [item.message for item in validator.validate(instance, target_class).results]
+
+
+def _write_pack(directory: Path, source: str, facts: str | None = None) -> Path:
+    directory = Path(shutil.copytree(FIXTURE, directory))
+    folder = directory / "rezono"
+    folder.mkdir()
+    module, form = folder / "derived.rezono", folder / "derived.json"
+    module.write_text(source, encoding="utf-8", newline="\n")
+    result = subprocess.run(
+        [os.environ.get("REZONO_NODE", "node"), str(ROOT / "rezono/src/write-form.ts"), str(module), str(form)],
+        capture_output=True, text=True, encoding="utf-8", check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert json.loads(form.read_bytes())["format"] == "rezono.module/5"
+    if facts is not None:
+        (directory / "facts").mkdir(exist_ok=True)
+        (directory / "facts/case.yaml").write_text(facts, encoding="utf-8", newline="\n")
+        (directory / "facts/case.sources.yaml").write_text(FACT_SOURCE, encoding="utf-8", newline="\n")
+    register(directory, {"module": "rezono/derived.rezono", "form": "rezono/derived.json", "layer": "facts"})
+    return directory
+
+
+def _refusal(directory: Path) -> str | None:
+    """The compiler's refusal of a pack as text, or None when it compiles."""
+    try:
+        emit.compile_pack(pack.read(directory))
+    except pack.CompileError as error:
+        return " ".join([str(error), *(f"{d.code} {d.message}" for d in getattr(error, "diagnostics", ()))])
+    return None
+
+
+def _state_rows(rows: set[tuple], keys: int) -> tuple[set[tuple], dict[tuple, str]]:
+    """(key..., state, reason) of every row, and the value of every known row, from (key..., state, reason, value)."""
+    states = {row[:keys + 2] for row in rows}
+    known = {row[:keys]: row[keys + 2] for row in rows if row[keys] == "known"}
+    return states, known
+
+
+def test_lower_rezono_1_derived(tmp_path):
+    # Counter-case: a rezono 1 pack whose module declares kinds and no derivation compiles to no rule program.
+    plain = _write_pack(tmp_path / "plain", MODULE.split("\nextend s: Item")[0] + "\n")
+    assert "ir/rules.json" not in emit.compile_pack(pack.read(plain))
+
+    directory = _write_pack(tmp_path / "derived", MODULE, FACTS)
+    try:
+        model = pack.read(directory)
+        files = emit.compile_pack(model)
+    except pack.CompileError as error:
+        raise MissingRezono1DerivedLowering(str(error)) from error
+    if "ir/rules.json" not in files:
+        raise MissingRezono1DerivedLowering(f"no ir/rules.json among {sorted(files)}")
+    document = json.loads(files["ir/rules.json"])
+    bundle = json.loads(files["bundle/schema-bundle.json"])
+    problems: list = []
+
+    # 1. The rule IR: rezono.rules/2, valid against contracts/rules.yaml, loadable with every witness.
+    if document.get("format") != "rezono.rules/2":
+        problems.append({"format": document.get("format")})
+    if errors := _validate("rules.yaml", document, "RuleProgram"):
+        problems.append({"contracts/rules.yaml": errors[:5]})
+    if errors := _validate("bundle.yaml", bundle, "Bundle"):
+        problems.append({"contracts/bundle.yaml": errors[:5]})
+    relations = {relation["name"]: relation for relation in document.get("relations", [])}
+    try:
+        prog = rules.load(document)
+    except rules.IRError as error:
+        raise MissingRezono1DerivedLowering(f"rules.load: {error}\n{json.dumps(problems, indent=1)}") from error
+
+    # 2. Naming, role, closed domain and value of every derivation.
+    for name, (domain, value_type) in {**PROPERTIES, **MULTI_KEY}.items():
+        relation = relations.get(name)
+        keys = 1 if name in PROPERTIES else 2
+        if relation is None:
+            problems.append({"missing relation": name, "relations": sorted(relations)})
+            continue
+        found = {member: relation.get(member) for member in ("role", "domain", "value", "world")}
+        if (relation.get("role") != "functional" or relation.get("domain") != domain
+                or relation.get("value") != {"name": "value", "type": value_type}
+                or relation.get("world", "closed") != "closed" or len(relation.get("key", [])) != keys
+                or relation.get("conflict_policy") not in ("publish", "block")):
+            problems.append({name: found | {"key": relation.get("key"), "conflict": relation.get("conflict_policy")}})
+    for name in MULTI_KEY:   # data multiplicity from .one() publishes by default (section 2)
+        if relations.get(name, {}).get("conflict_policy") != "publish":
+            problems.append({name: {"conflict_policy": relations.get(name, {}).get("conflict_policy")}})
+    for bare in ("home", "up", "chooses", "out_links", "goal", "askers"):
+        if bare in relations:
+            problems.append({"a property under its bare name": bare})
+    asks = relations.get("asks", {})
+    if (asks.get("role") != "derived" or len(asks.get("key", [])) != 2
+            or any(member in asks for member in ("domain", "value", "conflict_policy"))):
+        problems.append({"asks is a plain Bool set": asks})
+
+    # 3. DuckDB: co-located (key..., state, reason, value) views, one row per domain key, and the states of the
+    #    decisions. A Bool derivation is a plain set of its keys.
+    rows = dict(scenarios.states(model, directory))["0-case"]
+    con, _, _ = batch.run(model, prog, rows)
+    derived = batch.read(con, prog)
+    for name, expected in EXPECTED.items():
+        keys = 1 if name in PROPERTIES else 2
+        if name not in prog.relations:
+            continue
+        columns = [column[0] for column in con.execute(f'SELECT * FROM "{name}" LIMIT 0').description]
+        if len(columns) != keys + 3 or columns[keys:] != ["state", "reason", "value"]:
+            problems.append({name: {"columns": columns}})
+            continue
+        if any(cell is None for row in con.execute(f'SELECT * FROM "{name}"').fetchall() for cell in row):
+            problems.append({name: "a NULL cell in a NOT NULL functional view"})
+        states, known = _state_rows(derived.get(name, set()), keys)
+        if states != expected:
+            problems.append({name: {"missing": sorted(expected - states), "unexpected": sorted(states - expected)}})
+        if known != KNOWN.get(name, {}):
+            problems.append({name: {"known values": sorted(known.items()), "expected": sorted(KNOWN[name].items())}})
+    if "asks" in prog.relations:
+        asks_columns = [column[0] for column in con.execute('SELECT * FROM "asks" LIMIT 0').description]
+        if len(asks_columns) != 2 or derived.get("asks") != ASKS:
+            problems.append({"asks": {"columns": asks_columns, "rows": sorted(derived.get("asks", ()))}})
+
+    # 4. Soufflé, the independent oracle, gives the same rows for every derived and functional relation.
+    if shutil.which("souffle"):
+        oracle = souffle.run(prog, scenarios.rule_rows(model, prog, rows), tmp_path)
+        for name in sorted(set(oracle) | set(derived)):
+            if oracle.get(name) != derived.get(name):
+                problems.append({"souffle": name, "oracle": sorted(oracle.get(name, ())),
+                                 "duckdb": sorted(derived.get(name, ()))})
+
+    # 5. Feldera: one co-located materialized view per functional derivation, never inside a recursive view.
+    feldera_sql = rules_sql.feldera(prog, witnesses="none")
+    for name in sorted({**PROPERTIES, **MULTI_KEY}):
+        if (len(re.findall(rf'CREATE MATERIALIZED VIEW\s+"?{name}\b', feldera_sql)) != 1
+                or re.search(rf'DECLARE RECURSIVE VIEW\s+"?{name}\b', feldera_sql)):
+            problems.append({"feldera view": name})
+
+    # 6. `means` and `@`: every rule of `chosen` carries the sentence as its message in the default language and the
+    #    source in its bundle entry; the witness of the known row (ann, north) -> bob is one of those rules.
+    [messages] = [entry["resource"].splitlines() for entry in bundle.get("messages", []) if entry["lang"] == "nl"]
+    chosen_rules = {entry["id"]: entry for entry in bundle.get("rules", []) if entry.get("relation") == "chosen"}
+    if not chosen_rules:
+        problems.append({"no bundle rule for chosen": sorted(entry.get("relation") for entry in bundle.get("rules", []))})
+    for rid, entry in chosen_rules.items():
+        variables = {variable["name"] for variable in entry.get("variables", [])}
+        if (entry.get("source") != SOURCE or f"{entry['message']} = {{{{{SENTENCE}}}}}" not in messages
+                or not {"?a", "?r"} <= variables):
+            problems.append({"means and source": entry, "messages": [m for m in messages if m.startswith("rule.")]})
+    if any("source" in entry for entry in bundle.get("rules", []) if entry.get("relation") != "chosen"):
+        problems.append({"a source on a rule without @": [e["id"] for e in bundle["rules"] if "source" in e]})
+    witnessed = set()
+    for rid, thetas in batch.witnesses(con, prog).items():
+        rule = prog.rules[rid]
+        for theta in thetas:
+            binding = dict(zip(rule.variables, theta))
+            head = tuple(binding.get(term, term) for term in rule.head.terms)
+            if rule.head.relation == "chosen" and head == ("ann", "north", "bob"):
+                witnessed.add(rid)
+    if not witnessed or not witnessed <= set(chosen_rules):
+        problems.append({"witness of chosen(ann, north) = bob": sorted(witnessed), "rules": sorted(chosen_rules)})
+
+    # 7. An open domain is refused with functional_open_domain, for a property and for an `over` relation.
+    for label, source in (("property", OPEN_PROPERTY), ("over", OPEN_OVER)):
+        refusal = _refusal(_write_pack(tmp_path / f"open-{label}", source))
+        if refusal is None or "functional_open_domain" not in refusal:
+            problems.append({f"open {label}": refusal})
+
+    if problems:
+        raise MissingRezono1DerivedLowering(json.dumps(problems, indent=1, default=str))

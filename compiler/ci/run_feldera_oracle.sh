@@ -45,7 +45,7 @@ cleanup() {
   if docker container inspect "$container" >/dev/null 2>&1; then
     copy_rust_trace || true
     case "$shard" in
-      platform|subsidy) feldera_dependency_activity "$container" > "$reports/dependency-build.json" || true ;;
+      platform-incremental|platform-e2e|subsidy) feldera_dependency_activity "$container" > "$reports/dependency-build.json" || true ;;
     esac
     if (( status != 0 )); then
       docker logs --tail 250 "$container" > "$reports/engine.log" 2>&1 || true
@@ -70,7 +70,7 @@ compiler_env=(--env CARGO_NET_OFFLINE=true --env RUSTC_WRAPPER=/tmp/rezono-measu
 # The generated operator crates are small and independent. Leave the engine's dependencies and
 # the pipeline link crate on their original profile.
 printf '\n' > "$inputs/operator-codegen-units"
-if [[ "$shard" == platform ]]; then
+if [[ "$shard" == platform-incremental ]]; then
   printf '1\n' > "$inputs/operator-codegen-units"
 fi
 chmod 644 "$inputs/operator-codegen-units"
@@ -79,7 +79,7 @@ docker run --detach --name "$container" --network none "${compiler_env[@]}" \
   --mount "type=bind,src=$original,dst=/tmp/rezono-feldera-original-wrapper,readonly" \
   --mount "type=bind,src=$inputs,dst=/tmp/rezono-oracle-input,readonly" "$image"
 case "$shard" in
-  platform|subsidy)
+  platform-incremental|platform-e2e|subsidy)
     feldera_restore_dependencies "$image" "$container" | tee "$reports/dependency-restore.log"
     ;;
 esac
@@ -91,7 +91,7 @@ inside=(sudo nsenter --target "$pid" --net -- sudo -H -u "$(id -un)" --
         "FELDERA_ORACLE_REPORTS=$reports" "FELDERA_ORACLE_INPUT_DIR=$inputs")
 "${inside[@]}" curl --fail --silent --show-error --retry 45 --retry-connrefused \
   --retry-delay 2 --retry-max-time 95 --max-time 5 "$FELDERA_URL/healthz"
-if [[ "$shard" == platform ]]; then
+if [[ "$shard" == platform-incremental ]]; then
   # Retain the active Rust invocation even if GitHub stops the job before cleanup.
   (
     while docker container inspect "$container" >/dev/null 2>&1; do
@@ -119,10 +119,12 @@ selectors=(
   compiler/tests/test_calc.py::test_feldera_gives_what_duckdb_gives
   compiler/tests/test_bound.py::test_the_check_view_on_feldera_holds_the_rows_past_the_bound
   compiler/tests/test_boolean_rule_inputs.py::test_native_boolean_rule_inputs
+  compiler/tests/test_recorded_dates.py::test_independent_date_equality
   compiler/tests/test_rules_properties.py::test_feldera_runs_generated_programs_as_duckdb_does
   compiler/tests/test_ordered_rule_scalars_engines.py::test_feldera_orders_typed_values
   examples/test_feldera.py::test_feldera_accepts_the_sql_and_finds_the_errors
   examples/test_feldera_rules.py::test_incremental_on_feldera_equals_batch
+  examples/test_calculation_engine_parity.py::test_feldera_calculations_match_duckdb_and_checker
   examples/test_platform_incremental_proof.py::test_platform_incremental_delta_and_witnesses_match_batch
 )
 suite=(python -u -m pytest --rootdir="$PWD" -o empty_parameter_set_mark=fail_at_collect)

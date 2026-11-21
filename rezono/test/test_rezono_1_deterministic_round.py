@@ -172,15 +172,6 @@ class RoundingOrBoundMismatchError(AssertionError):
     """Rounding modes (`down`/`up`/`half_up`/`half_even`), `floor`/`ceil`, or symmetric 64-bit `BOUND = 2^63 - 1` failed."""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=NonDeterministicRoundError,
-    reason="M3: decisions/language-rezono-1-refinements.md: Remove alphabetical type lookup from rezono/src/evaluate.ts "
-           "and rezono/src/answer-schema.ts; support `round(x as TargetType[, mode])` and `schema.default_units`; "
-           "refuse `round` on a computed dimension with no `as TargetType` and no `default_units` with R013 (and "
-           "dimension mismatch with R003); keep `outputSchema`'s shown slot type and definition invariant to adding `AaaMicroEur`. "
-           "Read section 3.4A.",
-)
 def test_round_is_invariant_to_alphabetical_types_and_requires_target():
     res = run_node(DETERMINISTIC_ROUND_PROBE)
     problems = []
@@ -213,14 +204,6 @@ def test_round_is_invariant_to_alphabetical_types_and_requires_target():
         raise NonDeterministicRoundError(json.dumps(problems, indent=2))
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=RoundingOrBoundMismatchError,
-    reason="M3: decisions/language-rezono-1-refinements.md: Support `floor(x)` and `ceil(x)` beside the four `round` "
-           "modes (`down`, `up`, `half_up`, `half_even`) in rezono/src/check.ts and evaluate.ts with exact negative-"
-           "number semantics, and enforce the shared symmetric 64-bit exact-number bound `BOUND = 2^63 - 1` "
-           "(`±9223372036854775807` known, `±2^63` yielding `unknown beyond_exact_bound`). Read section 3.4B and 3.4C.",
-)
 def test_round_modes_floor_ceil_and_64bit_bound():
     res = run_node(MODES_AND_BOUNDS_PROBE)
     problems = []
