@@ -36,7 +36,7 @@ const headers = { 'cache-control': 'private, no-store' };
 
 type WitnessCheckStatus = 'green' | 'warning' | 'red';
 type ObjectRef = Pick<ArchivedFile, 'uri' | 'sha256'>;
-type Keyed = { key: string[] };
+type Keyed = { key: string[]; values?: Record<string, unknown> };
 type Witnesses = { witnesses: Witness[]; calc_witnesses?: CalcWitness[]; hidden: [] };
 type Head = { format: 'rezono.head/1'; manifest: string; epoch: number; sha256: string };
 type Page = { rows: Keyed[]; next?: string[] };
@@ -220,7 +220,8 @@ function publication(store: Store, pack: string, role: string) {
 				const ref = snaps.get(relation);
 				if (!ref) return missing();
 				if (!snapshots.has(relation)) snapshots.set(relation, object(ref, 'objects').then((value) => {
-					if (!Array.isArray(value) || value.some((row) => !record(row) || !keyParts(row.key) || !row.key.length)) fault();
+					if (!Array.isArray(value) || value.some((row) => !record(row) || !keyParts(row.key) || !row.key.length
+						|| (row.values !== undefined && !record(row.values)))) fault();
 					if (value.length > ROW_LIMIT) throw new StoreLimit();
 					const sorted = (value as Keyed[]).sort((a, b) => compareKey(a.key, b.key));
 					if (sorted.some((row, i) => i > 0 && compareKey(sorted[i - 1].key, row.key) === 0)) fault();
@@ -453,7 +454,7 @@ async function named(view: Current, withdrawals: readonly WithdrawalRecord[], ro
 		|| (published.calc_witnesses !== undefined && !Array.isArray(published.calc_witnesses))) fault();
 	const compiled = view.compiled('ir/rules.json');
 	const rules = compiled ? await view.object(compiled, 'bundles') as RuleDoc : undefined;
-	const steps = await stepsOf(rules, published.witnesses, async (name) => (await view.rows(name)).map((row) => row.key));
+	const steps = await stepsOf(rules, published.witnesses, (name) => view.rows(name));
 	const calc = published.calc_witnesses ?? [];
 	const answer = await trace(memoryGraph([...published.witnesses, ...calc], [...steps, ...calcSteps(calc)]), question,
 		view.manifest.id, { relation, key: canonicalJson(key) }, { limit: Math.min(limitOf(search.get('limit')), question.limit), after: parseAfter(search.get('after')) }, sourcesOf(view, role));
