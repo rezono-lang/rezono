@@ -35,10 +35,16 @@ def _derive(model, prog, label, rows):
     return State(model, prog, label, rows).derived
 
 
-def _query(day: str, horizon: int) -> dict:
-    as_of = date.fromisoformat(day)
-    return {"support_query": [("query",)], "support_query__as_of_day": [("query", (as_of - EPOCH).days)],
-            "support_query__horizon_days": [("query", horizon)]}
+def _query(prog, day: str, horizon: int) -> dict[str, list[tuple]]:
+    query: dict[str, list[tuple]] = {
+        "support_query": [("query",)],
+        "support_query__horizon_days": [("query", horizon)],
+    }
+    if "support_query__as_of" in prog.relations:
+        query["support_query__as_of"] = [("query", day)]
+    if "support_query__as_of_day" in prog.relations:
+        query["support_query__as_of_day"] = [("query", (date.fromisoformat(day) - EPOCH).days)]
+    return query
 
 
 @pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
@@ -56,7 +62,7 @@ def test_support_window_reads_the_release_the_service_runs():
     assert dict(rows["release__version"]).get(release) == RUNNING
 
     def window(changed, day, horizon):
-        return _derive(model, prog, label, changed | _query(day, horizon))["support_window_result"]
+        return _derive(model, prog, label, changed | _query(prog, day, horizon))["support_window_result"]
 
     def expected(version):
         return {("query", "cp", version, source["end"], source["url"], source["sha256"])}

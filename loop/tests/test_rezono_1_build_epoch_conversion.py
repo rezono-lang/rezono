@@ -6,23 +6,42 @@ modules with whole-pack equivalence against their frozen legacy snapshots via `c
 from __future__ import annotations
 
 from contextlib import ExitStack
-import json
+import importlib.util
 from pathlib import Path
 import shutil
 import sys
-import tarfile
 
 import pytest
 import yaml
 
 
 REPO = Path(__file__).resolve().parents[2]
-LEGACY_ARCHIVE = Path(__file__).resolve().parent / "fixtures" / "rezono-1-legacy" / "legacy-packs.tar.gz"
-TIME = "2026-11-10T00:00:00Z"
+LEGACY_HELPERS_PATH = REPO / "examples" / "fixtures" / "rezono-1-legacy" / "helpers.py"
+
+
+def _load_legacy_helpers():
+    spec = importlib.util.spec_from_file_location("rezono_1_legacy_helpers", LEGACY_HELPERS_PATH)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+_LEGACY = _load_legacy_helpers()
+TIME = _LEGACY.TIME
+CUT_TICK = 1794268800  # 2026-11-10T00:00:00Z
 
 # Synthetic exercise facts (with `kind: synthetic` origins per decisions/fact-origin-required.md §3)
-# so `compare_publications` compares non-empty derived conclusions and per-role views for both packs.
+# feeding EVERY rule file in `build/rules/` (`access.dl`, `selection.dl`, `policy_date.dl`,
+# `decision_rules.dl`, `progress.dl`, `tasks.dl`, `claims.dl`, `claim_release.dl`) with non-empty input,
+# using ISO calendar dates only (no day-number stopgaps; decisions/standard-packs-everywhere.md §1.4).
 BUILD_EXERCISE = {
+    "loop_active_run": [{"id": "run-1"}],
+    "loop_sweep_receipt": [
+        {"id": "rcpt-1", "run": "run-1", "event_time": CUT_TICK},
+        {"id": "rcpt-after", "run": "run-1", "event_time": CUT_TICK + 100},
+    ],
+    "loop_step": [{"id": "step-1"}, {"id": "step-2"}],
     "build_run": [
         {
             "id": "run-1",
@@ -30,8 +49,91 @@ BUILD_EXERCISE = {
             "base_sha": "a" * 40,
             "head_sha": "b" * 40,
             "engine_sha": "c" * 40,
-            "observed_at": 100,
+            "observed_at": CUT_TICK,
+            "receipt": "rcpt-1",
         },
+    ],
+    "build_component": [
+        {"id": "comp-a", "run": "run-1", "kind": "python", "folder": "compiler"},
+        {"id": "comp-b", "run": "run-1", "kind": "python", "folder": "checker"},
+    ],
+    "build_manifest": [
+        {
+            "id": "man-b",
+            "component": "comp-b",
+            "path": "checker/pyproject.toml",
+            "revision": "b" * 40,
+            "blob": "d" * 40,
+        },
+    ],
+    "build_dependency": [
+        {
+            "id": "dep-1",
+            "dependency": "comp-a",
+            "consumer": "comp-b",
+            "kind": "manifest",
+            "manifest": "man-b",
+            "source": "synthetic",
+        },
+    ],
+    "build_test_file": [
+        {"id": "tf-1", "component": "comp-a", "path": "compiler/tests/test_sample.py"},
+    ],
+    "build_path": [
+        {"id": "path-1", "run": "run-1", "path": "compiler/rezono_compiler/pack.py", "coverage": "mapped"},
+    ],
+    "build_path_reader": [
+        {"id": "pr-1", "path": "path-1", "component": "comp-a", "kind": "transitive", "source": "synthetic"},
+    ],
+    "build_target_rule": [
+        {"id": "tr-1", "target": "docs-check", "path_prefix": "docs/", "kind": "full_fallback"},
+    ],
+    "reference_date": [
+        {"id": "ref-1", "title": "2026-11-10", "date": "2026-11-10"},
+    ],
+    "build_policy_date": [
+        {"id": "pd-1", "run": "run-1", "reference": "ref-1", "observed_at": CUT_TICK},
+    ],
+    "decision": [
+        {
+            "id": "dec-old",
+            "title": "Old policy",
+            "state": "superseded",
+            "decider": ["owner"],
+            "valid_from": "2025-01-01",
+        },
+        {
+            "id": "dec-1",
+            "title": "Active policy",
+            "state": "in_force",
+            "decider": ["owner"],
+            "valid_from": "2026-01-01",
+            "supersedes": ["dec-old"],
+        },
+        {
+            "id": "dec-2",
+            "title": "Open policy",
+            "state": "in_force",
+            "decider": ["owner"],
+            "valid_from": "2026-02-01",
+        },
+        {
+            "id": "dec-3",
+            "title": "Uncited policy",
+            "state": "in_force",
+            "decider": ["owner"],
+            "valid_from": "2026-03-01",
+        },
+    ],
+    "build_citation_scan": [
+        {"id": "cscan-1", "run": "run-1", "observed_at": CUT_TICK, "source": "synthetic"},
+    ],
+    "build_decision_citation": [
+        {"id": "dc-1", "scan": "cscan-1", "path": "compiler/tests/test_sample.py", "decision": "dec-1"},
+    ],
+    "build_red_citation": [
+        {"id": "rc-1", "scan": "cscan-1", "test": "compiler/tests/test_open.py::test_open", "decision": "dec-2"},
+        {"id": "rc-2", "scan": "cscan-1", "test": "compiler/tests/test_old.py::test_old", "decision": "dec-old"},
     ],
     "build_milestone": [
         {"id": "M1", "scope": "release_1"},
@@ -40,10 +142,13 @@ BUILD_EXERCISE = {
         {"id": "M4", "scope": "release_1"},
     ],
     "build_progress_scan": [
-        {"id": "scan-1", "run": "run-1", "observed_at": 100, "source": "synthetic-scan"},
+        {"id": "scan-1", "run": "run-1", "observed_at": CUT_TICK, "source": "synthetic-scan"},
     ],
     "build_red_test": [
         {"id": "rt-1", "scan": "scan-1", "test": "example::test_one", "milestone": "M3"},
+    ],
+    "build_green_transition": [
+        {"id": "gt-1", "scan": "scan-1", "test": "example::test_zero", "milestone": "M1", "commit": "e" * 40},
     ],
     "build_offboard_work": [
         {
@@ -51,12 +156,116 @@ BUILD_EXERCISE = {
             "scan": "scan-1",
             "item": "pack-dl-conversion",
             "state": "known",
-            "completed": 0,
+            "completed": 1,
             "total": 124,
             "source": "synthetic-scan",
         },
+        {
+            "id": "ob-2",
+            "scan": "scan-1",
+            "item": "other-work",
+            "state": "unknown",
+            "reason": "pending-scan",
+            "source": "synthetic-scan",
+        },
+    ],
+    "build_task": [
+        {"id": "task-1", "run": "run-1", "step": "step-1", "track": "track-a", "source": "synthetic"},
+        {"id": "task-2", "run": "run-1", "step": "step-2", "track": "track-b", "source": "synthetic"},
+    ],
+    "build_track_rank": [
+        {"id": "rank-1", "decision": "dec-1", "track": "track-a", "rank": 1},
+        {"id": "rank-2", "decision": "dec-1", "track": "track-b", "rank": 2},
+    ],
+    "build_queue_limit": [
+        {"id": "ql-1", "decision": "dec-1", "limit": 5},
+    ],
+    "build_claim": [
+        {
+            "id": "claim-1",
+            "run": "run-1",
+            "branch": "task/demo-stale",
+            "generation": "f" * 40,
+            "observed_at": CUT_TICK,
+            "source": "synthetic",
+        },
+        {
+            "id": "claim-2",
+            "run": "run-1",
+            "branch": "task/demo-active",
+            "generation": "1" * 40,
+            "observed_at": CUT_TICK,
+            "source": "synthetic",
+        },
+    ],
+    "build_claim_activity": [
+        {"id": "act-1", "claim": "claim-1", "after": "f" * 40, "pushed_at": CUT_TICK - 8800, "source": "synthetic"},
+        {"id": "act-2", "claim": "claim-2", "after": "1" * 40, "pushed_at": CUT_TICK - 800, "source": "synthetic"},
+    ],
+    "build_claim_lease": [
+        {"id": "lease-1", "decision": "dec-1", "seconds": 7200},
+    ],
+    "build_claim_pull_reading": [
+        {
+            "id": "cpr-1",
+            "claim": "claim-1",
+            "observed_at": CUT_TICK,
+            "state": "none",
+            "source": "synthetic",
+            "receipt": "rcpt-1",
+        },
+        {
+            "id": "cpr-2",
+            "claim": "claim-2",
+            "observed_at": CUT_TICK,
+            "state": "open",
+            "source": "synthetic",
+        },
+    ],
+    "build_claim_delete": [
+        {
+            "id": "del-1",
+            "run": "run-1",
+            "branch": "task/demo-stale",
+            "generation": "f" * 40,
+            "sent_at": CUT_TICK,
+            "outcome": "sent",
+            "source": "synthetic",
+        },
+        {
+            "id": "del-2",
+            "run": "run-1",
+            "branch": "task/demo-pending",
+            "generation": "2" * 40,
+            "sent_at": CUT_TICK,
+            "outcome": "sent",
+            "source": "synthetic",
+        },
+    ],
+    "build_claim_ref_read": [
+        {
+            "id": "rr-1",
+            "run": "run-1",
+            "branch": "task/demo-stale",
+            "observed_at": CUT_TICK + 100,
+            "state": "absent",
+            "receipt": "rcpt-after",
+            "source": "synthetic",
+        },
     ],
 }
+
+# Representative derived relation per rule module in `build/rules/*.dl` to prove non-vacuous coverage.
+BUILD_REQUIRED_NON_EMPTY = (
+    "may_read",                 # access.dl
+    "build_selected_job",       # selection.dl
+    "build_policy_date_at_cut", # policy_date.dl
+    "build_decision_done",      # decision_rules.dl
+    "build_milestone_progress", # progress.dl
+    "build_task_precedes",      # tasks.dl
+    "build_claim_release_plan", # claims.dl
+    "build_claim_released",     # claim_release.dl
+)
 
 EPOCH_EXERCISE = {
     "loop_active_run": [{"id": "run-1"}],
@@ -84,142 +293,9 @@ EPOCH_EXERCISE = {
 }
 
 
-def _rel(path: Path) -> str:
-    return path.relative_to(REPO).as_posix()
-
-
-def _synthetic_sidecar(position: str) -> str:
-    return yaml.safe_dump(
-        {
-            "default": {
-                "kind": "synthetic",
-                "name": "loop/tests/test_rezono_1_build_epoch_conversion.py",
-                "position": position,
-            }
-        },
-        sort_keys=False,
-    )
-
-
-def _read_legacy_archive() -> dict[str, dict[str, bytes]]:
-    raw: dict[str, bytes] = {}
-    with tarfile.open(LEGACY_ARCHIVE, "r:gz") as tf:
-        for member in tf.getmembers():
-            assert (
-                member.isfile()
-                and not member.issym()
-                and not member.islnk()
-                and not member.name.startswith("/")
-                and "\\" not in member.name
-                and ".." not in member.name.split("/")
-            ), member.name
-            handle = tf.extractfile(member)
-            assert handle is not None
-            raw[member.name] = handle.read()
-    pack_roots = sorted(
-        (name[: -len("/pack.yaml")] for name in raw if name.endswith("/pack.yaml")),
-        key=len,
-        reverse=True,
-    )
-    by_pack: dict[str, dict[str, bytes]] = {root: {} for root in pack_roots}
-    for name, data in raw.items():
-        owner = next(root for root in pack_roots if name.startswith(root + "/"))
-        by_pack[owner][name[len(owner) + 1 :]] = data
-    return by_pack
-
-
-def _materialize_legacy_packs(dest_root: Path) -> None:
-    for pack_rel, files in _read_legacy_archive().items():
-        pack_dir = dest_root / pack_rel
-        if pack_dir.exists():
-            shutil.rmtree(pack_dir)
-        for rel_file, data in files.items():
-            target = pack_dir / rel_file
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_bytes(data)
-
-
-def _admit_legacy_std_packs(stack: ExitStack, root: Path) -> None:
-    from rezono_compiler import modules, standard_packs
-
-    packs_dir = root / "packs"
-    if not packs_dir.is_dir():
-        return
-    for pack_yaml in sorted(packs_dir.glob("std-*/pack.yaml")):
-        std_dir = pack_yaml.parent
-        stack.enter_context(standard_packs.trial(std_dir.name, modules.pack_hash(std_dir)))
-
-
-def _form_has_derivation(decls: list[dict]) -> bool:
-    for decl in decls:
-        if not isinstance(decl, dict):
-            continue
-        if "derived" in decl and isinstance(decl["derived"], str):
-            return True
-        if "step" in decl:
-            return True
-        nested = decl.get("derived")
-        if isinstance(nested, list) and nested:
-            return True
-    return False
-
-
-def _assert_pack_is_native_rezono_1(pack_dir: Path) -> object:
-    dl_files = sorted(_rel(path) for path in pack_dir.rglob("*.dl"))
-    assert not dl_files, f"{_rel(pack_dir)} still contains .dl rule files: {dl_files}"
-
-    meta = yaml.safe_load((pack_dir / "pack.yaml").read_bytes()) or {}
-    entries = meta.get("rezono") or []
-    assert entries, f"{_rel(pack_dir)}/pack.yaml must declare native rezono 1 modules under `rezono:`"
-
-    has_derivation = False
-    for entry in entries:
-        module_path = pack_dir / entry["module"]
-        form_path = pack_dir / entry["form"]
-        assert module_path.is_file(), f"missing module {_rel(module_path)}"
-        assert form_path.is_file(), f"missing module form {_rel(form_path)}"
-
-        form = json.loads(form_path.read_bytes())
-        assert form.get("format") == "rezono.module/5", (
-            f"{_rel(form_path)} must use format rezono.module/5, got {form.get('format')!r}"
-        )
-        module = form.get("module") or {}
-        assert module.get("rezono") == "1", (
-            f"{_rel(form_path)} must record module.rezono == '1', got {module.get('rezono')!r}"
-        )
-        decls = module.get("decls") or []
-        for decl in decls:
-            if isinstance(decl, dict):
-                assert "rules" not in decl, f"{_rel(form_path)} still contains a legacy `rules` pipe block"
-                assert "rule" not in decl, f"{_rel(form_path)} still contains a rezono 0 `rule` declaration"
-        if _form_has_derivation(decls):
-            has_derivation = True
-
-    assert has_derivation, f"{_rel(pack_dir)} must define native rezono 1 `derived` (or `step`) declarations"
-
-    from rezono_compiler import pack
-
-    return pack.read(pack_dir)
-
-
-def _assert_epoch_is_rezono_1(pack_label: str, epoch) -> tuple[dict, dict]:
-    bundle = json.loads(epoch.bundle)
-    info = bundle.get("pack") or {}
-    assert info.get("language_version") == "1", (
-        f"{pack_label} bundle/schema-bundle.json must record language_version == '1': {info!r}"
-    )
-    ir = json.loads(epoch.rules)
-    assert any(r.get("role") != "base" for r in ir.get("relations", ())), (
-        f"{pack_label} compiled ir/rules.json has no derived or functional relations"
-    )
-    return bundle, ir
-
-
 def test_legacy_build_and_epoch_archive_integrity():
-    """Verify `loop/tests/fixtures/rezono-1-legacy/legacy-packs.tar.gz` is well-formed (regular files only,
-    no symlinks or path traversal) and contains `build/`, `epoch/`, their imported standard packs, and `.dl` rules."""
-    assert LEGACY_ARCHIVE.is_file(), f"missing {_rel(LEGACY_ARCHIVE)}"
-    by_pack = _read_legacy_archive()
+    """Verify the shared legacy archive holds `build/`, `epoch/`, and their imported standard packs,
+    and matches live definition files byte-for-byte (LF-normalized) for every pack that is still legacy."""
     expected_packs = {
         "build",
         "epoch",
@@ -228,15 +304,12 @@ def test_legacy_build_and_epoch_archive_integrity():
         "packs/std-loop",
         "packs/std-order",
     }
-    assert expected_packs <= set(by_pack), f"missing packs in archive: {sorted(expected_packs - set(by_pack))}"
-    for pack_rel in sorted(expected_packs):
-        meta = yaml.safe_load(by_pack[pack_rel]["pack.yaml"])
-        assert isinstance(meta, dict) and meta.get("name"), f"invalid pack.yaml in archive for {pack_rel}"
-
-    for pack_rel in ("build", "epoch", "packs/std-decision", "packs/std-loop", "packs/std-order"):
-        dl_files = [rel for rel in by_pack[pack_rel] if rel.endswith(".dl")]
-        assert dl_files, f"archive pack {pack_rel} is missing legacy .dl definitions"
-    assert "rezono/access.rezono" in by_pack["packs/std-access"], "archive packs/std-access missing access.rezono"
+    _LEGACY.assert_legacy_archive_integrity(
+        expected_packs,
+        expected_dl_packs={"build", "epoch", "packs/std-decision", "packs/std-loop", "packs/std-order"},
+        expected_files={"packs/std-access": {"rezono/access.rezono"}},
+    )
+    _LEGACY.assert_legacy_packs_match_archive(expected_packs)
 
 
 @pytest.mark.xfail(
@@ -256,17 +329,16 @@ def test_build_and_epoch_packs_convert_to_rezono_1(tmp_path: Path):
     build_dir = REPO / "build"
     epoch_dir = REPO / "epoch"
 
-    build_model = _assert_pack_is_native_rezono_1(build_dir)
-    _assert_pack_is_native_rezono_1(epoch_dir)
+    build_model = _LEGACY.assert_pack_is_native_rezono_1(build_dir, compile_output=False)
+    _LEGACY.assert_pack_is_native_rezono_1(epoch_dir, compile_output=False)
 
     if str(REPO) not in sys.path:
         sys.path.insert(0, str(REPO))
-    from rezono_compiler import facts as fact_files
     from rezono_publisher import batch as publisher_batch
     from scripts import convert_pack
 
     legacy_root = tmp_path / "legacy"
-    _materialize_legacy_packs(legacy_root)
+    _LEGACY.materialize_legacy_packs(legacy_root, ("packs", "build", "epoch"))
     native_root = tmp_path / "native"
     shutil.copytree(REPO / "packs", native_root / "packs")
     shutil.copytree(build_dir, native_root / "build")
@@ -285,41 +357,47 @@ def test_build_and_epoch_packs_convert_to_rezono_1(tmp_path: Path):
                 yaml.safe_dump(exercise, sort_keys=False), encoding="utf-8", newline="\n"
             )
             (facts_dir / "exercise.sources.yaml").write_text(
-                _synthetic_sidecar(f"{pack_name}-exercise"), encoding="utf-8", newline="\n"
+                _LEGACY.synthetic_sidecar("loop/tests/test_rezono_1_build_epoch_conversion.py", f"{pack_name}-exercise"),
+                encoding="utf-8",
+                newline="\n",
             )
 
-    build_roles: dict[str, str] = {"checker": "complete"}
-    for path in fact_files.files(build_dir):
-        for row in fact_files.load(build_model, path).get("role", ()):
-            build_roles[str(row[0])] = "may_read"
+    build_roles = _LEGACY.roles_for_pack(build_dir, build_model)
     assert {"checker", "coordinator", "owner"} <= set(build_roles), build_roles
 
-    # Compare build/ across all roles via compare_publications (non-vacuous check on derived rows).
+    # Compare build/ across all roles via compare_publications (non-vacuous across all 8 build rule modules).
     with ExitStack() as stack:
-        _admit_legacy_std_packs(stack, legacy_root)
+        _LEGACY.admit_legacy_std_packs(stack, legacy_root)
         legacy_build_epoch = publisher_batch.epoch(
             legacy_root / "build", epoch=1, knowledge_time=TIME, sources=[("rules", "legacy-build")]
         )
         legacy_build = convert_pack.read_publication(legacy_build_epoch, tmp_path / "legacy-build-store", build_roles)
-    assert legacy_build.rows["may_read"], "build/ exercise must derive non-empty may_read rows"
+    for rel_name in BUILD_REQUIRED_NON_EMPTY:
+        assert legacy_build.rows.get(rel_name), f"build/ exercise must derive non-empty {rel_name} rows"
     native_build_epoch = publisher_batch.epoch(
         native_root / "build", epoch=1, knowledge_time=TIME, sources=[("rules", "native-build")]
     )
-    _, build_ir = _assert_epoch_is_rezono_1("build", native_build_epoch)
+    _, build_ir = _LEGACY.assert_epoch_is_rezono_1("build", native_build_epoch)
     build_relations = {r["name"] for r in build_ir.get("relations", []) if r.get("role") != "base"}
     assert {
         "may_read",
         "may_read_full",
+        "build_selected_job",
+        "build_policy_date_at_cut",
+        "build_decision_done",
         "build_milestone_progress",
         "release_1_done",
         "build_offboard_work_count",
         "build_offboard_work_unknown",
+        "build_task_precedes",
+        "build_claim_release_plan",
+        "build_claim_released",
     } <= build_relations, sorted(build_relations)
     convert_pack.compare_publications(legacy_build_epoch, native_build_epoch, build_roles)
 
     # Compare epoch/ across all derived relations via compare_publications (non-vacuous check on derived rows).
     with ExitStack() as stack:
-        _admit_legacy_std_packs(stack, legacy_root)
+        _LEGACY.admit_legacy_std_packs(stack, legacy_root)
         legacy_epoch_run = publisher_batch.epoch(
             legacy_root / "epoch", epoch=1, knowledge_time=TIME, sources=[("rules", "legacy-epoch")]
         )
@@ -332,7 +410,7 @@ def test_build_and_epoch_packs_convert_to_rezono_1(tmp_path: Path):
     native_epoch_run = publisher_batch.epoch(
         native_root / "epoch", epoch=1, knowledge_time=TIME, sources=[("rules", "native-epoch")]
     )
-    _, epoch_ir = _assert_epoch_is_rezono_1("epoch", native_epoch_run)
+    _, epoch_ir = _LEGACY.assert_epoch_is_rezono_1("epoch", native_epoch_run)
     epoch_relations = {r["name"] for r in epoch_ir.get("relations", []) if r.get("role") != "base"}
     assert {"publish_allowed", "epoch_allowed", "derived_refusal"} <= epoch_relations, sorted(epoch_relations)
     convert_pack.compare_publications(legacy_epoch_run, native_epoch_run, {"checker": "complete"})
