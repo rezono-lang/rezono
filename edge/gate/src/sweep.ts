@@ -24,6 +24,11 @@ export interface SweepStart {
 	relation: string;
 	key: string[];
 }
+export interface SweepCellLocation {
+	kind: string;
+	table: string;
+	key: string;
+}
 
 const TURN_CAUSES = new Set<TurnCause>([
 	'rule', 'version', 'definition', 'path', 'count',
@@ -130,11 +135,6 @@ function publishedGrids(text: string): Grid[] | undefined {
 	return grids;
 }
 
-function publishedGrid(text: string): Grid | undefined {
-	const grids = publishedGrids(text);
-	return grids && grids.length === 1 ? grids[0] : undefined;
-}
-
 function roleList(value: unknown): value is string[] {
 	return Array.isArray(value) && value.every((entry) => typeof entry === 'string'
 		&& SAFE.test(entry) && !entry.includes('..')) && new Set(value).size === value.length;
@@ -147,7 +147,7 @@ function checkedStatuses(checks: unknown): checks is Check[] {
 		&& typeof check.name === 'string' && typeof check.status === 'string' && ['green', 'warning', 'red'].includes(check.status));
 }
 
-async function readableCell(view: View, grid: Grid): Promise<boolean> {
+async function readableCell(view: View, grid: Grid): Promise<string | undefined> {
 	const scoped = roleCatalogue(view.bundle, [...view.snaps.values()]);
 	const byId = new Map(scoped.kinds.map((kind) => [kind.id, kind]));
 	const seen = new Set<string>();
@@ -156,17 +156,17 @@ async function readableCell(view: View, grid: Grid): Promise<boolean> {
 		seen.add(kind.id);
 		const slot = scoped.attributes.find((entry) => entry.kind === kind!.id && entry.name === grid.slot);
 		if (slot) {
-			if (slot.multivalued || slot.type !== 'integer') return false;
+			if (slot.multivalued || slot.type !== 'integer' || !view.snaps.has(grid.kind) || !view.snaps.has(slot.table)) return undefined;
 			const member = await view.range(grid.kind, { prefix: [grid.key], limit: 2 });
 			if (member.rows.length !== 1 || !record(member.rows[0]) || !Array.isArray(member.rows[0].key)
-				|| member.rows[0].key.length !== 1) return false;
+				|| member.rows[0].key.length !== 1) return undefined;
 			const value = await view.range(slot.table, { prefix: [grid.key], limit: 2 });
 			return value.rows.length === 1 && record(value.rows[0]) && Array.isArray(value.rows[0].key)
-				&& value.rows[0].key.length === 2;
+				&& value.rows[0].key.length === 2 ? slot.table : undefined;
 		}
 		kind = kind.parent ? byId.get(kind.parent) : undefined;
 	}
-	return false;
+	return undefined;
 }
 
 export function completeScope(view: View): boolean {
@@ -369,17 +369,61 @@ async function readTurns(
 	return map;
 }
 
-export async function readPublishedSweep(view: View, pack: string, role: string, named?: string, start?: SweepStart):
-	Promise<{listing: BoundSweepList; series: SweepSeriesCell[]; start?: RowRef} | undefined> {
+async function loadGrids(view: View): Promise<Grid[] | undefined> {
 	const ref = view.compiled('ir/sweeps.json');
 	if (!ref) return undefined;
-	let grid: Grid | undefined;
-	try { grid = await view.object(ref, 'bundles', publishedGrid) as Grid | undefined; }
+	try { return await view.object(ref, 'bundles', publishedGrids) as Grid[] | undefined; }
 	catch (error) {
 		if (error instanceof StoreLimit) throw error;
 		return undefined;
 	}
-	if (!grid || (named !== undefined && grid.name !== named) || !await readableCell(view, grid)) return undefined;
+}
+
+async function boundPoints(view: View, pack: string, role: string, grid: Grid, full: boolean): Promise<Point[]> {
+	const points: Point[] = [];
+	for (let index = 0; index < grid.count; index++) {
+		const value = (grid.min + BigInt(index) * grid.step).toString();
+		points.push(full ? await publishedPoint(view, pack, role, grid, index, value)
+			: { cell: { index, value, status: 'unavailable' } });
+	}
+	return points;
+}
+
+export async function readPublishedSweeps(view: View, pack: string, role: string):
+	Promise<{ listing: BoundSweepList; cells: SweepCellLocation[] } | undefined> {
+	const grids = await loadGrids(view);
+	if (!grids) return undefined;
+	const full = completeScope(view);
+	const sweeps: BoundSweep[] = [];
+	const cells: SweepCellLocation[] = [];
+	for (const grid of grids) {
+		const table = await readableCell(view, grid);
+		if (!table) continue;
+		const points = await boundPoints(view, pack, role, grid, full);
+		sweeps.push({
+			name: grid.name,
+			cell: { kind: grid.kind, id: grid.key, slot: grid.slot },
+			min: String(grid.min),
+			max: String(grid.max),
+			step: String(grid.step),
+			cells: points.map(({ cell }) => cell)
+		});
+		cells.push({ kind: grid.kind, table, key: grid.key });
+	}
+	if (!sweeps.length) return undefined;
+	return { listing: { manifest_id: view.manifest.id, sweeps }, cells };
+}
+
+export async function readPublishedSweep(view: View, pack: string, role: string, named: string, start?: SweepStart):
+	Promise<{ series: SweepSeriesCell[]; start?: RowRef; cell: SweepCellLocation } | undefined> {
+	if (!NAME.test(named)) return undefined;
+	const grids = await loadGrids(view);
+	if (!grids) return undefined;
+	const grid = grids.find((entry) => entry.name === named);
+	if (!grid) return undefined;
+	const table = await readableCell(view, grid);
+	if (!table) return undefined;
+	const cell: SweepCellLocation = { kind: grid.kind, table, key: grid.key };
 	let startRef: RowRef | undefined;
 	let mainRows: Keyed[] | undefined;
 	let mode: PairMode = { kind: 'default' };
@@ -407,18 +451,11 @@ export async function readPublishedSweep(view: View, pack: string, role: string,
 		}
 	}
 	const full = completeScope(view);
-	const points: Point[] = [];
-	for (let index = 0; index < grid.count; index++) {
-		const value = (grid.min + BigInt(index) * grid.step).toString();
-		points.push(full ? await publishedPoint(view, pack, role, grid, index, value)
-			: { cell: { index, value, status: 'unavailable' } });
-	}
-	const listing: BoundSweep = { name: grid.name, cell: { kind: grid.kind, id: grid.key, slot: grid.slot },
-		min: String(grid.min), max: String(grid.max), step: String(grid.step), cells: points.map(({ cell }) => cell) };
+	const points = await boundPoints(view, pack, role, grid, full);
 	if (!start || !mainRows || !startRef) {
-		const series = points.map(({ cell, diagnosis }) => ({ index: cell.index, value: cell.value, status: cell.status,
-			...(cell.manifest && { manifest: cell.manifest }), ...(diagnosis && { diagnosis }) }));
-		return { listing: { manifest_id: view.manifest.id, sweeps: [listing] }, series };
+		const series = points.map(({ cell: pointCell, diagnosis }) => ({ index: pointCell.index, value: pointCell.value, status: pointCell.status,
+			...(pointCell.manifest && { manifest: pointCell.manifest }), ...(diagnosis && { diagnosis }) }));
+		return { series, cell };
 	}
 
 	const pairedKeys: Array<string | undefined> = [];
@@ -447,12 +484,12 @@ export async function readPublishedSweep(view: View, pack: string, role: string,
 
 	const series: SweepSeriesCell[] = [];
 	for (let i = 0; i < points.length; i++) {
-		const { cell, diagnosis } = points[i];
+		const { cell: pointCell, diagnosis } = points[i];
 		const entry: SweepSeriesCell = {
-			index: cell.index,
-			value: cell.value,
-			status: cell.status,
-			...(cell.manifest && { manifest: cell.manifest }),
+			index: pointCell.index,
+			value: pointCell.value,
+			status: pointCell.status,
+			...(pointCell.manifest && { manifest: pointCell.manifest }),
 			...(diagnosis && { diagnosis })
 		};
 		if (pairedKeys[i] !== undefined) {
@@ -489,7 +526,7 @@ export async function readPublishedSweep(view: View, pack: string, role: string,
 		}
 		series.push(entry);
 	}
-	return { listing: { manifest_id: view.manifest.id, sweeps: [listing] }, series, start: startRef };
+	return { series, start: startRef, cell };
 }
 
 export async function readPublishedVariant(

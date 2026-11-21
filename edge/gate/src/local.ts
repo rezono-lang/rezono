@@ -16,7 +16,7 @@ import {
 	standingHeaders, withdrawalBody, WithdrawnError, type WithdrawalRecord
 } from './standing.ts';
 import { fileStore, StoreLimit, type Store } from './store.ts';
-import { completeScope, readPublishedSweep, readPublishedVariant, sweepAnswer, type SweepStart } from './sweep.ts';
+import { completeScope, readPublishedSweep, readPublishedSweeps, readPublishedVariant, sweepAnswer, type SweepCellLocation, type SweepStart } from './sweep.ts';
 
 const LIMIT = 1000;
 const REQUEST_BYTES = 16 * 1024;
@@ -307,38 +307,58 @@ async function rangeChecked(view: Current, withdrawals: readonly WithdrawalRecor
 	return pageByKey(all, at);
 }
 
-async function readSweepChecked(
+async function checkSweepWithdrawals(
 	current: Current,
 	withdrawals: readonly WithdrawalRecord[],
-	pack: string,
-	role: string,
-	name?: string,
+	cells: readonly SweepCellLocation[],
 	start?: SweepStart
-) {
+): Promise<void> {
+	if (!withdrawals.some((entry) => entry.rows.length > 0)) return;
 	let withdrawn: WithdrawalRecord | undefined;
-	const checkedView = {
-		...current,
-		range: async (relation: string, at: KeyRange): Promise<Page> => {
+	for (const cell of cells) {
+		for (const relation of [cell.kind, cell.table]) {
 			const all = await current.rows(relation);
 			withdrawn = earlierWithdrawal(
 				withdrawn,
-				rowsWithdrawal(withdrawals, current.manifest.id, relation, rangeMatchingRows(all, at))
+				rowsWithdrawal(withdrawals, current.manifest.id, relation, rangeMatchingRows(all, { prefix: [cell.key] }))
 			);
-			return pageByKey(all, at);
 		}
-	};
-	const published = await readPublishedSweep(checkedView, pack, role, name, start);
-	if (!published) return undefined;
+	}
 	if (start) {
 		withdrawn = earlierWithdrawal(withdrawn, rowWithdrawal(withdrawals, current.manifest.id, start.relation, start.key));
 	}
-	if (withdrawals.some((entry) => entry.rows.length > 0) && completeScope(current)) {
+	if (completeScope(current)) {
 		for (const relation of current.snaps.keys()) {
 			const rows = await current.rows(relation);
 			withdrawn = earlierWithdrawal(withdrawn, rowsWithdrawal(withdrawals, current.manifest.id, relation, rows));
 		}
 	}
 	if (withdrawn) throw new WithdrawnError(withdrawn);
+}
+
+async function readSweepsChecked(
+	current: Current,
+	withdrawals: readonly WithdrawalRecord[],
+	pack: string,
+	role: string
+) {
+	const published = await readPublishedSweeps(current, pack, role);
+	if (!published) return undefined;
+	await checkSweepWithdrawals(current, withdrawals, published.cells);
+	return published.listing;
+}
+
+async function readSweepChecked(
+	current: Current,
+	withdrawals: readonly WithdrawalRecord[],
+	pack: string,
+	role: string,
+	name: string,
+	start?: SweepStart
+) {
+	const published = await readPublishedSweep(current, pack, role, name, start);
+	if (!published) return undefined;
+	await checkSweepWithdrawals(current, withdrawals, [published.cell], start);
 	return published;
 }
 
@@ -484,9 +504,9 @@ export async function openLocalGate(root: string, role: string): Promise<Handle>
 				if (url.searchParams.get('m') !== current.manifest.id) return missing();
 				const withdrawn = epochWithdrawal(withdrawals, current.manifest.id);
 				if (withdrawn) return gone(withdrawn);
-				const published = await readSweepChecked(current, withdrawals, pack, role);
-				if (!published || await source.latest() !== headKey(pack, current.manifest.epoch)) return missing();
-				return json(published.listing, 200, standingHeaders(pack, current.manifest.epoch, current.manifest.id, current.manifest.epoch));
+				const listing = await readSweepsChecked(current, withdrawals, pack, role);
+				if (!listing || await source.latest() !== headKey(pack, current.manifest.epoch)) return missing();
+				return json(listing, 200, standingHeaders(pack, current.manifest.epoch, current.manifest.id, current.manifest.epoch));
 			}
 			const pin = id === 'head' || id === 'bundle' ? url.searchParams.get('m') ?? undefined
 				: id === 'manifests' ? route : id;
