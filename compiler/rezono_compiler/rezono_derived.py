@@ -219,6 +219,16 @@ def ir_type(pack, typ: tuple) -> str:
     return typ[1]
 
 
+def validate_note(site: Site, at: str, decl: Mapping[str, object]) -> tuple[str | None, str | None]:
+    """Validate optional `means` and `source` note members as strings and return `(means, source)`."""
+    for field_name, label in (("means", "sentence"), ("source", "source")):
+        if field_name in decl and not isinstance(decl[field_name], str):
+            site.refuse(f"{at}/{field_name}", f"a {label} is text", "R000")
+    means = decl.get("means")
+    source = decl.get("source")
+    return means if isinstance(means, str) else None, source if isinstance(source, str) else None
+
+
 def _signature(site: Site, module: modules.Module, names: modules.Names, pack, at: str, decl: dict,
                owner: dict | None) -> Signature:
     allowed = {"derived", "type", "card", "value", "means", "source"} | ({"params", "over"} if owner is None else set())
@@ -261,10 +271,7 @@ def _signature(site: Site, module: modules.Module, names: modules.Names, pack, a
     if not boolean:
         signature.value_type = ir_type(pack, result_type)
         signature.optional = card == "?"
-    if "means" in decl and not isinstance(decl["means"], str):
-        site.refuse(f"{at}/means", "a sentence is text", "R000")
-    if "source" in decl and not isinstance(decl["source"], str):
-        site.refuse(at, "a source is text", "R000")
+    validate_note(site, at, decl)
     return signature
 
 

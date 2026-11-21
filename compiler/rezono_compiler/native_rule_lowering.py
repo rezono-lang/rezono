@@ -9,7 +9,10 @@ from pathlib import Path
 import re
 from typing import NoReturn
 
-from . import diagnostics, modules, native_rule_groups, native_rule_signatures, rezono_module, rules, rules_dl, spans
+from . import (
+    diagnostics, modules, native_rule_groups, native_rule_signatures, rezono_derived, rezono_module, rules, rules_dl,
+    spans,
+)
 from .diagnostics import Diagnostic
 from .pack import CompileError, CompiledStep, IntermediateInvariant, Kind
 
@@ -99,13 +102,10 @@ def lower_declaration(site: Site, linked: native_rule_signatures.Linked, module:
         refuse(where, at, line, column, "Rule options and locals are not lowered yet")
     if ("means" in declaration or "source" in declaration) and "when" not in declaration:
         refuse(where, at, line, column, "A rule sentence or source needs a `when` clause", "R000")
-    means = declaration.get("means")
-    if means is not None and not isinstance(means, str):
-        m_line, m_col = site.span(f"{at}/means")[1:] if f"{at}/means" in offsets else (line, column)
-        refuse(where, f"{at}/means", m_line, m_col, "A rule sentence must be text", "R000")
-    source_ref = declaration.get("source")
-    if source_ref is not None and not isinstance(source_ref, str):
-        refuse(where, f"{at}/source", line, column, "A rule source must be text", "R000")
+    try:
+        means, source_ref = rezono_derived.validate_note(rezono_derived.Site(where, text, offsets), at, declaration)
+    except rezono_derived.Refused as error:
+        raise CompileError(str(error), [error.diagnostic]) from error
     if options is not None:
         for index, option in enumerate(options):
             opt_at = f"{at}/options/{index}"
