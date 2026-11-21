@@ -252,7 +252,7 @@ class Schema:
         if pack.ann(slot, "personal") is True:
             raise Refusal(
                 PERSONAL_SLOT_CODE,
-                personal_slot_message(f"{owner}.{name}", include_code=False),
+                personal_slot_message(f"{owner}.{name}"),
                 at,
             )
         if slot.identifier:

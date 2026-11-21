@@ -54,7 +54,7 @@ from .canon import CalcColumnType, calc_value, encode_key
 from .evidence import PROTECTED
 from .check import _check_witness, _rows, shaped
 from .refusals import RefusalError
-from .rules import check_calc_personal_slots, check_doc_personal_slots, load_rules
+from .rules import check_calc_personal_slots, check_personal_slots, load_rules
 from .snapshots import read_rows
 from .variant_access import check_variant_status_readers as check_variant_status_readers
 
@@ -398,7 +398,7 @@ def select(instances, derived: set, usable=None) -> dict[tuple[str, str], dict]:
 
 
 def _witnessed_grants(doc: dict, role: str, chains: dict, every: dict, instances, derived: set,
-                      findings: list[dict], *, bundle: dict | None = None) -> list[dict]:
+                      findings: list[dict]) -> list[dict]:
     """Check coverage witnesses and their positive rule premises against the complete snapshots."""
     coverage = {}
     for key, (parts, _) in every.get(READ_FULL, {}).items():
@@ -420,7 +420,7 @@ def _witnessed_grants(doc: dict, role: str, chains: dict, every: dict, instances
     for index, witness in enumerate(instances):
         conclusion = witness["conclusion"]
         by_row[conclusion["relation"], conclusion["key"]].append((index, witness))
-    rules, groups = load_rules(doc, bundle=bundle), {}
+    rules, groups = load_rules(doc), {}
     checked = []
     seen, pending = set(), set(coverage)
     while pending:
@@ -534,7 +534,7 @@ def check_role(role: str, complete: dict, snapshots: dict, claimed_full, bundle:
     except ValueError as err:
         return frozenset(), [{"reason": "malformed_bundle", "detail": str(err), "severity": "error"}]
     try:
-        check_doc_personal_slots(doc, bundle)
+        check_personal_slots(doc, bundle)
         if calc_ir is not None:
             check_calc_personal_slots(calc_ir, bundle)
     except RefusalError as err:
@@ -587,7 +587,7 @@ def check_role(role: str, complete: dict, snapshots: dict, claimed_full, bundle:
         valid = [w for w in instances if shaped(w)]
         if len(valid) != len(instances):
             findings.append({"reason": "evidence_mismatch", "relation": READ_FULL, "detail": "malformed rule instances"})
-        evidence = _witnessed_grants(doc, role, chains, every, valid, derived, findings, bundle=bundle) if complete_valid else []
+        evidence = _witnessed_grants(doc, role, chains, every, valid, derived, findings) if complete_valid else []
         instances = valid
     else:
         named = any(p == (role,) for p, _ in every.get(ROLE, {}).values())

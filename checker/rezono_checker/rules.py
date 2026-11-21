@@ -470,74 +470,42 @@ def personal_tables(bundle: dict) -> dict[str, str]:
     return tables
 
 
-def check_personal_slots(rules: dict, bundle: dict) -> None:
-    """Refuse any loaded rule whose head, body, aggregate, or functional domain references a personal
-    attribute table from `bundle` (`bundle/schema-bundle.json`, decisions/personal-data-handling.md §3).
-    Raises RefusalError."""
-    personal = personal_tables(bundle)
-    if not personal:
-        return
-    for func in sorted(getattr(rules, "functionals", {}).values(), key=lambda f: f.name):
-        if func.domain in personal:
-            raise RefusalError(
-                Refusal("personal_slot_in_functional_domain", relation=func.name, field=personal[func.domain])
-            )
-    for rule in sorted(rules.values(), key=lambda r: r.id):
-        if rule.head.relation in personal:
-            raise RefusalError(
-                Refusal("personal_slot_in_rule", rule=rule.id, relation=rule.head.relation,
-                        field=personal[rule.head.relation])
-            )
-        for b in rule.body:
-            if b.atom.relation in personal:
-                raise RefusalError(
-                    Refusal("personal_slot_in_rule", rule=rule.id, relation=b.atom.relation,
-                            field=personal[b.atom.relation])
-                )
-        for a in rule.aggregates:
-            if a.atom.relation in personal:
-                raise RefusalError(
-                    Refusal("personal_slot_in_rule", rule=rule.id, relation=a.atom.relation,
-                            field=personal[a.atom.relation])
-                )
-
-
-def check_doc_personal_slots(doc: dict, bundle: dict) -> None:
-    """Refuse any raw rule IR document whose rules or functional domains reference a personal attribute
-    table from `bundle` (`bundle/schema-bundle.json`). Works on both full and minimal rule documents,
-    independently of `load_rules`. Raises RefusalError."""
-    personal = personal_tables(bundle)
-    if not isinstance(doc, dict):
+def _personal_refs(rules_or_doc: dict) -> tuple[list[tuple[str, str]], list[tuple[str, tuple[str, ...]]]]:
+    """Extract `(functional_name, domain)` and `(rule_id, referenced_relations)` from either a loaded
+    `Rules`/rule mapping or a raw rule IR document. Raises RefusalError on malformed rule IR."""
+    if not isinstance(rules_or_doc, dict):
         raise RefusalError(Refusal("rule_ir_malformed", field="document"))
-    raw_relations = doc.get("relations", ())
+    if isinstance(rules_or_doc, Rules) or (rules_or_doc and all(isinstance(v, Rule) for v in rules_or_doc.values())):
+        funcs = [
+            (f.name, f.domain)
+            for f in sorted(getattr(rules_or_doc, "functionals", {}).values(), key=lambda f: f.name)
+        ]
+        refs = [
+            (r.id, (r.head.relation, *(b.atom.relation for b in r.body), *(a.atom.relation for a in r.aggregates)))
+            for r in sorted(rules_or_doc.values(), key=lambda r: r.id)
+        ]
+        return funcs, refs
+    raw_relations = rules_or_doc.get("relations", ())
     if raw_relations is not None and not isinstance(raw_relations, (list, tuple)):
         raise RefusalError(Refusal("rule_ir_malformed", field="relations"))
-    raw_rules = doc.get("rules", ())
+    raw_rules = rules_or_doc.get("rules", ())
     if raw_rules is not None and not isinstance(raw_rules, (list, tuple)):
         raise RefusalError(Refusal("rule_ir_malformed", field="rules"))
-    if not personal:
-        return
+    funcs = []
     for rel in raw_relations or ():
         if not isinstance(rel, dict):
             raise RefusalError(Refusal("rule_ir_malformed", field="relations"))
-        if rel.get("role") == "functional":
-            domain = rel.get("domain")
-            if isinstance(domain, str) and domain in personal:
-                rname = str(rel.get("name") or "functional")
-                raise RefusalError(
-                    Refusal("personal_slot_in_functional_domain", relation=rname, field=personal[domain])
-                )
+        if rel.get("role") == "functional" and isinstance(rel.get("domain"), str):
+            funcs.append((str(rel.get("name") or "functional"), rel["domain"]))
+    refs = []
     for rule in raw_rules or ():
         if not isinstance(rule, dict):
             raise RefusalError(Refusal("rule_ir_malformed", field="rules"))
         rid = str(rule.get("id") or "rule")
+        rels: list[str] = []
         head = rule.get("head")
-        if isinstance(head, dict):
-            hrel = head.get("relation")
-            if isinstance(hrel, str) and hrel in personal:
-                raise RefusalError(
-                    Refusal("personal_slot_in_rule", rule=rid, relation=hrel, field=personal[hrel])
-                )
+        if isinstance(head, dict) and isinstance(head.get("relation"), str):
+            rels.append(head["relation"])
         for section in ("body", "aggregates"):
             atoms = rule.get(section, ())
             if atoms is not None and not isinstance(atoms, (list, tuple)):
@@ -545,11 +513,31 @@ def check_doc_personal_slots(doc: dict, bundle: dict) -> None:
             for atom in atoms or ():
                 if not isinstance(atom, dict):
                     raise RefusalError(Refusal("rule_ir_malformed", field=section))
-                rel = atom.get("relation")
-                if isinstance(rel, str) and rel in personal:
-                    raise RefusalError(
-                        Refusal("personal_slot_in_rule", rule=rid, relation=rel, field=personal[rel])
-                    )
+                if isinstance(atom.get("relation"), str):
+                    rels.append(atom["relation"])
+        refs.append((rid, tuple(rels)))
+    return funcs, refs
+
+
+def check_personal_slots(rules_or_doc: dict, bundle: dict) -> None:
+    """Refuse any loaded rule set or raw rule IR document whose heads, bodies, aggregates, or
+    functional domains reference a personal attribute table from `bundle`
+    (`bundle/schema-bundle.json`, decisions/personal-data-handling.md §3). Raises RefusalError."""
+    personal = personal_tables(bundle)
+    funcs, refs = _personal_refs(rules_or_doc)
+    if not personal:
+        return
+    for fname, domain in funcs:
+        if domain in personal:
+            raise RefusalError(
+                Refusal("personal_slot_in_functional_domain", relation=fname, field=personal[domain])
+            )
+    for rid, relations in refs:
+        for rel in relations:
+            if rel in personal:
+                raise RefusalError(
+                    Refusal("personal_slot_in_rule", rule=rid, relation=rel, field=personal[rel])
+                )
 
 
 def check_calc_personal_slots(calculation: dict, bundle: dict) -> None:

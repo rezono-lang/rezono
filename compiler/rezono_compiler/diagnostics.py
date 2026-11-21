@@ -21,9 +21,9 @@ PERSONAL_SLOT_MESSAGE = (
 )
 
 
-def personal_slot_message(slot: str, *, where: str = "", table: str = "", include_code: bool = True) -> str:
-    """Format the R054 refusal sentence for a personal slot."""
-    detail = (f" ({table})" if table else "") + (f" ({PERSONAL_SLOT_CODE})" if include_code else "")
+def personal_slot_message(slot: str, *, where: str = "", table: str = "") -> str:
+    """Format the R054 refusal sentence for a personal slot (the code is carried on Diagnostic.code)."""
+    detail = f" ({table})" if table else ""
     body = PERSONAL_SLOT_MESSAGE.format(slot=slot, detail=detail)
     return f"{where}: {body}" if where else body
 
