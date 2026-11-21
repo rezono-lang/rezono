@@ -192,16 +192,18 @@ def _functional_state_ok(func, all_vals: set[str], state: str, reason: str, val:
                          prop_states: set[str] | frozenset[str] = frozenset()) -> bool:
     if state not in FUNCTIONAL_STATES:
         return False
-    if "invalid" in prop_states or len(all_vals) > 1:
+    if "invalid" in prop_states:
         return state == "invalid" and val == "" and bool(REASON.fullmatch(reason))
+    if len(all_vals) > 1:
+        return state == "invalid" and val == "" and reason == "multiple_values"
     if "unknown" in prop_states:
         return state == "unknown" and val == "" and bool(REASON.fullmatch(reason))
     if "not_applicable" in prop_states:
         return state == "not_applicable" and val == "" and bool(REASON.fullmatch(reason))
     if len(all_vals) == 1:
         return state == "known" and reason == "" and val in all_vals and _functional_value_ok(val, func.value_type)
-    return (state == func.empty_state and val == "" and bool(REASON.fullmatch(reason))
-            and (func.empty_reason is None or reason == func.empty_reason))
+    expected_reason = "no_match" if func.empty_reason is None else func.empty_reason
+    return state == func.empty_state and val == "" and reason == expected_reason and bool(REASON.fullmatch(reason))
 
 
 def _functional_candidates(rules, func, rows, witness=None, groups=None):
