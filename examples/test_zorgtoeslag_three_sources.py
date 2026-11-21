@@ -742,7 +742,10 @@ def test_zorgtoeslag_slice_readme_and_examples_learning_ladder():
     raises=AssertionError,
     reason="extra: decisions/healthcare-allowance-three-sources.md: "
            "examples/zorgtoeslag-slice/reference.py must fail closed when no reference date "
-           "(as_of, known) is supplied instead of silently falling back to a hardcoded fixed date.",
+           "(as_of, known) is supplied instead of silently falling back to a hardcoded fixed date. "
+           "Waits for the planner: scripts/red_guard.py treats reference.py as a protected path "
+           "(requiring the planner label) and forbids lifting a red mark in the same PR that changes "
+           "a non-evidence protected file.",
 )
 def test_reference_oracle_fails_closed_without_reference_date():
     oracle = _load_oracle()
