@@ -249,51 +249,67 @@ def execute_run(
     else:
         order_state, order_receipt = "refused", None
 
-    machines = (
-        prepare_machines(observe_machines(plan_hash))
-        if order_state == "applied"
-        else []
-    )
-
-    order_obs: list[tuple[str, str]] = []
-    if authorized and order_state == "applied" and order_receipt is not None:
-        order_obs.append(("order_applied", str(order_receipt["id"])))
-        if machines:
-            order_obs.append(("machines_observed", str(len(machines))))
-    order_trace, order_outcome = _run_phase(
-        loop_execute,
-        plan_hash,
-        _ORDER_STEPS,
-        [("authorized", plan_hash)] if authorized else [],
-        order_obs,
-    )
-
-    installation = (
-        deliver(plan_hash)
-        if order_outcome == "success" and bool(machines)
-        else None
-    )
-    delivered = (
-        order_outcome == "success"
-        and bool(machines)
-        and isinstance(installation, Mapping)
-        and installation.get("ready") is True
-        and installation.get("request_id") == request_id
-        and plan.get("request_id") == request_id
-    )
-
     sweep_id = "after"
-    if delivered:
-        delete_receipt = delete_resources(plan_hash)
-        raw_inventory = list_inventory(plan_hash)
-        if not isinstance(raw_inventory, list):
+    order_applied = order_state == "applied" or orders > 0
+    cleanup_ran = False
+
+    def _run_cleanup() -> tuple[object, str]:
+        nonlocal cleanup_ran
+        cleanup_ran = True
+        receipt = delete_resources(plan_hash)
+        pages = list_inventory(plan_hash)
+        if not isinstance(pages, list):
             raise ValueError("inventory must be a list of pages")
-        cleanup_evidence = _cleanup_status(
-            raw_inventory, sweep_id, plan_hash, plan_hash, delete_receipt, event_us, scope=scope
+        status = _cleanup_status(
+            pages, sweep_id, plan_hash, plan_hash, receipt, event_us, scope=scope
         )
-    else:
-        delete_receipt = None
-        cleanup_evidence = "unknown"
+        return receipt, status
+
+    try:
+        machines = (
+            prepare_machines(observe_machines(plan_hash))
+            if order_state == "applied"
+            else []
+        )
+
+        order_obs: list[tuple[str, str]] = []
+        if authorized and order_state == "applied" and order_receipt is not None:
+            order_obs.append(("order_applied", str(order_receipt["id"])))
+            if machines:
+                order_obs.append(("machines_observed", str(len(machines))))
+        order_trace, order_outcome = _run_phase(
+            loop_execute,
+            plan_hash,
+            _ORDER_STEPS,
+            [("authorized", plan_hash)] if authorized else [],
+            order_obs,
+        )
+
+        installation = (
+            deliver(plan_hash)
+            if order_outcome == "success" and bool(machines)
+            else None
+        )
+        delivered = (
+            order_outcome == "success"
+            and bool(machines)
+            and isinstance(installation, Mapping)
+            and installation.get("ready") is True
+            and installation.get("request_id") == request_id
+            and plan.get("request_id") == request_id
+        )
+
+        if order_applied:
+            delete_receipt, cleanup_evidence = _run_cleanup()
+        else:
+            delete_receipt = None
+            cleanup_evidence = "unknown"
+    finally:
+        if order_applied and not cleanup_ran:
+            try:
+                _run_cleanup()
+            except Exception:
+                pass
 
     install_obs: list[tuple[str, str]] = []
     if order_outcome == "success" and machines:
@@ -315,7 +331,12 @@ def execute_run(
     operations = [step for step_list in (*order_trace, *install_trace) for step in step_list]
     cleanup = (
         cleanup_evidence
-        if install_outcome == "success" and "delete_resources" in operations and "list_inventory" in operations
+        if scope == "live"
+        or (
+            install_outcome == "success"
+            and "delete_resources" in operations
+            and "list_inventory" in operations
+        )
         else "unknown"
     )
     return {
