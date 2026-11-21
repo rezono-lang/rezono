@@ -98,6 +98,23 @@ def _write_object(root: Path, payload: object) -> tuple[dict, bytes]:
     return {"uri": f"s3://local-test/{key}", "sha256": digest}, data
 
 
+def _load_bearing_entries(witnesses: list[dict]) -> list[dict]:
+    seen: dict[tuple[str, str, str, str, str], bool] = {}
+    for w in witnesses:
+        c = w["conclusion"]
+        for p in w.get("premises", ()):
+            seen[(c["relation"], c["key"], p["row"]["relation"], p["row"]["key"], p["polarity"])] = True
+    return [
+        {
+            "conclusion": {"relation": cr, "key": ck},
+            "premise": {"relation": pr, "key": pk},
+            "how": how,
+            "load_bearing": flag,
+        }
+        for (cr, ck, pr, pk, how), flag in sorted(seen.items())
+    ]
+
+
 def _build_verified_sum_publication(root: Path) -> tuple[dict[str, str], dict[str, list[tuple[list[str], str]]]]:
     """Build and independently verify a published archive for `hours(member, task; h)` -> `member_hours`."""
     rules_doc = RULES_DOC
@@ -155,7 +172,11 @@ def _build_verified_sum_publication(root: Path) -> tuple[dict[str, str], dict[st
             **ref,
         })
 
-    sees = {"witnesses": chosen_witnesses, "hidden": []}
+    sees = {
+        "witnesses": chosen_witnesses,
+        "hidden": [],
+        "load_bearing_entries": _load_bearing_entries(chosen_witnesses),
+    }
     witness_ref, _ = _write_object(root, sees)
 
     bundle = {
