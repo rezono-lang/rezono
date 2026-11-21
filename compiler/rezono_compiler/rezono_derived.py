@@ -76,6 +76,7 @@ class Lowered:
     sources: tuple[rules_dl.NativeSource, ...] = ()
     notes: dict[str, Note] = field(default_factory=dict)  # relation -> its sentence and source
     properties: dict[str, tuple[str, str]] = field(default_factory=dict)  # relation `<k>_<d>` -> (k, d)
+    note_owners: dict[str, str] = field(default_factory=dict)  # relation -> owning pack name
 
 
 class Refused(Exception):
@@ -124,13 +125,94 @@ class Signature:
     as_of: tuple[str, str] | None = None  # (valid_at, known_at) evaluation date
 
 
+def _use_scope(module: modules.Module) -> tuple[tuple[str, ...], dict[str, str]]:
+    """Return `(unaliased_packs, alias_to_pack)` from a rezono module's `use` lines."""
+    unaliased: list[str] = []
+    aliases: dict[str, str] = {}
+    form_module = (module.form or {}).get("module") or {}
+    for line_ in form_module.get("use") or ():
+        if not isinstance(line_, dict) or not isinstance(line_.get("use"), str):
+            continue
+        target = line_["use"]
+        if "as" in line_:
+            if isinstance(line_["as"], str):
+                aliases[line_["as"]] = target
+        elif target not in unaliased:
+            unaliased.append(target)
+    return tuple(unaliased), aliases
+
+
+def _resolve_schema_name(
+    site: Site,
+    names: modules.Names,
+    module: modules.Module,
+    at: str,
+    text: str,
+) -> str | None:
+    """Resolve an unqualified or `alias.Name` schema kind/enum visible in `module`, held to `interface`."""
+    unaliased, aliases = _use_scope(module)
+    if "." in text:
+        prefix, _, local = text.partition(".")
+        if prefix not in aliases:
+            site.refuse(at, f"{prefix} is not an imported alias in this module", "R046")
+        target_pack = aliases[prefix]
+        candidates = [
+            mid for mid, mod in names.modules.items()
+            if mod.pack == target_pack and local in names.declared.get(mid, ())
+        ]
+        if len(candidates) == 1:
+            return names.resolve(module.id, local, owner=candidates[0])
+        if len(candidates) > 1:
+            site.refuse(at, f"{text} is declared by more than one module of {target_pack}", "R046")
+        return None
+    visible = {module.pack, *unaliased}
+    candidates = [
+        mid for mid, mod in names.modules.items()
+        if mod.pack in visible and text in names.declared.get(mid, ())
+    ]
+    if len(candidates) == 1:
+        return names.resolve(module.id, text, owner=candidates[0])
+    if len(candidates) > 1:
+        site.refuse(at, f"{text} is declared by multiple used packs; qualify it with an import alias", "R046")
+    return None
+
+
+def _resolve_relation(
+    module: modules.Module,
+    signatures: Mapping[str, Signature],
+    site: Site,
+    at: str,
+    name: str,
+) -> Signature | None:
+    """Resolve an unqualified or `alias.name` derived relation visible in `module`."""
+    unaliased, aliases = _use_scope(module)
+    if "." in name:
+        prefix, _, local = name.partition(".")
+        if prefix not in aliases:
+            site.refuse(at, f"{prefix} is not an imported alias in this module", "R046")
+        target = signatures.get(local)
+        if target is None or target.module.pack != aliases[prefix]:
+            return None
+        return target
+    target = signatures.get(name)
+    if target is None:
+        return None
+    if target.module.pack != module.pack and target.module.pack not in unaliased:
+        site.refuse(at, f"{name} is not visible here; import it with `use`", "R046")
+    return target
+
+
 def lower_pack(root: str, mods: Iterable[modules.Module], names: modules.Names, pack) -> Lowered:
-    """The rules of every rezono 1 derivation of the pack being compiled, as native sources for the assembler."""
+    """The rules of every rezono 1 derivation of the pack and its imported packs, as native sources."""
     from .pack import CompileError
 
-    root_v1 = [m for m in mods if m.pack == root and m.form is not None and m.form.get("format") == REZONO_1_FORMAT]
-    pack_as_ofs = {ao for m in root_v1 if (ao := module_as_of(m.form)) is not None}
-    default_as_of = next(iter(pack_as_ofs)) if len(pack_as_ofs) == 1 else None
+    as_ofs_by_pack: dict[str, set[tuple[str, str]]] = {}
+    for m in mods:
+        if m.form is not None and m.form.get("format") == REZONO_1_FORMAT:
+            if (ao := module_as_of(m.form)) is not None:
+                as_ofs_by_pack.setdefault(m.pack, set()).add(ao)
+    default_by_pack = {p: next(iter(aos)) for p, aos in as_ofs_by_pack.items() if len(aos) == 1}
+    root_as_of = default_by_pack.get(root)
     found = [m for m in mods if m.form is not None and m.form.get("format") == REZONO_1_FORMAT
              and any(_derivations(m.form))]
     if not found:
@@ -146,18 +228,43 @@ def lower_pack(root: str, mods: Iterable[modules.Module], names: modules.Names, 
             message = f"{where}: cannot read the positions of its derivations"
             raise CompileError(message, [Diagnostic("R000", message, where)]) from error
         site = Site(where, text, {place["at"]: place["start"] for place in module.form["spans"]})
-        sites[module.rel] = site
-        mod_as_of = module_as_of(module.form) or default_as_of
+        sites[module.id] = site
+        pack_as_of = default_by_pack.get(module.pack) if module.pack in as_ofs_by_pack else root_as_of
+        mod_as_of = module_as_of(module.form) or pack_as_of
         for at, decl, owner in _derivations(module.form):
             try:
-                if module.pack != root:
-                    site.refuse(at, "a derivation of an imported rezono 1 pack is not lowered yet")
                 signature = _signature(site, module, names, pack, at, decl, owner, mod_as_of)
                 if signature.relation in signatures:
                     site.refuse(at, f"{signature.relation} is derived twice")
                 signatures[signature.relation] = signature
             except Refused as error:
                 refused.append(error.diagnostic)
+    if refused:
+        raise CompileError("\n".join(map(str, refused)), refused)
+    for signature in signatures.values():
+        if signature.result != "functional" or signature.property is not None:
+            continue
+        raw_domain = signature.domain
+        assert raw_domain is not None
+        try:
+            kind_domain = _resolve_schema_name(signature.site, names, signature.module, f"{signature.at}/over", raw_domain)
+            if kind_domain is not None and kind_domain in pack.kinds:
+                signature.domain = kind_domain
+                continue
+            target = _resolve_relation(signature.module, signatures, signature.site, f"{signature.at}/over", raw_domain)
+            if target is None:
+                signature.site.refuse(
+                    f"{signature.at}/over",
+                    f"`over` names a set this pack or a used pack derives in rezono 1, not {raw_domain}",
+                )
+            if target.result != "set":
+                signature.site.refuse(
+                    f"{signature.at}/over",
+                    f"the domain {raw_domain} is a Bool set, not a functional derivation",
+                )
+            signature.domain = target.relation
+        except Refused as error:
+            refused.append(error.diagnostic)
     if refused:
         raise CompileError("\n".join(map(str, refused)), refused)
     lowered = Lowered()
@@ -167,7 +274,7 @@ def lower_pack(root: str, mods: Iterable[modules.Module], names: modules.Names, 
     ordered = sorted(signatures.items(), key=lambda item: (item[1].result != "set", item[0]))
     opened: set[str] | None = None
     for name, signature in ordered:
-        out = statements.setdefault(signature.module.rel, ([], []))
+        out = statements.setdefault(signature.module.id, ([], []))
         if signature.result == "functional" and opened is None:
             opened = _opened(statements, pack)
         if signature.result == "functional" and signature.domain in opened:
@@ -183,15 +290,16 @@ def lower_pack(root: str, mods: Iterable[modules.Module], names: modules.Names, 
             line, column = signature.site.place(f"{signature.at}/means" if "means" in decl else signature.at)
             lowered.notes[name] = Note(decl.get("means"), signature.note_source, signature.site.file, line, column,
                                        f"{signature.at}/means")
+            lowered.note_owners[name] = signature.module.pack
         if signature.property is not None:
             lowered.properties[name] = (signature.kind, signature.property)
     if refused:
         raise CompileError("\n".join(map(str, refused)), refused)
     sources = []
     for module in found:
-        stmts, columns = statements.get(module.rel, ([], []))
+        stmts, columns = statements.get(module.id, ([], []))
         if stmts:
-            site = sites[module.rel]
+            site = sites[module.id]
             sources.append(rules_dl.NativeSource(module.pack, module.file.stem, site.file, site.text,
                                                  tuple(stmts), tuple(columns)))
     lowered.sources = tuple(sources)
@@ -212,10 +320,10 @@ def _derivations(form: dict):
                     yield f"/decls/{index}/derived/{position}", derived, decl
 
 
-def _enum_name(names: modules.Names, pack, module: modules.Module, text: object) -> str | None:
+def _enum_name(site: Site, names: modules.Names, pack, module: modules.Module, at: str, text: object) -> str | None:
     if not isinstance(text, str) or text in SCALARS:
         return None
-    engine = names.resolve(module.id, text)
+    engine = _resolve_schema_name(site, names, module, at, text)
     return engine if engine in pack.enums else None
 
 
@@ -224,7 +332,7 @@ def _type(site: Site, names: modules.Names, pack, module: modules.Module, at: st
         site.refuse(at, "a derivation needs a type")
     if text in SCALARS:
         return "scalar", SCALARS[text]
-    engine = names.resolve(module.id, text)
+    engine = _resolve_schema_name(site, names, module, at, text)
     if engine in pack.kinds:
         return "kind", engine
     if engine in pack.enums:
@@ -394,7 +502,7 @@ def _signature(site: Site, module: modules.Module, names: modules.Names, pack, a
             signature.domain = over["relation"]
     else:
         kind_name = owner.get("kind") or owner.get("extend")
-        kind = names.resolve(module.id, kind_name) if isinstance(kind_name, str) else None
+        kind = _resolve_schema_name(site, names, module, at, kind_name) if isinstance(kind_name, str) else None
         if kind not in pack.kinds:
             site.refuse(at, f"the kind {kind_name} is not a kind of the pack")
         binder = owner.get("binder")
@@ -408,7 +516,7 @@ def _signature(site: Site, module: modules.Module, names: modules.Names, pack, a
     if not boolean:
         signature.value_type = ir_type(pack, result_type)
         signature.optional = card == "?"
-    signature.enum_type = _enum_name(names, pack, module, decl.get("type"))
+    signature.enum_type = _enum_name(site, names, pack, module, at, decl.get("type"))
     _, signature.note_source = validate_note(site, at, decl)
     signature.as_of = as_of
     return signature
@@ -492,6 +600,9 @@ class Lowering:
         self.line, self.column = self.site.place(signature.at)
         self.used = {name for name, _ in signature.key}
         self.env = dict(signature.key)
+        unaliased, aliases = _use_scope(signature.module)
+        self._aliases = aliases
+        self._used_packs = {signature.module.pack, *unaliased, *aliases.values()}
         self._declared_helpers: set[str] = set()
         self._helper_seq = 0
         self._has_cache: dict[str, str] = {}
@@ -704,7 +815,7 @@ class Lowering:
     def _check_functional_domain(self) -> None:
         sig = self.sig
         if sig.domain not in self.pack.kinds and sig.domain not in self.signatures and sig.property is None:
-            self.site.refuse(f"{sig.at}/over", f"`over` names a set this pack derives in rezono 1, not {sig.domain}")
+            self.site.refuse(f"{sig.at}/over", f"`over` names a set this pack or a used pack derives in rezono 1, not {sig.domain}")
         if sig.domain in self.signatures and self.signatures[sig.domain].result != "set":
             self.site.refuse(f"{sig.at}/over", f"the domain {sig.domain} is a Bool set, not a functional derivation")
 
@@ -712,7 +823,7 @@ class Lowering:
 
     def _prop_sig(self, kind: str, name: str) -> Signature | None:
         while kind is not None:
-            if (sig := self.signatures.get(f"{kind}_{name}")) is not None:
+            if (sig := self.signatures.get(f"{kind}_{name}")) is not None and sig.module.pack in self._used_packs:
                 return sig
             kind = self.pack.kinds[kind].parent
         return None
@@ -1637,10 +1748,10 @@ class Lowering:
 
     def call(self, at: str, call: list, positive: bool) -> tuple:
         name, args = call
-        relation = self.names.resolve(self.sig.module.id, name) if name not in self.signatures else name
-        target = self.signatures.get(relation)
+        target = _resolve_relation(self.sig.module, self.signatures, self.site, at, name)
         if target is None or target.result != "set":
-            self.site.refuse(at, f"{name} is not a Bool set derived in this pack", "R001")
+            self.site.refuse(at, f"{name} is not a Bool set derived in this pack or a used pack", "R001")
+        relation = target.relation
         if len(args) != len(target.key):
             self.site.refuse(at, f"{name} takes {len(target.key)} arguments", "R041")
         terms = []
@@ -1668,7 +1779,7 @@ class Lowering:
             pred = self._conjuncts(f"{at}/filter/1", condition) + pred
             at, node = f"{at}/filter/0", base
         if set(node) == {"kind"}:
-            kind = self.names.resolve(self.sig.module.id, node["kind"])
+            kind = _resolve_schema_name(self.site, self.names, self.sig.module, at, node["kind"])
             if kind not in self.pack.kinds:
                 self.site.refuse(at, f"{node['kind']} is not a kind of the pack", "R001")
             if self.pack.kinds[kind].world == "open":
@@ -1676,17 +1787,23 @@ class Lowering:
                                      "recorded; it is not lowered", "R004")
             member = ("var", self.fresh("m"))
             return Member([member], self.lit(kind, [member]), kind, {}, pred)
-        if set(node) == {"path"} and len(node["path"]) == 1 and node["path"][0] not in self.env:
-            name = node["path"][0]
-            target = self.signatures.get(name)
-            if target is None or target.result != "set" or target.property is not None:
-                self.site.refuse(at, f"{name} is not a relation derived in this pack", "R001")
-            if target.relation in self.opened:
-                self.site.refuse(at, f"{name} is open, so a count or `.one()` over it is only what is "
-                                     "recorded; it is not lowered", "R004")
-            terms = [("var", self.fresh(column)) for column, _ in target.key]
-            columns = {column: (index, typ) for index, (column, typ) in enumerate(target.key)}
-            return Member(terms, self.lit(name, terms), None, columns, pred)
+        if set(node) == {"path"}:
+            path = node["path"]
+            rel_name = (
+                path[0] if len(path) == 1 and path[0] not in self.env
+                else f"{path[0]}.{path[1]}" if len(path) == 2 and path[0] in self._aliases
+                else None
+            )
+            if rel_name is not None:
+                target = _resolve_relation(self.sig.module, self.signatures, self.site, at, rel_name)
+                if target is None or target.result != "set" or target.property is not None:
+                    self.site.refuse(at, f"{rel_name} is not a relation derived in this pack or a used pack", "R001")
+                if target.relation in self.opened:
+                    self.site.refuse(at, f"{rel_name} is open, so a count or `.one()` over it is only what is "
+                                         "recorded; it is not lowered", "R004")
+                terms = [("var", self.fresh(column)) for column, _ in target.key]
+                columns = {column: (index, typ) for index, (column, typ) in enumerate(target.key)}
+                return Member(terms, self.lit(target.relation, terms), None, columns, pred)
         self.site.refuse(at, "a collection is a kind, a relation or a `.where(...)` of one here")
 
     def _conjuncts(self, at: str, node: dict) -> list[tuple[str, dict]]:
@@ -1967,7 +2084,8 @@ def notes(
         if rule_notes and rid in rule_notes:
             owner, note = rule_notes[rid]
         elif (derived_note := lowered.notes.get(rule["head"]["relation"])) is not None:
-            owner, note = root, derived_note
+            owner = lowered.note_owners.get(rule["head"]["relation"], root)
+            note = derived_note
         else:
             continue
         if note.source is not None:
