@@ -19,6 +19,7 @@ from linkml_runtime.loaders import yaml_loader
 import pytest
 
 from expression_packs import ROOT, register
+from rezono_canon import canonical_sha256
 from rezono_checker.check import check as verify_proof
 from rezono_checker.rules import load_rules as load_checker_rules
 from rezono_compiler import batch, emit, explain, pack, rules, rules_sql, scenarios
@@ -106,7 +107,10 @@ def _evaluate(directory: Path):
 
 
 def _verified_proof(explainer, manifest, read_bytes, document, relation: str, row: tuple[str, ...]) -> dict:
-    proof = explainer.proof(relation, row, "0-case")
+    try:
+        proof = explainer.proof(relation, row, "0-case")
+    except explain.NoProof as error:
+        raise MissingRequirementLowering(str(error)) from error
     report = verify_proof(proof, manifest, load_checker_rules(document), read_bytes)
     if not report["valid"] or report["findings"]:
         raise MissingRequirementLowering(f"checker rejected proof for {relation}{row}: {report['findings']}")
@@ -563,7 +567,7 @@ primary_node:
     reason=(
         "M3: decisions/language-requirements.md: Enforce cardinality bounds (at least N, at most N, "
         "exactly N) with observed-count witnesses under complete sweeps, pass when in bounds, "
-        "unknown incomplete_read under incomplete sweeps, and not_applicable when untriggered. "
+        "unknown incomplete_read when unproven under incomplete sweeps, and not_applicable when untriggered. "
         "Waits for compiler/tests/rezono/test_language_requirements.py--test_lower_requirement_to_rules_ir."
     ),
 )
@@ -654,3 +658,477 @@ def test_requirement_cardinality_bounds_and_incomplete_sweep(tmp_path):
         raise MissingRequirementLowering(f"service_ha violation proof missing coverage premise: {proof}")
     if not any(a["count"] == 2 and "svc-two" in a["group_key"] for a in aggregates):
         raise MissingRequirementLowering(f"service_ha violation proof missing count=2 aggregate: {proof}")
+
+
+def _verify_bound_witness(
+    explainer,
+    manifest,
+    read_bytes,
+    document: dict,
+    relation: str,
+    row: tuple[str, ...],
+    *,
+    scope: str,
+    expected_time: str,
+    expected_identities: set[str],
+    identity_relation: str,
+    scope_relation: str,
+    time_relation: str,
+    forbidden_coverage_relation: str | None = None,
+    required_coverage_relation: str | None = None,
+) -> None:
+    """Verify a checker-validated bound proof carries distinct identities, scope, time, and honest coverage."""
+    proof = _verified_proof(explainer, manifest, read_bytes, document, relation, row)
+    premises = [p for w in proof["witnesses"] for p in w.get("premises", [])]
+    aggregates = [a for w in proof["witnesses"] for a in w.get("aggregates", [])]
+    scope_key = explain.key_text([scope])
+
+    if forbidden_coverage_relation is not None and any(
+        p["row"]["relation"] == forbidden_coverage_relation for p in premises
+    ):
+        raise MissingRequirementLowering(
+            f"{relation}{row}: proven bound on incomplete register fabricated coverage premise "
+            f"{forbidden_coverage_relation}; proof={json.dumps(proof, indent=2)}"
+        )
+    if required_coverage_relation is not None and not any(
+        p["polarity"] == "positive"
+        and p["row"] == {"relation": required_coverage_relation, "key": scope_key}
+        for p in premises
+    ):
+        raise MissingRequirementLowering(
+            f"{relation}{row}: exact-count proof missing load-bearing coverage premise "
+            f"{required_coverage_relation}({scope_key}); proof={json.dumps(proof, indent=2)}"
+        )
+
+    expected_count = len(expected_identities)
+    matching_aggs = [
+        a for a in aggregates
+        if a["group_key"] == scope_key
+        and a["count"] == expected_count
+        and a["result"] == f"known:{expected_count}"
+    ]
+    if not matching_aggs:
+        raise MissingRequirementLowering(
+            f"{relation}{row}: missing count={expected_count} aggregate for scope {scope_key}; "
+            f"aggregates={json.dumps(aggregates, indent=2)}"
+        )
+
+    agg = matching_aggs[0]
+    match_rel = agg["relation"]
+    contributors = sorted(
+        (r for r in explainer.rows.get(match_rel, ()) if r[0] == scope),
+        key=explain.key_text,
+    )
+    expected_sha = canonical_sha256([[explain.key_text(r)] for r in contributors])
+    if len(contributors) != expected_count or expected_sha != agg["contributors_sha256"]:
+        raise MissingRequirementLowering(
+            f"{relation}{row}: aggregate contributors mismatch on {match_rel}: "
+            f"rows={contributors}, sha={expected_sha}, agg={agg}"
+        )
+
+    observed_ids = {r[1] for r in contributors}
+    if observed_ids != expected_identities:
+        raise MissingRequirementLowering(
+            f"{relation}{row}: witness identities={sorted(observed_ids)}, expected={sorted(expected_identities)}"
+        )
+
+    for contrib in contributors:
+        c_proof = _verified_proof(explainer, manifest, read_bytes, document, match_rel, contrib)
+        c_premises = [
+            p["row"] for w in c_proof["witnesses"] for p in w.get("premises", [])
+            if p["polarity"] == "positive"
+        ]
+        wid = contrib[1]
+        wanted_rows = (
+            {"relation": identity_relation, "key": explain.key_text([wid])},
+            {"relation": scope_relation, "key": explain.key_text([wid, scope])},
+            {"relation": time_relation, "key": explain.key_text([wid, expected_time])},
+        )
+        missing = [wrow for wrow in wanted_rows if wrow not in c_premises]
+        if missing:
+            raise MissingRequirementLowering(
+                f"{relation}{row}: witness for {contrib} missing premises {missing}; "
+                f"c_premises={json.dumps(c_premises, indent=2)}"
+            )
+
+
+PROVEN_BOUNDS_TIME = "2026-11-21T10:00:00Z"
+
+PROVEN_BOUNDS_MODULE = """\
+rezono 1
+pack minimal
+
+enum Tier = critical | standard
+enum Flag = yes | no
+
+kind Service
+  tier: Tier
+  as_of: Text
+kind ReplicaSweep
+  service: Service
+
+derived replica_sweep_complete(service: Service): Bool = ReplicaSweep.any(it.service = service)
+
+kind ReplicaObservation world open, complete by replica_sweep_complete
+  service: Service
+  healthy: Flag
+  observed_at: Text
+
+require service_exists_replica(s: Service)
+  when s.tier = critical
+  exists r: ReplicaObservation where r.service = s and r.healthy = yes and r.observed_at = s.as_of
+
+require service_at_least_one(s: Service)
+  when s.tier = critical
+  exists at least 1 r: ReplicaObservation where r.service = s and r.healthy = yes and r.observed_at = s.as_of
+
+require service_ha(s: Service)
+  when s.tier = critical
+  exists at least 3 r: ReplicaObservation where r.service = s and r.healthy = yes and r.observed_at = s.as_of
+
+require bounded_replicas(s: Service)
+  when s.tier = critical
+  exists at most 4 r: ReplicaObservation where r.service = s and r.healthy = yes and r.observed_at = s.as_of
+
+require single_replica(s: Service)
+  when s.tier = critical
+  exists exactly 1 r: ReplicaObservation where r.service = s and r.healthy = yes and r.observed_at = s.as_of
+"""
+
+PROVEN_BOUNDS_FACTS = f"""\
+service:
+  - {{id: svc-one-unswept, tier: critical, as_of: "{PROVEN_BOUNDS_TIME}"}}
+  - {{id: svc-two-unswept, tier: critical, as_of: "{PROVEN_BOUNDS_TIME}"}}
+  - {{id: svc-three-unswept, tier: critical, as_of: "{PROVEN_BOUNDS_TIME}"}}
+  - {{id: svc-five-unswept, tier: critical, as_of: "{PROVEN_BOUNDS_TIME}"}}
+  - {{id: svc-one-swept, tier: critical, as_of: "{PROVEN_BOUNDS_TIME}"}}
+replica_sweep:
+  - {{id: sw-one, service: svc-one-swept}}
+replica_observation:
+  - {{id: r-u1, service: svc-one-unswept, healthy: "yes", observed_at: "{PROVEN_BOUNDS_TIME}"}}
+  - {{id: r-u2a, service: svc-two-unswept, healthy: "yes", observed_at: "{PROVEN_BOUNDS_TIME}"}}
+  - {{id: r-u2b, service: svc-two-unswept, healthy: "yes", observed_at: "{PROVEN_BOUNDS_TIME}"}}
+  - {{id: r-u2c, service: svc-two-unswept, healthy: "no", observed_at: "{PROVEN_BOUNDS_TIME}"}}
+  - {{id: r-u2-stale, service: svc-two-unswept, healthy: "yes", observed_at: "2026-11-20T10:00:00Z"}}
+  - {{id: r-u3a, service: svc-three-unswept, healthy: "yes", observed_at: "{PROVEN_BOUNDS_TIME}"}}
+  - {{id: r-u3b, service: svc-three-unswept, healthy: "yes", observed_at: "{PROVEN_BOUNDS_TIME}"}}
+  - {{id: r-u3c, service: svc-three-unswept, healthy: "yes", observed_at: "{PROVEN_BOUNDS_TIME}"}}
+  - {{id: r-u5a, service: svc-five-unswept, healthy: "yes", observed_at: "{PROVEN_BOUNDS_TIME}"}}
+  - {{id: r-u5b, service: svc-five-unswept, healthy: "yes", observed_at: "{PROVEN_BOUNDS_TIME}"}}
+  - {{id: r-u5c, service: svc-five-unswept, healthy: "yes", observed_at: "{PROVEN_BOUNDS_TIME}"}}
+  - {{id: r-u5d, service: svc-five-unswept, healthy: "yes", observed_at: "{PROVEN_BOUNDS_TIME}"}}
+  - {{id: r-u5e, service: svc-five-unswept, healthy: "yes", observed_at: "{PROVEN_BOUNDS_TIME}"}}
+  - {{id: r-s1, service: svc-one-swept, healthy: "yes", observed_at: "{PROVEN_BOUNDS_TIME}"}}
+"""
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=MissingRequirementLowering,
+    reason=(
+        "M3: decisions/language-requirements.md: Separate proven cardinality bounds from exact "
+        "counting on incomplete world-open registers (1 match proves exists and at least 1, "
+        "3 distinct confirmed replicas prove at least 3, 5 prove at most 4 violated, >=2 prove "
+        "exactly 1 violated, 2 for at least 3 remains unknown incomplete_read, and verified "
+        "witnesses carry distinct identities, scope, time, and coverage only when load-bearing)."
+    ),
+)
+def test_requirement_proven_bounds_vs_exact_count(tmp_path):
+    directory = _write_pack(tmp_path / "proven-bounds", PROVEN_BOUNDS_MODULE, PROVEN_BOUNDS_FACTS)
+    _, document, _, _, con, derived, explainer, manifest, read_bytes = _evaluate(directory)
+
+    all_known_true = {
+        ("svc-one-unswept", "known", ""),
+        ("svc-two-unswept", "known", ""),
+        ("svc-three-unswept", "known", ""),
+        ("svc-five-unswept", "known", ""),
+        ("svc-one-swept", "known", ""),
+    }
+    all_true_vals = {
+        ("svc-one-unswept",): "true",
+        ("svc-two-unswept",): "true",
+        ("svc-three-unswept",): "true",
+        ("svc-five-unswept",): "true",
+        ("svc-one-swept",): "true",
+    }
+
+    # Case 1: 1 certain match on an incomplete register proves BOTH `exists` and `at least 1`.
+    _check_functional_outcome(con, derived, "service_exists_replica", 1, all_known_true, all_true_vals)
+    _check_functional_outcome(con, derived, "service_at_least_one", 1, all_known_true, all_true_vals)
+
+    # Cases 2 & 4: 3 distinct confirmed replicas prove `at least 3` without sweep; 2 remains unknown incomplete_read.
+    _check_functional_outcome(
+        con, derived, "service_ha", 1,
+        expected_states={
+            ("svc-one-unswept", "unknown", "incomplete_read"),
+            ("svc-two-unswept", "unknown", "incomplete_read"),
+            ("svc-three-unswept", "known", ""),
+            ("svc-five-unswept", "known", ""),
+            ("svc-one-swept", "known", ""),
+        },
+        expected_known={
+            ("svc-three-unswept",): "true",
+            ("svc-five-unswept",): "true",
+            ("svc-one-swept",): "false",
+        },
+    )
+
+    # Case 3: 5 distinct confirmed replicas prove violation of `at most 4` without sweep; <= 4 without sweep stays unknown.
+    _check_functional_outcome(
+        con, derived, "bounded_replicas", 1,
+        expected_states={
+            ("svc-one-unswept", "unknown", "incomplete_read"),
+            ("svc-two-unswept", "unknown", "incomplete_read"),
+            ("svc-three-unswept", "unknown", "incomplete_read"),
+            ("svc-five-unswept", "known", ""),
+            ("svc-one-swept", "known", ""),
+        },
+        expected_known={
+            ("svc-five-unswept",): "false",
+            ("svc-one-swept",): "true",
+        },
+    )
+
+    # Exact bound: >= 2 proves violation of `exactly 1` without sweep; `known true` requires complete sweep.
+    _check_functional_outcome(
+        con, derived, "single_replica", 1,
+        expected_states={
+            ("svc-one-unswept", "unknown", "incomplete_read"),
+            ("svc-two-unswept", "known", ""),
+            ("svc-three-unswept", "known", ""),
+            ("svc-five-unswept", "known", ""),
+            ("svc-one-swept", "known", ""),
+        },
+        expected_known={
+            ("svc-two-unswept",): "false",
+            ("svc-three-unswept",): "false",
+            ("svc-five-unswept",): "false",
+            ("svc-one-swept",): "true",
+        },
+    )
+
+    expected_violations = {
+        "service_exists_replica_violation": set(),
+        "service_at_least_one_violation": set(),
+        "service_ha_violation": {
+            ("svc-one-swept", "0", "replica_observation", "at_least:3", "1"),
+        },
+        "bounded_replicas_violation": {
+            ("svc-five-unswept", "0", "replica_observation", "at_most:4", "5"),
+        },
+        "single_replica_violation": {
+            ("svc-two-unswept", "0", "replica_observation", "exactly:1", "2"),
+            ("svc-three-unswept", "0", "replica_observation", "exactly:1", "3"),
+            ("svc-five-unswept", "0", "replica_observation", "exactly:1", "5"),
+        },
+    }
+    problems = []
+    for name, want in expected_violations.items():
+        got = derived.get(name, set())
+        if got != want:
+            problems.append({name: {"got": sorted(got), "want": sorted(want)}})
+    if problems:
+        raise MissingRequirementLowering(json.dumps(problems, indent=2))
+
+    # Verified witnesses carrying distinct identities, scope, and time (no fabricated coverage on incomplete registers).
+    obs_rels = {
+        "identity_relation": "replica_observation",
+        "scope_relation": "replica_observation__service",
+        "time_relation": "replica_observation__observed_at",
+    }
+    _verify_bound_witness(
+        explainer, manifest, read_bytes, document,
+        "service_exists_replica", ("svc-one-unswept", "known", "", "true"),
+        scope="svc-one-unswept",
+        expected_time=PROVEN_BOUNDS_TIME,
+        expected_identities={"r-u1"},
+        forbidden_coverage_relation="replica_sweep_complete",
+        **obs_rels,
+    )
+    _verify_bound_witness(
+        explainer, manifest, read_bytes, document,
+        "service_at_least_one", ("svc-one-unswept", "known", "", "true"),
+        scope="svc-one-unswept",
+        expected_time=PROVEN_BOUNDS_TIME,
+        expected_identities={"r-u1"},
+        forbidden_coverage_relation="replica_sweep_complete",
+        **obs_rels,
+    )
+    _verify_bound_witness(
+        explainer, manifest, read_bytes, document,
+        "service_ha", ("svc-three-unswept", "known", "", "true"),
+        scope="svc-three-unswept",
+        expected_time=PROVEN_BOUNDS_TIME,
+        expected_identities={"r-u3a", "r-u3b", "r-u3c"},
+        forbidden_coverage_relation="replica_sweep_complete",
+        **obs_rels,
+    )
+    _verify_bound_witness(
+        explainer, manifest, read_bytes, document,
+        "bounded_replicas_violation", ("svc-five-unswept", "0", "replica_observation", "at_most:4", "5"),
+        scope="svc-five-unswept",
+        expected_time=PROVEN_BOUNDS_TIME,
+        expected_identities={"r-u5a", "r-u5b", "r-u5c", "r-u5d", "r-u5e"},
+        forbidden_coverage_relation="replica_sweep_complete",
+        **obs_rels,
+    )
+    # Exact-count witness contrast: deficit violation under complete sweep MUST cite coverage premise.
+    _verify_bound_witness(
+        explainer, manifest, read_bytes, document,
+        "service_ha_violation", ("svc-one-swept", "0", "replica_observation", "at_least:3", "1"),
+        scope="svc-one-swept",
+        expected_time=PROVEN_BOUNDS_TIME,
+        expected_identities={"r-s1"},
+        required_coverage_relation="replica_sweep_complete",
+        **obs_rels,
+    )
+
+
+IDENTITY_BOUNDS_MODULE = """\
+rezono 1
+pack minimal
+
+enum Tier = critical | standard
+enum Flag = yes | no
+
+kind Service
+  tier: Tier
+  as_of: Text
+kind ReplicaSweep
+  service: Service
+
+derived replica_sweep_complete(service: Service): Bool = ReplicaSweep.any(it.service = service)
+
+kind ReplicaEntity world open, complete by replica_sweep_complete
+  service: Service
+
+kind ReplicaObservation
+  service: Service
+  healthy: Flag
+  observed_at: Text
+
+kind IdentityClaim
+  observation: ReplicaObservation
+  entity: ReplicaEntity
+
+extend r: ReplicaObservation
+  derived canonical_entity: ReplicaEntity = IdentityClaim.where(observation = r).one(entity)
+
+require canonical_service_ha(s: Service)
+  when s.tier = critical
+  exists at least 3 e: ReplicaEntity where e.service = s and ReplicaObservation.any(it.service = s and it.healthy = yes and it.observed_at = s.as_of and it.canonical_entity = e)
+
+require bounded_canonical_replicas(s: Service)
+  when s.tier = critical
+  exists at most 2 e: ReplicaEntity where e.service = s and ReplicaObservation.any(it.service = s and it.healthy = yes and it.observed_at = s.as_of and it.canonical_entity = e)
+"""
+
+IDENTITY_BOUNDS_FACTS = f"""\
+service:
+  - {{id: svc-three-distinct, tier: critical, as_of: "{PROVEN_BOUNDS_TIME}"}}
+  - {{id: svc-alias, tier: critical, as_of: "{PROVEN_BOUNDS_TIME}"}}
+  - {{id: svc-uncanon, tier: critical, as_of: "{PROVEN_BOUNDS_TIME}"}}
+  - {{id: svc-conflict, tier: critical, as_of: "{PROVEN_BOUNDS_TIME}"}}
+replica_sweep:
+  - {{id: sw-uncanon, service: svc-uncanon}}
+replica_entity:
+  - {{id: ent-ok-1, service: svc-three-distinct}}
+  - {{id: ent-ok-2, service: svc-three-distinct}}
+  - {{id: ent-ok-3, service: svc-three-distinct}}
+  - {{id: ent-al-1, service: svc-alias}}
+  - {{id: ent-al-2, service: svc-alias}}
+  - {{id: ent-uc-1, service: svc-uncanon}}
+  - {{id: ent-uc-2, service: svc-uncanon}}
+  - {{id: ent-uc-3, service: svc-uncanon}}
+  - {{id: ent-cf-1, service: svc-conflict}}
+  - {{id: ent-cf-2, service: svc-conflict}}
+  - {{id: ent-cf-3, service: svc-conflict}}
+  - {{id: ent-cf-4, service: svc-conflict}}
+  - {{id: ent-cf-5, service: svc-conflict}}
+replica_observation:
+  - {{id: r-ok-1, service: svc-three-distinct, healthy: "yes", observed_at: "{PROVEN_BOUNDS_TIME}"}}
+  - {{id: r-ok-2, service: svc-three-distinct, healthy: "yes", observed_at: "{PROVEN_BOUNDS_TIME}"}}
+  - {{id: r-ok-3, service: svc-three-distinct, healthy: "yes", observed_at: "{PROVEN_BOUNDS_TIME}"}}
+  - {{id: r-al-1, service: svc-alias, healthy: "yes", observed_at: "{PROVEN_BOUNDS_TIME}"}}
+  - {{id: r-al-2a, service: svc-alias, healthy: "yes", observed_at: "{PROVEN_BOUNDS_TIME}"}}
+  - {{id: r-al-2b, service: svc-alias, healthy: "yes", observed_at: "{PROVEN_BOUNDS_TIME}"}}
+  - {{id: r-uc-1, service: svc-uncanon, healthy: "yes", observed_at: "{PROVEN_BOUNDS_TIME}"}}
+  - {{id: r-uc-2, service: svc-uncanon, healthy: "yes", observed_at: "{PROVEN_BOUNDS_TIME}"}}
+  - {{id: r-uc-3, service: svc-uncanon, healthy: "yes", observed_at: "{PROVEN_BOUNDS_TIME}"}}
+  - {{id: r-cf-1, service: svc-conflict, healthy: "yes", observed_at: "{PROVEN_BOUNDS_TIME}"}}
+  - {{id: r-cf-2, service: svc-conflict, healthy: "yes", observed_at: "{PROVEN_BOUNDS_TIME}"}}
+  - {{id: r-cf-3, service: svc-conflict, healthy: "yes", observed_at: "{PROVEN_BOUNDS_TIME}"}}
+  - {{id: r-cf-bad, service: svc-conflict, healthy: "yes", observed_at: "{PROVEN_BOUNDS_TIME}"}}
+identity_claim:
+  - {{id: ic-ok-1, observation: r-ok-1, entity: ent-ok-1}}
+  - {{id: ic-ok-2, observation: r-ok-2, entity: ent-ok-2}}
+  - {{id: ic-ok-3, observation: r-ok-3, entity: ent-ok-3}}
+  - {{id: ic-al-1, observation: r-al-1, entity: ent-al-1}}
+  - {{id: ic-al-2a, observation: r-al-2a, entity: ent-al-2}}
+  - {{id: ic-al-2b, observation: r-al-2b, entity: ent-al-2}}
+  - {{id: ic-uc-1, observation: r-uc-1, entity: ent-uc-1}}
+  - {{id: ic-uc-2, observation: r-uc-2, entity: ent-uc-2}}
+  - {{id: ic-cf-1, observation: r-cf-1, entity: ent-cf-1}}
+  - {{id: ic-cf-2, observation: r-cf-2, entity: ent-cf-2}}
+  - {{id: ic-cf-3, observation: r-cf-3, entity: ent-cf-3}}
+  - {{id: ic-cf-bad-1, observation: r-cf-bad, entity: ent-cf-4}}
+  - {{id: ic-cf-bad-2, observation: r-cf-bad, entity: ent-cf-5}}
+"""
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=MissingRequirementLowering,
+    reason=(
+        "M3: decisions/language-requirements.md: Enforce conflict precedence (conflicting identity "
+        "claims yield invalid multiple_values even with 3 other clean replicas) and prevent "
+        "double-counting duplicate/alias or uncanonicalized identities toward at least N or "
+        "violating at most M."
+    ),
+)
+def test_requirement_bound_identity_conflict_and_alias_deduplication(tmp_path):
+    directory = _write_pack(tmp_path / "identity-bounds", IDENTITY_BOUNDS_MODULE, IDENTITY_BOUNDS_FACTS)
+    _, _, _, _, con, derived, _, _, _ = _evaluate(directory)
+
+    # 3 distinct canonical entities prove `at least 3` without sweep; alias duplicates (3 obs -> 2 entities)
+    # remain `unknown incomplete_read`; uncanonicalized observation remains `unknown no_match`;
+    # conflicting identity record yields `invalid multiple_values` (never dropped or masked).
+    _check_functional_outcome(
+        con, derived, "canonical_service_ha", 1,
+        expected_states={
+            ("svc-three-distinct", "known", ""),
+            ("svc-alias", "unknown", "incomplete_read"),
+            ("svc-uncanon", "unknown", "no_match"),
+            ("svc-conflict", "invalid", "multiple_values"),
+        },
+        expected_known={
+            ("svc-three-distinct",): "true",
+        },
+    )
+
+    # Same deduplication & conflict rules apply to upper bounds (`at most 2`):
+    # 3 distinct entities violate `at most 2`; aliases (2 entities) and uncanonicalized obs do NOT falsely violate;
+    # conflicting identity stays `invalid multiple_values` with zero violation rows.
+    _check_functional_outcome(
+        con, derived, "bounded_canonical_replicas", 1,
+        expected_states={
+            ("svc-three-distinct", "known", ""),
+            ("svc-alias", "unknown", "incomplete_read"),
+            ("svc-uncanon", "unknown", "no_match"),
+            ("svc-conflict", "invalid", "multiple_values"),
+        },
+        expected_known={
+            ("svc-three-distinct",): "false",
+        },
+    )
+
+    if derived.get("canonical_service_ha_violation"):
+        raise MissingRequirementLowering(
+            f"canonical_service_ha_violation must be empty, got {sorted(derived['canonical_service_ha_violation'])}"
+        )
+    expected_upper_viol = {("svc-three-distinct", "0", "replica_entity", "at_most:2", "3")}
+    if derived.get("bounded_canonical_replicas_violation") != expected_upper_viol:
+        raise MissingRequirementLowering(
+            f"bounded_canonical_replicas_violation={sorted(derived.get('bounded_canonical_replicas_violation', ()))}, "
+            f"expected={sorted(expected_upper_viol)}"
+        )

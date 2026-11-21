@@ -1,5 +1,6 @@
 """Exact reason codes for functional derivations on empty candidate sets and multiplicity
-conflicts in the independent checker and Soufflé oracle (decisions/language-rezono-1.md §§2-3):
+conflicts in the independent checker (decisions/language-rezono-1.md §§2-3; the matching
+Soufflé oracle check lives in compiler/tests/test_souffle_functional.py):
 
 - 0 candidates (empty key, no explicit empty_reason override): exact reason MUST be `"no_match"`
   for both `unknown` (`T`) and `not_applicable` (`T?`) — never `"no_value"` or a forged reason.
@@ -9,19 +10,10 @@ conflicts in the independent checker and Soufflé oracle (decisions/language-rez
 
 from __future__ import annotations
 
-import ast
-from pathlib import Path
-from types import SimpleNamespace
-
-import pytest
-
 from rezono_canon import canonical_bytes, sha256_hex
 from rezono_checker import rules as checker_rules
 from rezono_checker.canon import encode_key
 from rezono_checker.check import check_epoch
-
-ROOT = Path(__file__).resolve().parents[2]
-SOUFFLE_ORACLE = ROOT / "compiler" / "tests" / "souffle.py"
 
 
 def _col(name: str, typ: str = "string") -> dict:
@@ -166,41 +158,6 @@ def _base_rows_and_witnesses(
     return rows, witnesses
 
 
-def _load_souffle_oracle_without_compiler() -> dict[str, object]:
-    """Execute compiler/tests/souffle.py without importing the compiler package, keeping the checker
-    test suite independent of rezono_compiler."""
-    source = SOUFFLE_ORACLE.read_text(encoding="utf-8")
-    tree = ast.parse(source, filename=str(SOUFFLE_ORACLE))
-    tree.body = [
-        node
-        for node in tree.body
-        if not (isinstance(node, ast.ImportFrom) and (node.module or "").endswith(".rules"))
-    ]
-    ast.fix_missing_locations(tree)
-
-    def is_var(term: str) -> bool:
-        return isinstance(term, str) and term.startswith("?")
-
-    def const_type(term: str) -> str:
-        if term in ("TRUE", "FALSE"):
-            return "boolean"
-        try:
-            int(term)
-            return "integer"
-        except (TypeError, ValueError):
-            return "string"
-
-    ns: dict[str, object] = {
-        "__file__": str(SOUFFLE_ORACLE),
-        "COMPARE_AS": ("binary_text", "utc_instant"),
-        "DAYS": "days",
-        "const_type": const_type,
-        "is_var": is_var,
-    }
-    exec(compile(tree, str(SOUFFLE_ORACLE), "exec"), ns)
-    return ns
-
-
 def test_checker_enforces_exact_functional_empty_and_conflict_reasons():
     # 1. Default empty_state ('unknown') with no explicit empty_reason: 'no_match' and 'multiple_values' pass.
     doc = _functional_program()
@@ -260,79 +217,3 @@ def test_checker_enforces_exact_functional_empty_and_conflict_reasons():
         empty_state="not_applicable", empty_reason="made_up_reason", conflict_reason="multiple_values"
     )
     assert not _epoch(explicit_doc, exp_bad_rows, exp_bad_witnesses)["valid"]
-
-
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "M3: decisions/language-rezono-1.md: Soufflé oracle (compiler/tests/souffle.py) must emit "
-        "'no_match' (not 'no_value' or 'empty') for 0-candidate functional keys when empty_reason is "
-        "not overridden (fix Soufflé oracle, checker, and fixtures together; checker/ requires "
-        "independent pre-land review via p1-read-<sha>)"
-    ),
-)
-def test_souffle_oracle_emits_no_match_for_empty_functional_keys():
-    oracle = _load_souffle_oracle_without_compiler()
-    functional_rules = oracle["_functional_rules"]
-
-    def make_col(name: str, typ: str = "string"):
-        return SimpleNamespace(name=name, type=typ)
-
-    dom_rel = SimpleNamespace(
-        name="pair_dom",
-        role="base",
-        key=(make_col("a"), make_col("b")),
-        values=(),
-        row_columns=(make_col("a"), make_col("b")),
-    )
-    cand_rel = SimpleNamespace(
-        name="cand",
-        role="base",
-        key=(make_col("a"), make_col("b"), make_col("v")),
-        values=(),
-        row_columns=(make_col("a"), make_col("b"), make_col("v")),
-    )
-
-    def check_emitted(name: str, empty_state: str | None, expected_state: str) -> None:
-        func_rel = SimpleNamespace(
-            name=name,
-            role="functional",
-            domain="pair_dom",
-            key=(make_col("a"), make_col("b")),
-            values=(),
-            value=make_col("value", "string"),
-            empty_state=empty_state,
-            empty_reason=None,
-        )
-        rule = SimpleNamespace(
-            id=f"{name}_r",
-            head=SimpleNamespace(relation=name, terms=("?a", "?b", "?v")),
-            body=(
-                SimpleNamespace(polarity="positive", atom=SimpleNamespace(relation="pair_dom", terms=("?a", "?b"))),
-                SimpleNamespace(polarity="positive", atom=SimpleNamespace(relation="cand", terms=("?a", "?b", "?v"))),
-            ),
-            aggregates=(),
-            assignments=(),
-            conditions=(),
-        )
-        prog = SimpleNamespace(
-            relations={"pair_dom": dom_rel, "cand": cand_rel, name: func_rel},
-            rules_for=lambda rel_name: [rule] if rel_name == name else [],
-        )
-        lines = functional_rules(prog, func_rel)
-        empty_lines = [line for line in lines if f"!Func_{name}_HasCand(" in line]
-        assert len(empty_lines) == 1, f"expected one empty-key rule for {name}, got {empty_lines}"
-        empty_rule = empty_lines[0]
-        assert f'"{expected_state}", "no_match"' in empty_rule, (
-            f"Soufflé oracle emitted wrong empty-key reason for {name}: {empty_rule}"
-        )
-        assert '"no_value"' not in empty_rule, (
-            f"Soufflé oracle must not emit 'no_value' for 0-candidate key in {name}: {empty_rule}"
-        )
-        conflict_lines = [line for line in lines if f"Func_{name}_Conflict(" in line and line.startswith(f"{name}(")]
-        assert conflict_lines and '"invalid", "multiple_values"' in conflict_lines[0], (
-            f"Soufflé oracle conflict rule for {name} must emit ('invalid', 'multiple_values'): {conflict_lines}"
-        )
-
-    check_emitted("pick", None, "unknown")
-    check_emitted("opt_pick", "not_applicable", "not_applicable")
