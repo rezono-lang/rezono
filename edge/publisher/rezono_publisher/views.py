@@ -408,9 +408,21 @@ def _proof(st, pack, manifest, m, role, snapshots, base=None):
     """The role's proof graph as key-range pieces (rezono_publisher.proof), checked by rezono_checker.proof:
     (pieces, the `proof` part of the view index). Blocked if the check fails. `base` is the key prefix of
     the pieces: the role's views, or its explain index for a proposal or variant (rezono_publisher.difference)."""
+    from rezono_publication import l0
+    from rezono_publication import publication as rd
+
     w = next((x for x in m.get("witnesses", []) if x["role"] == role), None)
     rules = next((c for c in m.get("compiled", []) if c.get("file") == "ir/rules.json"), None)
+    bundle_ref = next((c for c in m.get("compiled", []) if c.get("file") == "bundle/schema-bundle.json"), None)
+    bundle_doc = json.loads(_get(st, key_of(bundle_ref["uri"]), bundle_ref["sha256"])) if bundle_ref else {}
+    pack_meta = bundle_doc.get("pack") if isinstance(bundle_doc, dict) else None
+    raw_base = pack_meta.get("base") if isinstance(pack_meta, dict) else None
     sees = json.loads(_get(st, key_of(w["uri"]), w["sha256"])) if w else {"witnesses": []}
+    base_iri = rd.BASE.format(pack=pack) if raw_base is None else raw_base
+    try:
+        l0.check_schema({"rezono": "1.0", "pack": pack, "base": base_iri, "kinds": {}})
+    except l0.L0Error as err:
+        raise Blocked(f"role {role}: proof: invalid pack.base {base_iri!r}: {err}") from err
     doc = json.loads(_get(st, key_of(rules["uri"]), rules["sha256"])) if rules else None
     if doc is None and sees["witnesses"]:
         raise ValueError(f"{manifest}: witnesses for role {role}, but no rule IR")
@@ -421,7 +433,7 @@ def _proof(st, pack, manifest, m, role, snapshots, base=None):
         raise Blocked(f"role {role}: proof: {err}") from err
     with timing.phase("checker"):
         problems = check_proof(doc or {"rules": []}, sees, snapshots, {k.removeprefix(base + "/"): b for k, b in made},
-                               roots, proof.PIECE, proof.FANOUT)
+                               roots, proof.PIECE, proof.FANOUT, require_load_bearing=True)
     if problems:
         raise Blocked(f"role {role}: proof: {len(problems)} (first: {'; '.join(problems[:3])})")
     trees = {t: {rel: {"uri": st.uri(f"{base}/{r['file']}"), "sha256": r["sha256"], "levels": r["levels"]}

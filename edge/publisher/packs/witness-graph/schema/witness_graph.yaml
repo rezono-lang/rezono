@@ -1,0 +1,47 @@
+id: https://rezono.org/packs/witness-graph
+name: witness_graph
+in_language: en
+imports:
+  - linkml:types
+default_range: string
+annotations:
+  layer: facts
+classes:
+  UsableWitness:
+    attributes:
+      id:
+        identifier: true
+      conclusion_rel:
+        required: true
+      conclusion_key:
+        required: true
+      dep_count:
+        required: true
+  WitnessPremise:
+    attributes:
+      id:
+        identifier: true
+      witness:
+        range: UsableWitness
+        required: true
+      premise_rel:
+        required: true
+      premise_key:
+        required: true
+      how:
+        required: true
+  WitnessDepStep:
+    attributes:
+      id:
+        identifier: true
+      witness:
+        range: UsableWitness
+        required: true
+      step_from:
+        required: true
+      step_to:
+        required: true
+      dep_rel:
+        required: true
+      dep_key:
+        required: true
