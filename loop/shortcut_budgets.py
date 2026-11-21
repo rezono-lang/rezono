@@ -42,7 +42,7 @@ BLOCKING_RELATIONS = (
 )
 RESULT_RELATIONS = (*BLOCKING_RELATIONS, "budget_slack", "budget_within")
 
-PACK_TOP_DIRS = ("build", "epoch", "examples", "packs", "run")
+PACK_TOP_DIRS = ("build", "examples", "packs", "run")
 EXCLUDED_DIR_NAMES = frozenset({
     "test",
     "tests",
@@ -156,23 +156,25 @@ def _read_pack_schema_models(pack_dir: Path) -> tuple[list[Any], list[dict[str, 
 
 
 def _imported_pack_dirs(pack_dir: Path, root_resolved: Path) -> list[Path]:
-    """Return resolvable imported pack directories declared in `pack.yaml`."""
+    """Return resolvable imported pack directories declared in `pack.yaml` (fail-closed)."""
     pack_yaml = pack_dir / "pack.yaml"
     if not pack_yaml.is_file():
         return []
     try:
         meta = yaml.safe_load(pack_yaml.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, yaml.YAMLError):
-        return []
+    except (OSError, UnicodeDecodeError, yaml.YAMLError) as exc:
+        raise RuntimeError(f"failed to read pack manifest {pack_yaml}: {exc}") from exc
     if not isinstance(meta, dict):
-        return []
+        raise RuntimeError(f"invalid pack manifest {pack_yaml}: expected a YAML mapping")
     imports = meta.get("imports")
-    if not isinstance(imports, list):
+    if imports is None:
         return []
+    if not isinstance(imports, list):
+        raise RuntimeError(f"invalid pack manifest {pack_yaml}: imports must be a list")
     out: list[Path] = []
     for entry in imports:
         if not isinstance(entry, dict) or not isinstance(entry.get("path"), str):
-            continue
+            raise RuntimeError(f"invalid pack manifest {pack_yaml}: each import entry must declare a string path")
         candidate = (pack_dir / entry["path"]).resolve()
         if candidate.is_dir() and candidate.is_relative_to(root_resolved):
             out.append(candidate)
