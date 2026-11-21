@@ -18,14 +18,6 @@ from pack_records import PACKS, evaluate
 BUDGET = PACKS / "std-budget"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "extra: decisions/tooling-does-not-decide.md: packs/std-budget must fail closed on missing "
-        "head observations (never treat absent head BudgetReading as 0 / budget_slack; emit "
-        "budget_missing_head and withhold budget_within)"
-    ),
-)
 def test_std_budget_missing_head_observation_fails_closed():
     from rezono_compiler import pack, rules
 
