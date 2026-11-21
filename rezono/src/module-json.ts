@@ -52,7 +52,7 @@ function formatOf(module: Module): ModuleForm['format'] {
 		if ('kind' in decl) {
 			if (decl.parent !== undefined) return true;
 			return decl.abstract || decl.embedded || decl.relationship || decl.keys?.length || decl.deprecated !== undefined || hasMetadata(decl)
-				|| decl.slots.some(slot => slot.identifier || slot.embedded || slot.slotUri !== undefined
+				|| decl.slots.some(slot => slot.identifier || slot.embedded || slot.personal || slot.slotUri !== undefined
 					|| slot.constraints !== undefined || hasMetadata(slot))
 				|| decl.equations?.length || decl.checks?.length;
 		}

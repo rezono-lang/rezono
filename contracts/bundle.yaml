@@ -268,6 +268,7 @@ classes:
       patterns: {multivalued: true, description: "Regular expressions every value must match (pattern on the slot or its type); see docs/compiler.md for the portable subset."}
       constant: {description: "The one allowed value (equals_string or equals_number); an integer as decimal text."}
       currency: {pattern: "^[A-Z]{3}$", description: "An amount: the integer values are whole minor units of this ISO 4217 currency (annotation `currency` on the slot or its type). The viewer shows them as money, exactly (contracts/value.yaml, Amount)."}
+      personal: {range: boolean, description: "Present as true for a slot marked `personal` (decisions/personal-data-handling.md): rules and calculations cannot read it, and public roles never see its rows. Left out otherwise."}
 
   PackEnum:
     description: >-

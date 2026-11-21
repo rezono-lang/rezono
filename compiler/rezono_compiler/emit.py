@@ -750,6 +750,7 @@ def bundle(pack: Pack, checks, prog=None, calc_prog=None) -> dict:
                                             "minimum": decimal(s.minimum), "maximum": decimal(s.maximum),
                                             "patterns": s.patterns, "input_format": s.input_format,
                                             "constant": constant, "currency": s.currency,
+                                            "personal": True if s.personal else None,
                                             "sentence": owned(sentence(f"attribute.{mood}", kind=k,
                                                                        attribute=s.element), sid, s.span)}))
         for name, slots in kind.unique_keys:

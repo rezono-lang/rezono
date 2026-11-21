@@ -94,6 +94,8 @@ export interface TypingOptions {
 	rezono1?: boolean;
 	/** Module-level derivations callable by name and usable as tuple sets in rezono 1. */
 	relations?: Record<string, RelationDef>;
+	/** Refuse reading slots marked `personal` with R054 (decisions/personal-data-handling.md §3). */
+	forbidPersonal?: boolean;
 }
 
 /** One scope: the question's row (the outermost) or the element of an aggregate, a quantifier or a filter. */
@@ -174,6 +176,7 @@ export function typing(text: string, schema: Schema, spans: WeakMap<object, Span
 	const levels: Level[] = [];
 	const tupleFields = new WeakMap<Typed, Record<string, SlotDef>>();
 	let projectionContext: ProjectionContext | undefined;
+	let inCheckStatement = false;
 
 	const spanOf = (node: object): Span => spans.get(node) ?? { text, start: 0, end: [...text].length };
 	/** The span of one word inside a node's span, when it can be found there. */
@@ -424,6 +427,10 @@ export function typing(text: string, schema: Schema, spans: WeakMap<object, Span
 		const slots = slotsOfTyped(from);
 		const slot = slots[name];
 		if (!slot) return [report('R001', within(node, name, 'end'), [name], { suggest: [...near(name, Object.keys(slots)), ...reach(name, from.ty)] }), at];
+		if ((options?.forbidPersonal || inCheckStatement) && slot.personal) {
+			const target = from.ty.t === 'ref' ? `${from.ty.kind}.${name}` : name;
+			return [report('R054', within(node, name, 'end'), [target]), at];
+		}
 		const here = `${at}.${name}`;
 		const many = slot.card === '*' || slot.card === '+';
 		const v = value(slotType(schema, slot), [from], from.set || many);
@@ -1083,7 +1090,12 @@ export function typing(text: string, schema: Schema, spans: WeakMap<object, Span
 		}
 		const binder = rows[0]?.[0];
 		if (binder !== undefined) levels.push({ ty: { t: 'ref', kind: kindOf(binder)! }, at: binder, binder });
-		truth(q.cond);
+		inCheckStatement = true;
+		try {
+			truth(q.cond);
+		} finally {
+			inCheckStatement = false;
+		}
 		return { verb: q.check, ...(q.name !== undefined ? { name: q.name } : {}), ...(binder !== undefined ? { binder, kind: kindOf(binder)! } : {}) };
 	}
 

@@ -236,6 +236,15 @@ def calc_ir(e: Epoch) -> dict | None:
     return doc
 
 
+def _bundle_doc(e: Epoch) -> dict | None:
+    if not e.bundle:
+        return None
+    try:
+        return json.loads(e.bundle)
+    except (TypeError, ValueError) as err:
+        raise Blocked(f"{PROOFS}: the schema bundle is not JSON: {err}") from err
+
+
 def rule_ir(e: Epoch):
     """The rule IR of the epoch: the document, the rules as the checker reads them and the derived relations.
 
@@ -251,8 +260,9 @@ def rule_ir(e: Epoch):
     if not isinstance(doc, dict) or doc.get("format") != "rezono.rules/1":
         # Only the compiler's rule IR has a relation catalogue; the checker's older minimal form has none.
         raise Blocked(f"{PROOFS}: the rule definitions are not the rule IR (format rezono.rules/1)")
+    bundle_doc = _bundle_doc(e)
     try:
-        rules = load_rules(doc)
+        rules = load_rules(doc, bundle=bundle_doc)
         derived = derived_relations(doc, rules)
     except (ValueError, KeyError, TypeError) as err:
         raise Blocked(f"{PROOFS}: the checker refuses the rule definitions: {err!r}") from err
@@ -273,8 +283,9 @@ def verify(e: Epoch, snapshots=None, witnesses=None, full=None, calc_witnesses=N
     """
     doc, rules, derived = rule_ir(e)
     calculation = calc_ir(e)
+    bundle_doc = _bundle_doc(e)
     try:
-        check_calc_bindings(doc, rules, calculation)
+        check_calc_bindings(doc, rules, calculation, bundle=bundle_doc)
     except (ValueError, KeyError, TypeError) as err:
         raise Blocked(f"{PROOFS}: the checker refuses the calculation bindings: {err!r}") from err
     try:

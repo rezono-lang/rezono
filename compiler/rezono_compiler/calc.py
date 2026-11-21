@@ -21,6 +21,7 @@ from typing import cast
 
 
 from . import rules_dl, spans, strict_yaml, types
+from .diagnostics import COMPILE_ERROR, PERSONAL_SLOT_CODE, Diagnostic, personal_slot_message
 from .names import ISO_DATE
 from .pack import CompileError, Pack, Slot, located, renamed
 
@@ -457,7 +458,8 @@ def build(pack: Pack, doc: dict, derived: dict | None = None, files: list[tuple[
             errors.append(f"calc.rule: {v.id} is defined twice")
         versions[v.id] = v
     if errors:
-        raise CompileError("\n".join(errors))
+        diags = [e if isinstance(e, Diagnostic) else Diagnostic(COMPILE_ERROR, e) for e in errors]
+        raise CompileError("\n".join(map(str, errors)), diags)
 
     rules: dict[str, list[str]] = {}
     for v in versions.values():
@@ -477,7 +479,8 @@ def build(pack: Pack, doc: dict, derived: dict | None = None, files: list[tuple[
             check_overrides(v, d, errors)
         check_override_cycles(v, errors)
     if errors:
-        raise CompileError("\n".join(errors))
+        diags = [e if isinstance(e, Diagnostic) else Diagnostic(COMPILE_ERROR, e) for e in errors]
+        raise CompileError("\n".join(map(str, errors)), diags)
 
     rule_types = infer_types(versions, rules, facts, errors)
     for f in sorted(facts.values(), key=lambda f: f.id):
@@ -485,7 +488,8 @@ def build(pack: Pack, doc: dict, derived: dict | None = None, files: list[tuple[
             errors.append(f"calc.binding: fact {f.id} is a {f.type}, but inputs bind no {'boolean' if f.type == BOOLEAN else 'integer'} slot")
     order = dependency_order(versions, rules, errors)
     if errors:
-        raise CompileError("\n".join(errors))
+        diags = [e if isinstance(e, Diagnostic) else Diagnostic(COMPILE_ERROR, e) for e in errors]
+        raise CompileError("\n".join(map(str, errors)), diags)
     if problems := check_units(pack, versions, rules, facts):
         raise UnitError(problems, files or [], versions)
 
@@ -510,7 +514,8 @@ def build(pack: Pack, doc: dict, derived: dict | None = None, files: list[tuple[
             errors.append(f"calc.name: engine name '{name}' of {owner} clashes with {seen.get(name, 'a table or relation of the pack')}")
         seen.setdefault(name, owner)
     if errors:
-        raise CompileError("\n".join(errors))
+        diags = [e if isinstance(e, Diagnostic) else Diagnostic(COMPILE_ERROR, e) for e in errors]
+        raise CompileError("\n".join(map(str, errors)), diags)
     return Program(doc["pack"], subject, root.id_type, subject, parameters, choice, inputs, as_of, versions, rules,
                    rule_types, facts, order, engine)
 
@@ -541,6 +546,9 @@ def attribute(pack: Pack, element: str, where: str) -> Slot:
     s = pack.slot(kind, name) if kind in pack.kinds else None
     if s is None or s.arrow:
         raise CompileError(f"calc.binding: {where}: '{element}' is not an attribute of the pack")
+    if s.personal:
+        msg = personal_slot_message(s.element, where=f"calc.binding: {where}")
+        raise CompileError(msg, [Diagnostic(PERSONAL_SLOT_CODE, msg)])
     return s
 
 
@@ -588,6 +596,9 @@ def bind_choice(pack: Pack, parameters: Slot | None, b: dict | None, kind: str |
         if s is None or s.arrow or s.multivalued or s.sql_type != sql_type:
             want = "a text" if sql_type == "VARCHAR" else "a date"
             raise CompileError(f"calc.binding: parameter_choice: {role}: '{element}' is not {want} attribute of '{kind}'")
+        if s.personal:
+            msg = personal_slot_message(s.element, where=f"calc.binding: parameter_choice: {role}")
+            raise CompileError(msg, [Diagnostic(PERSONAL_SLOT_CODE, msg)])
         out[role] = s
     return out
 
@@ -611,6 +622,9 @@ def bind_inputs(pack: Pack, subject: str, b: dict | None) -> dict | None:
             ok = s.range in pack.ancestors(subject)
         if not ok:
             raise CompileError(f"calc.binding: inputs.{role}: '{kind}.{name}' does not fit")
+        if s is not None and s.personal:
+            msg = personal_slot_message(s.element, where=f"calc.binding: inputs.{role}")
+            raise CompileError(msg, [Diagnostic(PERSONAL_SLOT_CODE, msg)])
         return s
 
     return {"kind": kind, "subject": slot("subject", None, arrow=True), "fact": slot("fact", "VARCHAR"),
@@ -793,6 +807,14 @@ def check_leaves(pack, subject, inputs, parameters, versions, rules, node, where
         elif leaf.op == "fact" and leaf.value not in facts:
             kind, _, name = leaf.value.partition(".")
             s = pack.slot(kind, name) if kind in pack.kinds else None
+            if s is not None and s.personal:
+                errors.append(
+                    Diagnostic(
+                        PERSONAL_SLOT_CODE,
+                        personal_slot_message(s.element, where=f"calc.binding: {where}"),
+                    )
+                )
+                continue
             relation = derived_fact(pack, subject, derived or {}, leaf.value)
             if isinstance(relation, Fact):
                 facts[leaf.value] = relation

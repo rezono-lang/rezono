@@ -11,7 +11,7 @@ import re
 import yaml
 
 from . import modules, pack, rezono_module, rezono_step, rules, rules_dl, spans, types
-from .diagnostics import Diagnostic
+from .diagnostics import PERSONAL_SLOT_CODE, Diagnostic, personal_slot_message
 
 Column = tuple[str, str, str]
 ClauseKey = tuple[str, str, str]
@@ -249,6 +249,12 @@ class Schema:
         else:
             raise Refusal("R001", f"{authored} has no slot {name!r}", at)
         slot = pack.own_class_slot(owner_mod.sv, kind, name)
+        if pack.ann(slot, "personal") is True:
+            raise Refusal(
+                PERSONAL_SLOT_CODE,
+                personal_slot_message(f"{owner}.{name}"),
+                at,
+            )
         if slot.identifier:
             scalar = "Int" if self.storage(subject, at) == "integer" else "Text"
             return (None, scalar), False

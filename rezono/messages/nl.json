@@ -36,6 +36,7 @@
 	"R050": "`{0}` kan niet worden omgezet naar een berekening",
 	"R051": "`{0}` wordt waargenomen: declareer `world open`, en `complete by` het bereik waarin het volledig is",
 	"R053": "`{0}` `{1}` heeft geen herkomst, en een pack op `rezono 1` weigert een feit zonder herkomst; geef het een `@`-bron, een `decide`-blok, een `Decision` waaraan het gebonden is, of een regel in zijn `.sources.yaml` (soort `synthetic` voor gegenereerde voorbeelddata)",
+	"R054": "regel mag persoonlijk veld `{0}` niet lezen; persoonlijke velden leven buiten de redeneerlaag zodat het weggooien van een persoonsleutel die gegevens wist",
 	"W105": "`{0}` kan onbekend zijn; onbekende waarden worden met hun reden getoond",
 	"W106": "geen `rezono`-regel; gelezen als `rezono 0`",
 	"W107": "`{0}` is verouderd",

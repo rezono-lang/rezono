@@ -21,6 +21,8 @@ from . import calc, closure, completeness, metadata
 from . import evidence as admission
 from .canon import INTEGER, calc_value, encode_key, sha256_json, strict_json_loads, value_text
 from .evaluate import _arith, _fits, _fold, _holds, _value, cells
+from .refusals import RefusalError
+from .rules import check_calc_personal_slots, check_personal_slots
 from .snapshots import read_rows
 from .state_projections import check as check_state_projections
 
@@ -123,6 +125,13 @@ def check_epoch(witnesses: list, manifest: dict, rules: dict, read_bytes, *, der
     findings = []
     if bundle is not None or check_metadata is not None:  # either alone is refused: nothing to compare
         findings += metadata.check(bundle, check_metadata)
+    if bundle is not None:
+        try:
+            check_personal_slots(rules, bundle)
+            if calc_ir is not None:
+                check_calc_personal_slots(calc_ir, bundle)
+        except RefusalError as err:
+            findings.append({"reason": err.refusal.code, **err.refusal.arguments})
     snapshots, _ = _load(manifest, read_bytes, None, findings)
     witnesses = _well_formed(witnesses if isinstance(witnesses, list) else [witnesses], findings)
     proof = {"manifest_id": manifest["id"], "root": None, "witnesses": witnesses}

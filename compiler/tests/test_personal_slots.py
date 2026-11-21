@@ -42,16 +42,6 @@ def _personal_pack(directory: Path, rule_text: str) -> Path:
     return directory
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "extra: decisions/personal-data-handling.md: Support the `personal` slot annotation in "
-        "compiler/rezono_compiler/pack.py, rezono_slot.py, rezono/src/module-slot.ts, and contracts/bundle.yaml; "
-        "refuse any rule or calculation reading a `personal` slot with diagnostic `R054` (in rules_dl.py, "
-        "native_rule_signatures.py, rezono/src/native-rule-check.ts, and checker)."
-    ),
-)
 def test_rule_reading_personal_slot_is_refused(tmp_path: Path):
     # 1. Positive body literal reading a personal slot must be refused with R054.
     positive_dir = _personal_pack(
