@@ -409,3 +409,93 @@ def test_rules_v2_refuses_min_int64_constant_and_accepts_symmetric_bound():
         )
 
     assert not problems, "\n".join(problems)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "M3: decisions/language-rezono-1.md: sections 2 and 5.4; compiler/rezono_compiler/rules.py "
+        "must refuse any rezono.rules/2 program where a functional relation rule positively reads an "
+        "open-world base or derived relation."
+    ),
+)
+def test_rules_v2_refuses_functional_rule_reading_open_relation():
+    # Counter-case: a functional derivation over a closed domain reading closed base and closed derived
+    # relations loads cleanly.
+    closed_ok = {
+        "format": "rezono.rules/2",
+        "pack": "sample",
+        "relations": [
+            {"name": "item", "role": "base", "world": "closed", "key": [_col("id")]},
+            {"name": "closed_tag", "role": "base", "world": "closed", "key": [_col("id"), _col("v")]},
+            {"name": "closed_rel", "role": "derived", "module": "core", "explain": "on_demand",
+             "key": [_col("id"), _col("v")]},
+            {
+                "name": "pick_base", "role": "functional", "module": "core", "explain": "on_demand",
+                "key": [_col("id")], "domain": "item",
+                "value": _col("value", "string"), "conflict_policy": "publish",
+            },
+            {
+                "name": "pick_derived", "role": "functional", "module": "core", "explain": "on_demand",
+                "key": [_col("id")], "domain": "item",
+                "value": _col("value", "string"), "conflict_policy": "publish",
+            },
+        ],
+        "rules": [
+            _rule("closed_rel_r", "closed_rel", ["?x", "?v"], [_lit("closed_tag", "?x", "?v")], stratum="1"),
+            _rule("pick_base_r", "pick_base", ["?x", "?v"],
+                  [_lit("item", "?x"), _lit("closed_tag", "?x", "?v")], stratum="1"),
+            _rule("pick_derived_r", "pick_derived", ["?x", "?v"],
+                  [_lit("item", "?x"), _lit("closed_rel", "?x", "?v", stratum="1")], stratum="2"),
+        ],
+    }
+    prog = ir.load(closed_ok, require_witness=False)
+    assert prog.relations["pick_base"].world == "closed"
+    assert prog.relations["pick_derived"].world == "closed"
+
+    problems: list[str] = []
+
+    # 1. Functional relation positively reading an open base relation must be refused.
+    reads_open_base = {
+        "format": "rezono.rules/2",
+        "pack": "sample",
+        "relations": [
+            {"name": "item", "role": "base", "world": "closed", "key": [_col("id")]},
+            {"name": "open_tag", "role": "base", "world": "open", "key": [_col("id"), _col("v")]},
+            {
+                "name": "pick_open_base", "role": "functional", "module": "core", "explain": "on_demand",
+                "key": [_col("id")], "domain": "item",
+                "value": _col("value", "string"), "conflict_policy": "publish",
+            },
+        ],
+        "rules": [
+            _rule("pick_open_base_r", "pick_open_base", ["?x", "?v"],
+                  [_lit("item", "?x"), _lit("open_tag", "?x", "?v")], stratum="1"),
+        ],
+    }
+    _expect_ir_error(reads_open_base, "functional rule positively reading open base relation", problems)
+
+    # 2. Functional relation positively reading an open derived relation must be refused.
+    reads_open_derived = {
+        "format": "rezono.rules/2",
+        "pack": "sample",
+        "relations": [
+            {"name": "item", "role": "base", "world": "closed", "key": [_col("id")]},
+            {"name": "open_tag", "role": "base", "world": "open", "key": [_col("id"), _col("v")]},
+            {"name": "open_rel", "role": "derived", "module": "core", "explain": "on_demand",
+             "key": [_col("id"), _col("v")]},
+            {
+                "name": "pick_open_derived", "role": "functional", "module": "core", "explain": "on_demand",
+                "key": [_col("id")], "domain": "item",
+                "value": _col("value", "string"), "conflict_policy": "publish",
+            },
+        ],
+        "rules": [
+            _rule("open_rel_r", "open_rel", ["?x", "?v"], [_lit("open_tag", "?x", "?v")], stratum="1"),
+            _rule("pick_open_derived_r", "pick_open_derived", ["?x", "?v"],
+                  [_lit("item", "?x"), _lit("open_rel", "?x", "?v", stratum="1")], stratum="2"),
+        ],
+    }
+    _expect_ir_error(reads_open_derived, "functional rule positively reading open derived relation", problems)
+
+    assert not problems, "\n".join(problems)
