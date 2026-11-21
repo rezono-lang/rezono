@@ -60,10 +60,12 @@ A scalar attribute whose values are personal data may be marked `personal`:
 
 **No rule or calculation may read a `personal` slot.**
 
-- **Datalog rules (`rules/*.dl`, [rules_dl.py](../compiler/rezono_compiler/rules_dl.py)):** Any rule that references the table `<kind>__<slot>` of a `personal` slot — in a positive body literal, a negative body literal (`!<kind>__<slot>(...)`), or an aggregate (`count : { <kind>__<slot>(...) }`) — is refused at compile time with diagnostic **`R054`**.
+**The tables of a personal slot** (clarified by the owner on 2026-11-21). A personal slot is read through two tables: its own table `<kind>__<slot>`, and its state table `<kind>__<slot>_state`, which holds that slot's state for each person. Both are personal, and every refusal below covers both. The parameter tables of the slot's bounds, constant and cardinalities (`<kind>__<slot>__minimum`, `__maximum`, `__constant`, `__minimum_cardinality`, `__maximum_cardinality`) hold values that are the same for everyone. They are not personal, and a rule may read them.
+
+- **Datalog rules (`rules/*.dl`, [rules_dl.py](../compiler/rezono_compiler/rules_dl.py)):** Any rule that references a table of a `personal` slot (`<kind>__<slot>` or `<kind>__<slot>_state`) — in a positive body literal, a negative body literal (`!<kind>__<slot>(...)`), or an aggregate (`count : { <kind>__<slot>(...) }`) — is refused at compile time with diagnostic **`R054`**.
 - **Native Rezono rules ([native_rule_signatures.py](../compiler/rezono_compiler/native_rule_signatures.py) and [native-rule-check.ts](../rezono/src/native-rule-check.ts)):** Any path expression traversing a `personal` slot (for example `s.display_name`) is refused with **`R054`**.
 - **Calculations (`calc/*.yaml` / `rezono_calc.py`):** Any calculation rule referencing a `personal` slot is refused with **`R054`**.
-- **Independent checker defense in depth:** The checker also refuses any rule IR whose body or aggregate references a table belonging to an attribute marked `personal: true` in `bundle/schema-bundle.json`.
+- **Independent checker defense in depth:** The checker also refuses any rule IR whose body or aggregate references a table of a slot marked `personal: true` in `bundle/schema-bundle.json` (`<kind>__<slot>` or `<kind>__<slot>_state`).
 
 ### Diagnostic code `R054`
 

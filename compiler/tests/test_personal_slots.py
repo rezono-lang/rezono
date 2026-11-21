@@ -153,30 +153,31 @@ def test_negated_literal_reading_a_personal_slot_is_refused(tmp_path: Path):
     assert _refused_codes(directory) == ["R054"]
 
 
+def test_rule_reading_a_parameter_table_of_a_personal_slot_compiles(tmp_path: Path):
+    """A bound of a personal slot is the same for everyone, so it is not personal (the owner, 21-11)."""
+    rule = ".decl capped(v: number)\ncapped(v) :- alpha__secret_count__maximum(v).\n"
+    directory = _personal_pack(tmp_path / "pack", rule)
+    schema_path = directory / "schema" / "minimal.yaml"
+    schema = yaml.safe_load(schema_path.read_text(encoding="utf-8"))
+    schema["classes"]["Alpha"]["attributes"]["secret_count"] = {
+        "range": "integer", "maximum_value": 9, "annotations": {"personal": True}}
+    schema_path.write_text(yaml.safe_dump(schema, sort_keys=False), encoding="utf-8", newline="\n")
+    emit.compile_pack(pack.read(directory))
+
+
 @pytest.mark.xfail(
     strict=True,
     raises=AssertionError,
     reason=(
-        "extra: decisions/personal-data-handling.md: R054 refuses a rule that reads any table belonging to a "
-        "personal attribute, the parameter table of its bound included (section 3), as the checker does. Waits "
-        "for compiler/tests/test_personal_slots.py--test_rule_reading_personal_slot_is_refused (#1342), which "
-        "lifts it with the fix."
+        "extra: decisions/personal-data-handling.md: R054 refuses a rule that reads the state table of a personal "
+        "slot, as it refuses its own table (section 3, the owner, 21-11). Waits for "
+        "compiler/tests/test_personal_slots.py--test_rule_reading_personal_slot_is_refused (#1342), which lifts "
+        "it with the fix."
     ),
 )
-def test_rule_reading_a_parameter_table_of_a_personal_slot_is_refused(tmp_path: Path):
-    rule = ".decl capped(v: number)\ncapped(v) :- alpha__secret_count__maximum(v).\n"
-
-    def made(name: str, personal: bool) -> Path:
-        directory = _personal_pack(tmp_path / name, rule)
-        schema_path = directory / "schema" / "minimal.yaml"
-        schema = yaml.safe_load(schema_path.read_text(encoding="utf-8"))
-        schema["classes"]["Alpha"]["attributes"]["secret_count"] = {
-            "range": "integer", "maximum_value": 9, **({"annotations": {"personal": True}} if personal else {})}
-        schema_path.write_text(yaml.safe_dump(schema, sort_keys=False), encoding="utf-8", newline="\n")
-        return directory
-
-    emit.compile_pack(pack.read(made("plain", False)))  # counter-case: the bound of a slot that is not personal
-    assert _refused_codes(made("personal", True)) == ["R054"]
+def test_rule_reading_the_state_table_of_a_personal_slot_is_refused(tmp_path: Path):
+    rule = ".decl seen(x: symbol)\nseen(x) :- alpha__secret_note_state(x, s, r).\n"
+    assert _refused_codes(_personal_pack(tmp_path / "pack", rule)) == ["R054"]
 
 
 # A rule over Beta only, so that sealing Alpha leaves it valid.

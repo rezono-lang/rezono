@@ -1,9 +1,9 @@
 """The checker refuses a definition that reads a personal slot, independently of the compiler's R054
 (decisions/personal-data-handling.md, section 3): no rule head, body (negated or not) or aggregate, no functional
-domain and no calculation binding may reference a table that belongs to an attribute the schema bundle marks
-`personal: true`: its own table, its state projection (`<table>_state`) and the parameter tables of its bounds,
-constant and cardinalities. check_epoch holds it whenever it is handed the bundle, as the publisher does for the
-complete epoch, and check_role for each role.
+domain and no calculation binding may reference a table of a slot the schema bundle marks `personal: true`: its own
+table or its state table (`<table>_state`). The parameter tables of its bounds, constant and cardinalities hold
+values that are the same for everyone, so a rule may read them (the owner, 21-11). check_epoch holds it whenever it
+is handed the bundle, as the publisher does for the complete epoch, and check_role for each role.
 
 A refusal is a registered code with named arguments (decisions/checker-refusal-register.md), and each argument has
 one meaning in all of them: `rule` is the id of the rule that reads, `relation` the table it reads, `field` the
@@ -117,21 +117,11 @@ def test_a_rule_reading_a_personal_slot_is_refused(ir, table):
     assert refusals(ir) == (False, [in_rule(table)])
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "extra: decisions/personal-data-handling.md: check_epoch refuses a rule that reads the parameter table of "
-        "a personal attribute's bound, as a table that belongs to the attribute (section 3, the checker's wording; "
-        "waits on the owner's confirmation, since the Datalog bullet names only `<kind>__<slot>`). Waits for "
-        "compiler/tests/test_personal_slots.py--test_rule_reading_personal_slot_is_refused (#1342), which lifts "
-        "it with the fix."
-    ),
-)
-def test_a_rule_reading_a_parameter_table_of_a_personal_slot_is_refused():
+def test_a_rule_reading_a_parameter_table_of_a_personal_slot_passes():
+    """A bound of a personal slot is the same for everyone, so it is not personal (the owner, 21-11)."""
     ir = program(body=[atom("subject__display_name__maximum", "?m")],
                  tables=[relation("subject__display_name__maximum", "v")])
-    assert refusals(ir) == (False, [in_rule("subject__display_name__maximum")])
+    assert refusals(ir) == (True, [])
 
 
 @pytest.mark.xfail(
