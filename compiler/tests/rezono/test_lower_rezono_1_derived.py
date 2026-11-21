@@ -361,14 +361,6 @@ def test_lower_rezono_1_derived(tmp_path):
         raise MissingRezono1DerivedLowering(json.dumps(problems, indent=1, default=str))
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "M3: decisions/language-rezono-1.md: sections 2, 5.8, and 8; compiler/rezono_compiler/emit.py "
-        "must emit role=='functional' relations into bundle/schema-bundle.json with co-located "
-        "(key..., state, reason, value) columns and populate kind/property on <k>_<d> derived properties."
-    ),
-)
 def test_rezono_1_derived_bundle_includes_functional_relations(tmp_path):
     source = MODULE + "\nextend s: Item\n  derived self_parent: Bool = s.parent = s\n"
     directory = _write_pack(tmp_path / "bundle-functional", source, FACTS)
@@ -430,14 +422,6 @@ def _write_json_form_pack(directory: Path, decls: list[dict]) -> Path:
     return directory
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "M3: decisions/language-rezono-1.md: section 2; compiler/rezono_compiler/rezono_derived.py "
-        "must accept only true/false for Bool literals (rejecting yes/no) and only Int for integer "
-        "scalars (rejecting Integer)."
-    ),
-)
 def test_rezono_1_derived_rejects_yes_no_booleans_and_integer_scalar(tmp_path):
     # Counter-cases: true/false and Int compile cleanly.
     ok_source = """\
