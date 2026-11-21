@@ -123,6 +123,52 @@ jobs:
         run: |
           set -euo pipefail
           PYTHONPATH="$PWD/loop" python loop/cluster/record_network.py
+      - name: Record management proof features
+        if: >-
+          inputs.tasks == ''
+          || contains(fromJSON(inputs.tasks || '[]'), 'examples/platform/proof_cases/test_management_health.py--test_management_health_readback')
+          || contains(fromJSON(inputs.tasks || '[]'), 'examples/platform/proof_cases/test_management_firewall.py--test_management_firewall_readback')
+          || contains(fromJSON(inputs.tasks || '[]'), 'examples/platform/proof_cases/test_management_certificates.py--test_management_certificate_renewal_readback')
+          || contains(fromJSON(inputs.tasks || '[]'), 'examples/platform/proof_cases/test_management_access.py--test_management_membership_withdrawal')
+          || contains(fromJSON(inputs.tasks || '[]'), 'examples/platform/proof_cases/test_management_backup.py--test_management_backup_restore_readback')
+          || contains(fromJSON(inputs.tasks || '[]'), 'examples/platform/proof_cases/test_management_dataset_restored_offline.py--test_management_dataset_restored_offline')
+        shell: bash
+        env:
+          TASKS: ${{ inputs.tasks }}
+        run: |
+          set -euo pipefail
+          export REZONO_CLUSTER_KUBECONFIG="$KUBECONFIG"
+          run_feature() {
+            local script=$1
+            shift
+            if [[ ! -f "$script" ]]; then
+              return 0
+            fi
+            if [[ -n "${TASKS:-}" ]]; then
+              local matched=false task
+              for task in "$@"; do
+                if jq -e --arg task "$task" 'index($task) != null' <<< "$TASKS" >/dev/null; then
+                  matched=true
+                  break
+                fi
+              done
+              if [[ "$matched" != true ]]; then
+                return 0
+              fi
+            fi
+            PYTHONPATH="$PWD:$PWD/loop:$PWD/loop/cluster" python "$script"
+          }
+          run_feature loop/cluster/record_management_health.py \
+            examples/platform/proof_cases/test_management_health.py--test_management_health_readback
+          run_feature loop/cluster/record_management_firewall.py \
+            examples/platform/proof_cases/test_management_firewall.py--test_management_firewall_readback
+          run_feature loop/cluster/record_management_certificates.py \
+            examples/platform/proof_cases/test_management_certificates.py--test_management_certificate_renewal_readback
+          run_feature loop/cluster/record_management_access.py \
+            examples/platform/proof_cases/test_management_access.py--test_management_membership_withdrawal
+          run_feature loop/cluster/record_management_backup.py \
+            examples/platform/proof_cases/test_management_backup.py--test_management_backup_restore_readback \
+            examples/platform/proof_cases/test_management_dataset_restored_offline.py--test_management_dataset_restored_offline
       - name: Select and run the repository's cluster tests
         if: inputs.tasks == ''
         shell: bash
@@ -203,5 +249,5 @@ jobs:
             echo "The disposable cluster is still registered." >&2
             exit 1
           fi
-          rm -f -- "$KUBECONFIG"
+          rm -f -- "$KUBECONFIG" "$RUNNER_TEMP/rezono-fixture-tenant.kubeconfig"
           echo "Disposable cluster rezono-fixture is absent."

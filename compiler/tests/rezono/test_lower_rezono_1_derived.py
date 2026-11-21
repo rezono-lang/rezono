@@ -359,3 +359,275 @@ def test_lower_rezono_1_derived(tmp_path):
 
     if problems:
         raise MissingRezono1DerivedLowering(json.dumps(problems, indent=1, default=str))
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "M3: decisions/language-rezono-1.md: sections 2, 5.8, and 8; compiler/rezono_compiler/emit.py "
+        "must emit role=='functional' relations into bundle/schema-bundle.json with co-located "
+        "(key..., state, reason, value) columns and populate kind/property on <k>_<d> derived properties."
+    ),
+)
+def test_rezono_1_derived_bundle_includes_functional_relations(tmp_path):
+    source = MODULE + "\nextend s: Item\n  derived self_parent: Bool = s.parent = s\n"
+    directory = _write_pack(tmp_path / "bundle-functional", source, FACTS)
+    files = emit.compile_pack(pack.read(directory))
+    bundle = json.loads(files["bundle/schema-bundle.json"])
+    assert _validate("bundle.yaml", bundle, "Bundle") == []
+
+    by_id = {rel["id"]: rel for rel in bundle.get("relations", [])}
+
+    # Every single-key functional derived property <k>_<d> appears with kind, property, and co-located columns.
+    for name, (domain, value_type) in PROPERTIES.items():
+        assert name in by_id, f"functional property {name!r} missing from bundle relations: {sorted(by_id)}"
+        rel = by_id[name]
+        prop = name[len(domain) + 1:]
+        assert rel.get("kind") == domain, (name, rel)
+        assert rel.get("property") == prop, (name, rel)
+        assert rel.get("world", "closed") == "closed", (name, rel)
+        cols = rel["columns"]
+        assert len(cols) == 4, (name, cols)
+        assert [(c["name"], c["type"]) for c in cols[1:]] == [
+            ("state", "string"), ("reason", "string"), ("value", value_type),
+        ], (name, cols)
+
+    # Multi-key functional derivations appear with co-located columns and no kind/property.
+    for name, (_, value_type) in MULTI_KEY.items():
+        assert name in by_id, f"functional relation {name!r} missing from bundle relations: {sorted(by_id)}"
+        rel = by_id[name]
+        assert "kind" not in rel and "property" not in rel, (name, rel)
+        assert rel.get("world", "closed") == "closed", (name, rel)
+        cols = rel["columns"]
+        assert len(cols) == 5, (name, cols)
+        assert [(c["name"], c["type"]) for c in cols[2:]] == [
+            ("state", "string"), ("reason", "string"), ("value", value_type),
+        ], (name, cols)
+
+    # Single-key Bool derived property carries kind/property and plain key column; module-level Bool asks omits them.
+    assert "item_self_parent" in by_id, sorted(by_id)
+    assert by_id["item_self_parent"].get("kind") == "item"
+    assert by_id["item_self_parent"].get("property") == "self_parent"
+    assert len(by_id["item_self_parent"]["columns"]) == 1
+
+    assert "asks" in by_id
+    assert "kind" not in by_id["asks"] and "property" not in by_id["asks"]
+    assert len(by_id["asks"]["columns"]) == 2
+
+
+def _write_json_form_pack(directory: Path, decls: list[dict]) -> Path:
+    from rezono_compiler import rezono_module
+
+    directory = Path(shutil.copytree(FIXTURE, directory))
+    folder = directory / "rezono"
+    folder.mkdir()
+    module = {"rezono": "1", "pack": "minimal", "use": [], "decls": decls}
+    spans = [{"at": at, "line": "1", "start": "0", "end": "1"} for at in rezono_module.place_pointers(module)]
+    form = {"format": "rezono.module/5", "module": module, "spans": spans}
+    (folder / "derived.rezono").write_text("rezono 1\npack minimal\n", encoding="utf-8", newline="\n")
+    (folder / "derived.json").write_text(json.dumps(form, sort_keys=True), encoding="utf-8")
+    register(directory, {"module": "rezono/derived.rezono", "form": "rezono/derived.json", "layer": "facts"})
+    return directory
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "M3: decisions/language-rezono-1.md: section 2; compiler/rezono_compiler/rezono_derived.py "
+        "must accept only true/false for Bool literals (rejecting yes/no) and only Int for integer "
+        "scalars (rejecting Integer)."
+    ),
+)
+def test_rezono_1_derived_rejects_yes_no_booleans_and_integer_scalar(tmp_path):
+    # Counter-cases: true/false and Int compile cleanly.
+    ok_source = """\
+rezono 1
+pack minimal
+
+kind Item
+  flag: Bool
+
+extend s: Item
+  derived yes_flag: Bool = s.flag = true
+  derived no_flag: Bool = s.flag = false
+  derived total_items: Int = Item.count()
+"""
+    assert _refusal(_write_pack(tmp_path / "ok", ok_source)) is None
+
+    # Integer (instead of Int) must be refused as a rezono 1 scalar type, and yes/no must be refused for Bool.
+    problems: list[str] = []
+    bad_integer = """\
+rezono 1
+pack minimal
+
+kind Item
+  flag: Bool
+
+extend s: Item
+  derived total_items: Integer = Item.count()
+"""
+    if _refusal(_write_pack(tmp_path / "bad-integer", bad_integer)) is None:
+        problems.append("rezono_derived accepted scalar type 'Integer' instead of refusing it in favour of 'Int'")
+
+    for token in ("yes", "no"):
+        decls = [
+            {"kind": "Item", "world": "closed", "slots": [{"slot": "flag", "type": "Bool"}], "derived": []},
+            {
+                "extend": "Item",
+                "binder": "s",
+                "derived": [{
+                    "derived": f"bad_{token}",
+                    "type": "Bool",
+                    "value": {"cmp": ["=", {"path": ["s", "flag"]}, {"lit": token}]},
+                }],
+            },
+        ]
+        if _refusal(_write_json_form_pack(tmp_path / f"bad-bool-{token}", decls)) is None:
+            problems.append(f"rezono_derived accepted {token!r} as a Bool literal instead of requiring true/false")
+
+    assert not problems, "\n".join(problems)
+
+
+def _run_derived_case(tmp_path: Path, name: str, source: str, facts: str) -> tuple[dict, dict, set[tuple]]:
+    directory = _write_pack(tmp_path / name, source, facts)
+    model = pack.read(directory)
+    files = emit.compile_pack(model)
+    assert "ir/calc.json" not in files, f"{name}: rezono 1 derivation fell back to rezono.calc/1 (ir/calc.json)"
+    assert "ir/rules.json" in files, f"{name}: missing ir/rules.json among {sorted(files)}"
+    doc = json.loads(files["ir/rules.json"])
+    assert doc.get("format") == "rezono.rules/2", f"{name}: expected rezono.rules/2, got {doc.get('format')!r}"
+    assert _validate("rules.yaml", doc, "RuleProgram") == []
+    prog = rules.load(doc)
+    rows = dict(scenarios.states(model, directory))["0-case"]
+    con, _, _ = batch.run(model, prog, rows)
+    return files, doc, batch.read(con, prog)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "M3: decisions/language-rezono-1.md: sections 2, 3.2, and 5.6; rezono 1 derivations using "
+        "unit, versions, unless, table, or standing in a module with as of must lower to rezono.rules/2 "
+        "functional relations without falling back to rezono.calc/1 or legacy multi-relation table desugaring."
+    ),
+)
+def test_rezono_1_derived_retires_calc_fallback(tmp_path):
+    item_facts = """\
+item:
+  - {id: a1, score: 4}
+  - {id: a2, score: 15}
+  - {id: a3}
+"""
+
+    # 1. `unit` on a rezono 1 derived value lowers to rezono.rules/2 (no ir/calc.json).
+    unit_src = """\
+rezono 1
+pack minimal
+
+kind Item
+  score: Int
+
+extend Item
+  derived doubled: Int = score * 2
+    unit points
+"""
+    _, doc, derived = _run_derived_case(tmp_path, "unit-case", unit_src, item_facts)
+    rels = {r["name"]: r for r in doc["relations"]}
+    assert rels["item_doubled"]["role"] == "functional"
+    assert rels["item_doubled"]["domain"] == "item"
+    states, known = _state_rows(derived["item_doubled"], 1)
+    assert states == {("a1", "known", ""), ("a2", "known", ""), ("a3", "unknown", "no_value")}
+    assert known == {("a1",): "8", ("a2",): "30"}
+
+    # 2. Module with `as of` still lowers its rezono 1 derivations to rezono.rules/2.
+    as_of_src = """\
+rezono 1
+pack minimal
+as of 2026-11-10 known 2026-11-10
+
+kind Area
+kind Item
+  area: Area
+
+extend Item
+  derived home: Area = area
+"""
+    as_of_facts = "area:\n  - {id: north}\nitem:\n  - {id: ann, area: north}\n"
+    _, doc, derived = _run_derived_case(tmp_path, "as-of-case", as_of_src, as_of_facts)
+    rels = {r["name"]: r for r in doc["relations"]}
+    assert rels["item_home"]["role"] == "functional"
+    assert rels["item_home"]["domain"] == "item"
+    states, known = _state_rows(derived["item_home"], 1)
+    assert states == {("ann", "known", "")}
+    assert known == {("ann",): "north"}
+
+    # 3. `versions` on a rezono 1 derived value lowers to rezono.rules/2.
+    versions_src = """\
+rezono 1
+pack minimal
+as of 2026-11-10 known 2026-11-10
+
+kind Item
+  score: Int
+
+extend Item
+  derived rate: Int
+    version 1, valid 2025-01-01..<2026-01-01, known 2024-12-01 = 10
+    version 2, valid 2026-01-01..<2027-01-01, known 2025-12-01 = 20
+"""
+    _, doc, derived = _run_derived_case(tmp_path, "versions-case", versions_src, item_facts)
+    rels = {r["name"]: r for r in doc["relations"]}
+    assert rels["item_rate"]["role"] == "functional"
+    assert rels["item_rate"]["domain"] == "item"
+    states, known = _state_rows(derived["item_rate"], 1)
+    assert states == {("a1", "known", ""), ("a2", "known", ""), ("a3", "known", "")}
+    assert known == {("a1",): "20", ("a2",): "20", ("a3",): "20"}
+
+    # 4. `unless` on a rezono 1 derived value lowers to rezono.rules/2.
+    unless_src = """\
+rezono 1
+pack minimal
+
+kind Item
+  score: Int
+
+extend Item
+  derived capped: Int = score
+    unless score > 10 then 10
+"""
+    _, doc, derived = _run_derived_case(tmp_path, "unless-case", unless_src, item_facts)
+    rels = {r["name"]: r for r in doc["relations"]}
+    assert rels["item_capped"]["role"] == "functional"
+    assert rels["item_capped"]["domain"] == "item"
+    states, known = _state_rows(derived["item_capped"], 1)
+    assert states == {("a1", "known", ""), ("a2", "known", ""), ("a3", "unknown", "no_value")}
+    assert known == {("a1",): "4", ("a2",): "10"}
+
+    # 5. `table first` on a rezono 1 derived value lowers to a single functional relation in rezono.rules/2
+    #    rather than legacy rezono.rules/1 multi-relation desugaring (`item_tier_value`).
+    table_src = """\
+rezono 1
+pack minimal
+
+enum Tier
+  low
+  high
+
+kind Item
+  score: Int
+
+extend Item
+  derived tier: Tier
+    table first
+      | score | -> tier |
+      | 10..  | high    |
+      | -     | low     |
+"""
+    _, doc, derived = _run_derived_case(tmp_path, "table-case", table_src, item_facts)
+    rels = {r["name"]: r for r in doc["relations"]}
+    assert rels["item_tier"]["role"] == "functional"
+    assert rels["item_tier"]["domain"] == "item"
+    assert "item_tier_value" not in rels
+    states, known = _state_rows(derived["item_tier"], 1)
+    assert states == {("a1", "known", ""), ("a2", "known", ""), ("a3", "unknown", "no_value")}
+    assert known == {("a1",): "low", ("a2",): "high"}

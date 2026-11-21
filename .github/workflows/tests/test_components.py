@@ -78,7 +78,7 @@ class WorkflowEnvironmentTests(unittest.TestCase):
 
         steps = jobs["discover"]["steps"]
         runs = [step.get("run", "") for step in steps]
-        source, = [i for i, run in enumerate(runs) if "git archive" in run]
+        source, = [i for i, run in enumerate(runs) if "git archive" in run and ".build-base" in run]
         self.assertEqual(steps[source]["env"]["POLICY"], base)
         self.assertIn('git archive "$POLICY" scripts | tar -x -C .build-base --strip-components=1', runs[source])
         for command in ("components.py ci-matrix", "components.py inventory"):
