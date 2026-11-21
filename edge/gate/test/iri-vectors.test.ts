@@ -48,7 +48,7 @@ test('a witness IRI is <base>witness/<canonical sha256>, and a bad base is refus
 		assert.equal(witnessDigest(base, iri), witnessHash(witness));
 	}
 	for (const base of vectors.base_refused) refused(() => witnessIri(base, {}), JSON.stringify(base));
-	// An independent check of the canonical form, written by hand (docs/contracts.md#canonical-hash): sorted keys,
+	// An independent check of the canonical form, written by hand (rezono_canon, viewer/src/lib/canon.ts): sorted keys,
 	// no spaces, an integer as decimal text. Its sha256 is the digest the Python side put in the first vector.
 	const canonical = '{"aggregates":[],"bindings":[{"value":"p-1","variable":"?p"}],"conclusion":{"key":"[\\"p-1\\"]","relation":"eligible"},'
 		+ '"premises":[{"polarity":"positive","row":{"key":"[\\"p-1\\"]","relation":"member"},"stratum":"0"},'

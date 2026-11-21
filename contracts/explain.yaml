@@ -441,7 +441,7 @@ classes:
       The chosen witness of a conclusion as an answer shows it: the role's published witness, unchanged, and its
       canonical IRI (decisions/publication-conclusion-addresses.md section 2).
     attributes:
-      iri: {required: true, pattern: "^[a-z][a-z0-9+.-]*://\\S+/witness/[0-9a-f]{64}$", description: "<base>witness/<H>: the base of the role's publication schema and H the canonical sha256 of the witness without this member (docs/contracts.md#canonical-hash)."}
+      iri: {required: true, pattern: "^[a-z][a-z0-9+.-]*://\\S+/witness/[0-9a-f]{64}$", description: "<base>witness/<H>: the base of the role's publication schema and H the canonical sha256 of the witness without this member (rezono_canon.canonical_sha256)."}
   AnswerCalcWitness:
     is_a: CalcWitness
     description: >-

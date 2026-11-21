@@ -116,7 +116,7 @@ export function splitConclusion(iri: string): { space: string; id: string } {
 	return { space: iri.slice(0, at), id: unspell(iri.slice(at + 1)) };
 }
 
-/** `canonical_sha256(witness)` (docs/contracts.md#canonical-hash) as 64 lower-case hex digits. */
+/** `canonical_sha256(witness)` (rezono_canon; viewer/src/lib/canon.ts) as 64 lower-case hex digits. */
 export function witnessHash(witness: unknown): string {
 	return createHash('sha256').update(canonicalJson(witness), 'utf8').digest('hex');
 }
