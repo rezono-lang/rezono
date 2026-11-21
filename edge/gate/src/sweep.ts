@@ -249,25 +249,68 @@ async function variantRows(view: View, body: Record<string, unknown>, role: stri
 	}
 }
 
-function pairRow(mainRows: readonly Keyed[], stopRows: readonly Keyed[], startKey: readonly string[], isCalc: boolean): string[] | undefined {
-	const exact = stopRows.find((row) => sameTuple(row.key, startKey));
-	if (exact) return exact.key;
-	if (isCalc) {
-		if (startKey.length !== 4) return undefined;
-		const subject = startKey[0];
-		const mainCount = mainRows.filter((row) => row.key.length === 4 && row.key[0] === subject).length;
-		if (mainCount !== 1) return undefined;
-		const stopMatches = stopRows.filter((row) => row.key.length === 4 && row.key[0] === subject);
-		return stopMatches.length === 1 ? stopMatches[0].key : undefined;
+type PairMode =
+	| { kind: 'calc' }
+	| { kind: 'functional'; keyArity: number }
+	| { kind: 'default' };
+
+type PairResult =
+	| { kind: 'paired'; key: string[] }
+	| { kind: 'absent' }
+	| { kind: 'ambiguous' };
+
+function functionalKeyArity(rulesDoc: unknown, relation: string): number | 'invalid' | undefined {
+	if (!record(rulesDoc) || !Array.isArray(rulesDoc.relations)) return 'invalid';
+	if (rulesDoc.format !== 'rezono.rules/1' && rulesDoc.format !== 'rezono.rules/2') return 'invalid';
+	if (rulesDoc.format !== 'rezono.rules/2') return undefined;
+	let matched: number | undefined;
+	let seen = false;
+	for (const rel of rulesDoc.relations) {
+		if (!record(rel) || typeof rel.name !== 'string') return 'invalid';
+		if (rel.name !== relation) continue;
+		if (seen) return 'invalid';
+		seen = true;
+		if (rel.role === 'functional') {
+			if (!Array.isArray(rel.key) || rel.key.length < 1
+				|| !rel.key.every((col) => record(col) && typeof col.name === 'string')) return 'invalid';
+			matched = rel.key.length;
+		}
 	}
-	if (startKey.length <= 1) return undefined;
+	return matched;
+}
+
+function pairRow(
+	mainRows: readonly Keyed[],
+	stopRows: readonly Keyed[],
+	startKey: readonly string[],
+	mode: PairMode
+): PairResult {
+	if (mode.kind === 'calc' || mode.kind === 'functional') {
+		const prefixLength = mode.kind === 'calc' ? 1 : mode.keyArity;
+		const expectedLength = mode.kind === 'calc' ? 4 : mode.keyArity + 3;
+		if (prefixLength < 1 || startKey.length !== expectedLength) return { kind: 'ambiguous' };
+		const samePrefix = (key: readonly string[]) =>
+			key.length === expectedLength && key.slice(0, prefixLength).every((part, i) => part === startKey[i]);
+		const mainCount = mainRows.filter((row) => samePrefix(row.key)).length;
+		if (mainCount !== 1) return { kind: 'ambiguous' };
+		const stopMatches = stopRows.filter((row) => samePrefix(row.key));
+		if (stopMatches.length === 0) return { kind: 'absent' };
+		if (stopMatches.length > 1) return { kind: 'ambiguous' };
+		return { kind: 'paired', key: stopMatches[0].key };
+	}
+	if (startKey.length < 1) return { kind: 'ambiguous' };
+	const exact = stopRows.find((row) => sameTuple(row.key, startKey));
+	if (exact) return { kind: 'paired', key: exact.key };
+	if (startKey.length === 1) return { kind: 'absent' };
 	const prefix = startKey.slice(0, -1);
 	const samePrefix = (key: readonly string[]) =>
 		key.length === startKey.length && prefix.every((part, i) => key[i] === part);
-	const mainCount = mainRows.filter((row) => samePrefix(row.key)).length;
-	if (mainCount !== 1) return undefined;
 	const stopMatches = stopRows.filter((row) => samePrefix(row.key));
-	return stopMatches.length === 1 ? stopMatches[0].key : undefined;
+	if (stopMatches.length === 0) return { kind: 'absent' };
+	if (stopMatches.length > 1) return { kind: 'ambiguous' };
+	const mainCount = mainRows.filter((row) => samePrefix(row.key)).length;
+	if (mainCount !== 1) return { kind: 'ambiguous' };
+	return { kind: 'paired', key: stopMatches[0].key };
 }
 
 async function readTurns(
@@ -339,14 +382,29 @@ export async function readPublishedSweep(view: View, pack: string, role: string,
 	if (!grid || (named !== undefined && grid.name !== named) || !await readableCell(view, grid)) return undefined;
 	let startRef: RowRef | undefined;
 	let mainRows: Keyed[] | undefined;
-	let isCalc = false;
+	let mode: PairMode = { kind: 'default' };
 	if (start) {
 		if (!view.snaps.has(start.relation)) return undefined;
 		mainRows = await view.rows(start.relation);
 		if (!mainRows.some((row) => compareKey(row.key, start.key) === 0)) return undefined;
 		startRef = { relation: start.relation, key: canonicalJson(start.key) };
 		const relMeta = view.bundle.relations?.find((rel) => rel.id === start.relation);
-		isCalc = typeof relMeta?.calc === 'string' && relMeta.calc.length > 0;
+		if (typeof relMeta?.calc === 'string' && relMeta.calc.length > 0) {
+			mode = { kind: 'calc' };
+		} else {
+			const rulesRef = view.compiled('ir/rules.json');
+			if (rulesRef) {
+				let rulesDoc: unknown;
+				try { rulesDoc = await view.object(rulesRef, 'bundles'); }
+				catch (error) {
+					if (error instanceof StoreLimit) throw error;
+					return undefined;
+				}
+				const keyArity = functionalKeyArity(rulesDoc, start.relation);
+				if (keyArity === 'invalid') return undefined;
+				if (keyArity !== undefined) mode = { kind: 'functional', keyArity };
+			}
+		}
 	}
 	const full = completeScope(view);
 	const points: Point[] = [];
@@ -370,10 +428,17 @@ export async function readPublishedSweep(view: View, pack: string, role: string,
 		if (full && point.manifestBody) {
 			const stopRows = await variantRows(view, point.manifestBody, role, start.relation);
 			if (stopRows !== undefined) {
-				const paired = pairRow(mainRows, stopRows, start.key, isCalc);
-				pairedKeys.push(paired ? canonicalJson(paired) : undefined);
-				rowValid.push(true);
-				continue;
+				const paired = pairRow(mainRows, stopRows, start.key, mode);
+				if (paired.kind === 'paired') {
+					pairedKeys.push(canonicalJson(paired.key));
+					rowValid.push(true);
+					continue;
+				}
+				if (paired.kind === 'absent') {
+					pairedKeys.push(undefined);
+					rowValid.push(true);
+					continue;
+				}
 			}
 		}
 		pairedKeys.push(undefined);
