@@ -1,5 +1,12 @@
 .decl build_citation_scan_at_cut(run: symbol, scan: symbol)
 .decl build_red_cites_replaced(run: symbol, test: symbol, decision: symbol, successor: symbol)
+.decl build_decision_cited_at_cut(run: symbol, decision: symbol)
+.decl build_uncited_decision(run: symbol, decision: symbol)
+.decl build_decision_open_test(run: symbol, decision: symbol, test: symbol)
+.decl build_decision_open(run: symbol, decision: symbol)
+.decl build_decision_tested_at_cut(run: symbol, decision: symbol)
+.decl build_decision_untested(run: symbol, decision: symbol)
+.decl build_decision_done(run: symbol, decision: symbol)
 
 // Only a scan of a verified run at its cut tick counts.
 build_citation_scan_at_cut(run, scan) :- build_verified_cut(run), build_run__observed_at(run, tick),
@@ -11,4 +18,43 @@ build_red_cites_replaced(run, test, decision, successor) :- build_citation_scan_
     build_red_citation__decision(citation, decision),
     build_policy_date_at_cut(run, day), replaced(decision, successor, day).
 
+// A decision in force at the cut is uncited when a cut scan exists and no tracked file names it in that scan.
+build_decision_cited_at_cut(run, decision) :- build_citation_scan_at_cut(run, scan),
+    build_decision_citation__scan(citation, scan), build_decision_citation__path(citation, path),
+    build_decision_citation__decision(citation, decision), path != "".
+
+build_uncited_decision(run, decision) :- build_citation_scan_at_cut(run, _),
+    build_policy_date_at_cut(run, day), in_force_on(decision, day),
+    !build_decision_cited_at_cut(run, decision).
+
+// Per-decision work status at a scanned verified cut (decisions/decision-driven-work.md section 2).
+// Missing scans or unverified cuts emit zero rows so every decision remains unknown, never done.
+build_decision_open_test(run, decision, test) :- build_citation_scan_at_cut(run, scan),
+    build_policy_date_at_cut(run, day), in_force_on(decision, day),
+    build_red_citation__scan(citation, scan), build_red_citation__test(citation, test),
+    build_red_citation__decision(citation, decision), test != "".
+
+build_decision_open(run, decision) :- build_decision_open_test(run, decision, _).
+
+build_decision_tested_at_cut(run, decision) :- build_citation_scan_at_cut(run, scan),
+    build_decision_citation__scan(citation, scan), build_decision_citation__path(citation, path),
+    build_decision_citation__decision(citation, decision),
+    build_test_file__path(file, path), build_test_file__component(file, component),
+    build_component__run(component, run).
+
+build_decision_untested(run, decision) :- build_citation_scan_at_cut(run, _),
+    build_policy_date_at_cut(run, day), in_force_on(decision, day),
+    !build_decision_tested_at_cut(run, decision),
+    !build_decision_open(run, decision).
+
+build_decision_done(run, decision) :- build_citation_scan_at_cut(run, _),
+    build_policy_date_at_cut(run, day), in_force_on(decision, day),
+    build_decision_tested_at_cut(run, decision),
+    !build_decision_open(run, decision).
+
 .output build_red_cites_replaced
+.output build_uncited_decision
+.output build_decision_open
+.output build_decision_open_test
+.output build_decision_untested
+.output build_decision_done

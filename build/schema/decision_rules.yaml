@@ -14,6 +14,13 @@ classes:
       run: {range: BuildRun, required: true}
       observed_at: {range: integer, required: true}
       source: {required: true}
+  BuildDecisionCitation:
+    description: A tracked file whose text names a decision with a head in a citation scan.
+    attributes:
+      id: {identifier: true}
+      scan: {range: BuildCitationScan, required: true}
+      path: {required: true}
+      decision: {range: Decision, required: true}
   BuildRedCitation:
     description: A red test whose reason names a decision with a head in a citation scan.
     attributes:
