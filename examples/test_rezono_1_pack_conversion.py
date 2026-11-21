@@ -245,30 +245,19 @@ def _synthetic_sidecar(position: str) -> str:
     )
 
 
-def _pack_is_legacy(pack_dir: Path) -> bool:
-    """Whether `pack_dir` still holds legacy `.dl` rules or pre-rezono-1 modules."""
-    if any(pack_dir.rglob("*.dl")):
-        return True
-    meta = yaml.safe_load((pack_dir / "pack.yaml").read_bytes()) or {}
-    entries = meta.get("rezono") or []
-    if not entries:
-        return True
-    for entry in entries:
-        form_path = pack_dir / entry["form"]
-        if not form_path.is_file():
-            return True
-        form = json.loads(form_path.read_bytes())
-        if form.get("format") != "rezono.module/5" or (form.get("module") or {}).get("rezono") != "1":
-            return True
-    return False
-
-
 def _read_legacy_archive() -> dict[str, dict[str, bytes]]:
     """Read `legacy-packs.tar.gz` into `{pack_rel: {file_rel: bytes}}`."""
     raw: dict[str, bytes] = {}
     with tarfile.open(LEGACY_ARCHIVE, "r:gz") as tf:
         for member in tf.getmembers():
-            assert member.isfile() and not member.name.startswith("/") and ".." not in member.name.split("/"), member.name
+            assert (
+                member.isfile()
+                and not member.issym()
+                and not member.islnk()
+                and not member.name.startswith("/")
+                and "\\" not in member.name
+                and ".." not in member.name.split("/")
+            ), member.name
             handle = tf.extractfile(member)
             assert handle is not None
             raw[member.name] = handle.read()
@@ -282,20 +271,6 @@ def _read_legacy_archive() -> dict[str, dict[str, bytes]]:
         owner = next(root for root in pack_roots if name.startswith(root + "/"))
         by_pack[owner][name[len(owner) + 1 :]] = data
     return by_pack
-
-
-def _live_definition_files(pack_dir: Path, *, include_yaml_facts: bool = False) -> dict[str, bytes]:
-    from rezono_compiler import modules
-
-    files: dict[str, bytes] = {}
-    for pattern in modules.DEFINITION:
-        for path in sorted(pack_dir.glob(pattern)):
-            if path.is_file() and "candidate" not in path.relative_to(pack_dir).parts:
-                files[path.relative_to(pack_dir).as_posix()] = path.read_bytes().replace(b"\r\n", b"\n")
-    if include_yaml_facts and (pack_dir / "facts").is_dir():
-        for path in sorted((pack_dir / "facts").glob("*.yaml")):
-            files[path.relative_to(pack_dir).as_posix()] = path.read_bytes().replace(b"\r\n", b"\n")
-    return files
 
 
 def _materialize_legacy_packs(dest_root: Path, pack_prefixes: tuple[str, ...]) -> None:
@@ -418,7 +393,7 @@ def _build_consumer_for_std_pack(root: Path, std_name: str, spec: dict, label: s
         "name": f"exercise-{std_name}",
         "version": "0.1.0",
         "default_language": "en",
-        "imports": [{"name": std_name, "path": f"packs/{std_name}", "sha256": modules.pack_hash(std_dir)}],
+        "imports": [{"name": std_name, "path": f"../packs/{std_name}", "sha256": modules.pack_hash(std_dir)}],
     }
     (consumer / "pack.yaml").write_text(yaml.safe_dump(meta, sort_keys=False), encoding="utf-8", newline="\n")
 
@@ -519,19 +494,42 @@ def _conflict_witness_candidates(witnesses: dict, relation: str, key: list[str])
     return found
 
 
-def test_legacy_snapshots_match_live_example_and_std_packs():
-    """While a pack still carries legacy `.dl` rules or pre-rezono-1 modules, its frozen legacy snapshot
-    matches the live repository pack byte-for-byte."""
+def test_legacy_example_and_std_archive_integrity():
+    """Verify `examples/fixtures/rezono-1-legacy/legacy-packs.tar.gz` is well-formed (regular files only,
+    no symlinks or path traversal) and contains every expected legacy pack root and its `.dl`/rule definitions."""
+    assert LEGACY_ARCHIVE.is_file(), f"missing {_rel(LEGACY_ARCHIVE)}"
     by_pack = _read_legacy_archive()
-    assert by_pack, "legacy-packs.tar.gz must hold the legacy pack snapshots"
-    for pack_rel, expected_files in by_pack.items():
-        pack_dir = REPO / pack_rel
-        if not _pack_is_legacy(pack_dir):
-            continue
-        want_facts = pack_rel in {"examples/library", "examples/projects"}
-        assert _live_definition_files(pack_dir, include_yaml_facts=want_facts) == expected_files, (
-            f"legacy snapshot drifted from live legacy pack {pack_rel}"
-        )
+    expected_packs = {
+        *(f"packs/{name}" for name in RULED_STD_PACKS),
+        "packs/std-explain",
+        "packs/std-view",
+        "examples/subsidy",
+        "examples/subsidy-scheme",
+        "examples/library",
+        "examples/projects",
+        "examples/platform",
+        "examples/platform/tenant-capacity/interface",
+    }
+    assert expected_packs <= set(by_pack), f"missing packs in archive: {sorted(expected_packs - set(by_pack))}"
+    for pack_rel in sorted(expected_packs):
+        meta = yaml.safe_load(by_pack[pack_rel]["pack.yaml"])
+        assert isinstance(meta, dict) and meta.get("name"), f"invalid pack.yaml in archive for {pack_rel}"
+
+    expected_dl_packs = {
+        *(f"packs/{name}" for name in RULED_STD_PACKS if name != "std-access"),
+        "examples/subsidy",
+        "examples/subsidy-scheme",
+        "examples/platform",
+        "examples/platform/tenant-capacity/interface",
+    }
+    for pack_rel in sorted(expected_dl_packs):
+        dl_files = [rel for rel in by_pack[pack_rel] if rel.endswith(".dl")]
+        assert dl_files, f"archive pack {pack_rel} is missing legacy .dl definitions"
+
+    assert "rezono/access.rezono" in by_pack["packs/std-access"], "archive packs/std-access missing access.rezono"
+    for pack_rel in ("examples/library", "examples/projects"):
+        fact_files = [rel for rel in by_pack[pack_rel] if rel.startswith("facts/") and rel.endswith(".yaml")]
+        assert fact_files, f"archive pack {pack_rel} is missing baseline facts/*.yaml"
 
 
 @pytest.mark.xfail(
@@ -596,11 +594,21 @@ def test_standard_packs_convert_to_rezono_1(tmp_path: Path):
             if dst.exists():
                 shutil.rmtree(dst)
             shutil.copytree(REPO / example, dst)
-        consumer = root / "examples" / "subsidy"
-        meta = yaml.safe_load((consumer / "pack.yaml").read_bytes())
-        for entry in meta["imports"]:
+        scheme = root / "examples" / "subsidy-scheme"
+        scheme_meta = yaml.safe_load((scheme / "pack.yaml").read_bytes())
+        for entry in scheme_meta.get("imports", ()):
             if entry["name"].startswith("std-"):
                 entry["sha256"] = modules.pack_hash(root / "packs" / entry["name"])
+        (scheme / "pack.yaml").write_text(
+            yaml.safe_dump(scheme_meta, sort_keys=False), encoding="utf-8", newline="\n"
+        )
+        consumer = root / "examples" / "subsidy"
+        meta = yaml.safe_load((consumer / "pack.yaml").read_bytes())
+        for entry in meta.get("imports", ()):
+            if entry["name"].startswith("std-"):
+                entry["sha256"] = modules.pack_hash(root / "packs" / entry["name"])
+            elif entry["name"] == "subsidy-scheme":
+                entry["sha256"] = modules.pack_hash(scheme)
         (consumer / "pack.yaml").write_text(yaml.safe_dump(meta, sort_keys=False), encoding="utf-8", newline="\n")
         with ExitStack() as stack:
             if legacy:

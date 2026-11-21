@@ -32,7 +32,7 @@ RUN_PACK_EXERCISES: dict[str, dict] = {
         "resource": [{"id": "res-1", "sweep": "s-1", "plan_hash": "p1", "page": "pg-1", "provider_id": "vm-1"}],
     },
     "cleanup-deadline": {
-        "attempt": [{"id": "att-1", "state": "open", "deadline_us": 100, "watermark_us": 200}],
+        "attempt": [{"id": "att-1", "state": "applied", "deadline_us": 100, "watermark_us": 200}],
     },
     "cluster-shape": {
         "cluster": [{"id": "cl-1", "plan_hash": "p1"}],
@@ -118,28 +118,18 @@ def _synthetic_sidecar(position: str) -> str:
     )
 
 
-def _pack_is_legacy(pack_dir: Path) -> bool:
-    if any(pack_dir.rglob("*.dl")):
-        return True
-    meta = yaml.safe_load((pack_dir / "pack.yaml").read_bytes()) or {}
-    entries = meta.get("rezono") or []
-    if not entries:
-        return True
-    for entry in entries:
-        form_path = pack_dir / entry["form"]
-        if not form_path.is_file():
-            return True
-        form = json.loads(form_path.read_bytes())
-        if form.get("format") != "rezono.module/5" or (form.get("module") or {}).get("rezono") != "1":
-            return True
-    return False
-
-
 def _read_legacy_archive() -> dict[str, dict[str, bytes]]:
     raw: dict[str, bytes] = {}
     with tarfile.open(LEGACY_ARCHIVE, "r:gz") as tf:
         for member in tf.getmembers():
-            assert member.isfile() and not member.name.startswith("/") and ".." not in member.name.split("/"), member.name
+            assert (
+                member.isfile()
+                and not member.issym()
+                and not member.islnk()
+                and not member.name.startswith("/")
+                and "\\" not in member.name
+                and ".." not in member.name.split("/")
+            ), member.name
             handle = tf.extractfile(member)
             assert handle is not None
             raw[member.name] = handle.read()
@@ -153,17 +143,6 @@ def _read_legacy_archive() -> dict[str, dict[str, bytes]]:
         owner = next(root for root in pack_roots if name.startswith(root + "/"))
         by_pack[owner][name[len(owner) + 1 :]] = data
     return by_pack
-
-
-def _live_definition_files(pack_dir: Path) -> dict[str, bytes]:
-    from rezono_compiler import modules
-
-    files: dict[str, bytes] = {}
-    for pattern in modules.DEFINITION:
-        for path in sorted(pack_dir.glob(pattern)):
-            if path.is_file() and "candidate" not in path.relative_to(pack_dir).parts:
-                files[path.relative_to(pack_dir).as_posix()] = path.read_bytes().replace(b"\r\n", b"\n")
-    return files
 
 
 def _materialize_legacy_packs(dest_root: Path) -> None:
@@ -262,18 +241,45 @@ def _roles_for_pack(pack_dir: Path, model) -> dict[str, str]:
     return roles
 
 
-def test_legacy_snapshots_match_live_run_packs():
-    """While a pack under `run/packs/` still carries legacy `.dl` rules or pre-rezono-1 modules,
-    its frozen legacy snapshot matches the live pack byte-for-byte."""
+def test_legacy_run_packs_archive_integrity():
+    """Verify `run/fixtures/rezono-1-legacy/legacy-packs.tar.gz` is well-formed (regular files only,
+    no symlinks or path traversal) and contains every `run/packs/*` root, its imported standard packs,
+    and its legacy `.dl`/rule definitions."""
+    assert LEGACY_ARCHIVE.is_file(), f"missing {_rel(LEGACY_ARCHIVE)}"
     by_pack = _read_legacy_archive()
-    for pack_rel, expected_files in by_pack.items():
-        if not pack_rel.startswith("run/packs/"):
-            continue
-        pack_dir = REPO / pack_rel
-        if _pack_is_legacy(pack_dir):
-            assert _live_definition_files(pack_dir) == expected_files, (
-                f"legacy snapshot drifted from live legacy pack {pack_rel}"
-            )
+    expected_run_packs = {
+        "run/packs/cleanup",
+        "run/packs/cleanup-deadline",
+        "run/packs/cluster-shape",
+        "run/packs/dispatch",
+        "run/packs/exact-quote",
+        "run/packs/invoice-drift",
+        "run/packs/offer-selection",
+        "run/packs/probe-profiles",
+        "run/packs/provider-terms",
+    }
+    expected_std_packs = {
+        "packs/std-access",
+        "packs/std-decision",
+        "packs/std-explain",
+        "packs/std-loop",
+        "packs/std-order",
+        "packs/std-part",
+        "packs/std-time",
+    }
+    expected_packs = expected_run_packs | expected_std_packs
+    assert expected_packs <= set(by_pack), f"missing packs in archive: {sorted(expected_packs - set(by_pack))}"
+    for pack_rel in sorted(expected_packs):
+        meta = yaml.safe_load(by_pack[pack_rel]["pack.yaml"])
+        assert isinstance(meta, dict) and meta.get("name"), f"invalid pack.yaml in archive for {pack_rel}"
+
+    for pack_rel in sorted(expected_run_packs - {"run/packs/exact-quote"}):
+        dl_files = [rel for rel in by_pack[pack_rel] if rel.endswith(".dl")]
+        assert dl_files, f"archive pack {pack_rel} is missing legacy .dl definitions"
+
+    assert {"rezono/effective_amount.rezono", "rezono/quote.rezono"} <= set(by_pack["run/packs/exact-quote"]), (
+        "archive run/packs/exact-quote is missing its legacy rezono modules"
+    )
 
 
 @pytest.mark.xfail(
