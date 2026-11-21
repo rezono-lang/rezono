@@ -25,7 +25,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import cast
 
-from . import rezono_alias, rezono_calc, rezono_enum, rezono_extend, rezono_key, rezono_kind, rezono_metadata, rezono_reason, rezono_slot, rezono_unit, strict_yaml
+from . import rezono_alias, rezono_calc, rezono_derived, rezono_enum, rezono_extend, rezono_key, rezono_kind, rezono_metadata, rezono_reason, rezono_slot, rezono_unit, strict_yaml
 from .diagnostics import Diagnostic
 from .native_literals import NATIVE_FORMAT, native_literal_errors
 from .schemaview import SchemaView
@@ -884,7 +884,7 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
                 decl, at, own, owners, declared_names, uses, refuse,
                 extended_format=extended_format, aliases=prefixes, kinds=kinds,
                 integer_types=integer_types, own_module=d.id, rezono_1=rezono_1,
-                layer=d.layer, slot_targets=slot_targets, parent_targets=parent_targets,
+                layer=d.layer, slot_targets=slot_targets, parent_targets=parent_targets, form=form,
             )
             if lowered_kind is not None:
                 if keys:
@@ -902,8 +902,11 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
             if form["format"] not in (SAFE_STEP_FORMAT, REZONO_1_FORMAT):
                 refuse(at, "a step declaration requires rezono.module/4 or rezono.module/5", "§6")
             continue  # Step declarations are lowered after native rules and schema resolution.
+        elif rezono_1 and rezono_derived.is_module_derived(decl):
+            continue  # Lowered with the rules (rezono_derived.py): it needs the checked schema of the pack.
         elif "extend" in decl:
-            rezono_extend.validate(decl, at, imported, refuse, extended_format=extended_format, rezono_1=rezono_1)
+            rezono_extend.validate(decl, at, imported, refuse, extended_format=extended_format, rezono_1=rezono_1,
+                                   form=form)
         elif "asOf" in decl and extended_format:
             rezono_calc.validate_as_of(decl, at, refuse)
         elif "param" in decl and extended_format:
@@ -949,7 +952,7 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
         else:
             refuse(at, *next((REFUSED[k] for k in REFUSED if k in decl), ("not a declaration this compiler reads",)))
     if extended_format:
-        rezono_calc.validate_module(module["decls"], refuse)
+        rezono_calc.validate_module(module["decls"], refuse, form=form)
     schema = {"id": f"https://rezono.org/rezono/{pack}/{d.id}", "name": d.id.replace("/", "_"),
               "imports": ["linkml:types"], "default_range": "string", "annotations": {"layer": d.layer},
               "enums": enums, "classes": classes}
