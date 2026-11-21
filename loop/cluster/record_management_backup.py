@@ -389,11 +389,14 @@ def _deploy_management(cluster: ManagementCluster) -> tuple[str, str]:
         namespace=MGMT_NAMESPACE,
         limit=70,
     )
-    pods = cluster.read("get", "pods", "-l", f"app={MGMT_DEPLOYMENT}", namespace=MGMT_NAMESPACE)["items"]
+    pods = cluster.read("get", "pods", "-l", f"app={MGMT_DEPLOYMENT}", namespace=MGMT_NAMESPACE).get("items") or []
     pod_name, = [
         p["metadata"]["name"]
         for p in pods
-        if any(c["type"] == "Ready" and c["status"] == "True" for c in p["status"].get("conditions", []))
+        if any(
+            c["type"] == "Ready" and c["status"] == "True"
+            for c in ((p.get("status") or {}).get("conditions") or [])
+        )
     ]
     service = cluster.read("get", "service", MGMT_DEPLOYMENT, namespace=MGMT_NAMESPACE)
     cluster_ip = service["spec"]["clusterIP"]
@@ -495,18 +498,21 @@ def _scale_down_management(cluster: ManagementCluster) -> None:
     )
     deadline = monotonic() + 30.0
     while monotonic() < deadline:
-        slices = cluster.read(
-            "get",
-            "endpointslices",
-            "-l",
-            f"kubernetes.io/service-name={MGMT_DEPLOYMENT}",
-            namespace=MGMT_NAMESPACE,
-        ).get("items", [])
+        slices = (
+            cluster.read(
+                "get",
+                "endpointslices",
+                "-l",
+                f"kubernetes.io/service-name={MGMT_DEPLOYMENT}",
+                namespace=MGMT_NAMESPACE,
+            ).get("items")
+            or []
+        )
         ready = [
             ep
             for sl in slices
-            for ep in sl.get("endpoints", [])
-            if ep.get("conditions", {}).get("ready") is True
+            for ep in (sl.get("endpoints") or [])
+            if (ep.get("conditions") or {}).get("ready") is True
         ]
         if not ready:
             return
@@ -554,12 +560,15 @@ def _run_isolated_restore_read(
     })
     cluster.wait(f"job/{RESTORE_JOB}", "--for=condition=Complete", "--timeout=60s", namespace=RECOVERY_NAMESPACE, limit=70)
     job = cluster.read("get", "job", RESTORE_JOB, namespace=RECOVERY_NAMESPACE)
-    pods = cluster.read("get", "pods", "-l", f"job-name={RESTORE_JOB}", namespace=RECOVERY_NAMESPACE)["items"]
+    pods = cluster.read("get", "pods", "-l", f"job-name={RESTORE_JOB}", namespace=RECOVERY_NAMESPACE).get("items") or []
     pod, = [
         p
         for p in pods
-        if p["status"]["phase"] == "Succeeded"
-        and any(o["uid"] == job["metadata"]["uid"] and o["controller"] for o in p["metadata"]["ownerReferences"])
+        if (p.get("status") or {}).get("phase") == "Succeeded"
+        and any(
+            o["uid"] == job["metadata"]["uid"] and o.get("controller")
+            for o in (p["metadata"].get("ownerReferences") or [])
+        )
     ]
     logs = run(*cluster.namespaced(RECOVERY_NAMESPACE, "logs", pod["metadata"]["name"], "-c", "restore"), limit=20)
     return json.loads(logs)
