@@ -1,0 +1,341 @@
+"""Regression tests for rezono.rules/2 SQL lowering guards and access-boundary checks."""
+
+from __future__ import annotations
+
+from uuid import uuid4
+
+import duckdb
+import pytest
+
+import feldera
+from rezono_compiler import calc_sql, rules as ir, rules_sql
+from rezono_publication import l0
+
+
+def _col(name: str, typ: str = "string") -> dict:
+    return {"name": name, "type": typ}
+
+
+def _lit(rel: str, *terms: str, polarity: str = "positive", stratum: str = "0") -> dict:
+    return {"relation": rel, "terms": list(terms), "polarity": polarity, "stratum": stratum}
+
+
+def _rule(rid: str, head_rel: str, head_terms: list[str], body: list[dict], *,
+          stratum: str = "1", module: str = "core", aggregates: list[dict] | None = None) -> dict:
+    doc = {
+        "id": rid,
+        "module": module,
+        "stratum": stratum,
+        "head": {"relation": head_rel, "terms": head_terms},
+        "body": body,
+        "origin": {"file": f"rules/{module}.rezono", "line": "1"},
+    }
+    if aggregates is not None:
+        doc["aggregates"] = aggregates
+    return doc
+
+
+def test_rational_functional_base_fact_bounds_and_invalid_denominator():
+    """In rezono.rules/2 (no rational arithmetic), every rational candidate is a base/input fact:
+    non-positive denominators and reduced fractions outside [-BOUND, +BOUND] (e.g. -2^63 / 1,
+    while -2^63 / 2 reduces to -2^62 / 1 within BOUND) are input violations -> invalid with empty
+    reason and block under conflict_policy=block (decisions/language-rezono-1-refinements.md §3.4C).
+    Multi-value conflicts among valid candidates yield invalid/multiple_values."""
+    assert l0.CORE_REASONS["beyond_exact_bound"] == ("unknown",)
+    assert "invalid_rational" not in l0.CORE_REASONS
+
+    doc = {
+        "format": "rezono.rules/2",
+        "pack": "sample",
+        "relations": [
+            {"name": "item", "role": "base", "key": [_col("id")]},
+            {"name": "ratio_in", "role": "base", "key": [_col("id"), _col("r", "rational")]},
+            {
+                "name": "ratio_val", "role": "functional", "module": "core", "explain": "on_demand",
+                "key": [_col("id")], "domain": "item",
+                "value": _col("value", "rational"), "conflict_policy": "block",
+            },
+        ],
+        "rules": [
+            _rule("ratio_val_r", "ratio_val", ["?id", "?r"],
+                  [_lit("item", "?id"), _lit("ratio_in", "?id", "?r")], stratum="1"),
+        ],
+    }
+    prog = ir.load(doc, require_witness=False)
+    feldera_sql = rules_sql.feldera(prog, witnesses=False)
+
+    items = [
+        ("i_ok",),
+        ("i_unreduced",),
+        ("i_max_bound",),
+        ("i_min_bound",),
+        ("i_reducible_min",),
+        ("i_oob",),
+        ("i_mixed_oob",),
+        ("i_zero_den",),
+        ("i_neg_den",),
+        ("i_mixed_bad",),
+        ("i_conflict",),
+        ("i_conflict_oob",),
+        ("i_empty",),
+    ]
+    ratio_in = [
+        ("i_ok", 3, 2),
+        ("i_unreduced", 4, 6),
+        ("i_max_bound", 2**63 - 1, 1),
+        ("i_min_bound", -(2**63 - 1), 1),
+        ("i_reducible_min", -(2**63), 2),
+        ("i_oob", -(2**63), 1),
+        ("i_mixed_oob", 1, 2),
+        ("i_mixed_oob", -(2**63), 1),
+        ("i_zero_den", 1, 0),
+        ("i_neg_den", 1, -2),
+        ("i_mixed_bad", 1, 2),
+        ("i_mixed_bad", 1, 0),
+        ("i_conflict", 1, 2),
+        ("i_conflict", 3, 4),
+        ("i_conflict_oob", 1, 2),
+        ("i_conflict_oob", 3, 4),
+        ("i_conflict_oob", -(2**63), 1),
+    ]
+
+    con = duckdb.connect()
+    con.execute(calc_sql.DUCKDB_MACROS)
+    for ddl in rules_sql.duckdb_tables(prog):
+        con.execute(ddl)
+    con.executemany('INSERT INTO "item" VALUES (?)', items)
+    con.executemany('INSERT INTO "ratio_in" VALUES (?, ?, ?)', ratio_in)
+    for stmt in rules_sql.duckdb_program(prog, witnesses=False):
+        con.execute(stmt)
+
+    rows = con.execute('SELECT * FROM "ratio_val"').fetchall()
+    assert all(cell is not None for row in rows for cell in row)
+    by_id = {row[0]: row[1:] for row in rows}
+    expected = {
+        "i_ok": ("known", "", 3, 2),
+        "i_unreduced": ("known", "", 2, 3),
+        "i_max_bound": ("known", "", 2**63 - 1, 1),
+        "i_min_bound": ("known", "", -(2**63 - 1), 1),
+        "i_reducible_min": ("known", "", -(2**62), 1),
+        "i_oob": ("invalid", "", 0, 1),
+        "i_mixed_oob": ("invalid", "", 0, 1),
+        "i_zero_den": ("invalid", "", 0, 1),
+        "i_neg_den": ("invalid", "", 0, 1),
+        "i_mixed_bad": ("invalid", "", 0, 1),
+        "i_conflict": ("invalid", "multiple_values", 0, 1),
+        # More than one distinct known candidate yields invalid/multiple_values (decisions/language-rezono-1.md §4).
+        "i_conflict_oob": ("invalid", "multiple_values", 0, 1),
+        "i_empty": ("unknown", "no_value", 0, 1),
+    }
+    assert by_id == expected
+
+    # Every non-empty emitted reason must be a registered core reason permitted for its state.
+    for state, reason, _, den in by_id.values():
+        assert den > 0
+        if reason:
+            assert reason in l0.CORE_REASONS
+            assert state in l0.CORE_REASONS[reason]
+
+    expected_blocked = {
+        "i_oob", "i_mixed_oob", "i_zero_den", "i_neg_den", "i_mixed_bad", "i_conflict", "i_conflict_oob",
+    }
+    blocked = {row[0] for row in con.execute('SELECT * FROM "ratio_val__invalid"').fetchall()}
+    assert blocked == expected_blocked
+
+    if feldera.URL:
+        pipeline = "rezono-rat-guard-" + uuid4().hex
+        feldera.deploy(pipeline, feldera_sql, profile="unoptimized", workers=2)
+        try:
+            updates = {
+                "item": [{"insert": {"id": iid}} for (iid,) in items],
+                "ratio_in": [{"insert": {"id": iid, "r_n": rn, "r_d": rd}} for iid, rn, rd in ratio_in],
+            }
+            feldera.processed(pipeline, feldera.push(pipeline, updates))
+            got_rows = {
+                r["id"]: (r["state"], r["reason"], r["value_n"], r["value_d"])
+                for r in feldera.read_relation(pipeline, "ratio_val")
+            }
+            got_blocked = {r["id"] for r in feldera.read_relation(pipeline, "ratio_val__invalid")}
+            with feldera.comparing():
+                assert got_rows == expected
+                assert got_blocked == expected_blocked
+        finally:
+            feldera.stop(pipeline, delete=True)
+
+
+def test_parse_rational_normalizes_fractions_and_rejects_zero_denominator():
+    assert rules_sql._parse_rational("2/4") == (1, 2)
+    assert rules_sql._parse_rational("-2/-4") == (1, 2)
+    assert rules_sql._parse_rational("2/-4") == (-1, 2)
+    assert rules_sql._parse_rational("0/5") == (0, 1)
+    assert rules_sql._parse_rational("-3") == (-3, 1)
+
+    for bad in ("1/0", "0/0", "1/", "not_a_number", "1/2/3"):
+        with pytest.raises(ir.IRError) as exc_info:
+            rules_sql._parse_rational(bad)
+        assert exc_info.value.code == "bad_constant"
+
+    # Unreduced literal "2/4" in positive match, negative anti-join, and aggregate filter matches stored (1, 2).
+    rels = {
+        "item": ir.Relation("item", "base", (ir.Column("id", "string"),)),
+        "rate": ir.Relation("rate", "base", (ir.Column("id", "string"), ir.Column("r", "rational"))),
+        "matched": ir.Relation("matched", "derived", (ir.Column("id", "string"),), module="core", explain="on_demand"),
+        "not_half": ir.Relation("not_half", "derived", (ir.Column("id", "string"),), module="core", explain="on_demand"),
+        "half_cnt": ir.Relation(
+            "half_cnt", "derived", (ir.Column("id", "string"), ir.Column("n", "integer")),
+            module="core", explain="on_demand",
+        ),
+    }
+    rules = {
+        "matched_r": ir.Rule(
+            "matched_r", "core", 1,
+            ir.Atom("matched", ("?id",)),
+            (ir.Literal(ir.Atom("rate", ("?id", "2/4")), "positive", 0),),
+        ),
+        "not_half_r": ir.Rule(
+            "not_half_r", "core", 1,
+            ir.Atom("not_half", ("?id",)),
+            (
+                ir.Literal(ir.Atom("item", ("?id",)), "positive", 0),
+                ir.Literal(ir.Atom("rate", ("?id", "2/4")), "negative", 0),
+            ),
+        ),
+        "half_cnt_r": ir.Rule(
+            "half_cnt_r", "core", 1,
+            ir.Atom("half_cnt", ("?id", "?n")),
+            (ir.Literal(ir.Atom("item", ("?id",)), "positive", 0),),
+            aggregates=(ir.Aggregate(ir.Atom("rate", ("?id", "2/4")), "count", None, "?n", 0),),
+        ),
+    }
+    prog = ir.Program("sample", rels, rules, strata={"item": 0, "rate": 0, "matched": 1, "not_half": 1, "half_cnt": 1},
+                      format=ir.FORMAT_V2)
+
+    con = duckdb.connect()
+    for ddl in rules_sql.duckdb_tables(prog):
+        con.execute(ddl)
+    con.executemany('INSERT INTO "item" VALUES (?)', [("a",), ("b",)])
+    con.executemany('INSERT INTO "rate" VALUES (?, ?, ?)', [("a", 1, 2), ("b", 3, 4)])
+    for stmt in rules_sql.duckdb_program(prog, witnesses=False):
+        con.execute(stmt)
+
+    assert con.execute('SELECT * FROM "matched"').fetchall() == [("a",)]
+    assert con.execute('SELECT * FROM "not_half"').fetchall() == [("b",)]
+    assert set(con.execute('SELECT * FROM "half_cnt"').fetchall()) == {("a", 1), ("b", 0)}
+
+
+@pytest.mark.parametrize("fn", ["sum", "min", "max"])
+def test_aggregate_over_rational_column_rejected_cleanly(fn):
+    doc = {
+        "format": "rezono.rules/2",
+        "pack": "sample",
+        "relations": [
+            {"name": "grp", "role": "base", "key": [_col("g")]},
+            {"name": "rate", "role": "base", "key": [_col("g"), _col("r", "rational")]},
+            {"name": "out", "role": "derived", "module": "core", "explain": "on_demand",
+             "key": [_col("g"), _col("x", "integer")]},
+        ],
+        "rules": [
+            _rule(
+                "agg_rat", "out", ["?g", "?x"], [_lit("grp", "?g")], stratum="1",
+                aggregates=[{"relation": "rate", "terms": ["?g", "_"], "function": fn,
+                             "over": "r", "as": "?x", "stratum": "0"}],
+            ),
+        ],
+    }
+
+    with pytest.raises(ir.IRError) as exc_info:
+        ir.load(doc, require_witness=False)
+    assert exc_info.value.code == "bad_aggregate"
+
+
+def test_zero_rule_functional_relation_emits_valid_sql_with_empty_state():
+    rels = {
+        "item": ir.Relation("item", "base", (ir.Column("id", "string"),)),
+        "empty_str": ir.Relation(
+            "empty_str", "functional", (ir.Column("id", "string"),),
+            module="core", explain="on_demand", domain="item",
+            value=ir.Column("value", "string"), conflict_policy="publish",
+        ),
+        "empty_int": ir.Relation(
+            "empty_int", "functional", (ir.Column("id", "string"),),
+            module="core", explain="on_demand", domain="item",
+            value=ir.Column("value", "integer"), conflict_policy="publish",
+            empty_state="not_applicable", empty_reason="empty",
+        ),
+        "empty_bool": ir.Relation(
+            "empty_bool", "functional", (ir.Column("id", "string"),),
+            module="core", explain="on_demand", domain="item",
+            value=ir.Column("value", "boolean"), conflict_policy="publish",
+        ),
+        "empty_rat": ir.Relation(
+            "empty_rat", "functional", (ir.Column("id", "string"),),
+            module="core", explain="on_demand", domain="item",
+            value=ir.Column("value", "rational"), conflict_policy="block",
+            empty_state="not_applicable", empty_reason="no_match",
+        ),
+    }
+    strata = {"item": 0, "empty_str": 1, "empty_int": 1, "empty_bool": 1, "empty_rat": 1}
+    prog = ir.Program("sample", rels, {}, strata=strata, format=ir.FORMAT_V2)
+    feldera_sql = rules_sql.feldera(prog, witnesses=False)
+
+    con = duckdb.connect()
+    for ddl in rules_sql.duckdb_tables(prog):
+        con.execute(ddl)
+    con.executemany('INSERT INTO "item" VALUES (?)', [("a",), ("b",)])
+    for stmt in rules_sql.duckdb_program(prog, witnesses=False):
+        con.execute(stmt)
+
+    expected_str = {("a", "unknown", "no_value", ""), ("b", "unknown", "no_value", "")}
+    expected_int = {("a", "not_applicable", "empty", 0), ("b", "not_applicable", "empty", 0)}
+    expected_bool = {("a", "unknown", "no_value", False), ("b", "unknown", "no_value", False)}
+    expected_rat = {("a", "not_applicable", "no_match", 0, 1), ("b", "not_applicable", "no_match", 0, 1)}
+
+    assert set(con.execute('SELECT * FROM "empty_str"').fetchall()) == expected_str
+    assert set(con.execute('SELECT * FROM "empty_int"').fetchall()) == expected_int
+    assert set(con.execute('SELECT * FROM "empty_bool"').fetchall()) == expected_bool
+    assert set(con.execute('SELECT * FROM "empty_rat"').fetchall()) == expected_rat
+    assert con.execute('SELECT * FROM "empty_rat__invalid"').fetchall() == []
+
+    if feldera.URL:
+        pipeline = "rezono-zero-rule-fn-" + uuid4().hex
+        feldera.deploy(pipeline, feldera_sql, profile="unoptimized", workers=2)
+        try:
+            feldera.processed(pipeline, feldera.push(pipeline, {"item": [{"insert": {"id": "a"}}, {"insert": {"id": "b"}}]}))
+            got_str = {(r["id"], r["state"], r["reason"], r["value"]) for r in feldera.read_relation(pipeline, "empty_str")}
+            got_int = {(r["id"], r["state"], r["reason"], r["value"]) for r in feldera.read_relation(pipeline, "empty_int")}
+            got_bool = {(r["id"], r["state"], r["reason"], r["value"]) for r in feldera.read_relation(pipeline, "empty_bool")}
+            got_rat = {
+                (r["id"], r["state"], r["reason"], r["value_n"], r["value_d"])
+                for r in feldera.read_relation(pipeline, "empty_rat")
+            }
+            got_invalid = feldera.read_relation(pipeline, "empty_rat__invalid")
+            with feldera.comparing():
+                assert got_str == expected_str
+                assert got_int == expected_int
+                assert got_bool == expected_bool
+                assert got_rat == expected_rat
+                assert got_invalid == []
+        finally:
+            feldera.stop(pipeline, delete=True)
+
+
+@pytest.mark.parametrize("access_rel", ["may_read", "may_read_full"])
+def test_access_relation_declared_functional_rejected(access_rel):
+    doc = {
+        "format": "rezono.rules/2",
+        "pack": "sample",
+        "relations": [
+            {"name": "role", "role": "base", "key": [_col("id")]},
+            {
+                "name": access_rel, "role": "functional", "module": "core", "explain": "on_demand",
+                "key": [_col("role")], "domain": "role",
+                "value": _col("allowed", "boolean"), "conflict_policy": "publish",
+            },
+        ],
+        "rules": [
+            _rule("acc_fn_r", access_rel, ["?r", "true"], [_lit("role", "?r")], stratum="1"),
+        ],
+    }
+    with pytest.raises(ir.IRError) as exc_info:
+        ir.load(doc, require_witness=False)
+    assert exc_info.value.code == "access_depends_on_functional"

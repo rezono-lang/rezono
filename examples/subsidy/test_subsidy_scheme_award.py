@@ -59,10 +59,10 @@ def golden_calc_text(results: dict[str, dict]) -> str:
 
 
 def compile_legacy_oracle(tmp_path: Path) -> dict[str, str]:
-    """Compile an isolated copy of archived examples/subsidy-scheme using the frozen legacy calc/award.yaml."""
+    """Compile an isolated copy of legacy examples/subsidy-scheme using the frozen legacy calc/award.yaml."""
     root = tmp_path / "legacy-oracle"
     helpers = legacy_helpers()
-    helpers.materialize_legacy_packs(root, ("packs/std-decision", "examples/subsidy-scheme"))
+    helpers.materialize_legacy_packs(root, ("packs/std-decision", "examples/subsidy-scheme"), prefer_live=True)
     scheme = root / "examples" / "subsidy-scheme"
     shutil.rmtree(scheme / "rezono", ignore_errors=True)
     (scheme / "calc").mkdir(exist_ok=True)
@@ -80,7 +80,7 @@ def compile_archived_rezono_0_award(tmp_path: Path) -> dict[str, str]:
     """Compile the archived rezono 0 examples/subsidy-scheme pack (with rezono/award.rezono)."""
     root = tmp_path / "archived-rezono-0"
     helpers = legacy_helpers()
-    helpers.materialize_legacy_packs(root, ("packs/std-decision", "examples/subsidy-scheme"))
+    helpers.materialize_legacy_packs(root, ("packs/std-decision", "examples/subsidy-scheme"), prefer_live=True)
     with ExitStack() as stack:
         helpers.admit_legacy_std_packs(stack, root)
         return emit.compile_pack(pack.read(root / "examples" / "subsidy-scheme"))

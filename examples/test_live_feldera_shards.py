@@ -38,6 +38,7 @@ EXPECTED = {
     "subsidy": [
         "examples/test_feldera_rules.py::test_incremental_on_feldera_equals_batch[subsidy]",
         "examples/test_calculation_engine_parity.py::test_feldera_calculations_match_duckdb_and_checker[subsidy]",
+        "examples/test_rule_witness_engine_parity.py::test_feldera_rule_witnesses_match_batch[subsidy]",
     ],
 }
 
@@ -47,13 +48,20 @@ def run(entry, *args):
                           capture_output=True, text=True, timeout=10)
 
 
-@pytest.fixture
-def evidence(tmp_path):
-    inputs = tmp_path / "shards"
-    for shard, selected in EXPECTED.items():
-        folder = inputs / f"feldera-shard-5-{shard}"
+def load_shards():
+    sys.path.insert(0, str(CI))
+    try:
+        import feldera_shards
+        return feldera_shards
+    finally:
+        sys.path.pop(0)
+
+
+def write_evidence(inputs, shards, attempt=5):
+    nodes = sorted(node for group in shards.values() for node in group)
+    for shard, selected in shards.items():
+        folder = inputs / f"feldera-shard-{attempt}-{shard}"
         folder.mkdir(parents=True)
-        nodes = sorted(node for group in EXPECTED.values() for node in group)
         (folder / "collection.txt").write_text("\n".join(nodes) + "\n", encoding="utf-8")
         (folder / "collected.txt").write_text("\n".join(selected) + "\n", encoding="utf-8")
         suite = ET.Element("testsuite", name=shard)
@@ -61,15 +69,31 @@ def evidence(tmp_path):
             path, name = node.split("::")
             ET.SubElement(suite, "testcase", classname=path[:-3].replace("/", "."), name=name)
         ET.ElementTree(suite).write(folder / "results.xml", encoding="utf-8")
+
+
+@pytest.fixture
+def evidence(tmp_path):
+    inputs = tmp_path / "shards"
+    write_evidence(inputs, EXPECTED, attempt=5)
     return inputs, tmp_path / "aggregate"
 
 
+@pytest.fixture
+def live_evidence(tmp_path):
+    shards = load_shards().SHARDS
+    inputs = tmp_path / "shards"
+    write_evidence(inputs, shards, attempt=5)
+    control = run("feldera_shards.py", "merge", inputs, tmp_path / "control", 5)
+    assert control.returncode == 0, control.stderr
+    return inputs, tmp_path / "aggregate", shards
+
+
 @pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "M3: compiler/ci/feldera_shards.py does not yet route "
-    "compiler/tests/test_recorded_dates.py::test_independent_date_equality (compiler-bound shard) and "
-    "examples/test_calculation_engine_parity.py::test_feldera_calculations_match_duckdb_and_checker[subsidy] (subsidy shard). "
-    "Lift this mark in the pull request that routes the last of the two, with its selector in "
-    "compiler/ci/run_feldera_oracle.sh; the other leaves it."))
+    "M3: decisions/release-1-scope.md: section 6 (Engine agreement); "
+    "compiler/ci/feldera_shards.py does not yet route "
+    "examples/test_rule_witness_engine_parity.py::test_feldera_rule_witnesses_match_batch[subsidy] "
+    "(subsidy shard). Lift this mark in the pull request that routes it, with its selector in "
+    "compiler/ci/run_feldera_oracle.sh."))
 @pytest.mark.parametrize("outcome", [None, "failure", "skipped", "error"])
 def test_merge_preserves_all_live_cases_and_outcomes(evidence, outcome):
     inputs, output = evidence
@@ -86,7 +110,7 @@ def test_merge_preserves_all_live_cases_and_outcomes(evidence, outcome):
     merged = run("feldera_shards.py", "merge", inputs, output, 5)
     assert merged.returncode == 0, merged.stderr
     report = ET.parse(output / "results.xml")
-    assert len(list(report.iter("testcase"))) == 14
+    assert len(list(report.iter("testcase"))) == 16
     if outcome:
         assert report.find(f".//{outcome}").text == "original diagnostic"
     verified = run("verify_feldera_run.py", output / "collected.txt", output / "results.xml")
@@ -94,11 +118,12 @@ def test_merge_preserves_all_live_cases_and_outcomes(evidence, outcome):
 
 
 @pytest.mark.parametrize("mutation", ["missing", "duplicate", "foreign", "collection", "all-drop", "attempt"])
-def test_partial_or_mismatched_shard_cannot_produce_evidence(evidence, mutation):
-    inputs, output = evidence
+def test_partial_or_mismatched_shard_cannot_produce_evidence(live_evidence, mutation):
+    inputs, output, shards = live_evidence
     subsidy = inputs / "feldera-shard-5-subsidy"
     if mutation == "missing":
         (subsidy / "results.xml").unlink()
+        expected_error = "results.xml"
     elif mutation in {"duplicate", "foreign"}:
         path = subsidy / "results.xml"
         tree = ET.parse(path)
@@ -109,16 +134,25 @@ def test_partial_or_mismatched_shard_cannot_produce_evidence(evidence, mutation)
         else:
             case.set("name", "test_another_test")
         tree.write(path, encoding="utf-8")
+        expected_error = "subsidy: JUnit cases differ from the assigned cases"
     elif mutation == "collection":
-        (subsidy / "collection.txt").write_text(EXPECTED["subsidy"][0] + "\n", encoding="utf-8")
+        (subsidy / "collection.txt").write_text(shards["subsidy"][0] + "\n", encoding="utf-8")
+        expected_error = "subsidy: full pytest collections disagree"
     elif mutation == "all-drop":
+        dropped = shards["tenant-capacity-interface"]
         for file in inputs.glob("*/collection.txt"):
             lines = file.read_text(encoding="utf-8").splitlines()
-            file.write_text("\n".join(n for n in lines if n not in EXPECTED["tenant-capacity-interface"]) + "\n",
+            file.write_text("\n".join(n for n in lines if n not in dropped) + "\n",
                             encoding="utf-8")
+        expected_error = f"unexpected oracle collection: missing {sorted(dropped)}, extra []"
     else:
         subsidy.rename(inputs / "feldera-shard-4-subsidy")
-    assert run("feldera_shards.py", "merge", inputs, output, 5).returncode != 0
+        expected_error = f"expected exactly {len(shards)} shard artifacts from attempt 5"
+    merged = run("feldera_shards.py", "merge", inputs, output, 5)
+    assert merged.returncode != 0
+    assert expected_error in merged.stderr, merged.stderr
+    if mutation != "all-drop":
+        assert "unexpected oracle collection" not in merged.stderr, merged.stderr
     assert not output.exists()
 
 

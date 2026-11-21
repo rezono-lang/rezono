@@ -108,17 +108,6 @@ def test_core_sources_has_honest_default_without_duplicate_records():
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "M2: decisions/fact-origin-required.md: PlatformStartupTarget rows in "
-        "examples/platform/facts/standard-order.yaml must carry kind: synthetic in "
-        "standard-order.sources.yaml (or be supplied from a test fixture instead of "
-        "standard-order.yaml) rather than citing decisions/safe-step-rounds.md#4 as a "
-        "non-synthetic git source."
-    ),
-)
 def test_platform_startup_target_has_honest_synthetic_or_fixture_origin():
     standard_order_data = yaml.safe_load((FACTS / "standard-order.yaml").read_text(encoding="utf-8")) or {}
     startup_targets = standard_order_data.get("platform_startup_target") or []

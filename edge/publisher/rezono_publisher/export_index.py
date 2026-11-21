@@ -192,7 +192,7 @@ def prov_fields(notes: list[tuple], owners: dict[tuple, set], bundle: URIRef) ->
     for line, subject, predicate, node, position in notes:
         if position == SUBJECT:
             refs = by_subject.get(node) if node != bundle else None
-        elif isinstance(node, Literal) or (isinstance(node, URIRef) and str(node).startswith("rezono:")):
+        elif isinstance(node, Literal) or (isinstance(node, URIRef) and predicate != RDF.type):
             refs = owners.get((subject, predicate, node))
         else:
             continue  # a vocabulary term or a nested node: exporter syntax

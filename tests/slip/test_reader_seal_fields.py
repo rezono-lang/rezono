@@ -20,11 +20,6 @@ def _head(store, role="reader") -> dict:
     return answer["body"]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="M2: decisions/reader-served-seal-fields.md (#1451): GET /<pack>/head must serve trust_tier and role-scoped may_propose",
-)
 def test_head_serves_trust_tier_and_may_propose(tmp_path):
     store, manifest = publish_main(tmp_path / "plain")
     got = _head(store, role="reader")
@@ -67,11 +62,6 @@ def test_head_serves_trust_tier_and_may_propose(tmp_path):
     assert _head(granted_store, role="summary").get("may_propose") is False
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="M2: decisions/reader-served-seal-fields.md (#1451): GET /<pack>/<manifest>/ask/grounds must serve reader_hashes per witness",
-)
 def test_grounds_serves_reader_hashes_per_witness(tmp_path):
     store, manifest = publish_main(tmp_path)
     [answer] = ask(store, "reader", f"/{PACK}/{manifest['id']}/ask/grounds?{row_query('flagged', 'item-a', '12')}")
@@ -93,11 +83,6 @@ def test_grounds_serves_reader_hashes_per_witness(tmp_path):
     assert isinstance(digest, str) and len(digest) == 64 and all(c in "0123456789abcdef" for c in digest)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="M2: decisions/reader-served-seal-fields.md (#1451): grounds must preserve declared origin_sign on fact sources and omit when undeclared",
-)
 def test_grounds_preserves_declared_origin_sign_on_sources(tmp_path):
     from rezono_compiler.facts import LoadError
     from rezono_publisher.publish import Blocked

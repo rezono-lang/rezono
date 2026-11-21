@@ -52,6 +52,8 @@ The workflows and the compiler's semantics stay with review after landing. A wro
 - Only the maintainer sets the label, after a reviewer has read the difference of that commit and reported no correctness finding. A finding is repaired on the same branch, and the new commit is read again.
 - The label is removed from the repository once the pull request has landed.
 
+[Landing gate as a rule](landing-gate-as-rule.md) turns this into a derived conclusion: a reading becomes a review fact bound to the head commit, the label becomes a projection of "may land", and `red_guard.py` reads the conclusion instead of the label (its section 5). Until that move lands, the rules above apply as written.
+
 ## Considered
 
 - **Review everything before landing.** Most changes are covered by tests and oracles, and the queue would wait on reviewers for no gain.

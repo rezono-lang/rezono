@@ -14,12 +14,14 @@ platform_needed_token(run, token) :-
 
 // A scoped empty-inventory observation established at a cut through an admitted completeness receipt.
 .decl platform_cut_empty_scope(run: symbol, cut: symbol, token: symbol, reason: symbol)
-platform_cut_empty_scope(run, cut, token, reason) :-
-    current(run, token, "absent", _, reason),
-    !platform_needed_token(run, token),
+platform_cut_empty_scope(run, cut, "platform/managed-scope", reason) :-
+    expectation("platform/managed-scope", expected_val),
+    current(run, "platform/managed-scope", "absent", expected_val, reason),
+    !platform_needed_token(run, "platform/managed-scope"),
     loop_observation__run(ev, run),
-    loop_observation__token(ev, token),
+    loop_observation__token(ev, "platform/managed-scope"),
     loop_observation__state(ev, "absent"),
+    loop_observation__value(ev, expected_val),
     loop_observation__scope(ev, scope),
     loop_observation__sweep(ev, cut),
     loop_observation__reason(ev, reason),
@@ -191,9 +193,9 @@ platform_restore_interval_broken(fence_interval) :-
     t_ev <= t_end,
     !platform_restore_offline_obs(run, token, ev, t_ev).
 
-// Verified offline fence interval covering the opening probe, readback and closing probe.
-.decl platform_restore_interval_verified(run: symbol, trial: symbol, readback: symbol, digest: symbol)
-platform_restore_interval_verified(run, trial, readback, digest) :-
+// Verified offline fence interval covering the opening probe, readback and closing probe for a fence token.
+.decl platform_restore_interval_verified_token(run: symbol, trial: symbol, readback: symbol, digest: symbol, token: symbol)
+platform_restore_interval_verified_token(run, trial, readback, digest, token) :-
     restore_offline_interval(fence_interval),
     restore_offline_interval__run(fence_interval, run),
     restore_offline_interval__trial(fence_interval, trial),
@@ -216,6 +218,11 @@ platform_restore_interval_verified(run, trial, readback, digest) :-
     known(run, token, end_ev),
     !platform_restore_interval_broken(fence_interval).
 
+// Verified offline fence interval covering the opening probe, readback and closing probe.
+.decl platform_restore_interval_verified(run: symbol, trial: symbol, readback: symbol, digest: symbol)
+platform_restore_interval_verified(run, trial, readback, digest) :-
+    platform_restore_interval_verified_token(run, trial, readback, digest, _).
+
 // Offline management dataset restore goal: matching isolated copy bound to the named dataset,
 // independent recovery prerequisites, completed restore step, and full offline fence interval
 // covering the opening probe, readback and closing probe.
@@ -226,8 +233,10 @@ platform_restore_goal(run, cut, dataset, readback) :-
     restore_trial_bound(trial),
     !platform_restore_foreign_control(trial),
     !platform_restore_binding_on_source(trial, source),
-    done(run, _, readback),
-    platform_restore_interval_verified(run, trial, readback, digest).
+    done(run, step, readback),
+    needed(run, step, fence_token, "management-offline"),
+    known(run, fence_token, _),
+    platform_restore_interval_verified_token(run, trial, readback, digest, fence_token).
 
 .output platform_safe_frontier
 .output platform_safe_blocker

@@ -37,7 +37,7 @@ if TYPE_CHECKING:
     from . import modules
 
 REZONO_1_FORMAT = "rezono.module/5"
-SCALARS = {"Int": "integer", "Integer": "integer", "Text": "string", "Bool": "boolean", "Date": "date"}
+SCALARS = {"Int": "integer", "Text": "string", "Bool": "boolean", "Date": "date"}
 COMPARE = rules_dl.COMPARE
 ARITH = rules_dl.ARITH
 NEGATED = {"eq": "ne", "ne": "eq", "lt": "ge", "le": "gt", "gt": "le", "ge": "lt"}
@@ -174,7 +174,7 @@ def lower_pack(root: str, mods: Iterable[modules.Module], names: modules.Names, 
             refused.append(_open_domain(name, signature))
             continue
         try:
-            Lowering(signature, signatures, pack, names, taken, out).run()
+            Lowering(signature, signatures, pack, names, taken, out, opened).run()
         except Refused as error:
             refused.append(error.diagnostic)
             continue
@@ -236,6 +236,16 @@ def ir_type(pack, typ: tuple) -> str:
     if typ[0] == "kind":
         return rules_dl.SQL.get(pack.kinds[pack.root(typ[1])].id_type) or "string"
     return typ[1]
+
+
+def validate_note(site: Site, at: str, decl: Mapping[str, object]) -> tuple[str | None, str | None]:
+    """Validate optional `means` and `source` note members as strings and return `(means, source)`."""
+    for field_name, label in (("means", "sentence"), ("source", "source")):
+        if field_name in decl and not isinstance(decl[field_name], str):
+            site.refuse(f"{at}/{field_name}", f"a {label} is text", "R000")
+    means = decl.get("means")
+    source = decl.get("source")
+    return means if isinstance(means, str) else None, source if isinstance(source, str) else None
 
 
 VERSION_FIELDS = frozenset({"version", "replaces", "valid", "known", "value", "source", "definitions"})
@@ -399,12 +409,8 @@ def _signature(site: Site, module: modules.Module, names: modules.Names, pack, a
         signature.value_type = ir_type(pack, result_type)
         signature.optional = card == "?"
     signature.enum_type = _enum_name(names, pack, module, decl.get("type"))
-    signature.note_source = decl.get("source")
+    _, signature.note_source = validate_note(site, at, decl)
     signature.as_of = as_of
-    if "means" in decl and not isinstance(decl["means"], str):
-        site.refuse(f"{at}/means", "a sentence is text", "R000")
-    if "source" in decl and not isinstance(decl["source"], str):
-        site.refuse(at, "a source is text", "R000")
     return signature
 
 
@@ -478,10 +484,11 @@ class Lowering:
     """The statements of one derivation."""
 
     def __init__(self, signature: Signature, signatures: Mapping[str, Signature], pack, names: modules.Names,
-                 taken: set[str], out: tuple[list, list]):
+                 taken: set[str], out: tuple[list, list], opened: set[str] | None = None):
         self.sig, self.signatures, self.pack, self.names = signature, signatures, pack, names
         self.site = signature.site
         self.taken, (self.statements, self.columns) = taken, out
+        self.opened = opened or set()
         self.line, self.column = self.site.place(signature.at)
         self.used = {name for name, _ in signature.key}
         self.env = dict(signature.key)
@@ -1477,13 +1484,18 @@ class Lowering:
                 self.sig.module.id, slot.range)
         return "scalar", rules_dl.SQL.get(slot.sql_type)
 
+    def _resolve_path(self, path: list) -> list:
+        """Prepend implicit `it` for `kind`/`extend` derivations when `path` does not start with a bound variable."""
+        if path and path[0] not in self.env and self.sig.binder == "it" and path[0] != "it":
+            return ["it", *path]
+        return path
+
     def path(self, at: str, path: list, target: tuple | None = None) -> tuple[list[tuple], tuple, bool]:
         """The literals that read a slot path from a variable, its value term and whether it is optional.
         Every hop is a single-valued slot; a path that mixes optional and required hops is not lowered yet. A value
         is not read from an open slot, where a missing value is unknown; a Bool set may read one and is then open."""
+        path = self._resolve_path(path)
         head = path[0]
-        if head not in self.env and self.sig.binder == "it" and head != "it":
-            path, head = ["it", *path], "it"
         if head not in self.env:
             self.site.refuse(at, f"{head} is not a variable here", "R001")
         literals, term, typ, optional = [], ("var", head), self.env[head], set()
@@ -1526,7 +1538,7 @@ class Lowering:
     def operand(self, at: str, node: dict) -> tuple[list[tuple], tuple]:
         if set(node) == {"lit"}:
             return [], self.literal(at, node["lit"])
-        if set(node) == {"path"} and node["path"] and node["path"][0] in self.env:
+        if set(node) == {"path"} and node["path"]:
             literals, term, _ = self.path(at, node["path"])
             return literals, term
         self.site.refuse(at, "an operand is a variable, a slot path or a literal here")
@@ -1538,9 +1550,9 @@ class Lowering:
             value = json.loads(token)
             if isinstance(value, str) and value != "_" and not value.startswith("?"):
                 return "const", value, "string"
-        if token in ("yes", "true"):
+        if token == "true":
             return "const", "true", "boolean"
-        if token in ("no", "false"):
+        if token == "false":
             return "const", "false", "boolean"
         if isinstance(token, str) and re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*", token):
             return "const", token, "string"  # an element id or a value of an enum
@@ -1554,9 +1566,10 @@ class Lowering:
             if op == "=":
                 for side, var, other in ((1, left, right), (2, right, left)):
                     name = var.get("path", [None])[0] if set(var) == {"path"} and len(var["path"]) == 1 else None
-                    if (name in self.env and set(other) == {"path"} and len(other["path"]) > 1
-                            and other["path"][0] in self.env):
-                        literals, _, _ = self.path(f"{at}/cmp/{3 - side}", other["path"], target=("var", name))
+                    other_path = (self._resolve_path(other["path"])
+                                  if set(other) == {"path"} and other["path"] else None)
+                    if name in self.env and other_path is not None and len(other_path) > 1 and other_path[0] in self.env:
+                        literals, _, _ = self.path(f"{at}/cmp/{3 - side}", other_path, target=("var", name))
                         return literals
             left_literals, left_term = self.operand(f"{at}/cmp/1", left)
             right_literals, right_term = self.operand(f"{at}/cmp/2", right)
@@ -1565,9 +1578,11 @@ class Lowering:
             return [self.call(at, node["call"], True)]
         if set(node) == {"not"} and isinstance(node["not"], dict) and set(node["not"]) == {"call"}:
             return [self.call(f"{at}/not", node["not"]["call"], False)]
-        if set(node) == {"path"} and len(node["path"]) > 1 and node["path"][0] in self.env:
-            literals, term, _ = self.path(at, node["path"])
-            return literals + [("cmp", "eq", term, ("const", "true", "boolean"))]
+        if set(node) == {"path"} and node["path"]:
+            resolved = self._resolve_path(node["path"])
+            if len(resolved) > 1 or resolved[0] not in self.env:
+                literals, term, _ = self.path(at, resolved)
+                return literals + [("cmp", "eq", term, ("const", "true", "boolean"))]
         self.site.refuse(at, "this Bool expression is not lowered to rezono.rules/2 yet")
 
     def call(self, at: str, call: list, positive: bool) -> tuple:
@@ -1616,6 +1631,9 @@ class Lowering:
             target = self.signatures.get(name)
             if target is None or target.result != "set" or target.property is not None:
                 self.site.refuse(at, f"{name} is not a relation derived in this pack", "R001")
+            if target.relation in self.opened:
+                self.site.refuse(at, f"{name} is open, so a count or `.one()` over it is only what is "
+                                     "recorded; it is not lowered", "R004")
             terms = [("var", self.fresh(column)) for column, _ in target.key]
             columns = {column: (index, typ) for index, (column, typ) in enumerate(target.key)}
             return Member(terms, self.lit(name, terms), None, columns, pred)
@@ -1780,6 +1798,9 @@ class Lowering:
                 slot = side[1]
                 if slot.multivalued:
                     self.site.refuse(f"{at}/agg/2", f"{slot.name} is a set", "R005")
+                if slot.world == "open":
+                    self.site.refuse(f"{at}/agg/2", f"{slot.table} is open, so a missing value is unknown; "
+                                                    "it is not lowered yet", "R004")
                 if not slot.required:
                     self.site.refuse(f"{at}/agg/2", f"{slot.name} is optional; `.one()` of an optional slot is not "
                                                     "lowered yet")

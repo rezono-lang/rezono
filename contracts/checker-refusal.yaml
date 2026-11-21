@@ -702,6 +702,11 @@ enums:
         annotations:
           arguments: tree relation
           scope: role
+      load_bearing_mismatch:
+        description: "The published load-bearing premise flags do not match the role's founded witnesses."
+        annotations:
+          arguments: ""
+          scope: role
       proof_steps_invalid:
         description: The proof steps could not be reconstructed from the rules and witnesses.
         annotations:

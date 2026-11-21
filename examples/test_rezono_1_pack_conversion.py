@@ -1,15 +1,21 @@
-"""Per-group strict red tests for single-pass pack rule conversion to native `rezono 1` modules
-for standard packs (`packs/std-*`), front-door examples (`examples/subsidy`, `examples/subsidy-scheme`,
-`examples/library`, `examples/projects`), and `examples/platform`
+"""Strict red tests for single-pass pack rule conversion to native `rezono 1` modules, one case per pack, for
+the standard packs (`packs/std-*`), the front-door examples (`examples/subsidy`, `examples/subsidy-scheme`,
+`examples/library`, `examples/projects`), and one for `examples/platform`
 (decisions/language-rezono-1.md, sections 1, 2, 5.5, 5.8, 5.10, 6, 7 and 8;
 decisions/standard-packs-everywhere.md, section 1.4;
 decisions/platform-facts-not-conclusions.md, sections 3, 4 and 5).
+
+Each standard pack and each front-door example has a strict red case of its own (`examples/subsidy-scheme` and
+`examples/subsidy` share one), so that each converts on its own task branch, leaves first: a case waits for the cases
+of the packs it imports, and for the red tests of the rezono 1 rule constructs its rules need
+(`compiler/tests/rezono/test_lower_rezono_1_imported_derived.py`, `test_lower_rezono_1_rule_constructs.py`). The cases keep every assertion of the
+former whole-group tests `test_standard_packs_convert_to_rezono_1` and `test_front_door_examples_convert_to_rezono_1`;
+`test_every_standard_pack_has_its_own_conversion_case` keeps their reach over every pack under `packs/std-*`.
 
 Companions for the other two conversion groups live in their owning components:
 - `loop/tests/test_rezono_1_build_epoch_conversion.py` (`build/` and `epoch/`)
 - `run/tests/test_rezono_1_run_packs_conversion.py` (`run/packs/*`)
 """
-
 from __future__ import annotations
 
 from contextlib import ExitStack
@@ -149,13 +155,6 @@ STD_PACK_EXERCISES: dict[str, dict] = {
         },
     },
 }
-
-FRONT_DOOR_EXAMPLES = (
-    ("examples/subsidy", True),
-    ("examples/subsidy-scheme", True),
-    ("examples/library", False),
-    ("examples/projects", False),
-)
 
 # Exact bundle relation names for examples/subsidy calculations in rezono 1 (<k>_<d>, section 2 & 5.6).
 SUBSIDY_CALC_RELATIONS = (
@@ -380,64 +379,48 @@ def test_legacy_example_and_std_archive_integrity():
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "M3: decisions/language-rezono-1.md: Convert every standard pack under packs/std-* to native rezono 1 "
-        "modules (zero .dl files and zero rezono 0 rules pipe blocks remaining in packs/std-*) with whole-pack "
-        "equivalence via compare_publications across every derived relation, checked grounds, and per-role views. "
-        "Waits for compiler/tests/rezono/test_lower_rezono_1_derived.py--test_lower_rezono_1_derived, "
-        "examples/test_calculation_engine_parity.py--test_feldera_calculations_match_duckdb_and_checker, "
-        "examples/test_rule_witness_engine_parity.py--test_feldera_rule_witnesses_match_batch, "
-        "compiler/tests/test_std_decision_dates.py--test_std_decision_rules_read_dates, "
-        "and packs/std-review native date migration (decisions/standard-packs-everywhere.md section 1.4 step 5)."
-    ),
-)
-def test_standard_packs_convert_to_rezono_1(tmp_path: Path):
-    std_packs = sorted(p.parent for p in (REPO / "packs").glob("std-*/pack.yaml"))
-    assert std_packs, "expected standard packs under packs/std-*"
+def _assert_std_pack_converts(std_name: str, tmp_path: Path) -> None:
+    """The conversion of one standard pack, as the former whole-group test checked it for every pack.
 
-    dl_files = sorted(_LEGACY.rel(path) for pack_dir in std_packs for path in pack_dir.rglob("*.dl"))
-    assert not dl_files, f"packs/std-* still contains .dl files: {dl_files}"
-
-    by_name = {pack_dir.name: pack_dir for pack_dir in std_packs}
-    for name in RULED_STD_PACKS:
-        assert name in by_name, f"missing expected standard pack packs/{name}"
-        _LEGACY.assert_pack_is_native_rezono_1(by_name[name], expect_rules=True)
-
-    for pack_dir in std_packs:
-        if pack_dir.name in RULED_STD_PACKS:
-            continue
-        meta = yaml.safe_load((pack_dir / "pack.yaml").read_bytes()) or {}
-        if meta.get("rezono") or (pack_dir / "schema").is_dir():
-            _LEGACY.assert_pack_is_native_rezono_1(pack_dir, expect_rules=False)
+    `packs/<std_name>` has zero `.dl` files and zero `rezono 0` rule pipes, declares native `rezono 1` modules that
+    compile with derivations, carries no legacy relational rule in `scripts/language_usage.py`, and publishes the
+    same meaning as its frozen legacy snapshot through `compare_publications`: `std-access` through
+    `examples/subsidy` for every role, every other pack through a consumer pack on its synthetic exercise facts,
+    which must derive rows on the legacy snapshot so that the comparison is not vacuous.
+    """
+    pack_dir = REPO / "packs" / std_name
+    assert (pack_dir / "pack.yaml").is_file(), f"missing expected standard pack packs/{std_name}"
+    dl_files = _LEGACY.dl_files_under(pack_dir)
+    assert not dl_files, f"packs/{std_name} still contains .dl files: {dl_files}"
+    _LEGACY.assert_pack_is_native_rezono_1(pack_dir, expect_rules=True)
 
     if str(REPO) not in sys.path:
         sys.path.insert(0, str(REPO))
-    from rezono_compiler import modules, pack
-    from rezono_publisher import batch as publisher_batch
-    from scripts import convert_pack, language_usage
+    from scripts import language_usage
 
-    packs_inv = language_usage.inventory(REPO)
-    legacy_std = [
-        _LEGACY.rel(folder)
-        for folder in std_packs
-        if "relational-rule" in {
-            f
-            for vals in packs_inv.get(folder.resolve(), language_usage.PackUsage({}, (), False)).files.values()
-            for f in vals
-        }
-    ]
-    assert not legacy_std, f"language_usage.py still reports legacy relational-rule in packs/std-*: {legacy_std}"
+    usage = language_usage.inventory(REPO).get(pack_dir.resolve(), language_usage.PackUsage({}, (), False))
+    assert "relational-rule" not in {form for forms in usage.files.values() for form in forms}, (
+        f"language_usage.py still reports legacy relational-rule in packs/{std_name}"
+    )
 
-    # Materialize the legacy std-* snapshot tree once alongside a clean native std-* tree.
+    # The legacy snapshot of every standard pack beside the live standard packs, which hold this pack converted.
     legacy_root = tmp_path / "legacy-root"
     _LEGACY.materialize_legacy_packs(legacy_root, ("packs",))
     native_root = tmp_path / "native-root"
     shutil.copytree(REPO / "packs", native_root / "packs")
+    if std_name == "std-access":
+        _compare_std_access_through_subsidy(legacy_root, native_root)
+    else:
+        _compare_std_pack_on_exercise(std_name, legacy_root, native_root, tmp_path)
 
-    # 1. packs/std-access: compare whole-pack publications through examples/subsidy across every role.
+
+def _compare_std_access_through_subsidy(legacy_root: Path, native_root: Path) -> None:
+    """Compare whole-pack publications of `examples/subsidy` (over `examples/subsidy-scheme`) on the legacy and on the
+    live `packs/std-access` across every role."""
+    from rezono_compiler import modules, pack
+    from rezono_publisher import batch as publisher_batch
+    from scripts import convert_pack
+
     def _subsidy_over_std_access(root: Path, *, legacy: bool):
         for example in ("examples/subsidy", "examples/subsidy-scheme"):
             dst = root / example
@@ -472,72 +455,341 @@ def test_standard_packs_convert_to_rezono_1(tmp_path: Path):
     native_access_epoch, _ = _subsidy_over_std_access(native_root, legacy=False)
     convert_pack.compare_publications(legacy_access_epoch, native_access_epoch, access_roles)
 
-    # 2. Every other ruled standard pack: compare every derived relation and checked ground via compare_publications.
-    for std_name, spec in STD_PACK_EXERCISES.items():
-        legacy_consumer = _build_consumer_for_std_pack(legacy_root, std_name, spec, "legacy")
-        native_consumer = _build_consumer_for_std_pack(native_root, std_name, spec, "native")
-        with ExitStack() as stack:
-            _LEGACY.admit_legacy_std_packs(stack, legacy_root)
-            legacy_epoch = publisher_batch.epoch(
-                legacy_consumer, epoch=1, knowledge_time=TIME, sources=[("rules", f"legacy-{std_name}")]
-            )
-            legacy_meaning = convert_pack.read_publication(
-                legacy_epoch, tmp_path / f"check-nonempty-{std_name}", {"checker": "complete"}
-            )
-        native_epoch = publisher_batch.epoch(
-            native_consumer, epoch=1, knowledge_time=TIME, sources=[("rules", f"native-{std_name}")]
+
+def _compare_std_pack_on_exercise(std_name: str, legacy_root: Path, native_root: Path, tmp_path: Path) -> None:
+    """Compare every derived relation and checked ground of one standard pack through a consumer pack that carries
+    its synthetic exercise facts, after showing that those facts derive rows on the legacy snapshot."""
+    from rezono_publisher import batch as publisher_batch
+    from scripts import convert_pack
+
+    spec = STD_PACK_EXERCISES[std_name]
+    legacy_consumer = _build_consumer_for_std_pack(legacy_root, std_name, spec, "legacy")
+    native_consumer = _build_consumer_for_std_pack(native_root, std_name, spec, "native")
+    with ExitStack() as stack:
+        _LEGACY.admit_legacy_std_packs(stack, legacy_root)
+        legacy_epoch = publisher_batch.epoch(
+            legacy_consumer, epoch=1, knowledge_time=TIME, sources=[("rules", f"legacy-{std_name}")]
         )
-        non_empty_derived = [
-            rel for rel, rows in legacy_meaning.rows.items()
-            if rows and rel not in spec["rows"] and "__" not in rel
-        ]
-        assert non_empty_derived, f"exercise facts for packs/{std_name} derived zero rows (vacuous comparison)"
-        convert_pack.compare_publications(legacy_epoch, native_epoch, {"checker": "complete"})
+        legacy_meaning = convert_pack.read_publication(
+            legacy_epoch, tmp_path / f"check-nonempty-{std_name}", {"checker": "complete"}
+        )
+    native_epoch = publisher_batch.epoch(
+        native_consumer, epoch=1, knowledge_time=TIME, sources=[("rules", f"native-{std_name}")]
+    )
+    non_empty_derived = [
+        rel for rel, rows in legacy_meaning.rows.items()
+        if rows and rel not in spec["rows"] and "__" not in rel
+    ]
+    assert non_empty_derived, f"exercise facts for packs/{std_name} derived zero rows (vacuous comparison)"
+    convert_pack.compare_publications(legacy_epoch, native_epoch, {"checker": "complete"})
+
+
+def test_every_standard_pack_has_its_own_conversion_case():
+    """Every `packs/std-*` pack is covered as the former whole-group test covered it: a pack with rules is one of
+    RULED_STD_PACKS and has its own strict red case below, and a pack without rules (`std-explain`, `std-view`)
+    holds no `.dl` file and, if it carries modules or schemas, native `rezono 1` modules without rules."""
+    std_packs = sorted(p.parent for p in (REPO / "packs").glob("std-*/pack.yaml"))
+    assert std_packs, "expected standard packs under packs/std-*"
+    names = {pack_dir.name for pack_dir in std_packs}
+    assert set(RULED_STD_PACKS) <= names, f"missing standard packs: {sorted(set(RULED_STD_PACKS) - names)}"
+    assert set(STD_PACK_EXERCISES) == set(RULED_STD_PACKS) - {"std-access"}, sorted(STD_PACK_EXERCISES)
+    for name in RULED_STD_PACKS:
+        case = globals().get(f"test_{name.replace('-', '_')}_converts_to_rezono_1")
+        assert callable(case), f"packs/{name} has no conversion case of its own"
+    for pack_dir in std_packs:
+        if pack_dir.name in RULED_STD_PACKS:
+            continue
+        assert not _LEGACY.dl_files_under(pack_dir), f"packs/{pack_dir.name} carries rules: add it to RULED_STD_PACKS"
+        assert not (pack_dir / "rules").exists(), f"packs/{pack_dir.name} carries rules: add it to RULED_STD_PACKS"
+        meta = yaml.safe_load((pack_dir / "pack.yaml").read_bytes()) or {}
+        if meta.get("rezono") or (pack_dir / "schema").is_dir():
+            _LEGACY.assert_pack_is_native_rezono_1(pack_dir, expect_rules=False)
+
+
+# One strict red case per standard pack, so that each converts on its own task branch. A pack waits for the cases
+# of the standard packs it imports (leaves first), for the compiler red tests of the rezono 1 lowering it needs, and,
+# like the former whole-group test, for the live comparison of rule witnesses on Feldera. Converting a pack also
+# regenerates its line of TABLE in compiler/rezono_compiler/standard_packs.py and re-pins its importers'
+# `imports[].sha256` (decisions/language-rezono-1.md section 5.5, cross-pack consumers).
 
 
 @pytest.mark.xfail(
     strict=True,
     raises=AssertionError,
     reason=(
-        "M3: decisions/language-rezono-1.md: Convert the front-door, README, and language-guide examples "
-        "(examples/subsidy, examples/subsidy-scheme, examples/library, examples/projects) to native rezono 1 "
-        "modules with zero .dl files and whole-pack equivalence against their frozen legacy snapshots, "
-        "compare_publications, and independent reference/expected oracles. "
-        "Waits for compiler/tests/rezono/test_lower_rezono_1_derived.py--test_lower_rezono_1_derived, "
-        "examples/test_calculation_engine_parity.py--test_feldera_calculations_match_duckdb_and_checker, "
-        "examples/test_rule_witness_engine_parity.py--test_feldera_rule_witnesses_match_batch, "
-        "and examples/test_rezono_1_pack_conversion.py--test_standard_packs_convert_to_rezono_1."
+        "M3: decisions/language-rezono-1.md: Convert packs/std-access (the rezono 0 rules pipe block of "
+        "rezono/access.rezono) to a native rezono 1 module: no rules pipe block and no rezono 0 rule left "
+        "in packs/std-access, and whole-pack equivalence via compare_publications of examples/subsidy (over "
+        "examples/subsidy-scheme) on its legacy std-access snapshot against the converted one, for every "
+        "role. Change only packs/std-access, its line of TABLE in "
+        "compiler/rezono_compiler/standard_packs.py and the imports[].sha256 pins of its importers "
+        "(packs/std-review, examples/subsidy, examples/platform, build, run/packs/probe-profiles; "
+        "tests/fixtures/neutral and tests/fixtures/slip with the planner label per "
+        "decisions/fixture-pin-update.md). Waits for "
+        "compiler/tests/rezono/test_lower_rezono_1_imported_derived.py--test_an_importer_compiles_the_derivations_of_an_imported_rezono_1_pack, "
+        "examples/test_rule_witness_engine_parity.py--test_feldera_rule_witnesses_match_batch, and "
+        "compiler/tests/rezono/test_lower_rezono_1_rule_constructs.py--test_rezono_1_extend_option_lowers_as_the_datalog_extension_point."
     ),
 )
-def test_front_door_examples_convert_to_rezono_1(tmp_path: Path):
-    compiled = {}
-    for rel_path, expect_rules in FRONT_DOOR_EXAMPLES:
-        compiled[rel_path] = _LEGACY.assert_pack_is_native_rezono_1(REPO / rel_path, expect_rules=expect_rules)
+def test_std_access_converts_to_rezono_1(tmp_path: Path):
+    _assert_std_pack_converts("std-access", tmp_path)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason=(
+        "M3: decisions/language-rezono-1.md: Convert packs/std-budget (rules/budget.dl) to native rezono 1 "
+        "modules: zero .dl files and zero rezono 0 rules pipe blocks in packs/std-budget, and whole-pack "
+        "equivalence with its legacy snapshot via compare_publications on its synthetic exercise facts "
+        "(kind: synthetic, STD_PACK_EXERCISES in this file), which derive rows on the legacy snapshot. "
+        "Change only packs/std-budget, its line of TABLE in compiler/rezono_compiler/standard_packs.py and "
+        "the imports[].sha256 pins of its importers (none today). Waits for "
+        "compiler/tests/rezono/test_lower_rezono_1_imported_derived.py--test_an_importer_compiles_the_derivations_of_an_imported_rezono_1_pack, "
+        "examples/test_rule_witness_engine_parity.py--test_feldera_rule_witnesses_match_batch, and "
+        "compiler/tests/rezono/test_lower_rezono_1_rule_constructs.py--test_rezono_1_any_lowers_as_an_existential_join."
+    ),
+)
+def test_std_budget_converts_to_rezono_1(tmp_path: Path):
+    _assert_std_pack_converts("std-budget", tmp_path)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason=(
+        "M3: decisions/language-rezono-1.md: Convert packs/std-decision (rules/decision.dl) to native "
+        "rezono 1 modules: zero .dl files and zero rezono 0 rules pipe blocks in packs/std-decision, and "
+        "whole-pack equivalence with its legacy snapshot via compare_publications on its synthetic exercise "
+        "facts (kind: synthetic, ISO dates only, STD_PACK_EXERCISES in this file). Change only "
+        "packs/std-decision, its line of TABLE in compiler/rezono_compiler/standard_packs.py and the "
+        "imports[].sha256 pins of its importers (examples/subsidy, examples/subsidy-scheme, "
+        "examples/platform, build, run/packs/invoice-drift, run/packs/offer-selection, "
+        "run/packs/probe-profiles). Waits for "
+        "compiler/tests/test_std_decision_dates.py--test_std_decision_rules_read_dates (the legacy snapshot "
+        "reads the exercise dates only after it and the archive refresh that follows), "
+        "compiler/tests/rezono/test_lower_rezono_1_imported_derived.py--test_an_importer_compiles_the_derivations_of_an_imported_rezono_1_pack, "
+        "examples/test_rule_witness_engine_parity.py--test_feldera_rule_witnesses_match_batch, "
+        "compiler/tests/rezono/test_lower_rezono_1_rule_constructs.py--test_rezono_1_invariant_option_lowers_as_the_datalog_invariant, "
+        "--test_rezono_1_absence_and_outcome_options_lower_as_the_datalog_annotations, "
+        "--test_rezono_1_any_lowers_as_an_existential_join, and "
+        "--test_rezono_1_membership_in_a_multivalued_slot_lowers."
+    ),
+)
+def test_std_decision_converts_to_rezono_1(tmp_path: Path):
+    _assert_std_pack_converts("std-decision", tmp_path)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason=(
+        "M3: decisions/language-rezono-1.md: Convert packs/std-identity (rules/identity.dl) to native "
+        "rezono 1 modules: zero .dl files and zero rezono 0 rules pipe blocks in packs/std-identity, and "
+        "whole-pack equivalence with its legacy snapshot via compare_publications on its synthetic exercise "
+        "facts (kind: synthetic, STD_PACK_EXERCISES in this file), which derive rows on the legacy "
+        "snapshot. Change only packs/std-identity, its line of TABLE in "
+        "compiler/rezono_compiler/standard_packs.py and the imports[].sha256 pins of its importers "
+        "(examples/platform). Waits for "
+        "compiler/tests/rezono/test_lower_rezono_1_imported_derived.py--test_an_importer_compiles_the_derivations_of_an_imported_rezono_1_pack, "
+        "examples/test_rule_witness_engine_parity.py--test_feldera_rule_witnesses_match_batch, "
+        "compiler/tests/rezono/test_lower_rezono_1_rule_constructs.py--test_rezono_1_invariant_option_lowers_as_the_datalog_invariant, "
+        "--test_rezono_1_explain_option_lowers_as_the_datalog_explain, "
+        "--test_rezono_1_extend_option_lowers_as_the_datalog_extension_point, "
+        "--test_rezono_1_any_lowers_as_an_existential_join, and "
+        "--test_rezono_1_membership_in_a_multivalued_slot_lowers."
+    ),
+)
+def test_std_identity_converts_to_rezono_1(tmp_path: Path):
+    _assert_std_pack_converts("std-identity", tmp_path)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason=(
+        "M3: decisions/language-rezono-1.md: Convert packs/std-loop (its 24 rules/*.dl files) to native "
+        "rezono 1 modules: zero .dl files and zero rezono 0 rules pipe blocks in packs/std-loop, and "
+        "whole-pack equivalence with its legacy snapshot via compare_publications on its synthetic exercise "
+        "facts (kind: synthetic, STD_PACK_EXERCISES in this file), which derive rows on the legacy "
+        "snapshot. Change only packs/std-loop, its line of TABLE in "
+        "compiler/rezono_compiler/standard_packs.py and the imports[].sha256 pins of its importers "
+        "(examples/platform, build, epoch, run/packs/cleanup-deadline). Waits for "
+        "examples/test_rezono_1_pack_conversion.py--test_std_order_converts_to_rezono_1 (it imports "
+        "std-order), "
+        "compiler/tests/rezono/test_lower_rezono_1_imported_derived.py--test_a_rezono_1_derivation_reads_a_relation_of_an_imported_pack, "
+        "examples/test_rule_witness_engine_parity.py--test_feldera_rule_witnesses_match_batch, "
+        "compiler/tests/rezono/test_lower_rezono_1_rule_constructs.py--test_rezono_1_invariant_option_lowers_as_the_datalog_invariant, "
+        "--test_rezono_1_extend_option_lowers_as_the_datalog_extension_point, "
+        "--test_rezono_1_any_lowers_as_an_existential_join, "
+        "--test_rezono_1_arithmetic_in_a_bool_derivation_lowers, and "
+        "--test_rezono_1_count_in_a_bool_derivation_lowers."
+    ),
+)
+def test_std_loop_converts_to_rezono_1(tmp_path: Path):
+    _assert_std_pack_converts("std-loop", tmp_path)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason=(
+        "M3: decisions/language-rezono-1.md: Convert packs/std-order (rules/order.dl) to native rezono 1 "
+        "modules: zero .dl files and zero rezono 0 rules pipe blocks in packs/std-order, and whole-pack "
+        "equivalence with its legacy snapshot via compare_publications on its synthetic exercise facts "
+        "(kind: synthetic, STD_PACK_EXERCISES in this file), which derive rows on the legacy snapshot. "
+        "Change only packs/std-order, its line of TABLE in compiler/rezono_compiler/standard_packs.py and "
+        "the imports[].sha256 pins of its importers (packs/std-loop, examples/platform). Waits for "
+        "compiler/tests/rezono/test_lower_rezono_1_imported_derived.py--test_an_importer_compiles_the_derivations_of_an_imported_rezono_1_pack, "
+        "examples/test_rule_witness_engine_parity.py--test_feldera_rule_witnesses_match_batch, "
+        "compiler/tests/rezono/test_lower_rezono_1_rule_constructs.py--test_rezono_1_invariant_option_lowers_as_the_datalog_invariant, "
+        "--test_rezono_1_explain_option_lowers_as_the_datalog_explain, "
+        "--test_rezono_1_extend_option_lowers_as_the_datalog_extension_point, "
+        "--test_rezono_1_any_lowers_as_an_existential_join, and "
+        "--test_rezono_1_membership_in_a_multivalued_slot_lowers."
+    ),
+)
+def test_std_order_converts_to_rezono_1(tmp_path: Path):
+    _assert_std_pack_converts("std-order", tmp_path)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason=(
+        "M3: decisions/language-rezono-1.md: Convert packs/std-part (rules/part.dl) to native rezono 1 "
+        "modules: zero .dl files and zero rezono 0 rules pipe blocks in packs/std-part, and whole-pack "
+        "equivalence with its legacy snapshot via compare_publications on its synthetic exercise facts "
+        "(kind: synthetic, STD_PACK_EXERCISES in this file), which derive rows on the legacy snapshot. "
+        "Change only packs/std-part, its line of TABLE in compiler/rezono_compiler/standard_packs.py and "
+        "the imports[].sha256 pins of its importers (examples/platform, run/packs/probe-profiles). Waits "
+        "for "
+        "compiler/tests/rezono/test_lower_rezono_1_imported_derived.py--test_an_importer_compiles_the_derivations_of_an_imported_rezono_1_pack, "
+        "examples/test_rule_witness_engine_parity.py--test_feldera_rule_witnesses_match_batch, "
+        "compiler/tests/rezono/test_lower_rezono_1_rule_constructs.py--test_rezono_1_invariant_option_lowers_as_the_datalog_invariant, "
+        "and --test_rezono_1_any_lowers_as_an_existential_join."
+    ),
+)
+def test_std_part_converts_to_rezono_1(tmp_path: Path):
+    _assert_std_pack_converts("std-part", tmp_path)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason=(
+        "M3: decisions/language-rezono-1.md: Convert packs/std-review (its 7 rules/*.dl files) to native "
+        "rezono 1 modules: zero .dl files and zero rezono 0 rules pipe blocks in packs/std-review, and "
+        "whole-pack equivalence with its legacy snapshot via compare_publications on its synthetic exercise "
+        "facts (kind: synthetic, ISO dates only, STD_PACK_EXERCISES in this file). Change only "
+        "packs/std-review, its line of TABLE in compiler/rezono_compiler/standard_packs.py and the "
+        "imports[].sha256 pins of its importers (none today). Waits for "
+        "examples/test_rezono_1_pack_conversion.py--test_std_access_converts_to_rezono_1 (it imports "
+        "std-access), "
+        "compiler/tests/rezono/test_lower_rezono_1_imported_derived.py--test_a_rezono_1_derivation_reads_a_relation_of_an_imported_pack, "
+        "examples/test_rule_witness_engine_parity.py--test_feldera_rule_witnesses_match_batch, "
+        "compiler/tests/rezono/test_lower_rezono_1_rule_constructs.py--test_rezono_1_invariant_option_lowers_as_the_datalog_invariant, "
+        "--test_rezono_1_any_lowers_as_an_existential_join, and the packs/std-review native date migration "
+        "of decisions/standard-packs-everywhere.md section 1.4 step 5 (Review.date and RoleGrant.valid_from "
+        "in place of day numbers; the legacy snapshot reads the exercise dates only after it and the "
+        "archive refresh that follows; no red test names it yet)."
+    ),
+)
+def test_std_review_converts_to_rezono_1(tmp_path: Path):
+    _assert_std_pack_converts("std-review", tmp_path)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason=(
+        "M3: decisions/language-rezono-1.md: Convert packs/std-time (rules/time.dl) to native rezono 1 "
+        "modules: zero .dl files and zero rezono 0 rules pipe blocks in packs/std-time, and whole-pack "
+        "equivalence with its legacy snapshot via compare_publications on its synthetic exercise facts "
+        "(kind: synthetic, STD_PACK_EXERCISES in this file), which derive rows on the legacy snapshot. "
+        "Change only packs/std-time, its line of TABLE in compiler/rezono_compiler/standard_packs.py and "
+        "the imports[].sha256 pins of its importers (examples/subsidy, examples/platform, "
+        "run/packs/invoice-drift). Waits for "
+        "compiler/tests/rezono/test_lower_rezono_1_imported_derived.py--test_an_importer_compiles_the_derivations_of_an_imported_rezono_1_pack, "
+        "examples/test_rule_witness_engine_parity.py--test_feldera_rule_witnesses_match_batch, "
+        "compiler/tests/rezono/test_lower_rezono_1_rule_constructs.py--test_rezono_1_invariant_option_lowers_as_the_datalog_invariant, "
+        "--test_rezono_1_explain_option_lowers_as_the_datalog_explain, "
+        "--test_rezono_1_absence_and_outcome_options_lower_as_the_datalog_annotations, "
+        "--test_rezono_1_any_lowers_as_an_existential_join, "
+        "--test_rezono_1_arithmetic_in_a_bool_derivation_lowers, and "
+        "--test_rezono_1_membership_in_a_multivalued_slot_lowers."
+    ),
+)
+def test_std_time_converts_to_rezono_1(tmp_path: Path):
+    _assert_std_pack_converts("std-time", tmp_path)
+
+
+def _assert_reader_example_converts(rel_path: str, tmp_path: Path) -> None:
+    """`examples/library` or `examples/projects`: native `rezono 1` modules without rules, compare_publications on the
+    valid dataset against the legacy snapshot (whose facts travel in the archive), and the expected violations of
+    both datasets."""
+    pack_dir = REPO / rel_path
+    model, files, _, _ = _LEGACY.assert_pack_is_native_rezono_1(pack_dir, expect_rules=False)
 
     if str(REPO) not in sys.path:
         sys.path.insert(0, str(REPO))
     from rezono_compiler import facts as fact_files
     from rezono_publisher import batch as publisher_batch
     from scripts import convert_pack
+    from support import expected, violations  # compiler/tests/support.py, as in examples/test_examples.py
 
     legacy_root = tmp_path / "legacy"
-    _LEGACY.materialize_legacy_packs(
-        legacy_root,
-        ("packs", "examples/library", "examples/projects", "examples/subsidy", "examples/subsidy-scheme"),
-    )
+    _LEGACY.materialize_legacy_packs(legacy_root, (rel_path,))
+    legacy_pack = legacy_root / rel_path
+    epochs = {}
+    for label, src_dir in (("legacy", legacy_pack), ("native", pack_dir)):
+        valid_copy = tmp_path / f"{pack_dir.name}-{label}-valid"
+        shutil.copytree(src_dir, valid_copy)
+        for err_file in (
+            list(valid_copy.rglob("errors.yaml"))
+            + list(valid_copy.rglob("errors.rezono"))
+            + list(valid_copy.rglob("errors.json"))
+        ):
+            err_file.unlink()
+        meta_path = valid_copy / "pack.yaml"
+        meta = yaml.safe_load(meta_path.read_bytes())
+        if meta.get("rezono"):
+            meta["rezono"] = [e for e in meta["rezono"] if Path(e["module"]).stem != "errors"]
+            meta_path.write_text(yaml.safe_dump(meta, sort_keys=False), encoding="utf-8", newline="\n")
+        epochs[label] = publisher_batch.epoch(
+            valid_copy, epoch=1, knowledge_time=TIME, sources=[("rules", f"{label}-{pack_dir.name}")]
+        )
+    convert_pack.compare_publications(epochs["legacy"], epochs["native"], {"reader": "complete"})
 
-    # 1. examples/subsidy (importing examples/subsidy-scheme): compare every legacy rule relation,
-    # checked grounds, per-role views, and exact `<k>_<d>` calculation derivations (`application_<rule>`).
+    datasets = fact_files.files(pack_dir)
+    assert {path.stem for path in datasets} == {"valid", "errors"}, (rel_path, datasets)
+    for path in datasets:
+        rows = fact_files.load(model, path)
+        want = expected(pack_dir / "expected" / "violations" / f"{path.stem}.json")
+        assert violations(files, rows) == want, (rel_path, path.stem)
+
+
+def _assert_subsidy_matches_legacy(tmp_path: Path) -> None:
+    """Publish the live `examples/subsidy` over the live `examples/subsidy-scheme` and compare it with the legacy
+    snapshot of both: every legacy rule relation, checked ground and per-role snapshot unchanged, role scoping kept,
+    the relations of the independent `reference.py` oracle under their exact names, and the exact `<k>_<d>`
+    calculation derivations (`application_<rule>`) that rezono 1 publishes beside them."""
+    if str(REPO) not in sys.path:
+        sys.path.insert(0, str(REPO))
+    from rezono_compiler import pack
+    from rezono_publisher import batch as publisher_batch
+    from scripts import convert_pack
+
     subsidy_dir = REPO / "examples" / "subsidy"
+    legacy_root = tmp_path / "legacy"
+    _LEGACY.materialize_legacy_packs(legacy_root, ("packs", "examples/subsidy", "examples/subsidy-scheme"))
     legacy_subsidy = legacy_root / "examples" / "subsidy"
     shutil.copytree(subsidy_dir / "facts", legacy_subsidy / "facts")
 
-    subsidy_model, _, _, _ = compiled["examples/subsidy"]
-    roles = _LEGACY.roles_for_pack(subsidy_dir, subsidy_model)
-    assert {"checker", "case_officer", "policy_adviser", "propose", "public", "viewer"} <= set(roles), roles
-
     with ExitStack() as stack:
         _LEGACY.admit_legacy_std_packs(stack, legacy_root)
+        roles = _LEGACY.roles_for_pack(legacy_subsidy, pack.read(legacy_subsidy))
+        assert {"checker", "case_officer", "policy_adviser", "propose", "public", "viewer"} <= set(roles), roles
         legacy_sub_epoch = publisher_batch.epoch(
             legacy_subsidy, epoch=1, knowledge_time=TIME, sources=[("rules", "legacy-subsidy")]
         )
@@ -573,7 +825,10 @@ def test_front_door_examples_convert_to_rezono_1(tmp_path: Path):
 
     # Independent reference.py oracle: pinned exact relation names (zero old-or-new fallback!).
     ref = _load_python_module(subsidy_dir / "reference.py", "subsidy_reference_oracle")
-    (_, base_state), *_ = list(ref.states())
+    # The facts state, read before the generator advances: the reference applies each scenario to the same state
+    # in place, so the facts state is the first one yielded, as in examples/test_rules.py.
+    label, base_state = next(ref.states())
+    assert label == "0-applications", label
     for rel_name, want_rows in ref.rules(base_state).items():
         got_rows = sorted([str(cell) for cell in row] for row in native_sub.rows[rel_name])
         assert got_rows == want_rows, f"examples/subsidy relation {rel_name!r} diverged from reference.py"
@@ -590,46 +845,80 @@ def test_front_door_examples_convert_to_rezono_1(tmp_path: Path):
         }
         assert observed == expected_calc[rule_name], f"examples/subsidy {rel_id!r} diverged from reference.py"
 
-    # 2. examples/library and examples/projects: compare_publications on valid dataset + violation parity on valid/errors.
-    for rel_path in ("examples/library", "examples/projects"):
-        pack_dir = REPO / rel_path
-        legacy_pack = legacy_root / rel_path
-        for label, src_dir in (("legacy", legacy_pack), ("native", pack_dir)):
-            valid_copy = tmp_path / f"{pack_dir.name}-{label}-valid"
-            shutil.copytree(src_dir, valid_copy)
-            for err_file in (
-                list(valid_copy.rglob("errors.yaml"))
-                + list(valid_copy.rglob("errors.rezono"))
-                + list(valid_copy.rglob("errors.json"))
-            ):
-                err_file.unlink()
-            meta_path = valid_copy / "pack.yaml"
-            meta = yaml.safe_load(meta_path.read_bytes())
-            if meta.get("rezono"):
-                meta["rezono"] = [e for e in meta["rezono"] if Path(e["module"]).stem != "errors"]
-                meta_path.write_text(yaml.safe_dump(meta, sort_keys=False), encoding="utf-8", newline="\n")
-            if label == "legacy":
-                legacy_valid_epoch = publisher_batch.epoch(
-                    valid_copy, epoch=1, knowledge_time=TIME, sources=[("rules", f"legacy-{pack_dir.name}")]
-                )
-            else:
-                native_valid_epoch = publisher_batch.epoch(
-                    valid_copy, epoch=1, knowledge_time=TIME, sources=[("rules", f"native-{pack_dir.name}")]
-                )
-        convert_pack.compare_publications(legacy_valid_epoch, native_valid_epoch, {"reader": "complete"})
 
-        model, files, _, _ = compiled[rel_path]
-        datasets = fact_files.files(pack_dir)
-        assert {path.stem for path in datasets} == {"valid", "errors"}, (rel_path, datasets)
-        from rezono_compiler import batch as compiler_batch
+# One strict red case per front-door example (decisions/release-1-scope.md section 7), with examples/subsidy-scheme
+# and examples/subsidy in one case: examples/library and examples/projects import nothing and carry no rules;
+# examples/subsidy imports examples/subsidy-scheme, std-access, std-decision and std-time, and its calculation reads
+# the scheme's award.
 
-        for path in datasets:
-            rows = fact_files.load(model, path)
-            got = compiler_batch.violations(files, rows)
-            want = json.loads((pack_dir / "expected" / "violations" / f"{path.stem}.json").read_text(encoding="utf-8"))
-            assert {k: {tuple(str(c) for c in r) for r in v} for k, v in got.items()} == {
-                k: {tuple(str(c) for c in r) for r in v} for k, v in want.items()
-            }, (rel_path, path.stem)
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason=(
+        "M3: decisions/language-rezono-1.md: Convert examples/library (its LinkML schema) to native rezono 1 "
+        "modules: zero .dl files, its kinds declared under rezono: in pack.yaml with rezono.module/5 forms that "
+        "compile with language_version 1, whole-pack equivalence of its valid dataset with the legacy snapshot via "
+        "compare_publications, and the violations in expected/violations for both datasets. "
+        "Change only examples/library, and scripts/convert_pack.py (the shared conversion helper) if it is to "
+        "convert the schema: it refuses it today with \"Address: cannot introduce an implicit identifier\"."
+    ),
+)
+def test_examples_library_converts_to_rezono_1(tmp_path: Path):
+    _assert_reader_example_converts("examples/library", tmp_path)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason=(
+        "M3: decisions/language-rezono-1.md: Convert examples/projects (its LinkML schema) to native rezono 1 "
+        "modules: zero .dl files, its kinds declared under rezono: in pack.yaml with rezono.module/5 forms that "
+        "compile with language_version 1, whole-pack equivalence of its valid dataset with the legacy snapshot via "
+        "compare_publications, and the violations in expected/violations for both datasets. "
+        "Change only examples/projects."
+    ),
+)
+def test_examples_projects_converts_to_rezono_1(tmp_path: Path):
+    _assert_reader_example_converts("examples/projects", tmp_path)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason=(
+        "M3: decisions/language-rezono-1.md: Convert examples/subsidy-scheme (its four rules/*.dl files and "
+        "rezono/award.rezono) and examples/subsidy (its four rules/*.dl files and calc/*.yaml) together to "
+        "native rezono 1 modules with derivations and zero .dl files: the published examples/subsidy keeps "
+        "every legacy relation, checked ground and per-role snapshot of the legacy snapshot of both, role "
+        "scoping, the relations of examples/subsidy/reference.py under their exact names, and gains the "
+        "exact functional properties application_<rule> of section 2 for the scheme's six calculations and "
+        "payment_difference. One case for both: examples/subsidy/calc/drift.yaml reads the scheme's award, "
+        "and section 5.6 lowers award to rezono.rules/2, so converting the scheme alone would leave a "
+        "rezono.calc/1 reading a rezono.rules/2 value, a state the decision does not ask for. Change only "
+        "examples/subsidy and examples/subsidy-scheme. Waits for "
+        "examples/test_rezono_1_pack_conversion.py--test_std_access_converts_to_rezono_1, "
+        "--test_std_decision_converts_to_rezono_1, --test_std_time_converts_to_rezono_1 (their imports), "
+        "compiler/tests/rezono/test_lower_rezono_1_imported_derived.py--test_a_rezono_1_derivation_reads_a_relation_of_an_imported_pack, "
+        "examples/test_rule_witness_engine_parity.py--test_feldera_rule_witnesses_match_batch, "
+        "compiler/tests/rezono/test_lower_rezono_1_rule_constructs.py--test_rezono_1_invariant_option_lowers_as_the_datalog_invariant, "
+        "--test_rezono_1_absence_and_outcome_options_lower_as_the_datalog_annotations, "
+        "--test_rezono_1_any_lowers_as_an_existential_join, "
+        "--test_rezono_1_count_in_a_bool_derivation_lowers, and a planner red test for lowering a versioned "
+        "calculation (version, definition, unit, output) to rezono.rules/2 as section 5.6 requires (none "
+        "yet: it first restates "
+        "compiler/tests/rezono/test_rezono_module_5_calc_facts_sources.py::test_rezono_module_5_calculation_lowers_to_calc_ir, "
+        "a green test that pins today's routing of such a calculation to rezono.calc/1)."
+    ),
+)
+def test_examples_subsidy_and_subsidy_scheme_convert_to_rezono_1(tmp_path: Path):
+    scheme_dir = REPO / "examples" / "subsidy-scheme"
+    assert not _LEGACY.dl_files_under(scheme_dir), (
+        f"examples/subsidy-scheme still contains .dl files: {_LEGACY.dl_files_under(scheme_dir)}"
+    )
+    _LEGACY.assert_pack_is_native_rezono_1(scheme_dir, expect_rules=True)
+    _LEGACY.assert_pack_is_native_rezono_1(REPO / "examples" / "subsidy", expect_rules=True)
+    _assert_subsidy_matches_legacy(tmp_path)
 
 
 @pytest.mark.xfail(
@@ -645,7 +934,10 @@ def test_front_door_examples_convert_to_rezono_1(tmp_path: Path):
         "Waits for compiler/tests/rezono/test_lower_rezono_1_derived.py--test_lower_rezono_1_derived, "
         "examples/test_calculation_engine_parity.py--test_feldera_calculations_match_duckdb_and_checker, "
         "examples/test_rule_witness_engine_parity.py--test_feldera_rule_witnesses_match_batch, "
-        "examples/test_rezono_1_pack_conversion.py--test_standard_packs_convert_to_rezono_1, "
+        "examples/test_rezono_1_pack_conversion.py--test_std_access_converts_to_rezono_1, "
+        "--test_std_decision_converts_to_rezono_1, --test_std_identity_converts_to_rezono_1, "
+        "--test_std_loop_converts_to_rezono_1, --test_std_order_converts_to_rezono_1, "
+        "--test_std_part_converts_to_rezono_1, --test_std_time_converts_to_rezono_1, "
         "examples/platform/test_platform_release_dates.py--test_runs_orders_releases_by_their_sourced_date, "
         "and examples/platform/test_platform_start_order.py--test_start_order_follows_from_needs_through_std_order."
     ),

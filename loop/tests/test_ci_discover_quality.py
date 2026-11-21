@@ -768,12 +768,6 @@ def test_ci_discover_fail_closed_safe_mode_for_ci_matrix_and_coordinator_state(t
     }
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="M2: decisions/build-reconciliation.md: rezono:schema must be emitted directly by "
-           "rezono_publisher/rezono_checker and never synthesized by loop/ci_discover.py.",
-)
 def test_rezono_schema_check_emitted_by_publisher_never_synthesized_by_ci_discover(tmp_path: Path):
     """Behaviorally verify rezono_publisher emits rezono:schema and loop/ci_discover.py never fabricates it."""
     from loop.build_cutover import select_suites
@@ -914,7 +908,7 @@ def test_ci_discover_shard_counts_come_from_build_facts_via_single_renderer(tmp_
     repo = tmp_path / "shard-repo"
     repo.mkdir()
     shutil.copytree(BUILD_DIR, repo / "build")
-    for pack_name in ("std-access", "std-decision", "std-loop", "std-order", "std-time"):
+    for pack_name in ("std-access", "std-decision", "std-loop", "std-order", "std-review", "std-time"):
         src = ROOT / "packs" / pack_name
         if src.is_dir():
             shutil.copytree(src, repo / "packs" / pack_name)

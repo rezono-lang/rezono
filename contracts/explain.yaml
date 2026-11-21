@@ -269,6 +269,7 @@ classes:
       computed: {range: boolean, description: "True on a computed answer (contrast, consequence): derived by Rezono, not quoted, and shown as computed (docs/explain/contract.md, rule 5). Absent on the others."}
       not_computed: {pattern: "^[a-z][a-z0-9_]*$", description: "A computed answer that could not be computed, with its reason code (for consequence: no_variant, no published variant withdraws the start fact alone). The answer then holds its start alone; missing is never an empty answer."}
       reader_hashes: {range: ReaderHashCheck, inlined: true, description: "The local reader's served SHA-256 hash verification result for this answer and each witness proof piece it read (decisions/reader-served-seal-fields.md)."}
+      restriction: {range: AskRestriction, inlined: true, description: "For an ask ... where (POST /<pack>/<manifest>/ask): the active place, valid-time, and knowledge-time restriction (or default scope) and resolved manifest (decisions/ask-place-time-restrictions.md)."}
     rules:
       - description: An ask ... where answer carries its output schema id and its counts together.
         preconditions: {slot_conditions: {output_schema: {value_presence: PRESENT}}}
@@ -328,6 +329,17 @@ classes:
     attributes:
       hash: {required: true, pattern: "^[0-9a-f]{64}$", description: "The sha256 of the question's canonical JSON form."}
       text: {required: true, description: "The question in its normal form, as the printer writes it."}
+  AskRestriction:
+    description: >-
+      The active place, valid-time, and knowledge-time restriction of an ask ... where answer
+      (decisions/ask-place-time-restrictions.md).
+    attributes:
+      default: {range: boolean, required: true, description: "True when no place, valid-time, or knowledge-time restriction was requested."}
+      at: {description: "Normalized place restriction text, or null when omitted."}
+      during: {description: "Normalized valid-time restriction text, or null when omitted."}
+      as_known: {description: "Normalized knowledge-time restriction text, or null when omitted."}
+      resolved_manifest: {description: "Manifest id actually evaluated, or null when before first publication."}
+      knowledge_time: {description: "Knowledge timestamp of resolved_manifest, or null when before first publication."}
   RezonoDiagnostic:
     description: A diagnostic of the check of a Rezono text (docs/rezono/expressions.md §8b), by code; its sentence is in the message catalogue.
     attributes:

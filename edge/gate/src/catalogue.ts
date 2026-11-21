@@ -7,7 +7,8 @@ import type {
 	MessageResource,
 	Question,
 	Rule,
-	SemanticType
+	SemanticType,
+	StaircaseReading
 } from '../../../contracts/typescript/generated/bundle.ts';
 import type { Snapshot } from '../../../contracts/typescript/generated/manifest.ts';
 
@@ -61,6 +62,7 @@ export interface RoleBundle extends RoleCatalogue {
 	messages: MessageResource[];
 	home: { claim: string[] };
 	questions: Question[];
+	channels?: { staircases?: StaircaseReading[] };
 }
 
 const MESSAGE_ENTRY = /^([A-Za-z0-9_.-]+)\s*=\s*/;
@@ -168,6 +170,25 @@ function questionReadable(
 		if (step.suppose && step.suppose.over !== undefined) return false;
 	}
 	return true;
+}
+
+function staircaseVisible(
+	sc: StaircaseReading,
+	visibleKinds: ReadonlySet<string>,
+	readableRelations: ReadonlySet<string>
+): boolean {
+	return visibleKinds.has(sc.subject) && readableRelations.has(sc.relation);
+}
+
+/** Return the staircase readings of `bundle` whose subject kind and outcome relation are readable in `snapshots`. */
+export function visibleStaircases(
+	bundle: { kinds?: { id: string }[]; relations?: { id: string }[]; channels?: { staircases?: StaircaseReading[] } },
+	snapshots: readonly Pick<Snapshot, 'relation'>[]
+): StaircaseReading[] {
+	const scoped = new Set(snapshots.map((snapshot) => snapshot.relation));
+	const visibleKinds = new Set((bundle.kinds ?? []).filter((kind) => scoped.has(kind.id)).map((kind) => kind.id));
+	const readableRelations = new Set((bundle.relations ?? []).filter((rel) => scoped.has(rel.id)).map((rel) => rel.id));
+	return (bundle.channels?.staircases ?? []).filter((sc) => staircaseVisible(sc, visibleKinds, readableRelations));
 }
 
 function addChannelBindingMessages(binding: ChannelBinding | undefined, target: Set<string>): void {
@@ -291,6 +312,12 @@ function collectHiddenChannelMessages(
 			return false;
 		});
 		if (!visible && typeof report.title_message === 'string') hidden.add(report.title_message);
+	}
+
+	for (const sc of channels.staircases ?? []) {
+		if (!staircaseVisible(sc, visibleKinds, readableRelations) && typeof sc.title_message === 'string') {
+			hidden.add(sc.title_message);
+		}
 	}
 
 	return hidden;
@@ -657,6 +684,8 @@ export function roleBundle(bundle: Bundle, snapshots: RoleSnapshot[]): RoleBundl
 
 	const messages = (bundle.messages ?? []).map((entry) => filterMessageResource(entry, allowMessage));
 	const claim = (bundle.channels?.home?.claim ?? []).filter((relation) => readableRuleRelations.has(relation));
+	const staircases = (bundle.channels?.staircases ?? [])
+		.filter((sc) => staircaseVisible(sc, visibleKinds, readableRuleRelations));
 
 	return {
 		...catalogue,
@@ -664,6 +693,7 @@ export function roleBundle(bundle: Bundle, snapshots: RoleSnapshot[]): RoleBundl
 		labels,
 		messages,
 		home: { claim },
-		questions
+		questions,
+		...(staircases.length > 0 && { channels: { staircases } })
 	};
 }

@@ -49,6 +49,7 @@ def isolated(tmp_path: Path, form: str) -> Path:
     legacy_helpers().materialize_legacy_packs(
         root,
         ("packs", "examples/subsidy-scheme", "examples/subsidy"),
+        prefer_live=True,
     )
     target = root / "examples/subsidy"
     shutil.copytree(SUBSIDY / "facts", target / "facts", dirs_exist_ok=True)

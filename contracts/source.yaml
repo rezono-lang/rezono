@@ -37,6 +37,16 @@ enums:
     permissible_values:
       first_party: {description: Content owned by the pack's author.}
       third_party: {description: Content from another party; licence and attribution are required.}
+  OriginSign:
+    description: >-
+      Epistemic origin sign declared on a fact source, matching the four origin_* signs in
+      packs/std-view/key.yaml and contracts/view.yaml (decisions/reader-served-seal-fields.md).
+      Never inferred from Source.kind.
+    permissible_values:
+      origin_decision: {description: "A base fact whose origin is a decision (◆)."}
+      origin_vendor: {description: "A base fact whose origin is a publication of a vendor or legislator (▲)."}
+      origin_design: {description: "A base fact whose origin is a design choice (■)."}
+      origin_observation: {description: "A base fact whose origin is an observation (●)."}
 
 classes:
   SourceSidecar:
@@ -75,6 +85,7 @@ classes:
       ownership: {range: SourceOwnership}
       licence: {pattern: "^\\S(.*\\S)?$", description: "The declared SPDX id, LicenseRef or licence file in the pack, verified by the importer; validation makes no claim about legal permission."}
       attribution: {pattern: "^\\S(.*\\S)?$", description: The required name/credit for the third-party source.}
+      origin_sign: {range: OriginSign, description: "Optional epistemic origin sign declared by the pack/ingester (decisions/reader-served-seal-fields.md); omitted when undeclared."}
       reason: {description: Message key explaining why this row remains a fact instead of being derived.}
 
   Source:
@@ -90,6 +101,7 @@ classes:
       ownership: {range: SourceOwnership}
       licence: {pattern: "^\\S(.*\\S)?$", description: "The declared SPDX id, LicenseRef or licence file in the pack, verified by the importer; validation makes no claim about legal permission."}
       attribution: {pattern: "^\\S(.*\\S)?$", description: The required name/credit for the third-party source.}
+      origin_sign: {range: OriginSign, description: "Optional epistemic origin sign declared by the pack/ingester (decisions/reader-served-seal-fields.md); omitted when undeclared."}
     rules:
       - preconditions: {slot_conditions: {kind: {equals_string: git}}}
         postconditions: {slot_conditions: {revision: {required: true}}}

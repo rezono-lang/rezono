@@ -22,9 +22,9 @@ slots:
     description: >-
       Why the value has its state: a reason code, never free text. Core codes need no declaration
       (no_version_applies, versions_overlap, exception_conflict, no_row_applies, ambiguous_date,
-      empty, no_value, no_match, multiple_values, added_later); a pack declares its own. Absent
-      when no reason is given: a writer omits an empty reason. A known value carries none, except
-      added_later (docs/semantics/values.md §2.3).
+      empty, no_value, no_match, multiple_values, beyond_exact_bound, added_later); a pack declares
+      its own. Absent when no reason is given: a writer omits an empty reason. A known value carries
+      none, except added_later (docs/semantics/values.md §2.3).
 
 enums:
   ValueState:
@@ -36,7 +36,7 @@ enums:
       known: {description: "Code 0. The value is present and valid."}
       unknown: {description: "Code 2. The value should exist but is missing. Never treated as zero."}
       not_applicable: {description: "Code 1. The value does not apply here. Does not count."}
-      invalid: {description: "Code 3. The input contradicts the schema (for example overflow or a type error). Whether it blocks is decided at its decision point."}
+      invalid: {description: "Code 3. The input contradicts the schema or domain (for example a type error, a base fact below the exact bound, or division by zero); runtime exact-bound exceedance is unknown (beyond_exact_bound). Whether it blocks is decided at its decision point."}
 
 classes:
   Value:

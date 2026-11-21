@@ -217,18 +217,6 @@ def _resolve_provider_command(doc, repo_root=None):
     raise AssertionError("provider_run job does not invoke a concrete live provider command entrypoint in run/")
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "M4: decisions/provider-workflow-dispatch.md: Waits for "
-        "run/tests/test_provider_workflow.py--test_provider_workflow_dispatch_boundary. "
-        "Wire a concrete live provider command entrypoint in run/ exposing run_live(...) into "
-        ".github/workflows/provider-run.yml and verify via recording ports that it runs the approved "
-        "plan's single order through the shared executor with durable Git claim, delivery, and "
-        "complete cleanup inventory."
-    ),
-)
 def test_provider_workflow_runs_live_command_with_recording_ports(tmp_path):
     import copy
     import subprocess

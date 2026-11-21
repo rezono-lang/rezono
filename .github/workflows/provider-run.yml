@@ -2,6 +2,15 @@ name: Provider run
 
 on:
   workflow_dispatch:
+    inputs:
+      spec:
+        description: Path to the pinned run specification JSON
+        required: false
+        type: string
+      fixture_dir:
+        description: Directory containing the pinned plan, price facts, and request
+        required: false
+        type: string
 
 permissions: {}
 
@@ -28,18 +37,36 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Require live provider wiring before execution
+      - name: Check out pinned main commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: ./.github/workflows/python-environment
+        with:
+          editable: -e canon -e compiler -e contracts/python -e loop
+      - name: Run live provider command
         shell: bash
+        env:
+          REZONO_RUN_SPEC: ${{ inputs.spec }}
+          REZONO_FIXTURE_DIR: ${{ inputs.fixture_dir }}
+          REZONO_CLAIM_REMOTE: ${{ vars.REZONO_CLAIM_REMOTE }}
+          REZONO_PROVIDER_PORTS: ${{ vars.REZONO_PROVIDER_PORTS }}
+          REZONO_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           set -euo pipefail
-          echo "::error::Live provider port command is not yet wired; see decisions/provider-workflow-dispatch.md"
-          exit 1
+          python -m run.provider_run \
+            --spec="$REZONO_RUN_SPEC" \
+            --fixture-dir="$REZONO_FIXTURE_DIR" \
+            --claim-remote="$REZONO_CLAIM_REMOTE" \
+            --ports="$REZONO_PROVIDER_PORTS" \
+            --run-id="$REZONO_RUN_ID"
       - name: Run step-level failure cleanup
         if: failure()
         shell: bash
         run: |
           set -euo pipefail
-          echo "Step-level failure cleanup awaiting live provider wiring."
+          echo "Provider run failed; verify claim remote and independent cleanup inventory."
 
   cleanup:
     name: Clean up failed provider run
@@ -51,8 +78,13 @@ jobs:
     permissions:
       contents: read
     steps:
+      - name: Check out pinned main commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
       - name: Report cleanup boundary
         shell: bash
         run: |
           set -euo pipefail
-          echo "Cleanup job reached only after verify_ref succeeded; awaiting live provider inventory wiring."
+          echo "Cleanup job reached only after verify_ref succeeded; verify independent provider inventory."

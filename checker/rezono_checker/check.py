@@ -10,6 +10,8 @@ redaction the explainer applies after a valid check.
 """
 
 import datetime
+from decimal import Decimal
+from fractions import Fraction
 import json
 import re
 from graphlib import CycleError, TopologicalSorter
@@ -176,26 +178,63 @@ def check_epoch(witnesses: list, manifest: dict, rules: dict, read_bytes, *, der
 OUTCOME_STATES = ("known", "unknown", "not_applicable")  # `invalid` comes from the violation views
 FUNCTIONAL_STATES = ("known", "unknown", "not_applicable", "invalid")
 REASON = re.compile(r"[a-z][a-z0-9_]*")  # a reason is a code, never free text
+EXACT_BOUND = 2**63 - 1  # symmetric 64-bit exact-number bound (decisions/language-rezono-1-refinements.md §3.4C)
+
+
+def _classify_rational_candidate(text: str) -> tuple[str, str, str | None]:
+    """Classify a candidate rational base/input value as `(state, reason, canonical_text_or_None)`.
+
+    In `rezono.rules/2` (which has no rational arithmetic), every rational head value is a base
+    fact: non-integer spelling, non-positive denominator, or a reduced fraction outside
+    `[-EXACT_BOUND, +EXACT_BOUND]` (with `1 <= d <= EXACT_BOUND`) is an input violation yielding
+    `('invalid', '', None)` (decisions/language-rezono-1-refinements.md §3.4C); otherwise returns
+    `('known', '', canonical_text)`.
+    """
+    if not isinstance(text, str):
+        return ("invalid", "", None)
+    n_text, slash, d_text = text.partition("/")
+    if not INTEGER.fullmatch(n_text):
+        return ("invalid", "", None)
+    if not slash:
+        num, den = int(Decimal(n_text)), 1
+    else:
+        if not INTEGER.fullmatch(d_text):
+            return ("invalid", "", None)
+        num, den = int(Decimal(n_text)), int(Decimal(d_text))
+        if den <= 0:
+            return ("invalid", "", None)
+    frac = Fraction(num, den)
+    if abs(frac.numerator) > EXACT_BOUND or frac.denominator > EXACT_BOUND:
+        return ("invalid", "", None)
+    canon = str(frac.numerator) if frac.denominator == 1 else f"{frac.numerator}/{frac.denominator}"
+    return ("known", "", canon)
 
 
 def _functional_value_ok(value: str, value_type: str) -> bool:
     if value_type == "integer":
         return bool(INTEGER.fullmatch(value)) and _fits(value)
     if value_type == "rational":
-        return calc_value(value, "rational")
+        return calc_value(value, "rational") and _classify_rational_candidate(value)[0] == "known"
     if value_type == "boolean":
         return value in ("true", "false")
     return isinstance(value, str)
 
 
 def _functional_state_ok(func, all_vals: set[str], state: str, reason: str, val: str,
-                         prop_states: set[str] | frozenset[str] = frozenset()) -> bool:
+                         prop_states: set[str] | frozenset[str] = frozenset(),
+                         rat_states: set[str] | frozenset[str] = frozenset()) -> bool:
     if state not in FUNCTIONAL_STATES:
         return False
-    if "invalid" in prop_states:
-        return state == "invalid" and val == "" and bool(REASON.fullmatch(reason))
-    if len(all_vals) > 1:
-        return state == "invalid" and val == "" and reason == "multiple_values"
+    if "invalid" in prop_states or "invalid" in rat_states or len(all_vals) > 1:
+        if state != "invalid" or val != "":
+            return False
+        if len(all_vals) > 1:
+            # More than one distinct known candidate yields invalid/multiple_values
+            # (decisions/language-rezono-1.md §4), never masked by an empty-reason invalid input.
+            return reason == "multiple_values"
+        if "invalid" in prop_states:
+            return bool(REASON.fullmatch(reason)) or ("invalid" in rat_states and reason == "")
+        return reason == ""
     if "unknown" in prop_states:
         return state == "unknown" and val == "" and bool(REASON.fullmatch(reason))
     if "not_applicable" in prop_states:
@@ -209,9 +248,12 @@ def _functional_state_ok(func, all_vals: set[str], state: str, reason: str, val:
 def _functional_candidates(rules, func, rows, witness=None, groups=None):
     """Evaluate all rules of a functional relation against the snapshots.
 
-    Returns (values_by_key, states_by_key, rule_instances, state_instances), cached in `groups` when provided:
+    Returns (values_by_key, states_by_key, rat_states_by_key, rule_instances, state_instances),
+    cached in `groups` when provided:
     - values_by_key: {domain_key_tuple: set[str]} of all distinct known candidate values across all rules of `func`.
     - states_by_key: {domain_key_tuple: set[str]} of propagated non-known aggregate states per domain key.
+    - rat_states_by_key: {domain_key_tuple: set[str]} of invalid states induced by rational base
+      inputs (non-positive/malformed denominator or reduced fraction outside `EXACT_BOUND`).
     - rule_instances: {rule_id: {domain_key_tuple: list[dict[str, str]]}} of known firing variable substitutions.
     - state_instances: {rule_id: {domain_key_tuple: list[tuple[dict[str, str], str]]}} of non-known firing substitutions.
     """
@@ -227,6 +269,7 @@ def _functional_candidates(rules, func, rows, witness=None, groups=None):
 
     values_by_key: dict[tuple, set[str]] = {}
     states_by_key: dict[tuple, set[str]] = {}
+    rat_states_by_key: dict[tuple, set[str]] = {}
     rule_instances: dict[str, dict[tuple, list[dict[str, str]]]] = {}
     state_instances: dict[str, dict[tuple, list[tuple[dict[str, str], str]]]] = {}
     n = func.key_arity
@@ -242,17 +285,33 @@ def _functional_candidates(rules, func, rows, witness=None, groups=None):
             if any(t.startswith("?") and t not in theta for t in key_terms):
                 continue
             dom_key = tuple(theta[t] if t.startswith("?") else t for t in key_terms)
+            val_term = r.head.terms[n]
             if row_state == "known":
-                val_term = r.head.terms[n]
                 cand_val = theta[val_term] if val_term.startswith("?") else val_term
-                values_by_key.setdefault(dom_key, set()).add(cand_val)
-                by_key.setdefault(dom_key, []).append(theta)
+                if func.value_type == "rational":
+                    cand_state, _, canon_val = _classify_rational_candidate(cand_val)
+                    if cand_state == "known":
+                        values_by_key.setdefault(dom_key, set()).add(canon_val)
+                        by_key.setdefault(dom_key, []).append(theta)
+                    else:
+                        rat_states_by_key.setdefault(dom_key, set()).add(cand_state)
+                        by_key_state.setdefault(dom_key, []).append((theta, cand_state))
+                else:
+                    values_by_key.setdefault(dom_key, set()).add(cand_val)
+                    by_key.setdefault(dom_key, []).append(theta)
             else:
                 states_by_key.setdefault(dom_key, set()).add(row_state)
-                by_key_state.setdefault(dom_key, []).append((theta, row_state))
+                effective_state = row_state
+                if func.value_type == "rational" and (not val_term.startswith("?") or val_term in theta):
+                    cand_val = theta[val_term] if val_term.startswith("?") else val_term
+                    cand_state, _, _ = _classify_rational_candidate(cand_val)
+                    if cand_state != "known":
+                        rat_states_by_key.setdefault(dom_key, set()).add(cand_state)
+                        effective_state = closure._worse_state(row_state, cand_state)
+                by_key_state.setdefault(dom_key, []).append((theta, effective_state))
         rule_instances[r.id] = by_key
         state_instances[r.id] = by_key_state
-    result = (values_by_key, states_by_key, rule_instances, state_instances)
+    result = (values_by_key, states_by_key, rat_states_by_key, rule_instances, state_instances)
     if groups is not None:
         groups[cache_key] = result
     return result
@@ -262,7 +321,7 @@ def _check_functional_relation(relation, func, rules, rows, findings, groups=Non
     """Verify totality, uniqueness, state/value accuracy, and conflict_policy for one functional relation."""
     n = func.key_arity
     domain_keys = {parts for parts, _ in rows(func.domain, None).values() if len(parts) == n}
-    values_by_key, states_by_key, _, _ = _functional_candidates(rules, func, rows, None, groups)
+    values_by_key, states_by_key, rat_states_by_key, _, _ = _functional_candidates(rules, func, rows, None, groups)
     given = {}
     for key, (parts, _) in sorted(rows(relation, None).items()):
         if len(parts) != n + 3:  # key..., state, reason, value; checked before any part is read
@@ -282,7 +341,8 @@ def _check_functional_relation(relation, func, rules, rows, findings, groups=Non
         (parts,) = row_list
         state, reason, val = parts[n:]
         if not _functional_state_ok(func, values_by_key.get(dom_key, set()), state, reason, val,
-                                    states_by_key.get(dom_key, frozenset())):
+                                    states_by_key.get(dom_key, frozenset()),
+                                    rat_states_by_key.get(dom_key, frozenset())):
             findings.append({"reason": "outcome_state", "relation": relation, "key": encode_key(dom_key)})
         elif state == "invalid" and func.conflict_policy == "block":
             findings.append({"reason": "functional_invalid", "relation": relation,
@@ -536,30 +596,37 @@ def _check_functional_witness(i, w, rule, func, rules, rows, findings, groups=No
     for v in sorted(key_vars - set(theta)):
         find("unbound_variable", detail=v)
     val_term = rule.head.terms[n]
+
+    def _canon_cand(raw: str) -> str | None:
+        return _classify_rational_candidate(raw)[2] if func.value_type == "rational" else raw
+
     if tuple(theta.get(t, t) if t.startswith("?") else t for t in key_terms) != key_parts:
         find("head_mismatch", relation=c["relation"], key=c["key"])
     if state == "known":
         if val_term.startswith("?"):
-            if val_term in theta and theta[val_term] != val:
+            if val_term in theta and _canon_cand(theta[val_term]) != val:
                 find("head_mismatch", relation=c["relation"], key=c["key"])
-        elif val_term != val:
+        elif _canon_cand(val_term) != val:
             find("head_mismatch", relation=c["relation"], key=c["key"])
 
     dom_key_enc = encode_key(key_parts)
     if dom_key_enc not in rows(func.domain, i):
         find("premise_missing", relation=func.domain, key=dom_key_enc)
 
-    values_by_key, states_by_key, rule_instances, state_instances = _functional_candidates(rules, func, rows, i, groups)
+    values_by_key, states_by_key, rat_states_by_key, rule_instances, state_instances = (
+        _functional_candidates(rules, func, rows, i, groups)
+    )
     all_vals = values_by_key.get(key_parts, set())
     prop_states = states_by_key.get(key_parts, frozenset())
+    rat_states = rat_states_by_key.get(key_parts, frozenset())
     insts = rule_instances.get(rule.id, {}).get(key_parts, [])
     prop_insts = state_instances.get(rule.id, {}).get(key_parts, [])
     matching_insts = [
         inst_theta for inst_theta in insts
-        if (inst_theta[val_term] if val_term.startswith("?") else val_term) == val
+        if _canon_cand(inst_theta[val_term] if val_term.startswith("?") else val_term) == val
     ]
 
-    if not _functional_state_ok(func, all_vals, state, reason, val, prop_states):
+    if not _functional_state_ok(func, all_vals, state, reason, val, prop_states, rat_states):
         find("outcome_state", relation=c["relation"], key=dom_key_enc)
     elif state == "invalid" and func.conflict_policy == "block":
         find("functional_invalid", relation=c["relation"], key=c["key"], detail=reason)
@@ -586,7 +653,7 @@ def _check_functional_witness(i, w, rule, func, rules, rows, findings, groups=No
     elif state == "known":
         premise_rules = [(rule, matching_insts)]
         active_insts = matching_insts
-    elif state in prop_states:
+    elif state in (prop_states | rat_states):
         state_matching = [t for t, st in prop_insts if st == state]
         if not state_matching:
             find("premise_mismatch", relation=c["relation"], key=c["key"])

@@ -5,7 +5,11 @@ default:
   position: decisions/platform-derivation-acceptance.md#import-and-exercise-the-five-standard-packs
 records:
   - of: {kind: platform_startup_target, id: platform-startup}
-    kind: git
-    name: rezono-lang/rezono
+    kind: synthetic
+    name: decisions/safe-step-rounds.md
     revision: 0d327c2ee5e00173e0f088812073e51c4acd7e34
-    position: decisions/safe-step-rounds.md#4-platform-acceptance
+    position: 4-platform-acceptance
+  - of: {kind: loop_expectation, id: platform/managed-scope}
+    kind: synthetic
+    name: decisions/safe-step-rounds.md
+    position: 4-platform-acceptance
