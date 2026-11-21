@@ -521,6 +521,11 @@ def _is_fact_table(decl: object) -> bool:
     return isinstance(decl, dict) and isinstance(decl.get("fact"), str) and "columns" in decl and "rows" in decl
 
 
+def _is_fact_row(decl: object) -> bool:
+    return (isinstance(decl, dict) and isinstance(decl.get("fact"), str)
+            and isinstance(decl.get("id"), str) and isinstance(decl.get("set"), list))
+
+
 def _is_decide_decl(decl: object) -> bool:
     return (isinstance(decl, dict) and isinstance(decl.get("decide"), str)
             and isinstance(decl.get("by"), str) and isinstance(decl.get("on"), str)
@@ -532,11 +537,11 @@ def _is_source_decl(decl: object) -> bool:
 
 
 def fact_tables_only(module: dict) -> bool:
-    """A module whose declarations are only fact tables, decide blocks, and their sources (§5.3)."""
+    """A module whose declarations are only fact tables, fact rows, decide blocks, and their sources (§5.3)."""
     declarations = module["decls"]
     return (bool(declarations)
             and any(_is_fact_table(decl) or _is_decide_decl(decl) for decl in declarations)
-            and all(_is_fact_table(decl) or _is_decide_decl(decl) or _is_source_decl(decl)
+            and all(_is_fact_table(decl) or _is_fact_row(decl) or _is_decide_decl(decl) or _is_source_decl(decl)
                     for decl in declarations))
 
 

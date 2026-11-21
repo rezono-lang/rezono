@@ -319,7 +319,13 @@ def schema(pack: Pack) -> FactSchema:
                        "attributes": attributes, "arrows": arrows}, optional_slots)
 
 
-def load(pack: Pack, path: str | Path, *, as_of: str | None = None, known: str | None = None) -> dict[str, list[tuple]]:
+def load_with_dated_tables(
+    pack: Pack,
+    path: str | Path,
+    *,
+    as_of: str | None = None,
+    known: str | None = None,
+) -> tuple[dict[str, list[tuple]], set[str]]:
     path = Path(path)
     try:
         data, dated_tables = _document_with_dated_tables(path, pack, as_of=as_of, known=known)
@@ -333,6 +339,11 @@ def load(pack: Pack, path: str | Path, *, as_of: str | None = None, known: str |
     if path.parent.name == "facts" and path.with_suffix(".sources.yaml").exists():
         from .sources import file_entries
         file_entries(pack, path, data)  # malformed metadata blocks batch loading too; the row API stays unchanged
+    return rows, dated_tables
+
+
+def load(pack: Pack, path: str | Path, *, as_of: str | None = None, known: str | None = None) -> dict[str, list[tuple]]:
+    rows, _ = load_with_dated_tables(pack, path, as_of=as_of, known=known)
     return rows
 
 
