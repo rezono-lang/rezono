@@ -84,6 +84,7 @@ import re
 from typing import NamedTuple
 
 from .canon import INTEGER, strict_json_loads
+from .refusals import Refusal
 from .snapshots import read_rows
 
 
@@ -200,20 +201,20 @@ def check_page(snapshots: dict[str, bytes], bundle: dict, page: bytes, role: Rol
     problems = []
     try:
         doc = strict_json_loads(page)
-    except ValueError as err:
-        return [f"page: invalid JSON ({err})"]
+    except ValueError:
+        return [Refusal("page_invalid_json")]
     if not isinstance(doc, dict):
-        return ["page: not a JSON object"]
+        return [Refusal("page_not_object")]
     for entry in doc.get("kinds", []):
         kind, ids = entry["kind"], by_kind.get(entry["kind"], set())
         if entry["count"] != len(ids):
-            problems.append(f"page: kind {kind} counts {entry['count']}, the role reads {len(ids)}")
+            problems.append(Refusal("page_kind_count_mismatch", kind=kind, count=entry["count"], size=len(ids)))
         for row in entry["first"]:
             i = row.get("id") if isinstance(row, dict) else None
             if i not in ids or set(row) - {"id", "name"}:
-                problems.append(f"page: {kind}/{i} is no row the role reads")
+                problems.append(Refusal("page_row_unreadable", kind=kind, key=i))
             elif "name" in row and not _name(i, row["name"], read):
-                problems.append(f"page: {kind}/{i} has a name that is no rows the role reads: {row['name']}")
+                problems.append(Refusal("page_name_unreadable", kind=kind, key=i, value=row["name"]))
     return problems
 
 
@@ -297,18 +298,18 @@ def _node(n: dict, read: dict, stubs: dict[str, dict], bundle: dict) -> list[str
     """What a tile shows of a node, recomputed from the role's rows (a stub's, from the island levels)."""
     node_id = n["id"]
     if set(n) - NODE:
-        return [f"node {node_id} holds more than its place, status, name and cell: {sorted(set(n) - NODE)}"]
+        return [Refusal("view_node_extra_fields", key=node_id, fields=sorted(set(n) - NODE))]
     if node_id.startswith("stub/"):
         ok = n["status"] == "valid" and not {"cell", "name", "image"} & set(n) and n.get("stub") == stubs.get(node_id)
-        return [] if ok else [f"stub {node_id} shows {n.get('stub')}, the island levels give {stubs.get(node_id)}"]
+        return [] if ok else [Refusal("view_stub_mismatch", key=node_id, value=n.get("stub"), bindings=stubs.get(node_id))]
     if "stub" in n:
-        return [f"node {node_id} is no stub, yet shows one"]
+        return [Refusal("view_node_unexpected_stub", key=node_id)]
     if node_id.startswith("unknown/"):
-        return [] if n["status"] == "unknown" and not {"cell", "name", "image", "lane", "group"} & set(n) else [f"unknown end {node_id} is not shown as unknown"]
+        return [] if n["status"] == "unknown" and not {"cell", "name", "image", "lane", "group"} & set(n) else [Refusal("view_unknown_end_invalid", key=node_id)]
     if node_id.startswith("screened/"):
-        return [] if n["status"] == "valid" and not {"cell", "name", "image", "lane", "group"} & set(n) else [f"screened end {node_id} shows more than a screened end"]
+        return [] if n["status"] == "valid" and not {"cell", "name", "image", "lane", "group"} & set(n) else [Refusal("view_screened_end_invalid", key=node_id)]
     _, _, row = n.get("of", node_id).partition("/")
-    problems = [] if n["status"] == "valid" else [f"node {node_id} has status {n['status']!r}, its rows give valid"]
+    problems = [] if n["status"] == "valid" else [Refusal("view_node_status_invalid", key=node_id, value=repr(n["status"]))]
     cell = n.get("cell")
     if cell is not None:
         relation = cell.get("relation", "")
@@ -321,11 +322,11 @@ def _node(n: dict, read: dict, stubs: dict[str, dict], bundle: dict) -> list[str
                  and cell.get("currency") == attribute["currency"]))
         if (cell.get("state") != "known" or set(cell) != fields or not typed
                 or (row, value) not in read.get(relation, set())):
-            problems.append(f"node {node_id} shows a cell that is no row the role reads: {cell}")
+            problems.append(Refusal("view_node_cell_unreadable", key=node_id, value=cell))
     if "name" in n and not _name(row, n["name"], read):
-        problems.append(f"node {node_id} shows a name that is no rows the role reads: {n['name']}")
+        problems.append(Refusal("view_node_name_unreadable", key=node_id, value=n["name"]))
     if "image" in n and not _image(n.get("of", node_id), n["image"], read, bundle):
-        problems.append(f"node {node_id} shows an image that is no bound cell the role reads")
+        problems.append(Refusal("view_node_image_unreadable", key=node_id))
     return problems
 
 
@@ -373,20 +374,20 @@ def _edge(e: dict, read: dict, bundle: dict, of: dict[str, str] | None = None) -
     """A line, recomputed from the role's rows of its sign. `of`: per node whose id is not its element, the
     element it shows; a line between such nodes is the rows between those elements."""
     if set(e) - {"rows", "quantity", "width", "columns"} != EDGE:
-        return [f"line {e.get('id')} is not ends, arrow and route: {sorted(e)}"]
+        return [Refusal("view_line_shape_invalid", key=e.get("id"), fields=sorted(e))]
     if of and (e["source"] in of or e["target"] in of):
         if e["id"] != f"{e['source']}->{e['arrow']}->{e['target']}" or e["arrow"] in ("unknown_end", "screened") \
                 or "quantity" in e or "width" in e:
-            return [f"line {e['id']} is not named by its ends and sign, or is more than rows between them"]
+            return [Refusal("view_line_mapped_invalid", key=e["id"])]
         if "columns" not in e and not any(a.get("table") == e["arrow"] for a in bundle.get("arrows", [])):
-            return [f"line {e['id']} is a relation's rows between elements, but does not say its columns"]
+            return [Refusal("view_line_missing_columns", key=e["id"])]
         e = dict(e, id=f"{of.get(e['source'], e['source'])}->{e['arrow']}->{of.get(e['target'], e['target'])}",
                  source=of.get(e["source"], e["source"]), target=of.get(e["target"], e["target"]))
     source, target, arrow = e["source"], e["target"], e["arrow"]
     _, _, sid = source.partition("/")
     # A line to a stub, an unknown or a screened end has no rows behind both ends to sum: it is never a band.
     if (target.startswith("stub/") or arrow in ("unknown_end", "screened")) and {"quantity", "width"} & set(e):
-        return [f"line {e['id']} ends at a stub, an unknown or a screened end, yet shows a quantity or a width"]
+        return [Refusal("view_line_placeholder_quantity", key=e["id"])]
     if source.startswith("stub/"):
         # A line from another island into an element: named by its stub, arrow and element, from an arrow row the
         # role reads into that element. Which island it comes from is checked against the island levels.
@@ -394,46 +395,46 @@ def _edge(e: dict, read: dict, bundle: dict, of: dict[str, str] | None = None) -
         ends = [a for a in bundle.get("arrows", []) if a.get("table") == arrow]
         if {"quantity", "width"} & set(e) or e["id"] != f"{source}->{arrow}->{target}" or not source.endswith(f"/{arrow}") \
                 or _placeholder(target) or not any(a["target"] in chain(bundle, tkind) for a in ends):
-            return [f"line {e['id']} is not named by its stub, arrow and element, or comes in by another arrow"]
+            return [Refusal("view_line_from_stub_invalid", key=e["id"])]
         if not any(len(k) == 2 and k[1] == tid for k in read.get(arrow, set())):
-            return [f"line {e['id']} from a stub ends at no arrow row the role reads"]
+            return [Refusal("view_line_from_stub_unreadable", key=e["id"])]
         return []
     if target.startswith("stub/"):
         # Which island it ends at is checked against the island levels (check_islands).
         if e["id"] != stub_line(source, arrow, target, bundle) or not target.endswith(f"/{arrow}") or arrow.split("__", 1)[0] not in chain(bundle, source.partition("/")[0]):
-            return [f"line {e['id']} is not named by its source and arrow (and stub, for a multivalued arrow), or ends at a stub of another arrow"]
+            return [Refusal("view_line_to_stub_invalid", key=e["id"])]
         if not any(k[0] == sid for k in read.get(arrow, set())):
-            return [f"line {e['id']} to a stub hangs from no arrow row the role reads"]
+            return [Refusal("view_line_to_stub_unreadable", key=e["id"])]
         return []
     if arrow in ("unknown_end", "screened"):
         prefix = "unknown" if arrow == "unknown_end" else "screened"
         if not target.startswith(f"{prefix}/{source}/"):
-            return [f"line {e['id']} does not end at its own {prefix} end"]
+            return [Refusal("view_line_end_mismatch", key=e["id"], kind=prefix)]
         slot = target[len(f"{prefix}/{source}/"):]
         if e["id"] not in (f"{source}->{slot}", f"{source}->{slot}->{target}") or "rows" in e:
-            return [f"line {e['id']} is not named by its source and arrow"]
+            return [Refusal("view_line_name_invalid", key=e["id"])]
         if arrow == "screened" and not _counts(source, None, slot, read, bundle):
-            return [f"screened line {e['id']} hangs from no row the role reads"]
+            return [Refusal("view_screened_line_unreadable", key=e["id"])]
         return []
     _, _, tid = target.partition("/")
     if e["id"] not in (f"{source}->{arrow}", f"{source}->{arrow}->{target}"):
-        return [f"line {e['id']} is not named by its source and arrow"]
+        return [Refusal("view_line_name_invalid", key=e["id"])]
     # An arrow row between the ends' own kinds (declared there or on a supertype), a link row, or a relation row.
     counts = _counts(source, target, arrow, read, bundle, e.get("columns"))
     if not counts:
-        return [f"line {e['id']} is no row the role reads"]
+        return [Refusal("view_line_unreadable", key=e["id"])]
     # Its number of rows and its quantity hold in one and the same way (a relation's pair of columns), never
     # the number in one way and the sum in another.
     ways = {w for w, n in counts.items() if n == e.get("rows", 1)}
     if not ways:
-        return [f"line {e['id']} says {e.get('rows', 1)} rows, the role reads {sorted(counts.values())}"]
+        return [Refusal("view_line_row_count_mismatch", key=e["id"], count=e.get("rows", 1), bindings=sorted(counts.values()))]
     if "quantity" in e:
         sums = _sums(source, target, arrow, e["quantity"], read, bundle)
         if not any(sums.get(w) == e["quantity"].get("value") for w in ways):
-            return [f"line {e['id']} says a quantity of {e['quantity']}, which is no sum of rows the role reads in the way it counts them"]
+            return [Refusal("view_line_quantity_mismatch", key=e["id"], value=e["quantity"])]
     width = e.get("width")
     if width is not None and ("quantity" not in e or isinstance(width, bool) or not isinstance(width, (int, float)) or width <= 0):
-        return [f"line {e['id']} has a width but no quantity, or no positive width"]
+        return [Refusal("view_line_width_invalid", key=e["id"])]
     return []
 
 
@@ -443,12 +444,12 @@ def _cell(e: dict, matrix: dict, shows: dict[str, str], bundle: dict) -> list[st
     columns are both turned round would hold as rows, so the binding, not the cell, fixes the direction."""
     source, target = str(e.get("source")), str(e.get("target"))
     if not (source.startswith("rows/") and target.startswith("columns/")):
-        return [f"cell {e.get('id')} is not from a row's head to a column's head"]
+        return [Refusal("matrix_cell_direction_invalid", key=e.get("id"))]
     if e.get("arrow") != matrix["sign"] or e.get("columns") != matrix["columns"]:
-        return [f"cell {e.get('id')} is not of the Matrix's source: sign {e.get('arrow')}, columns {e.get('columns')}"]
+        return [Refusal("matrix_cell_source_mismatch", key=e.get("id"), relation=e.get("arrow"), fields=e.get("columns"))]
     for end, kinds in ((source, matrix["from_kinds"]), (target, matrix["to_kinds"])):
         if kinds is not None and not set(kinds) & set(chain(bundle, shows.get(end, "").partition("/")[0])):
-            return [f"cell {e.get('id')} ends at {end}, which is of none of {kinds}"]
+            return [Refusal("matrix_cell_end_kind_mismatch", key=e.get("id"), value=end, fields=kinds)]
     return []
 
 
@@ -568,7 +569,7 @@ def _timeline_row(n: dict, timeline: dict, values: dict[str, dict[str, set[str]]
     dates, order = n.get("dates"), timeline["dates"]
     named = [d.get("relation") for d in dates if isinstance(d, dict)] if isinstance(dates, list) else None
     if named is None or len(named) != len(dates) or named != [r for r in order if r in named]:
-        return [f"row {node_id} does not show its dates as a list of its Timeline's dates, each once and in the binding's order: {', '.join(order)}"]
+        return [Refusal("timeline_dates_order_invalid", key=node_id, fields=", ".join(order))]
     shown = dict(zip(named, dates))
     problems = []
     for at, relation in enumerate(order):
@@ -577,22 +578,27 @@ def _timeline_row(n: dict, timeline: dict, values: dict[str, dict[str, set[str]]
         without = "unknown" if at < 2 else lacking(relation, slot, slot.get("required") is False, full)
         if date is None:
             if mine:
-                problems.append(f"row {node_id} does not show {relation}, the role reads {sorted(mine)}")
+                problems.append(Refusal("timeline_date_missing", key=node_id, relation=relation, bindings=sorted(mine)))
             elif without == "unknown":
-                problems.append(f"row {node_id} does not show {relation}: the role reads no row of it, so it is unknown and is shown as unknown")
+                problems.append(Refusal("timeline_date_unknown_omitted", key=node_id, relation=relation))
         elif date == {"relation": relation, "state": "unknown"}:
             if mine:
-                problems.append(f"row {node_id} shows {relation} as unknown, the role reads {sorted(mine)}")
+                problems.append(Refusal("timeline_date_known_as_unknown", key=node_id, relation=relation, bindings=sorted(mine)))
             elif without == "none":
-                problems.append(f"row {node_id} shows {relation} as unknown: it is optional and the role reads its closed relation in full, so the row has none")
+                problems.append(Refusal("timeline_date_none_as_unknown", key=node_id, relation=relation))
         elif set(date) == {"relation", "state", "value"} and date["state"] == "known" and isinstance(date["value"], str):
             if mine != {date["value"]}:
-                problems.append(f"row {node_id} shows {relation} as {date['value']!r}, the role reads {sorted(mine) or 'no such row'}")
+                if mine:
+                    problems.append(Refusal("timeline_date_value_mismatch", key=node_id, relation=relation,
+                                            value=repr(date["value"]), bindings=sorted(mine)))
+                else:
+                    problems.append(Refusal("timeline_date_unreadable", key=node_id, relation=relation,
+                                            value=repr(date["value"])))
         else:
-            problems.append(f"row {node_id} shows a date of {relation} that is neither known nor unknown: {date}")
+            problems.append(Refusal("timeline_date_shape_invalid", key=node_id, relation=relation, value=date))
     cell = n.get("cell")
     if cell is not None and (not isinstance(cell, dict) or timeline["judgement"] is None or cell.get("relation") != timeline["judgement"]):
-        problems.append(f"row {node_id} shows a cell that is not the judgement of its Timeline: {cell}")
+        problems.append(Refusal("timeline_cell_not_judgement", key=node_id, value=cell))
     return problems
 
 
@@ -666,7 +672,7 @@ def nest_parts(nest: dict, read: dict, once: set[tuple[str, str]], bundle: dict,
         level = level_of(kind)
         if level is not None:
             if i in at[level]:
-                twice.append(f"{at[level][i]} and {kind}/{i} are two elements of level {nest['kinds'][level]} with one id")
+                twice.append(Refusal("nest_level_duplicate_id", key=at[level][i], value=f"{kind}/{i}", kind=nest["kinds"][level]))
             at[level][i] = f"{kind}/{i}"
     parts: dict[str, object] = {node: None for node in at[0].values()}
     inside = set(at[0])
@@ -700,17 +706,17 @@ def _nest_part(n: dict, parts: dict, tables: dict[str, str], states: dict[str, d
     problems = []
     if want is None:
         if group is not None:
-            problems.append(f"part {node_id} is the element the sheet is of, yet stands in a container: {group}")
+            problems.append(Refusal("nest_root_has_container", key=node_id, value=group))
     elif want is APART:
         if group != APART:
-            problems.append(f"part {node_id} stands in a container the role reads no row of: {group}")
+            problems.append(Refusal("nest_container_unreadable", key=node_id, value=group))
     elif group == APART:
-        problems.append(f"part {node_id} stands apart as unknown, the role reads its container {want}")
+        problems.append(Refusal("nest_container_known_as_apart", key=node_id, value=want))
     elif group != {"relation": tables[node_id], "value": want}:
-        problems.append(f"part {node_id} stands in {group}, the role's row of {tables[node_id]} says {want}")
+        problems.append(Refusal("nest_container_mismatch", key=node_id, value=group, relation=tables[node_id], bindings=want))
     mine = {view: by.get(node_id.partition("/")[2]) or without[view] for view, by in states.items()}
     if n.get("states", {}) != mine or ("states" in n) != bool(mine):
-        problems.append(f"part {node_id} shows states that are not the role's rows of its perspectives: {n.get('states')}")
+        problems.append(Refusal("nest_states_mismatch", key=node_id, value=n.get("states")))
     return problems
 
 
@@ -728,49 +734,50 @@ def check_view(sheet: str, snapshots: dict[str, bytes], layout: bytes, tiles: di
     read, readable, once = role.read, role.readable, role.once
     try:
         whole = strict_json_loads(layout)
-    except ValueError as err:
-        return [f"{sheet}: layout is not valid JSON ({err})"]
+    except ValueError:
+        return [Refusal("view_layout_invalid_json", file=sheet)]
     if not isinstance(whole, dict):
-        return [f"{sheet}: layout is not a JSON object"]
+        return [Refusal("view_layout_not_object", file=sheet)]
     nodes = whole.get("nodes", {})
     lines = whole.get("edges", {})
     # A node that is not its element (an element that stands on the sheet more than once) says which it shows.
     shows = whole.get("of", {})
     if not isinstance(shows, dict) or set(shows) - set(nodes) or any(_placeholder(i) or _placeholder(str(x)) for i, x in shows.items()):
-        problems.append(f"{sheet}: the layout says a node shows an element, but it is no node, or a placeholder")
+        problems.append(Refusal("view_layout_of_invalid", file=sheet))
         shows = {}
     # Only a Matrix has such nodes, each a head named by its axis and its element (`rows/<of>`, `columns/<of>`),
     # so the id a page shows is the element the checker checks. Its cells follow the binding in the bundle.
     matrix = matrix_cells(sheet, bundle)
     if sheet.startswith("matrix.") and matrix is None:
-        problems.append(f"{sheet}: no Matrix of the bundle has this sheet")
+        problems.append(Refusal("view_matrix_unbound", file=sheet))
     if matrix is None and shows:
-        problems.append(f"{sheet}: the layout says nodes show other elements, but only a Matrix has such nodes")
+        problems.append(Refusal("view_layout_of_non_matrix", file=sheet))
         shows = {}
     if matrix is not None:
         for node_id in sorted(nodes):
             axis, _, of = node_id.partition("/")
             if axis not in matrix["axes"] or shows.get(node_id) != of or matrix["axes"][axis] not in chain(bundle, of.partition("/")[0]):
-                problems.append(f"{sheet}: node {node_id} is no head {axis}/<element> of an element of its axis kind")
+                problems.append(Refusal("view_matrix_head_invalid", file=sheet, key=node_id, field=axis))
         for edge_id, e in sorted(lines.items()):
             if not (str(e.get("source")).startswith("rows/") and str(e.get("target")).startswith("columns/")):
-                problems.append(f"{sheet}: line {edge_id} is no cell from a row's head to a column's head")
+                problems.append(Refusal("view_matrix_line_not_cell", file=sheet, key=edge_id))
     # A Timeline is its rows and nothing else: one node per element of its row kind that the role reads, each
     # with its dates (in the tile, `_timeline_row`), no line, no stub and no placeholder. Its binding is the
     # bundle's; a `timeline.<id>` without one is refused, and so is a node with dates on any other sheet (NODE).
     timeline = timeline_dates(sheet, bundle)
     dated: dict[str, dict[str, set[str]]] = {}
     if sheet.partition(".")[0] not in SHEETS:
-        problems.append(f"{sheet}: a sheet of a kind the checker does not know")
+        problems.append(Refusal("view_sheet_kind_unknown", file=sheet))
     if sheet.startswith("timeline.") and timeline is None:
-        problems.append(f"{sheet}: no Timeline of the bundle has this sheet")
+        problems.append(Refusal("view_timeline_unbound", file=sheet))
     if timeline is not None:
         wanted = {f"{kind}/{i}" for kind, i in once if timeline["rows"] in chain(bundle, kind)}
-        problems += [f"{sheet}: node {i} is no row of the Timeline: no element of {timeline['rows']} the role reads"
-                     for i in sorted(set(nodes) - wanted)]
-        problems += [f"{sheet}: row {i} is missing: the role reads it" for i in sorted(wanted - set(nodes))]
+        for i in sorted(set(nodes) - wanted):
+            problems.append(Refusal("view_timeline_row_unexpected", file=sheet, key=i, kind=timeline["rows"]))
+        for i in sorted(wanted - set(nodes)):
+            problems.append(Refusal("view_timeline_row_missing", file=sheet, key=i))
         if lines:
-            problems.append(f"{sheet}: a Timeline holds no lines, the layout has {len(lines)}")
+            problems.append(Refusal("view_timeline_has_lines", file=sheet, count=len(lines)))
         for relation in timeline["dates"]:
             by = dated.setdefault(relation, {})
             for parts in read.get(relation, set()):
@@ -786,14 +793,16 @@ def check_view(sheet: str, snapshots: dict[str, bytes], layout: bytes, tiles: di
     part_states: dict[str, dict[str, list]] = {}
     stateless: dict[str, object] = {}
     if sheet.partition(".")[0] == "nest" and nest is None:
-        problems.append(f"{sheet}: no Nest of the bundle has this sheet")
+        problems.append(Refusal("view_nest_unbound", file=sheet))
     if nest is not None:
         nested, twice = nest_parts(nest, read, once, bundle, role.full)
-        problems += [f"{sheet}: {p}" for p in twice]
-        problems += [f"{sheet}: node {i} is no part of this Nest" for i in sorted(set(nodes) - set(nested))]
-        problems += [f"{sheet}: part {i} is missing: the role reads it" for i in sorted(set(nested) - set(nodes))]
+        problems.extend(twice)
+        for i in sorted(set(nodes) - set(nested)):
+            problems.append(Refusal("view_nest_part_unexpected", file=sheet, key=i))
+        for i in sorted(set(nested) - set(nodes)):
+            problems.append(Refusal("view_nest_part_missing", file=sheet, key=i))
         if lines:
-            problems.append(f"{sheet}: a Nest holds no lines, the layout has {len(lines)}")
+            problems.append(Refusal("view_nest_has_lines", file=sheet, count=len(lines)))
         for node_id in nested:
             level = next(nest["kinds"].index(k) for k in chain(bundle, node_id.partition("/")[0]) if k in nest["kinds"])
             part_table[node_id] = nest["tables"][level]
@@ -809,14 +818,14 @@ def check_view(sheet: str, snapshots: dict[str, bytes], layout: bytes, tiles: di
     for node_id in sorted(nodes):
         if node_id.startswith("stub/"):
             if node_id not in stubs:
-                problems.append(f"{sheet}: stub {node_id} is a stub the island levels do not give")
+                problems.append(Refusal("view_stub_unexpected", file=sheet, key=node_id))
         elif not _readable(element(node_id), readable):
-            problems.append(f"{sheet}: node {node_id} is no row the role reads")
+            problems.append(Refusal("view_node_unreadable", file=sheet, key=node_id))
         elif not _placeholder(node_id) and tuple(element(node_id).split("/", 1)) not in once:
-            problems.append(f"{sheet}: node {node_id} is not its element at its most specific kind")
+            problems.append(Refusal("view_node_not_most_specific", file=sheet, key=node_id))
     for edge_id, e in sorted(lines.items()):
         if e.get("source") not in nodes or e.get("target") not in nodes:
-            problems.append(f"{sheet}: line {edge_id} does not join two nodes of the layout")
+            problems.append(Refusal("view_line_endpoint_missing", file=sheet, key=edge_id))
 
     # Counts by centre, per tile of each level, recomputed from the layout (rows only: they are valid).
     last = levels - 1
@@ -842,13 +851,13 @@ def check_view(sheet: str, snapshots: dict[str, bytes], layout: bytes, tiles: di
 
     def guide(c: dict, which: str, want: str | None) -> list[str]:
         e = c.get(which)
-        where = f"{sheet}: cluster {c['x']}_{c['y']}"
+        pos = f"{c['x']}_{c['y']}"
         if e is None:
-            return [] if want is None else [f"{where} has no {which} element, the layout {want}"]
+            return [] if want is None else [Refusal("view_cluster_guide_missing", file=sheet, position=pos, field=which, key=want)]
         if not isinstance(e, dict) or set(e) - {"id", "name"} or e.get("id") != want:
-            return [f"{where} names {e} as its {which} element, the layout {want}"]
+            return [Refusal("view_cluster_guide_mismatch", file=sheet, position=pos, value=e, field=which, key=want)]
         if "name" in e and not _name(element(want).partition("/")[2], e["name"], read):
-            return [f"{where} shows a name for {want} that is no rows the role reads: {e['name']}"]
+            return [Refusal("view_cluster_guide_name_unreadable", file=sheet, position=pos, key=want, value=e["name"])]
         return []
 
     lanes: dict[str, str] = {}  # node id: the key of its lane, from the cell it holds
@@ -863,48 +872,49 @@ def check_view(sheet: str, snapshots: dict[str, bytes], layout: bytes, tiles: di
         path, sha = todo.pop()
         data = tiles.get(path)
         if data is None:
-            problems.append(f"{sheet}: tile {path} is missing")
+            problems.append(Refusal("view_tile_missing", file=sheet, path=path))
             continue
         if sha is not None and hashlib.sha256(data).hexdigest() != sha:
-            problems.append(f"{sheet}: tile {path} does not have the sha256 its parent names")
+            problems.append(Refusal("view_tile_hash_mismatch", file=sheet, path=path))
         reached.add(path)
         try:
             t = strict_json_loads(data)
-        except ValueError as err:
-            problems.append(f"{sheet}: tile {path} is not valid JSON ({err})")
+        except ValueError:
+            problems.append(Refusal("view_tile_invalid_json", file=sheet, path=path))
             continue
         if not isinstance(t, dict):
-            problems.append(f"{sheet}: tile {path} is not a JSON object")
+            problems.append(Refusal("view_tile_not_object", file=sheet, path=path))
             continue
         if t.get("sheet") != sheet or f"{sheet}/{t.get('level')}/{t.get('x')}_{t.get('y')}.json" != path:
-            problems.append(f"{sheet}: tile {path} says it is another tile")
+            problems.append(Refusal("view_tile_identity_mismatch", file=sheet, path=path))
         for c in t.get("clusters", []):
             n, first, last_one = count(t["level"] + 1, c["x"], c["y"])
             problems += guide(c, "first", first) + guide(c, "last", last_one)
             if c["count"] != n or c["statuses"] != ([{"status": "valid", "count": n}] if n else []):
-                problems.append(f"{sheet}: cluster {t['level'] + 1}/{c['x']}_{c['y']} counts {c['count']} {c['statuses']}, the layout {n}")
+                problems.append(Refusal("view_cluster_count_mismatch", file=sheet, level=t["level"] + 1,
+                                        position=f"{c['x']}_{c['y']}", count=c["count"], value=c["statuses"], size=n))
             todo.append((f"{sheet}/{t['level'] + 1}/{c['x']}_{c['y']}.json", c["sha256"]))
         shown = t.get("bands", [])
         for b in shown:
             if not isinstance(b, dict) or set(b) - BAND or b.get("axis") not in ("x", "y") or \
                     b.get("hatched", False) != (b.get("key") == UNKNOWN_LANE):
-                problems.append(f"{sheet}: tile {path} holds a lane that is no band: {b}")
+                problems.append(Refusal("view_lane_shape_invalid", file=sheet, path=path, value=b))
                 continue
             facts = (b["axis"], b["from"], b["to"], b.get("hatched", False), b.get("name"))
             if bands.setdefault(b["key"], facts) != facts:
                 warnings.append(f"{sheet}: lane {b['key']} is not the same in every tile")
             target = re.match(r"^kind:([^:]+):(.*)$", b["key"], re.S)
             if "name" in b and not (target and _name(target.group(2), b["name"], read)):
-                problems.append(f"{sheet}: lane {b['key']} has a name that is no rows the role reads: {b['name']}")
+                problems.append(Refusal("view_lane_name_unreadable", file=sheet, key=b["key"], value=b["name"]))
         held = t.get("groups", [])
         for g in held:
             if not isinstance(g, dict) or set(g) - GROUP or not {"id", "x", "y", "width", "height"} <= set(g) or "/" not in str(g["id"]):
-                problems.append(f"{sheet}: tile {path} holds a group that is no box: {g}")
+                problems.append(Refusal("view_group_shape_invalid", file=sheet, path=path, value=g))
                 continue
             if tuple(g["id"].split("/", 1)) not in once:
-                problems.append(f"{sheet}: group {g['id']} is no element the role reads at its most specific kind")
+                problems.append(Refusal("view_group_unreadable", file=sheet, key=g["id"]))
             if "name" in g and not _name(g["id"].partition("/")[2], g["name"], read):
-                problems.append(f"{sheet}: group {g['id']} has a name that is no rows the role reads: {g['name']}")
+                problems.append(Refusal("view_group_name_unreadable", file=sheet, key=g["id"], value=g["name"]))
             facts = (g["x"], g["y"], g["width"], g["height"], json.dumps(g.get("name"), sort_keys=True))
             if boxes.setdefault(g["id"], facts) != facts:
                 warnings.append(f"{sheet}: group {g['id']} is not the same in every tile")
@@ -914,10 +924,10 @@ def check_view(sheet: str, snapshots: dict[str, bytes], layout: bytes, tiles: di
         # Only the last level holds nodes and lines (tiles.ts, Tile); a tile above it that holds one is refused, so
         # no node escapes the checks of its lane and group cells, which hold there.
         if t.get("level") != last and (t.get("nodes") or t.get("edges")):
-            problems.append(f"{sheet}: tile {path} holds nodes or lines above the last level")
+            problems.append(Refusal("view_tile_non_leaf_content", file=sheet, path=path))
         for n in t.get("nodes", []):
             if nest is not None:  # before the node's group is read as a box: a part that stands apart has none
-                problems += [f"{sheet}: tile {path}: {p}" for p in _nest_part(n, nested, part_table, part_states, stateless)]
+                problems.extend(_nest_part(n, nested, part_table, part_states, stateless))
                 n = {k: v for k, v in n.items() if k != "states" and (k, v) != ("group", APART)}
             if t.get("level") == last:
                 drawn.add((path, n["id"]))
@@ -925,43 +935,43 @@ def check_view(sheet: str, snapshots: dict[str, bytes], layout: bytes, tiles: di
                     # A Matrix's head stands in the lane of the element it shows (a Board's column, docs/gui.md).
                     key = lane_key(n.get("of", n["id"]), n["lane"], read, bundle)
                     if key is None:
-                        problems.append(f"{sheet}: node {n['id']} stands in a lane that is no row the role reads: {n['lane']}")
+                        problems.append(Refusal("view_node_lane_unreadable", file=sheet, key=n["id"], value=n["lane"]))
                     else:
                         lanes[n["id"]] = key
                         placed.append((path, n["id"], [n["x"], n["y"], n["width"], n["height"]], {b.get("key"): b for b in shown}))
                 if "group" in n and not _placeholder(n["id"]):
                     of = group_of(n["id"], n["group"], read, bundle)
                     if of is None:
-                        problems.append(f"{sheet}: node {n['id']} stands in a group that is no row the role reads: {n['group']}")
+                        problems.append(Refusal("view_node_group_unreadable", file=sheet, key=n["id"], value=n["group"]))
                     else:
                         member[n["id"]] = of
                         grouped.append((path, n["id"], [n["x"], n["y"], n["width"], n["height"]], {g.get("id"): g for g in held if isinstance(g, dict)}))
             if n["id"] not in nodes or nodes[n["id"]] != [n["x"], n["y"], n["width"], n["height"]]:
-                problems.append(f"{sheet}: tile {path} shows node {n['id']} not as laid out")
+                problems.append(Refusal("view_tile_node_layout_mismatch", file=sheet, path=path, key=n["id"]))
             if n.get("of") != shows.get(n["id"]):
-                problems.append(f"{sheet}: tile {path} shows node {n['id']} as another element than the layout")
+                problems.append(Refusal("view_tile_node_of_mismatch", file=sheet, path=path, key=n["id"]))
             if timeline is not None:
-                problems += [f"{sheet}: tile {path}: {p}" for p in _timeline_row(n, timeline, dated, role.full)]
+                problems.extend(_timeline_row(n, timeline, dated, role.full))
                 n = {k: v for k, v in n.items() if k != "dates"}
-            problems += [f"{sheet}: tile {path}: {p}" for p in _node(n, read, stubs, bundle)]
+            problems.extend(_node(n, read, stubs, bundle))
         for e in t.get("edges", []):
             was = lines.get(e.get("id"))
             if not was or (was["source"], was["target"], was["points"]) != (e.get("source"), e.get("target"), e.get("points")):
-                problems.append(f"{sheet}: tile {path} shows line {e.get('id')} not as laid out")
-            problems += [f"{sheet}: tile {path}: {p}" for p in _edge(e, read, bundle, shows)]
+                problems.append(Refusal("view_tile_line_layout_mismatch", file=sheet, path=path, key=e.get("id")))
+            problems.extend(_edge(e, read, bundle, shows))
             if matrix is not None:
-                problems += [f"{sheet}: tile {path}: {p}" for p in _cell(e, matrix, shows, bundle)]
+                problems.extend(_cell(e, matrix, shows, bundle))
         if path == root and not t.get("clusters"):
             n = sum(1 for x in t.get("nodes", []) if not _placeholder(x["id"]))
             if n != len(centres):
-                problems.append(f"{sheet}: the root shows {n} nodes, the layout has {len(centres)}")
+                problems.append(Refusal("view_root_count_mismatch", file=sheet, count=n, size=len(centres)))
     for node_id, box in sorted(nodes.items()):
         lx, ly = leaf(*box)
         if (f"{sheet}/{last}/{lx}_{ly}.json", node_id) not in drawn:
-            problems.append(f"{sheet}: node {node_id} is drawn in no tile, not in the one that holds its centre")
+            problems.append(Refusal("view_node_not_drawn", file=sheet, key=node_id))
     # Lanes: a band is the lane of a node; a node lies inside the band of its lane, in its own tile.
     for key in sorted(set(bands) - set(lanes.values())):
-        problems.append(f"{sheet}: lane {key} is the lane of no node the role reads")
+        problems.append(Refusal("view_lane_unused", file=sheet, key=key))
     for path, node_id, (x, y, w, h), here in placed:
         b = here.get(lanes[node_id])
         start, size = (x, w) if b and b["axis"] == "x" else (y, h)
@@ -974,7 +984,7 @@ def check_view(sheet: str, snapshots: dict[str, bytes], layout: bytes, tiles: di
         return {(k, i) for k in chain(bundle, kind)}
     for group_id in sorted(boxes):
         if not of_box(group_id) & set(member.values()):
-            problems.append(f"{sheet}: group {group_id} is the group of no node the role reads")
+            problems.append(Refusal("view_group_unused", file=sheet, key=group_id))
     for path, node_id, (x, y, w, h), here in grouped:
         box = next((g for i, g in sorted(here.items()) if member[node_id] in of_box(i)), None)
         if not box or x < box["x"] or y < box["y"] or x + w > box["x"] + box["width"] or y + h > box["y"] + box["height"]:
@@ -985,7 +995,7 @@ def check_view(sheet: str, snapshots: dict[str, bytes], layout: bytes, tiles: di
         warnings.append(f"{sheet}: some nodes stand in a lane, others in none")
     unreached = sorted(set(tiles) - reached)
     if unreached:
-        problems.append(f"{sheet}: tiles not reached from the root: {', '.join(unreached[:3])}")
+        problems.append(Refusal("view_tiles_unreached", file=sheet, path=", ".join(unreached[:3])))
     return problems
 
 
@@ -1144,39 +1154,39 @@ def check_islands(snapshots: dict[str, bytes], bundle: dict, levels: dict[str, b
     problems = []
     for key in sorted(set(want) | set(levels)):
         if key not in levels:
-            problems.append(f"islands: level {key} is missing")
+            problems.append(Refusal("islands_level_missing", key=key))
         elif key not in want:
-            problems.append(f"islands: level {key} is no level the role's rows give")
+            problems.append(Refusal("islands_level_unexpected", key=key))
         else:
             try:
                 got = strict_json_loads(levels[key])
-            except ValueError as err:
-                problems.append(f"islands: level {key} is not valid JSON ({err})")
+            except ValueError:
+                problems.append(Refusal("islands_level_invalid_json", key=key))
             else:
                 if got != want[key]:
-                    problems.append(f"islands: level {key} is not what the role's rows give")
+                    problems.append(Refusal("islands_level_mismatch", key=key))
     for sheet in sorted(set(maps) | set(layouts)):
         if sheet not in layouts:
-            problems.append(f"islands: the Map {sheet} is missing")
+            problems.append(Refusal("islands_map_missing", file=sheet))
         elif sheet not in maps:
-            problems.append(f"islands: {sheet} is the Map of no island")
+            problems.append(Refusal("islands_map_unexpected", file=sheet))
         else:
             try:
                 whole = strict_json_loads(layouts[sheet])
-            except ValueError as err:
-                problems.append(f"islands: {sheet} is not valid JSON ({err})")
+            except ValueError:
+                problems.append(Refusal("islands_layout_invalid_json", file=sheet))
                 continue
             if not isinstance(whole, dict):
-                problems.append(f"islands: {sheet} is not a JSON object")
+                problems.append(Refusal("islands_layout_not_object", file=sheet))
                 continue
             drawn = {i for i in whole.get("nodes", {}) if not _placeholder(i)}
             if drawn != maps[sheet]:
-                problems.append(f"islands: {sheet} draws {len(drawn)} elements, the island holds {len(maps[sheet])}")
+                problems.append(Refusal("islands_map_elements_mismatch", file=sheet, count=len(drawn), size=len(maps[sheet])))
             if {i for i in whole.get("nodes", {}) if i.startswith("stub/")} != set(stubs[sheet]):
-                problems.append(f"islands: {sheet} does not have the stubs its lines to other islands give")
+                problems.append(Refusal("islands_map_stubs_mismatch", file=sheet))
             to_stubs = {(i, e.get("source"), e.get("target")) for i, e in whole.get("edges", {}).items()
                         if str(e.get("target")).startswith("stub/") or str(e.get("source")).startswith("stub/")}
             if to_stubs != stub_lines[sheet]:
-                problems.append(f"islands: {sheet} draws {len(to_stubs)} lines to stubs, its lines to other islands are {len(stub_lines[sheet])}")
+                problems.append(Refusal("islands_map_stub_lines_mismatch", file=sheet, count=len(to_stubs), size=len(stub_lines[sheet])))
     return problems
 

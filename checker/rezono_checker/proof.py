@@ -36,6 +36,7 @@ import re
 from .canon import encode_key, strict_json_loads, value_text
 from .closure import instances as rule_instances
 from .evaluate import cells
+from .refusals import Refusal, RefusalError
 from .rules import load_rules
 from .snapshots import read_rows, rows_of
 
@@ -81,7 +82,7 @@ def steps(rules_doc: dict, witnesses: list[dict], rows: dict) -> set[tuple]:
     for w in witnesses:
         rule = rules.get(w["rule_id"])
         if rule is None:
-            raise ValueError(f"unknown rule {w['rule_id']}")
+            raise RefusalError(Refusal("unknown_rule", rule=w["rule_id"]))
         theta = {b["variable"]: b["value"] for b in w.get("bindings", [])}
 
         def subst(atom, env=theta):
@@ -89,7 +90,7 @@ def steps(rules_doc: dict, witnesses: list[dict], rows: dict) -> set[tuple]:
             for t in atom.terms:
                 if t.startswith("?"):
                     if t not in env:
-                        raise ValueError(f"unbound variable {t} in witness for {rule.id}")
+                        raise RefusalError(Refusal("proof_unbound_variable", variable=t, rule=rule.id))
                     out_terms.append(env[t])
                 else:
                     out_terms.append(t)
@@ -101,13 +102,13 @@ def steps(rules_doc: dict, witnesses: list[dict], rows: dict) -> set[tuple]:
             c_parts = strict_json_loads(w["conclusion"]["key"])
             if (w["conclusion"]["relation"] != rule.head.relation or not isinstance(c_parts, list)
                     or len(c_parts) != func.key_arity + 3 or not all(isinstance(p, str) for p in c_parts)):
-                raise ValueError(f"malformed functional conclusion key in witness for {rule.id}")
+                raise RefusalError(Refusal("proof_functional_key_malformed", rule=rule.id))
             state, val = c_parts[func.key_arity], c_parts[func.key_arity + 2]
             dom_key = tuple(
                 theta[t] if t.startswith("?") else t for t in rule.head.terms[:func.key_arity]
             ) if all(t in theta for t in rule.head.terms[:func.key_arity] if t.startswith("?")) else None
             if dom_key is None:
-                raise ValueError(f"unbound domain key variable in witness for {rule.id}")
+                raise RefusalError(Refusal("proof_unbound_domain_variable", rule=rule.id))
             dom_key_enc = encode_key(dom_key)
             for i, b in enumerate(rule.body):
                 if b.polarity == "positive" and b.atom.relation == func.domain:
@@ -215,12 +216,12 @@ class _Walk:
         self.pieces, self.problems = pieces, problems
         self.reached: set = set()
         if type(limit) is not int or not 1 <= limit <= MAX_PIECE:
-            problems.append(f"proof: a piece limit of {limit!r} bytes, not 1 to {MAX_PIECE}")
+            problems.append(Refusal("proof_piece_limit_invalid", limit=repr(limit), bound=MAX_PIECE))
             self.limit = MAX_PIECE
         else:
             self.limit = limit
         if type(fanout) is not int or not 2 <= fanout <= MAX_FANOUT:
-            problems.append(f"proof: a fanout of {fanout!r} children per page, not 2 to {MAX_FANOUT}")
+            problems.append(Refusal("proof_fanout_invalid", limit=repr(fanout), bound=MAX_FANOUT))
             self.fanout = MAX_FANOUT
         else:
             self.fanout = fanout
@@ -228,43 +229,53 @@ class _Walk:
     def read(self, path, digest, tree, relation, level):
         problems = self.problems
         if path not in self.pieces:
-            problems.append(f"{path}: missing")
+            problems.append(Refusal("piece_missing", path=path))
             return None
         data = self.pieces[path]
         self.reached.add(path)
         if hashlib.sha256(data).hexdigest() != digest:
-            problems.append(f"{path}: not the piece its parent names")
+            problems.append(Refusal("piece_hash_mismatch", path=path))
             return None
         if len(data) > self.limit:
-            problems.append(f"{path}: {len(data)} bytes, more than {self.limit}")
+            problems.append(Refusal("piece_too_large", path=path, size=len(data), limit=self.limit))
             return None
         try:
             piece = strict_json_loads(data)
         except ValueError as err:
-            problems.append(f"{path}: invalid JSON ({err})")
+            text = str(err)
+            if text == "duplicate JSON object key":
+                problems.append(Refusal("piece_duplicate_json_key", path=path))
+            elif text.startswith("non-standard JSON constant "):
+                problems.append(Refusal("piece_nonstandard_json_constant", path=path,
+                                        value=text.removeprefix("non-standard JSON constant ")))
+            else:
+                problems.append(Refusal("piece_invalid_json", path=path))
             return None
         if not isinstance(piece, dict) or set(piece) != (LEAF if level == 0 else PAGE):
-            problems.append(f"{path}: fields {sorted(piece) if isinstance(piece, dict) else type(piece).__name__}, "
-                            f"not exactly {sorted(LEAF if level == 0 else PAGE)}")
+            actual = sorted(piece) if isinstance(piece, dict) else type(piece).__name__
+            if level == 0:
+                problems.append(Refusal("piece_leaf_fields_invalid", path=path, fields=actual))
+            else:
+                problems.append(Refusal("piece_page_fields_invalid", path=path, fields=actual))
             return None
         head = {k: piece[k] for k in ("format", "tree", "relation", "level")}
         if head != {"format": FORMAT, "tree": tree, "relation": relation, "level": level} or type(piece["level"]) is not int:
-            problems.append(f"{path}: is {head}, not level {level} of {tree}/{relation}")
+            problems.append(Refusal("piece_header_mismatch", path=path, value=head, level=level, tree=tree, relation=relation))
             return None
         if level == 0:
             rows = piece["rows"]
             if not isinstance(rows, list) or not rows:
-                problems.append(f"{path}: rows is not a list with at least one row")
+                problems.append(Refusal("piece_rows_invalid", path=path))
                 return None
             return rows
         children = piece["children"]
         if not isinstance(children, list) or not children or len(children) > self.fanout:
-            problems.append(f"{path}: children is not a list of 1 to {self.fanout}")
+            problems.append(Refusal("piece_children_invalid", path=path, limit=self.fanout))
             return None
         if not all(isinstance(ch, dict) and set(ch) == CHILD and isinstance(ch["file"], str)
                    and isinstance(ch["sha256"], str) and SHA256.match(ch["sha256"])
                    and isinstance(ch["first"], list) and isinstance(ch["last"], list) for ch in children):
-            problems.append(f"{path}: a child is not exactly {sorted(CHILD)} with a file, a sha256 and two keys")
+            problems.append(Refusal("piece_child_shape_invalid", path=path, fields=sorted(CHILD)))
             return None
         out = []
         for ch in children:
@@ -272,24 +283,24 @@ class _Walk:
             if got is None:
                 continue
             if not got or [sort_key(tree, got[0]), sort_key(tree, got[-1])] != [ch["first"], ch["last"]]:
-                problems.append(f"{ch['file']}: its bounds are not those its parent names")
+                problems.append(Refusal("piece_bounds_mismatch", path=ch["file"]))
             out += got
         return out
 
     def root(self, name, root, keys=frozenset({"file", "sha256", "levels"})):
         """The rows of one tree down from its root, or None (a problem) if the root is not well-formed."""
         if not isinstance(root, dict) or set(root) != keys or type(root["levels"]) is not int or root["levels"] < 1:
-            self.problems.append(f"{name}: the root is not exactly {sorted(keys)}")
+            self.problems.append(Refusal("tree_root_invalid", tree=name, fields=sorted(keys)))
             return None
         if root["levels"] > MAX_LEVELS:
-            self.problems.append(f"{name}: {root['levels']} levels, more than {MAX_LEVELS}")
+            self.problems.append(Refusal("tree_levels_exceeded", tree=name, level=root["levels"], limit=MAX_LEVELS))
             return None
         tree, relation = name.split("/", 1)
         return self.read(root["file"], root["sha256"], tree, relation, root["levels"] - 1)
 
     def unreached(self):
         for path in sorted(set(self.pieces) - self.reached):
-            self.problems.append(f"{path}: a piece no tree reaches")
+            self.problems.append(Refusal("piece_unreached", path=path))
 
 
 def check_proof(rules_doc: dict, sees: dict, snapshots: dict, pieces: dict, roots: dict, limit: int, fanout: int) -> list[str]:
@@ -302,21 +313,23 @@ def check_proof(rules_doc: dict, sees: dict, snapshots: dict, pieces: dict, root
     calc = sees.get("calc_witnesses", [])
     try:
         want = expected(sees["witnesses"] + calc, steps(rules_doc, sees["witnesses"], rows) | calc_steps(calc))
-    except ValueError as err:
-        return [f"proof: {err}"]
+    except RefusalError as err:
+        return [err.refusal]
+    except ValueError:
+        return [Refusal("proof_steps_invalid")]
     walk = _Walk(pieces, limit, fanout, problems)
     for t in TREES:
         given = roots.get(t, {})
         for rel in sorted(set(given) | set(want[t])):
             if rel not in given:
-                problems.append(f"{t}/{rel}: no tree")
+                problems.append(Refusal("proof_tree_missing", tree=t, relation=rel))
                 continue
             if rel not in want[t]:
-                problems.append(f"{t}/{rel}: a tree for nothing")
+                problems.append(Refusal("proof_tree_unexpected", tree=t, relation=rel))
                 continue
             got = walk.root(f"{t}/{rel}", given[rel])
             if got is not None and got != want[t][rel]:
-                problems.append(f"{t}/{rel}: the rows are not the role's proof graph")
+                problems.append(Refusal("proof_rows_mismatch", tree=t, relation=rel))
     walk.unreached()
     return problems
 
@@ -341,34 +354,34 @@ def check_rows(snapshots: dict, pieces: dict, roots: dict, limit: int, fanout: i
 
     for rel in sorted(set(roots) | set(snapshots)):
         if rel not in snapshots:
-            problems.append(f"rows/{rel}: a tree for a relation the role has no snapshot of")
+            problems.append(Refusal("rows_tree_unexpected", relation=rel))
             continue
         if rel not in roots:
-            problems.append(f"rows/{rel}: no root")
+            problems.append(Refusal("rows_root_missing", relation=rel))
             continue
         rows_of(table(rel))  # a malformed snapshot raises
         want = sorted(table(rel), key=lambda r: [p.encode() for p in r["key"]])
         root = roots[rel]
         if not want:
             if root != {"count": 0}:
-                problems.append(f"rows/{rel}: an empty relation's root is not exactly a count of 0")
+                problems.append(Refusal("rows_empty_root_invalid", relation=rel))
             continue
         if not isinstance(root, dict) or root.get("count") != len(want) or type(root.get("count")) is not int:
-            problems.append(f"rows/{rel}: the count is not the snapshot's {len(want)} rows")
+            problems.append(Refusal("rows_count_mismatch", relation=rel, count=len(want)))
             continue
         got = walk.root(f"rows/{rel}", root, frozenset({"file", "sha256", "levels", "count"}))
         if got is not None and got != want:
-            problems.append(f"rows/{rel}: the rows are not the role's snapshot")
+            problems.append(Refusal("rows_snapshot_mismatch", relation=rel))
         if all(len(r["key"]) == 2 for r in want):
             if rel not in inverse:
-                problems.append(f"inverse/{rel}: no root for a relation with two columns")
+                problems.append(Refusal("inverse_root_missing", relation=rel))
                 continue
             back = sorted(want, key=lambda r: [p.encode() for p in r["key"][::-1]])
             got = walk.root(f"inverse/{rel}", inverse[rel])
             if got is not None and got != back:
-                problems.append(f"inverse/{rel}: the rows are not the role's snapshot by the key reversed")
+                problems.append(Refusal("inverse_rows_mismatch", relation=rel))
     for rel in sorted(set(inverse) - {r for r in snapshots if table(r) and all(len(x["key"]) == 2 for x in table(r))}):
-        problems.append(f"inverse/{rel}: a tree for a relation without two columns or rows")
+        problems.append(Refusal("inverse_tree_unexpected", relation=rel))
     walk.unreached()
     return problems
 
@@ -391,37 +404,37 @@ def check_indexes(plan: dict, snapshots: dict, pieces: dict, entries: list, limi
     want = sorted((r, list(b)) for r, b in lookups if not _prefix(b))
     have = [(i["relation"], i["bound"]) for i in plan.get("indexes", [])]
     if have != want:
-        problems.append(f"gap: the plan's indexes are not the lookups of its schedules that need one ({len(have)} for {len(want)})")
+        problems.append(Refusal("gap_plan_indexes_mismatch", count=len(have), size=len(want)))
     walk = _Walk(pieces, limit, fanout, problems)
     given = {}
     for e in entries:
         k = (e.get("relation"), tuple(e.get("bound", ())))
         if k in given:
-            problems.append(f"gap: {k[0]} {list(k[1])} listed twice")
+            problems.append(Refusal("gap_index_duplicate", relation=k[0], bound=list(k[1])))
         given[k] = e
     for rel, bound in want:
         rs = strict_json_loads(snapshots[rel]) if rel in snapshots else []
         k = (rel, tuple(bound))
         if not rs:
             if k in given:
-                problems.append(f"gap: an index of {rel} {bound}, a relation the role has no rows of")
+                problems.append(Refusal("gap_index_empty_relation", relation=rel, bound=bound))
             continue
         e = given.get(k)
         if e is None:
-            problems.append(f"gap: no index of {rel} {bound}")
+            problems.append(Refusal("gap_index_missing", relation=rel, bound=bound))
             continue
         if bound == [1] and all(len(r["key"]) == 2 for r in rs):
             if e != {"relation": rel, "bound": bound, "tree": "inverse"}:
-                problems.append(f"gap: {rel} {bound} is the inverse tree's, not a tree of its own")
+                problems.append(Refusal("gap_index_not_inverse", relation=rel, bound=bound))
             continue
         root = {x: e[x] for x in e if x not in ("relation", "bound")}
         name = "index:" + ",".join(str(i) for i in bound)
         got = walk.root(f"{name}/{rel}", root)
         expect = sorted(rs, key=lambda r: [p.encode() for p in _permuted(r["key"], bound)])
         if got is not None and got != expect:
-            problems.append(f"{name}/{rel}: the rows are not the role's snapshot by the bound columns first")
+            problems.append(Refusal("gap_index_rows_mismatch", tree=name, relation=rel))
     for k in sorted(set(given) - {(r, tuple(b)) for r, b in want}):
-        problems.append(f"gap: an index of {k[0]} {list(k[1])} that the plan does not need")
+        problems.append(Refusal("gap_index_unexpected", relation=k[0], bound=list(k[1])))
     walk.unreached()
     return problems
 
@@ -442,22 +455,22 @@ def check_sources(entries: list, pieces: dict, roots: dict, limit: int, fanout: 
         except ValueError:
             key = None
         if not isinstance(key, list) or not all(isinstance(p, str) for p in key) or not isinstance(row.get("relation"), str):
-            return ["sources: an entry has no row reference with a key of text parts"]
+            return [Refusal("sources_entry_row_invalid")]
         want.setdefault(row["relation"], []).append({"key": key} | {k: v for k, v in e.items() if k != "row"})
     walk = _Walk(pieces, limit, fanout, problems)
     for rel in sorted(set(roots) | set(want)):
         if rel not in want:
-            problems.append(f"sources/{rel}: a tree for a relation the role has no entries of")
+            problems.append(Refusal("sources_tree_unexpected", relation=rel))
             continue
         if rel not in roots:
-            problems.append(f"sources/{rel}: no tree")
+            problems.append(Refusal("sources_tree_missing", relation=rel))
             continue
         expect = sorted(want[rel], key=lambda r: [p.encode() for p in r["key"]])
         if len({json.dumps(r["key"]) for r in expect}) != len(expect):
-            problems.append(f"sources/{rel}: two entries for one row")
+            problems.append(Refusal("sources_duplicate_row", relation=rel))
             continue
         got = walk.root(f"sources/{rel}", roots[rel])
         if got is not None and got != expect:
-            problems.append(f"sources/{rel}: the rows are not the role's source entries")
+            problems.append(Refusal("sources_rows_mismatch", relation=rel))
     walk.unreached()
     return problems
