@@ -617,11 +617,16 @@ class Lowering:
         if "versions" in decl:
             status, picked = self.select_version(sig.at, decl["versions"])
             if sig.result == "set":
+                if "table" in decl or "unless" in decl:
+                    self.site.refuse(sig.at, "`table` and `unless` on a Bool set derivation are not lowered yet")
                 self.declare(sig.relation, key_columns)
                 if status == "one":
                     ver_idx, ver = picked
                     for alternative in self.alternatives(f"{sig.at}/versions/{ver_idx}/value", ver["value"]):
                         self.rule(sig.relation, self.key_terms(), self.domain() + alternative)
+                elif status == "none":
+                    self.rule(sig.relation, self.key_terms(),
+                              self.domain() + [("cmp", "eq", ("const", "1", "integer"), ("const", "0", "integer"))])
                 elif status == "overlap":
                     self.site.refuse(f"{sig.at}/versions", "versions overlap on a Bool set derivation")
                 return
@@ -629,7 +634,10 @@ class Lowering:
             meta = {"domain": sig.domain, "value": {"name": "value", "type": sig.value_type},
                     "conflict_policy": "publish", "empty_state": "unknown", "empty_reason": "no_version_applies"}
             if status == "none":
-                self.emit_functional(sig.at, meta, (), None)
+                if "unless" in decl:
+                    self.lower_unless(sig.at, None, decl["unless"], meta, empty_reason="no_version_applies")
+                else:
+                    self.emit_functional(sig.at, meta, (), None)
                 return
             if status == "overlap":
                 meta["conflict_policy"] = "block"
@@ -673,7 +681,9 @@ class Lowering:
             self.statements.append(("functional", sig.relation, key_columns, self.line, meta))
             self.count(value_at, value["agg"])
         elif (inline := self.try_inline_value(value_at, value)) is not None:
-            lits, assigns, conds, term, missing = inline
+            lits, assigns, conds, term, missing, typ = inline
+            if typ != sig.value_type:
+                self.site.refuse(value_at, f"expression has type {typ}, expected {sig.value_type}", "R003")
             meta |= {"empty_state": "not_applicable" if missing == "not_applicable" else "unknown",
                      "empty_reason": "no_value"}
             self.emit_functional(value_at, meta, (ValBranch(tuple(lits), tuple(assigns), tuple(conds), term),), None)
@@ -703,13 +713,12 @@ class Lowering:
     def _enum_literal(self, name: str) -> tuple | None:
         if self.sig.enum_type is not None and name in self.pack.enums[self.sig.enum_type]:
             return "const", name, "string"
-        if self.sig.enum_type is None:
-            matches = [e for e, vals in self.pack.enums.items() if name in vals]
-            if len(matches) == 1:
-                return "const", name, "string"
+        matches = [e for e, vals in self.pack.enums.items() if name in vals]
+        if len(matches) == 1:
+            return "const", name, "string"
         return None
 
-    def try_inline_value(self, at: str, node: dict) -> tuple[list, list, list, tuple, str | None] | None:
+    def try_inline_value(self, at: str, node: dict) -> tuple[list, list, list, tuple, str | None, str] | None:
         """Single-rule inline lowering when the expression is a simple literal, slot path, or integer arithmetic
         whose missing slots (if any) all share the same missingness (`unknown` vs `not_applicable`)."""
         if not isinstance(node, dict) or len(node) != 1:
@@ -717,44 +726,53 @@ class Lowering:
         key = next(iter(node))
         if key == "lit":
             term = self.literal(at, node["lit"])
-            if term[2] != self.sig.value_type:
-                return None
-            return [], [], [], term, None
+            return [], [], [], term, None, term[2]
         if key == "path":
             path = node["path"]
             if len(path) == 1 and path[0] in self.env:
-                return [], [], [], ("var", path[0]), None
-            if len(path) == 1 and self.sig.binder == "it" and path[0] != "it":
-                if self.slot(at, self.env["it"][1], path[0]) is None:
-                    if (enum_term := self._enum_literal(path[0])) is not None and self.sig.value_type == "string":
-                        return [], [], [], enum_term, None
-                    return None
-            elif len(path) >= 2:
-                head = path[0]
-                if head not in self.env:
-                    return None
-                typ = self.env[head]
-                for part in path[1:]:
-                    if typ[0] != "kind":
+                return [], [], [], ("var", path[0]), None, ir_type(self.pack, self.env[path[0]])
+            if len(path) == 1:
+                if self.sig.binder == "it" and path[0] != "it" and self.slot(at, self.env["it"][1], path[0]) is not None:
+                    slot = self.slot(at, self.env["it"][1], path[0])
+                    if slot.multivalued or slot.world == "open":
                         return None
-                    slot = self.slot(at, typ[1], part)
-                    if slot is None:
-                        return None
-                    typ = self.slot_type(slot)
+                    lits, term, optional = self.path(at, path)
+                    return lits, [], [], term, ("not_applicable" if optional else "unknown"), ir_type(self.pack, self.slot_type(slot))
+                if (enum_term := self._enum_literal(path[0])) is not None:
+                    return [], [], [], enum_term, None, "string"
+                return None
+            head = path[0]
+            if head not in self.env:
+                return None
+            typ = self.env[head]
+            opt_flags: set[bool] = set()
+            for part in path[1:]:
+                if typ[0] != "kind":
+                    return None
+                slot = self.slot(at, typ[1], part)
+                if slot is None or slot.multivalued or slot.world == "open":
+                    return None
+                opt_flags.add(not slot.required)
+                typ = self.slot_type(slot)
+            if len(opt_flags) > 1:
+                return None
             lits, term, optional = self.path(at, path)
-            return lits, [], [], term, ("not_applicable" if optional else "unknown")
+            return lits, [], [], term, ("not_applicable" if optional else "unknown"), ir_type(self.pack, typ)
         if key == "neg":
             inner = node["neg"]
             if isinstance(inner, dict) and set(inner) == {"lit"}:
                 term = self.literal(f"{at}/neg", inner["lit"])
-                if term[2] == "integer":
-                    return [], [], [], ("const", str(-int(term[1])), "integer"), None
+                if term[2] != "integer":
+                    self.site.refuse(at, "unary `-` requires an integer", "R003")
+                return [], [], [], ("const", str(-int(term[1])), "integer"), None, "integer"
             sub = self.try_inline_value(f"{at}/neg", inner)
             if sub is None:
                 return None
-            lits, assigns, conds, term, missing = sub
+            lits, assigns, conds, term, missing, typ = sub
+            if typ != "integer":
+                self.site.refuse(at, "unary `-` requires an integer", "R003")
             res = self.fresh()
-            return lits, assigns + [("arith", res, "sub", ("const", "0", "integer"), term)], conds, ("var", res), missing
+            return lits, assigns + [("arith", res, "sub", ("const", "0", "integer"), term)], conds, ("var", res), missing, "integer"
         if key == "arith":
             op, left, right = node["arith"]
             if op not in ARITH:
@@ -763,8 +781,10 @@ class Lowering:
             sr = self.try_inline_value(f"{at}/arith/2", right)
             if sl is None or sr is None:
                 return None
-            ll, al, cl, tl, ml = sl
-            lr, ar, cr, tr, mr = sr
+            ll, al, cl, tl, ml, typ_l = sl
+            lr, ar, cr, tr, mr, typ_r = sr
+            if typ_l != "integer" or typ_r != "integer":
+                self.site.refuse(at, f"arithmetic `{op}` requires integer operands", "R003")
             if ml is not None and mr is not None and ml != mr:
                 return None
             if op == "/":
@@ -772,7 +792,7 @@ class Lowering:
                     return None
             res = self.fresh()
             missing = ml or mr
-            return ll + lr, al + ar + [("arith", res, ARITH[op], tl, tr)], cl + cr, ("var", res), missing
+            return ll + lr, al + ar + [("arith", res, ARITH[op], tl, tr)], cl + cr, ("var", res), missing, "integer"
         return None
 
     def _has_slot(self, kind: str, slot) -> str:
@@ -861,11 +881,13 @@ class Lowering:
 
     def eval_path_val(self, at: str, path: list) -> ValEval:
         head = path[0]
-        if head not in self.env and self.sig.binder == "it" and head != "it":
-            if len(path) == 1 and self.slot(at, self.env["it"][1], head) is None and self._prop_sig(self.env["it"][1], head) is None:
-                if (enum_term := self._enum_literal(head)) is not None:
-                    return ValEval("string", (ValBranch((), (), (), enum_term),), None)
-            path, head = ["it", *path], "it"
+        if head not in self.env:
+            if (self.sig.binder == "it" and head != "it"
+                    and (self.slot(at, self.env["it"][1], head) is not None
+                         or self._prop_sig(self.env["it"][1], head) is not None)):
+                path, head = ["it", *path], "it"
+            elif len(path) == 1 and (enum_term := self._enum_literal(head)) is not None:
+                return ValEval("string", (ValBranch((), (), (), enum_term),), None)
         if head not in self.env:
             self.site.refuse(at, f"{head} is not a variable here", "R001")
         if len(path) == 1:
@@ -896,7 +918,7 @@ class Lowering:
             prop = self._prop_sig(typ[1], name)
             if prop is not None and prop.result == "functional":
                 if prop.relation == self.sig.relation:
-                    self.site.refuse(at, f"{prop.relation} cannot read itself recursively", "R009")
+                    self.site.refuse(at, f"{prop.relation} cannot read itself recursively", "R043")
                 val_var = ("var", self.fresh())
                 for st_lit in (NOT_APPLICABLE, UNKNOWN, INVALID):
                     rsn_v = ("var", self.fresh("rsn"))
@@ -1166,17 +1188,18 @@ class Lowering:
             return BoolEval(self.helper_or_none(t_rel), self.helper_or_none(f_rel), val.state_rel)
         self.site.refuse(at, f"Boolean condition `{key}` is not lowered yet")
 
-    def lower_unless(self, at: str, fallback: tuple[str, dict] | None, blocks: list[list[dict]], meta: dict) -> None:
+    def lower_unless(self, at: str, fallback: tuple[str, dict] | None, blocks: list[list[dict]], meta: dict,
+                     *, empty_reason: str | None = None) -> None:
         """Lower ordered `unless` blocks (last block has highest priority) with sibling conflict detection."""
-        meta |= {"empty_state": "unknown", "empty_reason": "no_value" if fallback is not None else "no_row_applies"}
+        default_reason = empty_reason or ("no_value" if fallback is not None else "no_row_applies")
+        meta |= {"empty_state": "unknown", "empty_reason": default_reason}
         if any(len(block) > 1 for block in blocks):
             meta["conflict_policy"] = "block"
         branches: list[ValBranch] = []
         states: list[str | None] = []
-        prior_handled = self.next_helper("unless_handled")
+        prior_ref: str | None = None
         for bi in range(len(blocks) - 1, -1, -1):
             block = blocks[bi]
-            prior_ref = self.helper_or_none(prior_handled)
             prior_guard = [] if prior_ref is None else [self.lit(prior_ref, self.key_terms(), False)]
             conds: list[BoolEval] = []
             und_rels: list[str | None] = []
@@ -1232,21 +1255,25 @@ class Lowering:
                 for b in then_val.branches:
                     branches.append(ValBranch(tuple(clause_guard) + b.lits, b.assigns, b.conds, b.term))
                 states.append(self.gate_state(then_val.state_rel, clause_guard))
-            # Mark keys handled by this block so lower blocks and fallback wait.
+            # Accumulate handled keys into a fresh relation so lower blocks and fallback never self-negate.
+            next_handled = self.next_helper(f"unless_handled_b{bi}")
+            if prior_ref is not None:
+                self.add_helper(next_handled, self._key_cols, self.key_terms(),
+                                self.domain() + [self.lit(prior_ref, self.key_terms())])
             for c_eval in conds:
                 if c_eval.t_all:
-                    self.add_helper(prior_handled, self._key_cols, self.key_terms(), self.domain())
+                    self.add_helper(next_handled, self._key_cols, self.key_terms(), self.domain())
                 elif c_eval.t_rel is not None:
-                    self.add_helper(prior_handled, self._key_cols, self.key_terms(),
+                    self.add_helper(next_handled, self._key_cols, self.key_terms(),
                                     self.domain() + [self.lit(c_eval.t_rel, self.key_terms())])
             for u_rel in und_rels:
                 if u_rel is not None:
-                    self.add_helper(prior_handled, self._key_cols, self.key_terms(),
+                    self.add_helper(next_handled, self._key_cols, self.key_terms(),
                                     self.domain() + [self.lit(u_rel, self.key_terms())])
+            prior_ref = self.helper_or_none(next_handled)
         if fallback is not None:
             fb_at, fb_node = fallback
-            handled_ref = self.helper_or_none(prior_handled)
-            fb_guard = [] if handled_ref is None else [self.lit(handled_ref, self.key_terms(), False)]
+            fb_guard = [] if prior_ref is None else [self.lit(prior_ref, self.key_terms(), False)]
             fb_val = self.eval_value(fb_at, fb_node)
             if fb_val.typ != self.sig.value_type:
                 self.site.refuse(fb_at, f"expected {self.sig.value_type}, got {fb_val.typ}", "R003")

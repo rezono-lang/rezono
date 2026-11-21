@@ -219,6 +219,7 @@ def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]]
                 and derived["table"].get("table") == "priority"):
             refuse(here, "`table priority` is removed in `rezono 1` (R028); use `table first` instead", "§5.4")
             ok = False
+            continue
         elif rezono_derived.is_derivation(form, derived):
             continue  # lowered with the rules to rezono.rules/2 (rezono_derived.py)
         if not extended_format:
