@@ -3,12 +3,16 @@
 domain and no calculation binding may reference a table that belongs to an attribute the schema bundle marks
 `personal: true`: its own table, its state projection (`<table>_state`) and the parameter tables of its bounds,
 constant and cardinalities. check_epoch holds it whenever it is handed the bundle, as the publisher does for the
-complete epoch. A refusal is a registered code with named arguments (decisions/checker-refusal-register.md); the
-tests compare those, never a sentence."""
+complete epoch, and check_role for each role.
+
+A refusal is a registered code with named arguments (decisions/checker-refusal-register.md), and each argument has
+one meaning in all of them: `rule` is the id of the rule that reads, `relation` the table it reads, `field` the
+personal slot (`<kind>.<slot>`) of the bundle. The tests compare the code and its arguments, never a sentence."""
 
 import pytest
 
 from rezono_checker import check_epoch
+from rezono_checker.access import check_role
 from rezono_checker.rules import load_rules
 
 SLOT = "subject.display_name"
@@ -52,7 +56,7 @@ def aggregate(table):
 
 
 def functional(domain):
-    """A rezono.rules/2 functional derivation `pick` over `domain`, whose rule reads only the other slot."""
+    """A rezono.rules/2 functional derivation `pick` over `domain`, whose rule `pick_r` reads only the other slot."""
     return {"format": "rezono.rules/2",
             "relations": [relation("subject", "id"), relation("subject__display_name", "subject", "v"),
                           relation("subject__grade", "subject", "v"),
@@ -74,29 +78,29 @@ def calculation(table):
                           "definitions": [{"name": "share", "when": {"boolean": True}, "value": value}]}]}
 
 
+def personal(findings):
+    """The personal-slot refusals among `findings`, each its code and arguments."""
+    return [{k: v for k, v in f.items() if k != "severity"} for f in findings if f["reason"] in CODES]
+
+
 def refusals(ir, bundle=BUNDLE, calc_ir=None):
-    """(valid, the personal-slot refusals with their arguments) of check_epoch over an epoch without rows, handed
-    the bundle."""
+    """(valid, the personal-slot refusals) of check_epoch over an epoch without rows, handed the bundle."""
     report = check_epoch([], {"id": "m-1", "snapshots": []}, load_rules(ir), lambda uri: b"", derived=set(),
                          bundle=bundle, check_metadata=LOADED, calc_ir=calc_ir)
-    return report["valid"], [{k: v for k, v in f.items() if k != "severity"} for f in report["findings"]
-                             if f["reason"] in CODES]
+    return report["valid"], personal(report["findings"])
 
 
-def in_rule(table):
-    return {"reason": "personal_slot_in_rule", "rule": "seen", "relation": table, "field": SLOT}
+def in_rule(table, rule="seen"):
+    return {"reason": "personal_slot_in_rule", "rule": rule, "relation": table, "field": SLOT}
 
 
 @pytest.mark.xfail(
     strict=True,
     raises=AssertionError,
     reason=(
-        "extra: decisions/personal-data-handling.md: check_epoch, handed the schema bundle, refuses a definition "
-        "that references a table belonging to a personal attribute (its own, `<table>_state` or a parameter "
-        "table) in a rule head, body or aggregate (personal_slot_in_rule), as a functional domain "
-        "(personal_slot_in_functional_domain) or in a calculation binding (personal_slot_in_calculation), and a "
-        "personal mark the bundle cannot carry (bundle_personal_flag_invalid, bundle_personal_table_invalid, "
-        "bundle_personal_arrow). Waits for "
+        "extra: decisions/personal-data-handling.md: check_epoch, handed the schema bundle, refuses a rule that "
+        "reads the table or the state projection of a personal attribute in a positive or negative body literal or "
+        "an aggregate, with personal_slot_in_rule (rule, relation, field). Waits for "
         "compiler/tests/test_personal_slots.py--test_rule_reading_personal_slot_is_refused (#1342), which lifts "
         "it with the fix."
     ),
@@ -108,10 +112,8 @@ def in_rule(table):
     (program(body=[atom("subject__display_name_state", "?s", "?st", "?r")],
              tables=[relation("subject__display_name_state", "subject", "state", "reason")]),
      "subject__display_name_state"),
-    (program(body=[atom("subject__display_name__maximum", "?m")],
-             tables=[relation("subject__display_name__maximum", "v")]), "subject__display_name__maximum"),
-], ids=["positive", "negative", "aggregate", "state", "parameter"])
-def test_a_rule_reading_a_table_of_a_personal_slot_is_refused(ir, table):
+], ids=["positive", "negative", "aggregate", "state"])
+def test_a_rule_reading_a_personal_slot_is_refused(ir, table):
     assert refusals(ir) == (False, [in_rule(table)])
 
 
@@ -119,12 +121,25 @@ def test_a_rule_reading_a_table_of_a_personal_slot_is_refused(ir, table):
     strict=True,
     raises=AssertionError,
     reason=(
-        "extra: decisions/personal-data-handling.md: check_epoch, handed the schema bundle, refuses a definition "
-        "that references a table belonging to a personal attribute (its own, `<table>_state` or a parameter "
-        "table) in a rule head, body or aggregate (personal_slot_in_rule), as a functional domain "
-        "(personal_slot_in_functional_domain) or in a calculation binding (personal_slot_in_calculation), and a "
-        "personal mark the bundle cannot carry (bundle_personal_flag_invalid, bundle_personal_table_invalid, "
-        "bundle_personal_arrow). Waits for "
+        "extra: decisions/personal-data-handling.md: check_epoch refuses a rule that reads the parameter table of "
+        "a personal attribute's bound, as a table that belongs to the attribute (section 3, the checker's wording; "
+        "waits on the owner's confirmation, since the Datalog bullet names only `<kind>__<slot>`). Waits for "
+        "compiler/tests/test_personal_slots.py--test_rule_reading_personal_slot_is_refused (#1342), which lifts "
+        "it with the fix."
+    ),
+)
+def test_a_rule_reading_a_parameter_table_of_a_personal_slot_is_refused():
+    ir = program(body=[atom("subject__display_name__maximum", "?m")],
+                 tables=[relation("subject__display_name__maximum", "v")])
+    assert refusals(ir) == (False, [in_rule("subject__display_name__maximum")])
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason=(
+        "extra: decisions/personal-data-handling.md: check_epoch refuses a rule whose head is the table of a "
+        "personal attribute, with personal_slot_in_rule (rule, relation, field). Waits for "
         "compiler/tests/test_personal_slots.py--test_rule_reading_personal_slot_is_refused (#1342), which lifts "
         "it with the fix."
     ),
@@ -147,12 +162,9 @@ def test_a_rule_reading_only_other_slots_passes(ir):
     strict=True,
     raises=AssertionError,
     reason=(
-        "extra: decisions/personal-data-handling.md: check_epoch, handed the schema bundle, refuses a definition "
-        "that references a table belonging to a personal attribute (its own, `<table>_state` or a parameter "
-        "table) in a rule head, body or aggregate (personal_slot_in_rule), as a functional domain "
-        "(personal_slot_in_functional_domain) or in a calculation binding (personal_slot_in_calculation), and a "
-        "personal mark the bundle cannot carry (bundle_personal_flag_invalid, bundle_personal_table_invalid, "
-        "bundle_personal_arrow). Waits for "
+        "extra: decisions/personal-data-handling.md: check_epoch refuses a functional derivation over the table "
+        "of a personal attribute as its domain, with personal_slot_in_functional_domain (rule: a rule that "
+        "derives it, relation: the domain table, field). Waits for "
         "compiler/tests/test_personal_slots.py--test_rule_reading_personal_slot_is_refused (#1342), which lifts "
         "it with the fix."
     ),
@@ -162,19 +174,16 @@ def test_a_functional_derivation_over_a_personal_slot_is_refused():
     is not valid either way; only the refusals are compared.)"""
     assert refusals(functional("subject__grade"))[1] == []
     assert refusals(functional("subject__display_name"))[1] == [
-        {"reason": "personal_slot_in_functional_domain", "relation": "pick", "field": SLOT}]
+        {"reason": "personal_slot_in_functional_domain", "rule": "pick_r", "relation": "subject__display_name",
+         "field": SLOT}]
 
 
 @pytest.mark.xfail(
     strict=True,
     raises=AssertionError,
     reason=(
-        "extra: decisions/personal-data-handling.md: check_epoch, handed the schema bundle, refuses a definition "
-        "that references a table belonging to a personal attribute (its own, `<table>_state` or a parameter "
-        "table) in a rule head, body or aggregate (personal_slot_in_rule), as a functional domain "
-        "(personal_slot_in_functional_domain) or in a calculation binding (personal_slot_in_calculation), and a "
-        "personal mark the bundle cannot carry (bundle_personal_flag_invalid, bundle_personal_table_invalid, "
-        "bundle_personal_arrow). Waits for "
+        "extra: decisions/personal-data-handling.md: check_epoch refuses a calculation whose fact reads the table "
+        "of a personal attribute, with personal_slot_in_calculation (relation, field). Waits for "
         "compiler/tests/test_personal_slots.py--test_rule_reading_personal_slot_is_refused (#1342), which lifts "
         "it with the fix."
     ),
@@ -183,34 +192,73 @@ def test_a_calculation_reading_a_personal_slot_is_refused():
     ir = program(body=[atom("subject__grade")])
     assert refusals(ir, calc_ir=calculation("subject__grade"))[1] == []
     assert refusals(ir, calc_ir=calculation("subject__display_name"))[1] == [
-        {"reason": "personal_slot_in_calculation", "field": "facts.amount", "relation": "subject__display_name"}]
+        {"reason": "personal_slot_in_calculation", "relation": "subject__display_name", "field": SLOT}]
 
 
 @pytest.mark.xfail(
     strict=True,
     raises=AssertionError,
     reason=(
-        "extra: decisions/personal-data-handling.md: check_epoch, handed the schema bundle, refuses a definition "
-        "that references a table belonging to a personal attribute (its own, `<table>_state` or a parameter "
-        "table) in a rule head, body or aggregate (personal_slot_in_rule), as a functional domain "
-        "(personal_slot_in_functional_domain) or in a calculation binding (personal_slot_in_calculation), and a "
-        "personal mark the bundle cannot carry (bundle_personal_flag_invalid, bundle_personal_table_invalid, "
-        "bundle_personal_arrow). Waits for "
+        "extra: decisions/personal-data-handling.md: check_role refuses a role's rule IR that reads the table of a "
+        "personal attribute, with personal_slot_in_rule (rule, relation, field). Waits for "
         "compiler/tests/test_personal_slots.py--test_rule_reading_personal_slot_is_refused (#1342), which lifts "
         "it with the fix."
     ),
 )
-@pytest.mark.parametrize("bundle, refusal", [
-    ({**BUNDLE, "attributes": [{**PERSONAL, "personal": "true"}, OTHER]},
-     {"reason": "bundle_personal_flag_invalid", "relation": SLOT}),
-    ({**BUNDLE, "attributes": [{**PERSONAL, "table": "subject__grade"}, OTHER]},
-     {"reason": "bundle_personal_table_invalid", "relation": SLOT}),
-    ({**BUNDLE, "arrows": [{"id": "subject.mentor", "kind": "subject", "name": "mentor", "table": "subject__mentor",
-                            "target": "subject", "multivalued": False, "personal": True}]},
-     {"reason": "bundle_personal_arrow", "relation": "subject.mentor"}),
-], ids=["flag-text", "other-table", "arrow"])
-def test_a_personal_mark_the_bundle_cannot_carry_is_refused(bundle, refusal):
-    """`personal` is a boolean on an attribute whose table is `<kind>__<name>` (contracts/bundle.yaml, section 2 of
-    the decision): anything else is refused, never read as not personal."""
-    valid, found = refusals(program(body=[atom("subject__grade")]), bundle)
-    assert (valid, found) == (False, [refusal])
+def test_a_role_whose_rules_read_a_personal_slot_is_refused():
+    """The role check derives the role's reads from the complete snapshots, the bundle and the rule IR; a rule IR
+    that reads a personal slot is refused before anything is read. Only the refusals are compared."""
+    def found(ir):
+        return personal(check_role("reader", {}, {}, None, BUNDLE, ir)[1])
+
+    assert found(program(body=[atom("subject__grade")])) == []
+    assert found(program(body=[atom("subject__display_name")])) == [in_rule("subject__display_name")]
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason=(
+        "extra: decisions/personal-data-handling.md: A `personal` flag that is not a boolean is refused with "
+        "bundle_personal_flag_invalid (field), never read as not personal. Waits for "
+        "compiler/tests/test_personal_slots.py--test_rule_reading_personal_slot_is_refused (#1342), which lifts "
+        "it with the fix."
+    ),
+)
+def test_a_personal_flag_that_is_not_a_boolean_is_refused():
+    bundle = {**BUNDLE, "attributes": [{**PERSONAL, "personal": "true"}, OTHER]}
+    assert refusals(program(body=[atom("subject__grade")]), bundle) == (
+        False, [{"reason": "bundle_personal_flag_invalid", "field": SLOT}])
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason=(
+        "extra: decisions/personal-data-handling.md: A personal attribute whose table is not `<kind>__<name>` is "
+        "refused with bundle_personal_table_invalid (field), so the table rules read cannot slip past. Waits for "
+        "compiler/tests/test_personal_slots.py--test_rule_reading_personal_slot_is_refused (#1342), which lifts "
+        "it with the fix."
+    ),
+)
+def test_a_personal_attribute_on_another_table_is_refused():
+    bundle = {**BUNDLE, "attributes": [{**PERSONAL, "table": "subject__grade"}, OTHER]}
+    assert refusals(program(body=[atom("subject__grade")]), bundle) == (
+        False, [{"reason": "bundle_personal_table_invalid", "field": SLOT}])
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason=(
+        "extra: decisions/personal-data-handling.md: An arrow marked personal is refused with "
+        "bundle_personal_arrow (field): `personal` goes on a scalar attribute (section 2). Waits for "
+        "compiler/tests/test_personal_slots.py--test_rule_reading_personal_slot_is_refused (#1342), which lifts "
+        "it with the fix."
+    ),
+)
+def test_a_personal_arrow_is_refused():
+    arrow = {"id": "subject.mentor", "kind": "subject", "name": "mentor", "table": "subject__mentor",
+             "target": "subject", "multivalued": False, "personal": True}
+    valid, found = refusals(program(body=[atom("subject__grade")]), {**BUNDLE, "arrows": [arrow]})
+    assert (valid, found) == (False, [{"reason": "bundle_personal_arrow", "field": "subject.mentor"}])
