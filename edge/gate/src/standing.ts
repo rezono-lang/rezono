@@ -184,7 +184,7 @@ export function rowWithdrawal(
 	);
 }
 
-function hasSortedKey(sorted: readonly { key: string[] }[], target: readonly string[]): boolean {
+export function hasSortedKey(sorted: readonly { key: string[] }[], target: readonly string[]): boolean {
 	let lo = 0, hi = sorted.length - 1;
 	while (lo <= hi) {
 		const mid = (lo + hi) >>> 1;

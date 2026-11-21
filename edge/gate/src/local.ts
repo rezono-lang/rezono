@@ -11,11 +11,11 @@ import { ask as evaluate, roleSchema, type Asking } from './expr.ts';
 import { compareKey, pageByKey, type KeyRange } from './pieces.ts';
 import { rowQueryScope, type RowSelection } from './row-query.ts';
 import {
-	earlierWithdrawal, epochWithdrawal, loadWithdrawals, rangeMatchingRows, rowsWithdrawal, rowWithdrawal,
+	earlierWithdrawal, epochWithdrawal, hasSortedKey, loadWithdrawals, rangeMatchingRows, rowsWithdrawal, rowWithdrawal,
 	standingHeaders, withdrawalBody, WithdrawnError, type WithdrawalRecord
 } from './standing.ts';
 import { fileStore, StoreLimit, type Store } from './store.ts';
-import { readPublishedSweep, sweepAnswer } from './sweep.ts';
+import { completeScope, readPublishedSweep, sweepAnswer } from './sweep.ts';
 
 const LIMIT = 1000;
 const REQUEST_BYTES = 16 * 1024;
@@ -283,6 +283,31 @@ async function rangeChecked(view: Current, withdrawals: readonly WithdrawalRecor
 	return pageByKey(all, at);
 }
 
+async function readSweepChecked(current: Current, withdrawals: readonly WithdrawalRecord[], pack: string, role: string, name?: string) {
+	let withdrawn: WithdrawalRecord | undefined;
+	const checkedView = {
+		...current,
+		range: async (relation: string, at: KeyRange): Promise<Page> => {
+			const all = await current.rows(relation);
+			withdrawn = earlierWithdrawal(
+				withdrawn,
+				rowsWithdrawal(withdrawals, current.manifest.id, relation, rangeMatchingRows(all, at))
+			);
+			return pageByKey(all, at);
+		}
+	};
+	const published = await readPublishedSweep(checkedView, pack, role, name);
+	if (!published) return undefined;
+	if (withdrawals.some((entry) => entry.rows.length > 0) && completeScope(current)) {
+		for (const relation of current.snaps.keys()) {
+			const rows = await current.rows(relation);
+			withdrawn = earlierWithdrawal(withdrawn, rowsWithdrawal(withdrawals, current.manifest.id, relation, rows));
+		}
+	}
+	if (withdrawn) throw new WithdrawnError(withdrawn);
+	return published;
+}
+
 function isManifestRoute(method: string, parts: readonly string[], search: URLSearchParams, manifestId: string): boolean {
 	const [, id, route] = parts;
 	if (parts.length === 2 && (id === 'head' || id === 'bundle')) {
@@ -320,15 +345,18 @@ async function named(view: Current, withdrawals: readonly WithdrawalRecord[], ro
 	const answer = await trace(memoryGraph([...published.witnesses, ...calc], [...steps, ...calcSteps(calc)]), question,
 		view.manifest.id, { relation, key: canonicalJson(key) }, { limit: Math.min(limitOf(search.get('limit')), question.limit), after: parseAfter(search.get('after')) }, sourcesOf(view, role));
 	if (!answer) return missing();
-	let withdrawn: WithdrawalRecord | undefined;
-	for (const node of answer.nodes) {
-		let parsed: unknown;
-		try { parsed = JSON.parse(node.key); } catch { continue; }
-		if (keyParts(parsed)) {
+	if (withdrawals.some((entry) => entry.rows.length > 0)) {
+		let withdrawn: WithdrawalRecord | undefined;
+		for (const node of answer.nodes) {
+			if (!view.snaps.has(node.relation)) continue;
+			let parsed: unknown;
+			try { parsed = JSON.parse(node.key); } catch { continue; }
+			if (!keyParts(parsed)) continue;
+			if (!hasSortedKey(await view.rows(node.relation), parsed)) continue;
 			withdrawn = earlierWithdrawal(withdrawn, rowWithdrawal(withdrawals, view.manifest.id, node.relation, parsed));
 		}
+		if (withdrawn) throw new WithdrawnError(withdrawn);
 	}
-	if (withdrawn) throw new WithdrawnError(withdrawn);
 	return answer;
 }
 
@@ -388,7 +416,7 @@ export async function openLocalGate(root: string, role: string): Promise<Handle>
 				if (url.searchParams.get('m') !== current.manifest.id) return missing();
 				const withdrawn = epochWithdrawal(withdrawals, current.manifest.id);
 				if (withdrawn) return gone(withdrawn);
-				const published = await readPublishedSweep(current, pack, role);
+				const published = await readSweepChecked(current, withdrawals, pack, role);
 				if (!published || await source.latest() !== headKey(pack, current.manifest.epoch)) return missing();
 				return json(published.listing, 200, standingHeaders(pack, current.manifest.epoch, current.manifest.id, current.manifest.epoch));
 			}
@@ -441,7 +469,7 @@ export async function openLocalGate(root: string, role: string): Promise<Handle>
 					if (q?.start === 'sweep' && q.answer === 'series') {
 						const name = url.searchParams.get('sweep');
 						if (!name || view !== current) return missing();
-						const published = await readPublishedSweep(current, pack, role, name);
+						const published = await readSweepChecked(current, withdrawals, pack, role, name);
 						if (!published || await source.latest() !== headKey(pack, current.manifest.epoch)) return missing();
 						return json(sweepAnswer(item, name, id, published.series), 200, standing);
 					}
