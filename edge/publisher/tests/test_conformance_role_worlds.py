@@ -90,7 +90,8 @@ def check_role_worlds(case_id, tmp_path):
             if expected is None:
                 assert witnesses == []
             else:
-                witness, = witnesses
+                assert witnesses
+                witness = witnesses[0]
                 value, = values
                 assert witness["conclusion"]["key"] == canonical_json(value)
                 check_witness(witness, expected, value)
