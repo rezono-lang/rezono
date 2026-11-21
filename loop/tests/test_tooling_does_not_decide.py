@@ -210,11 +210,6 @@ def test_change_to_target_selection_shared_form():
     assert rows["build_target_not_required"] == set()
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="extra: decisions/tooling-does-not-decide.md: Form 4 single-effect watchdog in packs/std-loop",
-)
 def test_single_effect_watchdog_shared_form():
     """Form 4: packs/std-loop derives watchdog_trigger, watchdog_resolve and watchdog_hold with fail-closed receipt check."""
     from rezono_compiler import pack, rules
