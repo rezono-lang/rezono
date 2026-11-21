@@ -1,0 +1,5 @@
+default:
+  kind: git
+  name: rezono-lang/rezono
+  revision: acb44d165dcd521505aeb920fd3c71330273ab12
+  position: decisions/platform-clusters.md

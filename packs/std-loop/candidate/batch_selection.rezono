@@ -46,18 +46,19 @@ rules batch_selection
   |     n = count : { verified_round_member(round, _) }.
   | 
   | // The round verifier replays the choice for each claim on its own, and the batch is the label its claim gives.
-  | // Two admitted rounds of one run and cut that name different batches leave the choice undecided, so neither is
-  | // selected.
-  | .decl loop_batch_undecided(batch: symbol)
-  | loop_batch_undecided(b) :-
-  |     current_verified_round(_, run, cut, b), current_verified_round(_, run, cut, c), b != c.
+  | // Two distinct admitted rounds of one run and cut leave the choice undecided for that run and cut, even when
+  | // they share a batch label, without affecting any other run or cut.
+  | .decl loop_batch_undecided(run: symbol, cut: symbol)
+  | loop_batch_undecided(run, cut) :-
+  |     current_verified_round(r1, run, cut, _), current_verified_round(r2, run, cut, _), r1 != r2.
   | 
-  | // A verified round's batch is certified above, so this rule selects it unless another admitted batch disagrees.
+  | // A verified round's batch is certified above, so this rule selects it unless another admitted round of the
+  | // same run and cut disagrees.
   | .decl loop_selected_batch(batch: symbol)
-  | loop_selected_batch(b) :- loop_certified_batch(b, _, _), !loop_batch_undecided(b).
-  | 
-  | .output loop_certified_batch
-  | .output loop_selected_batch
+  | loop_selected_batch(b) :-
+  |     current_verified_round(round, run, cut, b),
+  |     loop_certified_batch(b, round, _),
+  |     !loop_batch_undecided(run, cut).
   | 
   | .output loop_certified_batch
   | .output loop_selected_batch

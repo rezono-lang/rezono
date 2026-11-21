@@ -45,7 +45,7 @@ cleanup() {
   if docker container inspect "$container" >/dev/null 2>&1; then
     copy_rust_trace || true
     case "$shard" in
-      platform|subsidy) feldera_dependency_activity "$container" > "$reports/dependency-build.json" || true ;;
+      platform-incremental|platform-e2e|subsidy) feldera_dependency_activity "$container" > "$reports/dependency-build.json" || true ;;
     esac
     if (( status != 0 )); then
       docker logs --tail 250 "$container" > "$reports/engine.log" 2>&1 || true
@@ -70,7 +70,7 @@ compiler_env=(--env CARGO_NET_OFFLINE=true --env RUSTC_WRAPPER=/tmp/rezono-measu
 # The generated operator crates are small and independent. Leave the engine's dependencies and
 # the pipeline link crate on their original profile.
 printf '\n' > "$inputs/operator-codegen-units"
-if [[ "$shard" == platform ]]; then
+if [[ "$shard" == platform-incremental ]]; then
   printf '1\n' > "$inputs/operator-codegen-units"
 fi
 chmod 644 "$inputs/operator-codegen-units"
@@ -79,7 +79,7 @@ docker run --detach --name "$container" --network none "${compiler_env[@]}" \
   --mount "type=bind,src=$original,dst=/tmp/rezono-feldera-original-wrapper,readonly" \
   --mount "type=bind,src=$inputs,dst=/tmp/rezono-oracle-input,readonly" "$image"
 case "$shard" in
-  platform|subsidy)
+  platform-incremental|platform-e2e|subsidy)
     feldera_restore_dependencies "$image" "$container" | tee "$reports/dependency-restore.log"
     ;;
 esac
@@ -91,7 +91,7 @@ inside=(sudo nsenter --target "$pid" --net -- sudo -H -u "$(id -un)" --
         "FELDERA_ORACLE_REPORTS=$reports" "FELDERA_ORACLE_INPUT_DIR=$inputs")
 "${inside[@]}" curl --fail --silent --show-error --retry 45 --retry-connrefused \
   --retry-delay 2 --retry-max-time 95 --max-time 5 "$FELDERA_URL/healthz"
-if [[ "$shard" == platform ]]; then
+if [[ "$shard" == platform-incremental ]]; then
   # Retain the active Rust invocation even if GitHub stops the job before cleanup.
   (
     while docker container inspect "$container" >/dev/null 2>&1; do

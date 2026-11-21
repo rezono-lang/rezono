@@ -1,0 +1,27 @@
+id: https://rezono.org/examples/platform-core/safe-rounds
+name: platform_safe_rounds
+description: Dataset-to-copy binding and offline fence interval evidence for isolated management dataset restoration.
+in_language: en
+imports: [linkml:types]
+default_range: string
+annotations:
+  layer: facts
+
+classes:
+  RestoreDatasetBinding:
+    description: Binds a named management dataset to the exact captured backup copy for a restore trial.
+    attributes:
+      id: {identifier: true}
+      trial: {required: true}
+      dataset: {required: true}
+      backup: {required: true}
+      capture: {required: true}
+  RestoreOfflineInterval:
+    description: Complete stop or fence interval evidence establishing that management stayed offline across the restore readback.
+    attributes:
+      id: {identifier: true}
+      run: {required: true}
+      trial: {required: true}
+      start_evidence: {required: true}
+      end_evidence: {required: true}
+      readback_evidence: {required: true}

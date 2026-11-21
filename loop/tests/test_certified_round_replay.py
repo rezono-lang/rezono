@@ -5,6 +5,8 @@ import json
 import pytest
 
 from loop.recording_cli import main
+from loop.replay import Snapshot, replay_certified_report
+from loop.typed_recording import AttemptRecord, CertifiedRound
 from rezono_canon import canonical_bytes, canonical_json, canonical_sha256, sha256_hex
 from rezono_checker.evidence import admit
 from rezono_checker.transition import check_transition_certificate
@@ -200,20 +202,6 @@ def _recording(root, *, include_trusted_context=True):
     return plan_hash, data
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "M2: decisions/safe-step-rounds.md, decisions/loop-certificate-admission.md, decisions/admission-transport.md "
-        "and decisions/code-does-not-decide.md. Extend the ordinary typed recording and replay path for certified "
-        "rounds: allow a dated opening sweep in initial so step_safety_current_cut derives opening, admit the "
-        "recording's archived Evidence (archive, context, index) through rezono_checker.evidence.admit and feed "
-        "only the admitted verified_round and verified_round_member rows into std-loop, read ready (not unblocked) "
-        "for certified rounds, preserve durable attempt reservation across lost replies and reconciliation on "
-        "readback, refuse stale round cuts, and keep std-loop round_outcome (drift from later contrary readback "
-        "yields failure)."
-    ),
-)
 def test_certified_round_replay(tmp_path, capsys):
     certified_dir = tmp_path / "certified"
     plan_hash, data = _recording(certified_dir)
@@ -241,3 +229,42 @@ def test_certified_round_replay(tmp_path, capsys):
     assert main([str(recording)]) == 1
     refused = capsys.readouterr()
     assert not refused.out and "cut" in refused.err.lower()
+
+
+def test_reserved_plan_hash_cannot_be_released_by_another_step():
+    plan_hash = canonical_sha256({"step": "ship", "target": "ship"})
+    for release_state, done_in_c1 in (("applied", {"other"}), ("failed", set()), ("cleaned", set())):
+        snapshots = iter([
+            Snapshot({"ship", "other"}, [("r", "ship", "ok")], set(), set(), (), round_outcome="pending"),
+            Snapshot({"ship", "other"}, [("r", "ship", "ok")], done_in_c1, set(), (), round_outcome="pending"),
+            Snapshot({"ship", "other"}, [], {"ship", "other"}, set(), (), round_outcome="success"),
+        ])
+        rounds = [
+            CertifiedRound("r", "c0", (AttemptRecord("ship", plan_hash, "unknown"),)),
+            CertifiedRound("r", "c1", (AttemptRecord("other", plan_hash, release_state),)),
+            CertifiedRound("r", "c2", ()),
+        ]
+        with pytest.raises(ValueError, match="reserved"):
+            replay_certified_report("r", 3, snapshots, rounds, report_limit=True)
+
+
+def test_unconfirmed_applied_attempt_stays_reserved_until_readback():
+    plan_hash = canonical_sha256({"step": "ship", "target": "ship"})
+    for repeat_attempts in ((), (AttemptRecord("ship", plan_hash, "applied"),)):
+        snapshots = iter([
+            Snapshot({"ship"}, [("r", "ship", "ok")], set(), set(), (), round_outcome="pending"),
+            Snapshot({"ship"}, [("r", "ship", "ok")], set(), set(), (), round_outcome="pending"),
+            Snapshot({"ship"}, [], {"ship"}, set(), (), round_outcome="success"),
+        ])
+        rounds = [
+            CertifiedRound("r", "c0", (AttemptRecord("ship", plan_hash, "applied"),)),
+            CertifiedRound("r", "c1", repeat_attempts),
+            CertifiedRound("r", "c2", ()),
+        ]
+        plans, outcome, fixed_point, submissions, round_reports = replay_certified_report(
+            "r", 3, snapshots, rounds, report_limit=True,
+        )
+        assert (plans, outcome, fixed_point) == ([["ship"], []], "success", [])
+        assert submissions == [{"step": "ship", "plan_hash": plan_hash}]
+        assert [entry["reserved"] for entry in round_reports] == [[plan_hash], [plan_hash], []]
+        assert [entry["done"] for entry in round_reports] == [[], [], ["ship"]]

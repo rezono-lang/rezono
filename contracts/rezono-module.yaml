@@ -265,6 +265,7 @@ classes:
           - {range: ScalarAliasDecl, inlined: true}
           - {range: DatasetDecl, inlined: true}
           - {range: SourceDecl, inlined: true}
+          - {range: DecideDecl, inlined: true}
 
   ModuleHeader:
     abstract: true
@@ -305,9 +306,10 @@ classes:
           - &scalar_alias {range: ScalarAliasDecl}
           - range: DatasetDecl
           - &source_decl {range: SourceDecl}
+          - &decide_decl {range: DecideDecl}
 
   DatasetDecl:
-    description: A named fact dataset with its fact tables and source declarations in source order.
+    description: A named fact dataset with its fact tables, source declarations and decide blocks in source order.
     attributes:
       dataset: {required: true, range: Name}
       decls:
@@ -317,6 +319,7 @@ classes:
         any_of:
           - *fact_table
           - *source_decl
+          - *decide_decl
 
   SourceDecl:
     description: >-
@@ -591,6 +594,7 @@ classes:
           - range: RulesDecl
           - range: DatasetDecl
           - range: SourceDecl
+          - *decide_decl
           - range: StepDecl
     all_of:
       - slot_conditions:
@@ -636,6 +640,7 @@ classes:
           - *scalar_alias
           - range: DatasetDecl
           - *source_decl
+          - *decide_decl
           - range: StepDecl
 
   Rezono1Use:
@@ -1211,6 +1216,29 @@ classes:
       slot: {required: true, range: Name}
       value: {required: true, range: Expr, inlined: true}
       source: {}
+
+  DecideDecl:
+    description: A decision block naming its title, decider, date and the slot values it sets (docs/rezono/v0.md §5).
+    attributes:
+      decide: {required: true, range: string}
+      by: {required: true, range: Word}
+      "on": {required: true, range: Date}
+      valid: {range: Date, multivalued: true, minimum_cardinality: 1, maximum_cardinality: 2}
+      during:
+        description: The stages the decided values hold for, one stage or a range from a stage.
+        exactly_one_of:
+          - range: StageContext
+          - range: StageRange
+      in: {multivalued: true, minimum_cardinality: 1, description: "The setups the decided values hold in, in the order written."}
+      known: {range: Date}
+      source: {description: "The source reference after `@`."}
+      set: {required: true, range: DecideAssign, multivalued: true, inlined_as_list: true, minimum_cardinality: 1}
+
+  DecideAssign:
+    description: One slot assignment `<id>.<slot> = <value>` in a `decide` block.
+    attributes:
+      path: {required: true, range: Word, multivalued: true, minimum_cardinality: 2}
+      value: {required: true, range: Expr, inlined: true}
 
   Expr:
     description: >-

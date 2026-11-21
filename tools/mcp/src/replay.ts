@@ -9,7 +9,7 @@ import { z } from 'zod';
 import type { Pin } from './server.ts';
 
 const CALL = z.object({
-	tool: z.enum(['ask', 'grounds', 'kinds', 'more', 'reach', 'row', 'schema', 'search', 'sweep']),
+	tool: z.enum(['ask', 'gap', 'grounds', 'kinds', 'more', 'reach', 'row', 'schema', 'search', 'suppose', 'sweep']),
 	args: z.record(z.string(), z.unknown()),
 }).strict();
 const PLAN = z.object({

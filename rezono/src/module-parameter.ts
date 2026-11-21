@@ -31,7 +31,7 @@ export const parameter = {
   `,
 	actions: {
 		ParamTail_source: (_f, kind, _dot, slot, _by, nameSlot) => ({
-			source: { kind: kind.sourceString, slot: slot.sourceString, nameSlot: nameSlot.sourceString }
+			source: named(kind, { kind: kind.sourceString, slot: slot.sourceString, nameSlot: nameSlot.sourceString })
 		}),
 		ParamTail_value: (_eq, value) => ({ value: value.tree() as Expr }),
 		ParamLine(_k, n, _c, type, _per, per, tail) {

@@ -1,0 +1,11 @@
+default:
+  kind: git
+  name: rezono-lang/rezono
+  revision: 32e434cd93e65ccb68bed467a0e5920fcd08fef7
+  position: decisions/platform-product-licence-evidence.md
+records:
+  - of: {kind: licence_release_binding, id: bind-distribution-3.0.0}
+    kind: git
+    name: rezono-lang/rezono
+    revision: 0b9e8ffe2e9475f9591f58ea75d966de93818d1a
+    position: decisions/platform-registry-reference.md

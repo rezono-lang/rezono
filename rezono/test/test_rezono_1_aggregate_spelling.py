@@ -19,8 +19,8 @@ ROOT = Path(__file__).resolve().parents[2]
 COUNT = """\
 rezono 1
 pack sample
-kind Household world closed
-kind Application world closed
+kind Household
+kind Application
   household: Household
 extend h: Household
   derived applications: Int = {aggregate}
@@ -29,9 +29,9 @@ extend h: Household
 FILTERED_COUNT = """\
 rezono 1
 pack sample
-kind Application world closed
-kind CostItem world closed
-kind CostLine world closed
+kind Application
+kind CostItem
+kind CostLine
   application: Application
   item: CostItem
   amount: Int
@@ -44,8 +44,8 @@ extend a: Application
 SUM = """\
 rezono 1
 pack sample
-kind Application world closed
-kind LedgerPayment world closed
+kind Application
+kind LedgerPayment
   accepted: Bool
   application: Application
   amount: Int
@@ -140,16 +140,6 @@ class MissingAggregateSpelling(AssertionError):
     not read the tuple-set spelling beside a positional membership test."""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingAggregateSpelling,
-    reason="M3: decisions/language-rezono-1-aggregate-spelling.md: Waits for rezono/test/test_rezono_1_derived.py. "
-           "In rezono/src/, refuse in a rezono 1 module a relation call with a `_` argument in an aggregate's "
-           "collection position (the receiver of count, sum, min, max, any, all, none or one, directly or through "
-           "a filter) with R028 at that call and the hint hint.use_instead naming the tuple-set spelling (the "
-           "relation or kind name, then `.where(` or the aggregate method); keep a positional call as a membership "
-           "test, and read `.where(pred)`, `.count(pred)` and `r.sum(col)` with bare column names. Read section 1.",
-)
 @pytest.mark.parametrize(("module", "positional", "tuple_set", "call", "derived", "relation"), CASES)
 def test_rezono_1_refuses_positional_aggregates(module, positional, tuple_set, call, derived, relation):
     refused_source = module.format(aggregate=positional)

@@ -1,9 +1,11 @@
-# Expected allowances of the first slice of the healthcare allowance
-# (decisions/language-healthcare-allowance-slice.md), for the households of facts.rezono.
+# Expected allowances of the healthcare allowance slice
+# (decisions/language-healthcare-allowance-slice.md, decisions/healthcare-allowance-three-sources.md).
 #
-# Each case evaluates one household on one day (`as_of`, the first day of a month) with what is known on
+# Each case evaluates one claimant on one day (`as_of`, the first day of a month) with what is known on
 # `known`, as one `as of DAY known DAY` line of the pack does. `expect` is the monthly allowance in whole
 # cents, rounded down to whole euros, or the state and reason of an allowance that is not known.
+# `household` names the single-source key in facts.rezono (S01-S15); `claimant` names the synthetic
+# `Persoon` key in the three-source facts (S01-S17, never a real BSN).
 # The amounts, rates and versions are those of examples/zorgtoeslag/zorgtoeslag.rezono, in cents; they are
 # illustrative, not the published figures. `note` shows the arithmetic, exact until the one rounding.
 
@@ -14,6 +16,7 @@ cases:
   - id: S01
     title: a single claimant below the threshold income
     household: ann
+    claimant: p-ann
     as_of: 2026-01-01
     known: 2026-02-01
     expect: {cents: 13500}
@@ -22,6 +25,7 @@ cases:
   - id: S02
     title: a later known version of the standard premium replaces the earlier one on the same dates
     household: ann
+    claimant: p-ann
     as_of: 2026-03-01
     known: 2026-03-10
     expect: {cents: 13600}
@@ -30,6 +34,7 @@ cases:
   - id: S03
     title: the previous year's parameters and income apply to a month in that year
     household: ann
+    claimant: p-ann
     as_of: 2025-12-01
     known: 2026-06-01
     expect: {cents: 13100}
@@ -38,6 +43,7 @@ cases:
   - id: S04
     title: partners pay a double standard premium and a higher norm percentage
     household: bob
+    claimant: p-bob
     as_of: 2026-02-01
     known: 2026-02-10
     expect: {cents: 10500}
@@ -46,6 +52,7 @@ cases:
   - id: S05
     title: an income above the limit for a single claimant gives nothing
     household: fay
+    claimant: p-fay
     as_of: 2026-02-01
     known: 2026-06-01
     expect: {cents: 0}
@@ -54,6 +61,7 @@ cases:
   - id: S06
     title: the first income estimate
     household: gus
+    claimant: p-gus
     as_of: 2026-01-01
     known: 2026-02-01
     expect: {cents: 13500}
@@ -62,6 +70,7 @@ cases:
   - id: S07
     title: a corrected income estimate applies to a later month
     household: gus
+    claimant: p-gus
     as_of: 2026-04-01
     known: 2026-05-01
     expect: {cents: 8500}
@@ -70,6 +79,7 @@ cases:
   - id: S08
     title: without sealing, the corrected estimate also changes an earlier month
     household: gus
+    claimant: p-gus
     as_of: 2026-01-01
     known: 2026-05-01
     expect: {cents: 8500}
@@ -78,6 +88,7 @@ cases:
   - id: S09
     title: no income estimate leaves the allowance unknown
     household: hal
+    claimant: p-hal
     as_of: 2026-02-01
     known: 2026-06-01
     expect: {state: unknown, reason: no_version_applies}
@@ -86,6 +97,7 @@ cases:
   - id: S10
     title: a claimant who is not insured in the month gets nothing
     household: dex
+    claimant: p-dex
     as_of: 2026-02-01
     known: 2026-06-01
     expect: {cents: 0}
@@ -94,6 +106,7 @@ cases:
   - id: S11
     title: insured from March, so March is paid
     household: dex
+    claimant: p-dex
     as_of: 2026-03-01
     known: 2026-03-10
     expect: {cents: 13600}
@@ -102,6 +115,7 @@ cases:
   - id: S12
     title: a claimant who was never insured gets nothing
     household: eve
+    claimant: p-eve
     as_of: 2026-02-01
     known: 2026-06-01
     expect: {cents: 0}
@@ -109,6 +123,7 @@ cases:
   - id: S13
     title: an unknown insurance leaves the allowance unknown, not a decided zero
     household: ivy
+    claimant: p-ivy
     as_of: 2026-02-01
     known: 2026-06-01
     expect: {state: unknown, reason: no_version_applies}
@@ -117,6 +132,7 @@ cases:
   - id: S14
     title: partners above their income limit get nothing, although the formula gives an amount
     household: kim
+    claimant: p-kim
     as_of: 2026-02-01
     known: 2026-06-01
     expect: {cents: 0}
@@ -125,6 +141,23 @@ cases:
   - id: S15
     title: a month before the first parameter version has no allowance
     household: ann
+    claimant: p-ann
     as_of: 2024-12-01
     known: 2026-06-01
     expect: {state: unknown, reason: no_version_applies}
+
+  - id: S16
+    title: married in civil registry, living apart with a divorce petition, still in tax.Partner
+    claimant: p-leo
+    as_of: 2026-02-01
+    known: 2026-02-10
+    expect: {cents: 13500}
+    note: not toeslagpartner despite tax.Partner; own income 2600000 <= 2960000; (218000 - 1.879 % * 2960000) / 12 = 13531.8, rounded down to 13500
+
+  - id: S17
+    title: unmarried cohabiting parents of a joint child are toeslagpartners
+    claimant: p-noa
+    as_of: 2026-02-01
+    known: 2026-02-10
+    expect: {cents: 11600}
+    note: joint child p-pip at same address -> toeslagpartner; combined income 4200000; (2 * 218000 - (4.256 % * 2960000 + 13.7 % * 1240000)) / 12 = 11678.53, rounded down to 11600

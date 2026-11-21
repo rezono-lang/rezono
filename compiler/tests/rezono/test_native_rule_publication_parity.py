@@ -122,7 +122,9 @@ def premise(relation, *key):
 def check_publication(directory, source, bucket, manifest, titles, listed, count, numbers):
     assert manifest["definition_sha256"] == definition_pin(directory)
     assert manifest["sources"] == [{"source_id": "rules", "position": digest((directory / source).read_bytes())}]
-    assert {entry["status"] for entry in manifest["checks"]} == {"green"}
+    # This rezono 0 fixture tests implicit pack locators without sidecars, so rezono:origins warns.
+    assert {entry["status"] for entry in manifest["checks"] if entry["name"] != "rezono:origins"} == {"green"}
+    assert all(entry["status"] in {"green", "warning"} for entry in manifest["checks"])
     compiled = {entry["file"]: artifact(bucket, entry) for entry in manifest["compiled"]}
     bundle = compiled["bundle/schema-bundle.json"]
     # Rule IDs and stable IDs are local choices of each representation; resolve them by relation.

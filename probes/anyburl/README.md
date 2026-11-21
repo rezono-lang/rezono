@@ -41,7 +41,9 @@ must preserve the Git bytes of the pinned fact files.
 
 ```sh
 git -c core.autocrlf=false -c core.eol=lf worktree add --detach pinned a1bc4a2612ae74eb6556c90e7f8efab309d93cdc
-unzip -q probes/anyburl/evidence/44405578238.zip -d evidence
+# Download artifact 14476974527 from run 44405578238 and verify its SHA-256:
+# 10dbf9621cafc4e666b0a45b5baf6b37ba3abb7c8b300b1da88b9b08b4e33aa0  44405578238.zip
+unzip -q 44405578238.zip -d evidence
 python probes/anyburl/replay.py pinned/examples/platform evidence/projection \
   evidence/learner/rules-59 replay.json
 cmp evidence/report.json replay.json
@@ -77,10 +79,14 @@ inferred no excess. Raw line 620 added two `owner` values for
 two `zone__isolated_recovery` rows and missed two. The archive lists every exact
 counterexample and provenance gap.
 
-The [durable evidence archive](evidence/44405578238.zip) stores the unmodified raw rules,
-per-candidate report, exact projection and snapshot pins, settings and toolchain measurements.
-It stores one copy of the matching report. The hosted artifact has ID `14476974527` and
-GitHub digest `872a2a3e79af557e6ab5da82de06408db8fc9132cb1fde0555b7b1fc55cbe658`.
+The binary evidence archive (`44405578238.zip`, SHA-256
+`10dbf9621cafc4e666b0a45b5baf6b37ba3abb7c8b300b1da88b9b08b4e33aa0`) is no longer stored in Git:
+the probe produced 1,543 raw rules and 0 eligible candidates, recorded in the
+[import proposal decision](../../decisions/anyburl-import-proposals.md). That archive holds the
+unmodified raw rules, per-candidate report, exact projection and snapshot pins, settings,
+toolchain measurements, and one copy of the matching report. The hosted artifact has ID
+`14476974527` and GitHub digest
+`872a2a3e79af557e6ab5da82de06408db8fc9132cb1fde0555b7b1fc55cbe658`.
 [Hosted artifact](https://github.com/rezono-lang/rezono/actions/runs/44405578238/artifacts/14476974527)
 
 | Evidence | SHA-256 |

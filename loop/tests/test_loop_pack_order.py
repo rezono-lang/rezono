@@ -36,7 +36,7 @@ def test_loop_pack_order():
         if link:
             proof = explainer.proof("needed", ("current", "ship", "seeded", "source-a"), "fixture")
             witnesses = proof["witnesses"]
-            imported = [w for w in witnesses if w["conclusion"]["relation"] == "before"
+            imported = [w for w in witnesses if w["conclusion"]["relation"] in ("before", "direct_before")
                         and prog.rules[w["rule_id"]].origin[0].startswith("std-order:")]
             assert imported
             edges = {tuple(json.loads(p["row"]["key"])) for w in imported for p in w["premises"]

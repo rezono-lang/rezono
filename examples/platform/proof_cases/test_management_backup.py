@@ -44,6 +44,27 @@ def test_management_backup_age_and_absence():
     imported("std-decision")
 
 
+def test_management_backup_incomplete_inventory_with_old_copy_is_unknown():
+    from management_probes import compiled
+
+    data = records()
+    for scan in data["backup_inventory"]:
+        if scan["id"] == "scan-old":
+            scan["complete"] = False
+    _, state = compiled(data)
+    assert ("old", "unknown") in state.derived.get("managed_backup_state", set())
+    assert ("old", "too-old") not in state.derived.get("managed_backup_state", set())
+
+    data["backup_inventory"] = [scan for scan in data["backup_inventory"] if scan["id"] != "scan-old"]
+    for scan in data["backup_inventory"]:
+        if scan["id"] == "scan-kept":
+            scan["complete"] = False
+    _, state = compiled(data)
+    assert ("old", "unknown") in state.derived.get("managed_backup_state", set())
+    assert ("old", "too-old") not in state.derived.get("managed_backup_state", set())
+    assert ("kept", "current") in state.derived.get("managed_backup_state", set())
+
+
 @pytest.mark.parametrize(("kind", "changes"), [
     pytest.param(None, {}, id="matching-capture-and-readback"),
     pytest.param("backup_capture", None, id="missing-capture"),

@@ -2,9 +2,22 @@
 ---
 arrow.total = Each {$kind} has exactly one {$arrow}.
 arrow.partial = Each {$kind} has at most one {$arrow}.
+arrow.many.total = Each {$kind} has at least one {$arrow}.
 attribute.total = Each {$kind} has exactly one {$attribute}.
 attribute.partial = Each {$kind} has at most one {$attribute}.
 is_a = Each {$kind} is a {$parent}.
 unique_key = Each {$key} belongs to at most one {$kind}.
 path_equation = For each {$kind}, {$equation} holds.
 rule.platform_service_count = The platform runs {$n} services.
+reader.safe_platform_startup = Safe platform startup
+reader.safe_platform_startup.about = Observed completion of safe platform startup and recovery isolation probes for each run and cut.
+reader.safe_platform_startup.run = Run
+reader.safe_platform_startup.cut = Cut
+reader.safe_platform_startup.target = Target
+reader.safe_platform_startup.status = Status
+reader.offline_management_dataset_restore = Offline management dataset restore
+reader.offline_management_dataset_restore.about = Verified isolated restoration of a bound management dataset while management stayed offline throughout.
+reader.offline_management_dataset_restore.run = Run
+reader.offline_management_dataset_restore.cut = Cut
+reader.offline_management_dataset_restore.dataset = Dataset
+reader.offline_management_dataset_restore.readback = Readback

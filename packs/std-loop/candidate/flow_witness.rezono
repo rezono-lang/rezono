@@ -1,0 +1,105 @@
+rezono 0
+pack std-loop
+
+schema std_loop_flow_witness
+  iri "https://rezono.org/std-loop/flow-witness"
+  import "linkml:types"
+  default range Text
+  description "Flow test cases and independent probe and Hubble witness observations."
+  annotation layer = "facts"
+
+kind LoopFlowCase world closed
+  description "One expected service-to-service flow decision in a run."
+  run: Text
+  source: Text
+  destination: Text
+  protocol: Text
+  port: Int
+  expected: Text
+
+kind LoopFlowWitness world closed
+  description "One independent probe or Hubble observation for a flow case."
+  run: Text
+  case: Text
+  source: Text
+  destination: Text
+  protocol: Text
+  port: Int
+  witness: Text
+  outcome: Text
+
+rules flow_witness
+  | // Independent probe and Hubble witness verification for recorded flow cases (decisions/loop-design.md).
+  | // A witness counts only with the case's run and exact tuple; exactly one probe and one hubble witness
+  | // with distinct non-empty evidence references and valid outcomes are required.
+  | .decl flow_case_declared(run: symbol, case: symbol, source: symbol, destination: symbol, protocol: symbol, port: number, expected: symbol)
+  | .decl flow_case_expected(run: symbol, case: symbol, expected: symbol)
+  | .decl flow_case_witness(run: symbol, case: symbol, kind: symbol, ref: symbol, outcome: symbol)
+  | .decl flow_case_valid_witness(run: symbol, case: symbol, kind: symbol, ref: symbol, outcome: symbol)
+  | .decl flow_case_witness_count(run: symbol, case: symbol, kind: symbol, n: number)
+  | .decl flow_case_pair(run: symbol, case: symbol, expected: symbol, probe: symbol, probe_outcome: symbol, hubble: symbol, hubble_outcome: symbol)
+  | .decl flow_case_verdict(run: symbol, case: symbol, state: symbol, probe: symbol, hubble: symbol)
+  | .decl flow_case_decided(run: symbol, case: symbol)
+  | .decl flow_case_incomplete(run: symbol, case: symbol)
+  | 
+  | flow_case_declared(run, case, source, destination, protocol, port, expected) :-
+  |     loop_flow_case__run(case, run),
+  |     loop_flow_case__source(case, source),
+  |     loop_flow_case__destination(case, destination),
+  |     loop_flow_case__protocol(case, protocol),
+  |     loop_flow_case__port(case, port),
+  |     loop_flow_case__expected(case, expected).
+  | 
+  | flow_case_expected(run, case, "allow") :-
+  |     flow_case_declared(run, case, _, _, _, _, "allow").
+  | flow_case_expected(run, case, "deny") :-
+  |     flow_case_declared(run, case, _, _, _, _, "deny").
+  | 
+  | flow_case_witness(run, case, kind, ref, outcome) :-
+  |     flow_case_declared(run, case, source, destination, protocol, port, _),
+  |     loop_flow_witness__run(ref, run),
+  |     loop_flow_witness__case(ref, case),
+  |     loop_flow_witness__source(ref, source),
+  |     loop_flow_witness__destination(ref, destination),
+  |     loop_flow_witness__protocol(ref, protocol),
+  |     loop_flow_witness__port(ref, port),
+  |     loop_flow_witness__witness(ref, kind),
+  |     loop_flow_witness__outcome(ref, outcome).
+  | 
+  | flow_case_valid_witness(run, case, kind, ref, "allow") :-
+  |     flow_case_witness(run, case, kind, ref, "allow"),
+  |     ref != "".
+  | flow_case_valid_witness(run, case, kind, ref, "deny") :-
+  |     flow_case_witness(run, case, kind, ref, "deny"),
+  |     ref != "".
+  | 
+  | flow_case_witness_count(run, case, kind, n) :-
+  |     flow_case_witness(run, case, kind, _, _),
+  |     n = count : { flow_case_witness(run, case, kind, _, _) }.
+  | 
+  | flow_case_pair(run, case, expected, probe, probe_outcome, hubble, hubble_outcome) :-
+  |     flow_case_expected(run, case, expected),
+  |     flow_case_witness_count(run, case, "probe", 1),
+  |     flow_case_witness_count(run, case, "hubble", 1),
+  |     flow_case_valid_witness(run, case, "probe", probe, probe_outcome),
+  |     flow_case_valid_witness(run, case, "hubble", hubble, hubble_outcome),
+  |     probe != hubble.
+  | 
+  | flow_case_verdict(run, case, "confirmed", probe, hubble) :-
+  |     flow_case_pair(run, case, expected, probe, expected, hubble, expected).
+  | 
+  | flow_case_verdict(run, case, "disagreement", probe, hubble) :-
+  |     flow_case_pair(run, case, expected, probe, probe_outcome, hubble, _),
+  |     probe_outcome != expected.
+  | 
+  | flow_case_verdict(run, case, "disagreement", probe, hubble) :-
+  |     flow_case_pair(run, case, expected, probe, _, hubble, hubble_outcome),
+  |     hubble_outcome != expected.
+  | 
+  | flow_case_decided(run, case) :-
+  |     flow_case_verdict(run, case, _, _, _).
+  | 
+  | flow_case_incomplete(run, case) :-
+  |     flow_case_declared(run, case, _, _, _, _, _),
+  |     !flow_case_decided(run, case).
+

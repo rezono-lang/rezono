@@ -1,4 +1,5 @@
 import { block, declaration, named, opt, printWorld, type Build, type Line, type Logical, type World, type ModuleComponent } from './module-support.ts';
+import { spanOf, type Span } from './parse-support.ts';
 import { printDeprecated, type Deprecation } from './module-deprecation.ts';
 import { printDerived, readDerived, type DerivedDecl } from './module-derived.ts';
 import { key, printKey, type KeyDecl } from './module-key.ts';
@@ -6,6 +7,7 @@ import { printMetadata, readMetadataLine, type Metadata } from './module-metadat
 import { pathEquation, printPathEquation, type PathEquationDecl } from './module-path-equation.ts';
 import { printSlot, readSlot, type SlotDecl } from './module-slot.ts';
 import { printExpr } from './print-expression.ts';
+import { spellQualifiedName } from './rule-names.ts';
 import type { Expr } from './tree.ts';
 
 interface ConditionalCheckDecl extends Pick<Metadata, 'description'> {
@@ -23,6 +25,7 @@ export interface KindDecl extends Metadata {
 	relationship?: true;
 	parent?: string;
 	world?: World;
+	complete?: string;
 	applies?: { axis: 'at' | 'during' | 'in'; slot: string };
 	sealed?: string;
 	equations?: PathEquationDecl[];
@@ -34,6 +37,7 @@ export interface KindDecl extends Metadata {
 export interface ExtendDecl {
 	extend: string;
 	binder?: string;
+	slots?: SlotDecl[];
 	derived: DerivedDecl[];
 }
 
@@ -46,9 +50,18 @@ function readConditionalCheck(line: Logical, build: Build): ConditionalCheckDecl
 	return decl;
 }
 
+const worldSpans = new WeakMap<Line, Span>();
+
 function readKind(line: Logical, build: Build): KindDecl {
 	const decl: KindDecl = { ...build.strip<KindDecl>(line.read!), slots: [], derived: [] };
 	build.spans.set(decl, build.spans.get(line.read!)!);
+	if (decl.complete !== undefined && build.version !== '1') {
+		build.refuse(line, 'a `rezono 0` kind declaration');
+	}
+	if (build.version === '1' && decl.world === 'closed') {
+		const span = worldSpans.get(line.read!);
+		if (span) build.later.push({ code: 'W114', span, args: [span.text], hint: { id: 'hint.leave_out', args: [] } });
+	}
 	for (const child of line.block) {
 		if (readMetadataLine(decl, child, build)) continue;
 		const member = child.read!;
@@ -87,16 +100,18 @@ function readExtension(line: Logical, build: Build): ExtendDecl {
 	}
 	for (const child of line.block) {
 		if (child.read!.line === 'derived') decl.derived.push(readDerived(child, build, 'member'));
-		else build.refuse(child, '`derived`');
+		else if (child.read!.line === 'slot' && build.version === '1') (decl.slots ??= []).push(readSlot(child, build));
+		else build.refuse(child, build.version === '1' ? 'a slot or `derived`' : '`derived`');
 	}
 	return decl;
 }
 
 function printKind(d: KindDecl): string[] {
 	const parent = d.parent === undefined ? '' : ` is ${d.parent}`;
+	const complete = d.complete === undefined ? '' : `, complete by ${spellQualifiedName(d.complete)}`;
 	return [
 		...printDeprecated(d.deprecated),
-		...block(`${d.embedded ? 'embedded ' : d.abstract ? 'abstract ' : ''}${d.relationship ? 'relationship ' : ''}kind ${d.kind}${parent}${printWorld(d.world)}`, [
+		...block(`${d.embedded ? 'embedded ' : d.abstract ? 'abstract ' : ''}${d.relationship ? 'relationship ' : ''}kind ${d.kind}${parent}${printWorld(d.world)}${complete}`, [
 			...printMetadata(d),
 			...(d.applies ? [`applies ${d.applies.axis}: ${d.applies.slot}`] : []),
 			...(d.sealed !== undefined ? [`sealed at: ${d.sealed}`] : []),
@@ -119,7 +134,9 @@ export const kind = {
     | kw<"abstract"> kw<"relationship"> -- abstractRelationship
     | kw<"abstract"> -- abstract
     | kw<"relationship"> -- relationship
-  KindLine = KindModifier? kw<"kind"> typeName (is typeName)? World?
+  KindWorld = kw<"world"> kw<"open"> ("," kw<"complete"> by RuleRef)? -- open
+            | kw<"world"> kw<"closed">                                -- closed
+  KindLine = KindModifier? kw<"kind"> typeName (is typeName)? KindWorld?
   ExtendLine = kw<"extend"> (name ":")? typeName
   AppliesLine = kw<"applies"> (at | during | in) ":" name
   SealedLine = kw<"sealed"> at ":" name
@@ -131,6 +148,15 @@ export const kind = {
 		KindModifier_abstractRelationship: (_a, _r) => 'abstract relationship',
 		KindModifier_abstract: (_a) => 'abstract',
 		KindModifier_relationship: (_r) => 'relationship',
+		KindWorld_open(_world, _open, _comma, _complete, _by, rel) {
+			return {
+				world: 'open' as World,
+				...(rel.numChildren ? { complete: rel.child(0).decl() as string } : {}),
+			};
+		},
+		KindWorld_closed(_world, _closed) {
+			return { world: 'closed' as World };
+		},
 		KindLine(modifier, _k, t, _is, parent, world) {
 			const decl: Line = { line: 'kind', kind: t.sourceString };
 			const kindModifier = opt(modifier);
@@ -138,7 +164,12 @@ export const kind = {
 			if (kindModifier?.startsWith('abstract')) decl.abstract = true;
 			if (kindModifier?.endsWith('relationship')) decl.relationship = true;
 			if (parent.numChildren) decl.parent = opt(parent);
-			if (world.numChildren) decl.world = world.child(0).decl();
+			if (world.numChildren) {
+				const kindWorld = world.child(0).decl() as { world: World; complete?: string };
+				decl.world = kindWorld.world;
+				if (kindWorld.complete !== undefined) decl.complete = kindWorld.complete;
+				worldSpans.set(decl, spanOf(world.child(0)));
+			}
 			return named(t, decl);
 		},
 		ExtendLine(_k, binder, _colon, t) {
@@ -159,7 +190,10 @@ export const kind = {
 		extend: declaration<ExtendDecl>(
 			'extend',
 			readExtension,
-			d => block(`extend ${d.binder ? `${d.binder}: ` : ''}${d.extend}`, d.derived.flatMap(printDerived))
+			d => block(`extend ${d.binder ? `${d.binder}: ` : ''}${d.extend}`, [
+				...(d.slots ?? []).flatMap(printSlot),
+				...d.derived.flatMap(printDerived),
+			])
 		)
 	}
 } satisfies ModuleComponent;

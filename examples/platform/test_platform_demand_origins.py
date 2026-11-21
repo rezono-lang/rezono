@@ -41,12 +41,6 @@ def _maker(source: dict) -> bool:
     return kind == "git" and source.get("name") not in (None, THIS_REPOSITORY)
 
 
-@pytest.mark.xfail(strict=True, raises=MissingDemandOrigin, reason=(
-    "M2: decisions/platform-facts-not-conclusions.md, section 8. Give every demand row of examples/platform/facts/ "
-    "the origin its product requires: a decision file (a git source naming decisions/<id>.md) for the platform's own "
-    "products, those product_licence_gap lists as unknown-implementation; the maker's page (a document or tool "
-    "source with its URL and fragment hash) for a maker's requirement, as Keycloak's database is; a decision file "
-    "for the platform's own choice about a third-party product. No demand is synthetic."))
 def test_demands_cite_the_vendor_or_a_decision():
     from rezono_compiler import pack, sources
 

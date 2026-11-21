@@ -1,0 +1,5 @@
+default:
+  kind: git
+  name: rezono-lang/rezono
+  revision: ea1b182cbb89f50946a438a48e6508a4f16995a3
+  position: decisions/platform-release-comparison-unknown.md

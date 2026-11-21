@@ -122,6 +122,13 @@ function flattenGrammarRules(grammar: TextMateGrammar): CompiledRule[] {
 			if (entry) visit(entry);
 			return;
 		}
+		if (rule.begin !== undefined && rule.end !== undefined) {
+			const leaf = compileLeafRule(rule);
+			if (leaf.length) {
+				compiled.push(...leaf);
+				return;
+			}
+		}
 		if (rule.patterns) {
 			for (const nested of rule.patterns) visit(nested);
 			return;
@@ -158,6 +165,7 @@ function splitCapturedMatch(
 	const spans: HighlightSpan[] = [];
 	let cursor = start;
 	for (const region of regions) {
+		if (region.start < cursor) continue;
 		if (region.start > cursor) {
 			const gap = line.slice(cursor, region.start);
 			spans.push({ text: gap, kind: /^\s+$/.test(gap) ? null : outerKind });

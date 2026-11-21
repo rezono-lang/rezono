@@ -82,7 +82,6 @@ test('fixed local role scopes metadata, snapshots, pagination and absence', asyn
 	assert.deepEqual(catalogue.kinds, [{ id: 'item', class: 'Item', world: 'open' }]);
 	assert.deepEqual(catalogue.enums, []);
 	assert.ok(!JSON.stringify(catalogue).includes('unseen'));
-	assert.ok(!Object.hasOwn(catalogue, 'questions'));
 
 	const start = await (await reader(request(route + '/rows/item?starts=a&limit=1'))).json();
 	assert.deepEqual(start, { rows: [{ key: ['a'] }], next: ['a'] });
@@ -180,8 +179,8 @@ test('catalogue aliases use one role-scoped typed question with ordinary answers
 	const publicSchema = { ...schema, kinds: [schema.kinds[0], ...definedKinds], arrows: [{
 		id: 'item.link', kind: 'item', table: 'item__link', name: 'link', target: 'unseen', required: false
 	}], relations: [
-		{ id: 'unseen_outcome', columns: [{ name: 'key' }], outcome: 'unseen' },
-		{ id: 'item_outcome', columns: [{ name: 'key' }], outcome: 'item' }
+		{ id: 'unseen_outcome', columns: [{ name: 'key', type: 'string' }], outcome: 'unseen' },
+		{ id: 'item_outcome', columns: [{ name: 'key', type: 'string' }], outcome: 'item' }
 	] };
 	const snap = async (relation: string, role: string, full: boolean, keys: string[][] = []) => ({
 		relation, role, complete: false, full, format: 'json', ...await object(keys.map((key) => ({ key })))

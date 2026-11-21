@@ -13,6 +13,8 @@ in the module's file. The lowering is a pure function of the form: the same form
 
 from __future__ import annotations
 
+from collections import OrderedDict
+import hashlib
 import json
 import os
 import re
@@ -24,6 +26,7 @@ from tempfile import TemporaryDirectory
 from typing import cast
 
 from . import rezono_alias, rezono_calc, rezono_enum, rezono_extend, rezono_key, rezono_kind, rezono_metadata, rezono_reason, rezono_slot, rezono_unit, strict_yaml
+from .diagnostics import Diagnostic
 from .native_literals import NATIVE_FORMAT, native_literal_errors
 from .schemaview import SchemaView
 from linkml_runtime.linkml_model import SchemaDefinition
@@ -40,6 +43,7 @@ CHECKOUT_READER = Path(__file__).resolve().parents[2] / DIR / "src" / "write-for
 KEY = "rezono"  # the key of pack.yaml (contract RezonoModule in contracts/pack.yaml)
 PAGE = "docs/rezono/publication.md"
 DATASET_FORMAT = "rezono.module/2"
+DATASET_FORMATS = (DATASET_FORMAT, REZONO_1_FORMAT)
 PATH = re.compile(r"^rezono/[a-z][a-z0-9_]*(/[a-z][a-z0-9_]*)*\.(rezono|json)$")
 # Declarations this slice does not lower, by the member that names them: what, and where the page says so.
 REFUSED = {
@@ -71,6 +75,8 @@ class Lowered:
     uses: list[str] = field(default_factory=list)  # module ids within the pack, sorted
     foreign: list[str] = field(default_factory=list)  # `<pack>:<module>` of the schema modules of the used packs
     reasons: list[tuple[str, str]] = field(default_factory=list)  # (code, label) in declaration order
+    slot_targets: dict[tuple[str, str], str] = field(default_factory=dict)  # (kind, slot) -> owning module id
+    parent_targets: dict[str, str] = field(default_factory=dict)  # kind -> owning module id
 
 
 def declared(meta: dict, pack_dir: Path, errors: list[str], *, reject_undeclared: bool = True,
@@ -123,13 +129,12 @@ def declared(meta: dict, pack_dir: Path, errors: list[str], *, reject_undeclared
     return out
 
 
-def read_form(pack_dir: Path, d: Declared, errors: list[str],
-              *, authored_output: Path | None = None) -> dict | None:
-    """The form of a module, if it is one: format, module and spans, and nothing else."""
-    path = authored_output if authored_output is not None else pack_dir / d.form
-    where = f"{pack_dir.name}/{d.module if authored_output is not None else d.form}"
+def _load_form(pack_dir: Path, d: Declared, source: Path | bytes, errors: list[str],
+               *, authored: bool = False) -> dict | None:
+    """Validate and decode a module form from a file path or raw UTF-8 JSON bytes."""
+    where = f"{pack_dir.name}/{d.module if authored else d.form}"
     try:
-        doc = json.loads(path.read_bytes())
+        doc = json.loads(source.read_bytes() if isinstance(source, Path) else source)
     except (OSError, ValueError) as e:
         errors.append(f"{where}: not a JSON file ({e})")
         return None
@@ -153,12 +158,19 @@ def read_form(pack_dir: Path, d: Declared, errors: list[str],
     spans = doc["spans"]
     if not valid_places(module, spans) and not (
         "schema" in module and valid_places(module, spans, legacy_metadata=True)
-        and authored_output is None and form_only_source(pack_dir / d.module, doc)
+        and not authored and form_only_source(pack_dir / d.module, doc)
     ):
         errors.append(f"{where}: spans must place each module node once, in order, with a positive line and "
                       "nonnegative start and end offsets in ascending order (contracts/rezono-module.yaml)")
         return None
     return doc
+
+
+def read_form(pack_dir: Path, d: Declared, errors: list[str],
+              *, authored_output: Path | None = None) -> dict | None:
+    """The form of a module, if it is one: format, module and spans, and nothing else."""
+    path = authored_output if authored_output is not None else pack_dir / d.form
+    return _load_form(pack_dir, d, path, errors, authored=authored_output is not None)
 
 
 def effective_form(pack_dir: Path, d: Declared, errors: list[str]) -> dict | None:
@@ -174,8 +186,10 @@ def effective_dataset_form(pack_dir: Path, d: Declared, pack: str, submitted: di
     """Read authored dataset tables unless the exact historical form-only declaration is present."""
     module = submitted["module"]
     name = Path(d.module).stem
-    matches_legacy = not submitted["spans"] and not any(header_errors(module, pack))
-    header = f"rezono 0\npack {pack}\ndataset {name}"
+    fmt = submitted["format"]
+    version = "1" if fmt == REZONO_1_FORMAT else "0"
+    matches_legacy = not submitted["spans"] and not any(header_errors(module, pack, form_format=fmt))
+    header = f"rezono {version}\npack {pack}\ndataset {name}"
     return source_form(pack_dir, d, submitted, errors,
                        lambda source: matches_legacy and source.replace("\r\n", "\n").removesuffix("\n") == header)
 
@@ -204,6 +218,182 @@ def legacy_header(source: str, form: dict) -> bool:
     return actual == header
 
 
+_AUTHORED_CACHE_LIMIT = 512
+_BATCH_ARGV_LIMIT = 200
+_CacheKey = tuple[str, str, str, str]
+_CacheValue = tuple[bool, bytes | tuple[str, ...]]
+_AUTHORED_CACHE: OrderedDict[_CacheKey, _CacheValue] = OrderedDict()
+
+
+def clear_form_cache() -> None:
+    """Clear memoized authored module forms."""
+    _AUTHORED_CACHE.clear()
+
+
+def _cache_key(pack_dir: Path, d: Declared, reader: Path, node: str, data: bytes) -> _CacheKey:
+    return (str((pack_dir / d.module).resolve()), str(reader), node, hashlib.sha256(data).hexdigest())
+
+
+def _cache_get(key: _CacheKey) -> _CacheValue | None:
+    entry = _AUTHORED_CACHE.get(key)
+    if entry is not None:
+        _AUTHORED_CACHE.move_to_end(key)
+    return entry
+
+
+def _cache_put(key: _CacheKey, value: _CacheValue) -> None:
+    _AUTHORED_CACHE[key] = value
+    _AUTHORED_CACHE.move_to_end(key)
+    while len(_AUTHORED_CACHE) > _AUTHORED_CACHE_LIMIT:
+        _AUTHORED_CACHE.popitem(last=False)
+
+
+def _invoke_reader(reader: Path, node: str, items: list[tuple[_CacheKey, bytes]]) -> dict[_CacheKey, _CacheValue] | None:
+    """Run the module reader once for all uncached items, caching deterministic outcomes."""
+    by_sha: dict[str, tuple[bytes, list[_CacheKey]]] = {}
+    for key, data in items:
+        if _cache_get(key) is not None:
+            continue
+        sha = key[3]
+        if sha not in by_sha:
+            by_sha[sha] = (data, [key])
+        else:
+            by_sha[sha][1].append(key)
+    if not by_sha:
+        return {}
+    env = {k: v for k, v in os.environ.items() if not k.upper().startswith("NODE_")}
+    unique = list(by_sha.values())
+    try:
+        with TemporaryDirectory(prefix="rezono-module-") as directory:
+            base = Path(directory)
+            pairs: list[tuple[Path, Path, list[_CacheKey]]] = []
+            run_kwargs: dict[str, object] = {}
+            if len(unique) == 1:
+                source, target = base / "source.rezono", base / "form.json"
+                source.write_bytes(unique[0][0])
+                pairs.append((source, target, unique[0][1]))
+                cmd = [node, str(reader), source.name, target.name]
+            else:
+                for idx, (data, keys) in enumerate(unique):
+                    source, target = base / f"m{idx}.rezono", base / f"m{idx}.json"
+                    source.write_bytes(data)
+                    pairs.append((source, target, keys))
+                if len(pairs) <= _BATCH_ARGV_LIMIT:
+                    cmd = [node, str(reader), "--batch", *(name for s, t, _ in pairs for name in (s.name, t.name))]
+                else:
+                    cmd = [node, str(reader), "--batch"]
+                    run_kwargs["input"] = json.dumps([[s.name, t.name] for s, t, _ in pairs])
+            result = subprocess.run(
+                cmd, cwd=directory, capture_output=True, encoding="utf-8", env=env, **run_kwargs,  # type: ignore[arg-type]
+            )
+            outcomes: dict[_CacheKey, _CacheValue] = {}
+            stderr_lines = result.stderr.splitlines()
+            for source, target, keys in pairs:
+                if (result.returncode == 0 or len(pairs) > 1) and target.is_file():
+                    outcome: _CacheValue = (True, target.read_bytes())
+                    for key in keys:
+                        _cache_put(key, outcome)
+                        outcomes[key] = outcome
+                else:
+                    prefix = f"{source.name}:"
+                    diags = tuple(line.split(":", 1)[1] for line in stderr_lines if line.startswith(prefix))
+                    outcome = (False, diags)
+                    for key in keys:
+                        if diags:
+                            _cache_put(key, outcome)
+                        outcomes[key] = outcome
+            return outcomes
+    except (OSError, UnicodeError):
+        return None
+
+
+def _pending_authored(pack_dir: Path, meta: dict, decls: Iterable[Declared],
+                      reader: Path, node: str, *, datasets_only: bool = False) -> list[tuple[_CacheKey, bytes]]:
+    """Collect uncached (cache_key, source_bytes) pairs for declared modules that invoke the reader."""
+    pack_name = str(meta.get("name", ""))
+    source_dir = pack_dir.resolve() / DIR
+    out: list[tuple[_CacheKey, bytes]] = []
+    for d in decls:
+        mod_path, form_path = pack_dir / d.module, pack_dir / d.form
+        try:
+            if not (mod_path.resolve().is_relative_to(source_dir) and form_path.resolve().is_relative_to(source_dir)):
+                continue
+            submitted = json.loads(form_path.read_bytes())
+            data = mod_path.read_bytes()
+            source = data.decode("utf-8")
+        except (OSError, ValueError, UnicodeError):
+            continue
+        if not isinstance(submitted, dict):
+            continue
+        fmt = submitted.get("format")
+        if fmt not in (FORMAT, IDENTIFIER_FORMAT, NATIVE_FORMAT, SAFE_STEP_FORMAT, REZONO_1_FORMAT):
+            continue
+        if module_body(submitted, fmt) is None:
+            continue
+        if datasets_only:
+            plain = (module_body(submitted, FORMAT)
+                     or module_body(submitted, DATASET_FORMAT)
+                     or module_body(submitted, REZONO_1_FORMAT))
+            if plain is not None and fact_tables_only(plain):
+                if form_only_source(mod_path, submitted):
+                    continue
+            else:
+                mod = module_body(submitted, DATASET_FORMAT) or module_body(submitted, REZONO_1_FORMAT)
+                if mod is None or not any(isinstance(decl, dict) and "dataset" in decl for decl in mod["decls"]):
+                    continue
+                ds_only = dataset_only(submitted)
+                ds_mod = ds_only["module"]
+                name = Path(d.module).stem
+                version = "1" if fmt == REZONO_1_FORMAT else "0"
+                if (not ds_only["spans"] and not any(header_errors(ds_mod, pack_name, form_format=fmt))
+                        and source.replace("\r\n", "\n").removesuffix("\n") == f"rezono {version}\npack {pack_name}\ndataset {name}"):
+                    continue
+        elif fmt != NATIVE_FORMAT:
+            try:
+                if legacy_header(source, submitted):
+                    continue
+            except (KeyError, TypeError):
+                continue
+            ds_mod = module_body(submitted, DATASET_FORMAT) or module_body(submitted, REZONO_1_FORMAT)
+            if ds_mod is not None and named_dataset(ds_mod) is not None:
+                name = Path(d.module).stem
+                version = "1" if fmt == REZONO_1_FORMAT else "0"
+                if (not submitted["spans"] and not any(header_errors(ds_mod, pack_name, form_format=fmt))
+                        and source.replace("\r\n", "\n").removesuffix("\n") == f"rezono {version}\npack {pack_name}\ndataset {name}"):
+                    continue
+        key = _cache_key(pack_dir, d, reader, node, data)
+        if _cache_get(key) is None:
+            out.append((key, data))
+    return out
+
+
+def warm_packs(entries: Iterable[tuple[Path, dict, bool]]) -> None:
+    """Batch-parse all uncached authored Rezono modules across packs in a single reader invocation."""
+    reader = PACKAGED_READER if PACKAGED_READER.is_file() else CHECKOUT_READER
+    if not reader.is_file():
+        return
+    node = os.environ.get("REZONO_NODE", "node")
+    pending: list[tuple[_CacheKey, bytes]] = []
+    for pack_dir, meta, include_datasets in entries:
+        if not isinstance(meta, dict):
+            continue
+        decls = declared(meta, pack_dir, [], reject_undeclared=False, include_datasets=include_datasets)
+        pending.extend(_pending_authored(pack_dir, meta, decls, reader, node))
+    if pending:
+        _invoke_reader(reader, node, pending)
+
+
+def warm_pack_modules(pack_dir: Path, meta: dict, decls: Iterable[Declared], *, datasets_only: bool = False) -> None:
+    """Batch-parse all uncached authored Rezono modules in `decls` in a single reader invocation."""
+    reader = PACKAGED_READER if PACKAGED_READER.is_file() else CHECKOUT_READER
+    if not reader.is_file():
+        return
+    node = os.environ.get("REZONO_NODE", "node")
+    pending = _pending_authored(pack_dir, meta, decls, reader, node, datasets_only=datasets_only)
+    if pending:
+        _invoke_reader(reader, node, pending)
+
+
 def authored_form(pack_dir: Path, d: Declared, data: bytes, errors: list[str]) -> dict | None:
     where = f"{pack_dir.name}/{d.module}"
     reader = PACKAGED_READER if PACKAGED_READER.is_file() else CHECKOUT_READER
@@ -212,23 +402,19 @@ def authored_form(pack_dir: Path, d: Declared, data: bytes, errors: list[str]) -
         return None
     hint = "use Node 24" if reader == PACKAGED_READER else "use Node 24 and run npm ci in rezono/"
     node = os.environ.get("REZONO_NODE", "node")
-    env = {key: value for key, value in os.environ.items() if not key.upper().startswith("NODE_")}
-    try:
-        with TemporaryDirectory(prefix="rezono-module-") as directory:
-            source, target = Path(directory) / "source.rezono", Path(directory) / "form.json"
-            source.write_bytes(data)
-            result = subprocess.run(
-                [node, str(reader), source.name, target.name], cwd=directory,
-                capture_output=True, encoding="utf-8", env=env,
-            )
-            if result.returncode == 0:
-                return read_form(pack_dir, d, errors, authored_output=target)
-    except (OSError, UnicodeError):
-        errors.append(f"{where}: cannot run the module reader; {hint}")
-        return None
-    diagnostics = [f"{where}:{line.split(':', 1)[1]}" for line in result.stderr.splitlines()
-                   if line.startswith(f"{source.name}:")]
-    errors.extend(diagnostics or [f"{where}: the module reader failed; {hint}"])
+    key = _cache_key(pack_dir, d, reader, node, data)
+    outcome = _cache_get(key)
+    if outcome is None:
+        outcomes = _invoke_reader(reader, node, [(key, data)])
+        if outcomes is None:
+            errors.append(f"{where}: cannot run the module reader; {hint}")
+            return None
+        outcome = outcomes[key]
+    ok, payload = outcome
+    if ok:
+        return _load_form(pack_dir, d, cast(bytes, payload), errors, authored=True)
+    diags = cast(tuple[str, ...], payload)
+    errors.extend([f"{where}:{line}" for line in diags] or [f"{where}: the module reader failed; {hint}"])
     return None
 
 
@@ -254,7 +440,7 @@ def place_pointers(value: object, at: str = "", member: str = "", *, legacy_meta
             elif member == "memberMetadata":
                 if isinstance(child, dict):
                     yield pointer
-            elif key not in ("annotations", "prefixes"):
+            elif key not in ("annotations", "prefixes", "fields"):
                 yield from place_pointers(child, pointer, key)
     elif isinstance(value, list):
         for i, item in enumerate(value):
@@ -329,28 +515,46 @@ def dataset_only(form: dict) -> dict:
     return form | {"module": module | {"decls": module["decls"][-1:]}, "spans": spans}
 
 
+def _is_fact_table(decl: object) -> bool:
+    return isinstance(decl, dict) and isinstance(decl.get("fact"), str) and "columns" in decl and "rows" in decl
+
+
+def _is_decide_decl(decl: object) -> bool:
+    return (isinstance(decl, dict) and isinstance(decl.get("decide"), str)
+            and isinstance(decl.get("by"), str) and isinstance(decl.get("on"), str)
+            and isinstance(decl.get("set"), list))
+
+
+def _is_source_decl(decl: object) -> bool:
+    return isinstance(decl, dict) and decl.keys() == {"source", "fields"}
+
+
 def fact_tables_only(module: dict) -> bool:
-    """A module whose declarations are all fact tables (§5.3): the form of a base fact file."""
+    """A module whose declarations are only fact tables, decide blocks, and their sources (§5.3)."""
     declarations = module["decls"]
-    return bool(declarations) and all(
-        isinstance(decl, dict) and isinstance(decl.get("fact"), str) and "columns" in decl and "rows" in decl
-        for decl in declarations)
+    return (bool(declarations)
+            and any(_is_fact_table(decl) or _is_decide_decl(decl) for decl in declarations)
+            and all(_is_fact_table(decl) or _is_decide_decl(decl) or _is_source_decl(decl)
+                    for decl in declarations))
 
 
 def is_dataset_form(path: Path, source: Path | None = None) -> bool:
     """Dispatch only recognized dataset forms; leave other documents to ordinary schema validation. With its
-    source, an authored module of fact tables is one too; a form-only module is left to the refusal."""
+    source, an authored module of fact tables or decide blocks is one too; a form-only module is left to the refusal."""
     try:
         doc = json.loads(path.read_bytes())
     except (OSError, ValueError):
         return False
-    for fmt in (DATASET_FORMAT, REZONO_1_FORMAT):
+    for fmt in DATASET_FORMATS:
         module = module_body(doc, fmt)
         if module is not None and named_dataset(module) is not None:
             return True
-    module = module_body(doc, FORMAT)
-    return (source is not None and module is not None and fact_tables_only(module)
-            and not form_only_source(source, doc))
+    for fmt in (FORMAT, DATASET_FORMAT, REZONO_1_FORMAT):
+        module = module_body(doc, fmt)
+        if (source is not None and module is not None and fact_tables_only(module)
+                and not form_only_source(source, doc)):
+            return True
+    return False
 
 
 def pack_language_version(forms: Iterable[dict]) -> str:
@@ -359,6 +563,23 @@ def pack_language_version(forms: Iterable[dict]) -> str:
         if isinstance(form, dict) and form.get("format") == REZONO_1_FORMAT:
             return "1"
     return "0"
+
+
+def dataset_forms(pack_dir: Path, meta: dict) -> dict[Declared, dict]:
+    """Submitted JSON forms of declared dataset / fact-tables-only modules skipped by schema lowering."""
+    schema_decls = set(declared(meta, pack_dir, [], reject_undeclared=False, include_datasets=False))
+    all_decls = declared(meta, pack_dir, [], reject_undeclared=False, include_datasets=True)
+    out: dict[Declared, dict] = {}
+    for d in all_decls:
+        if d in schema_decls:
+            continue
+        try:
+            doc = json.loads((pack_dir / d.form).read_bytes())
+        except (OSError, ValueError):
+            continue
+        if isinstance(doc, dict) and isinstance(doc.get("module"), dict) and isinstance(doc.get("format"), str):
+            out[d] = doc
+    return out
 
 
 def header_errors(module: dict, pack: str, *, native_rules: bool = False,
@@ -500,7 +721,9 @@ def lower_pack(pack_dir: Path, meta: dict, pack: str, declared_by: Mapping[str, 
     pack that pack.yaml pins (the packs a `use` line may name). `pack` is the pack's name, `declared_by` the LinkML names each schema
     module of the pack declares, by module id within the pack, `imported` whether another pack imports it. Every
     refusal names the module's file and line."""
-    forms = {d: effective_form(pack_dir, d, errors) for d in declared(meta, pack_dir, errors)}
+    decls = declared(meta, pack_dir, errors)
+    warm_pack_modules(pack_dir, meta, decls)
+    forms = {d: effective_form(pack_dir, d, errors) for d in decls}
     owners: dict[str, list[str]] = {}
     ints: dict[str, set[str]] = {mid: set(ns) for mid, ns in (integer_types or {}).items()}
     for mid, ns in sorted(declared_by.items()):
@@ -527,7 +750,23 @@ def lower_pack(pack_dir: Path, meta: dict, pack: str, declared_by: Mapping[str, 
             ints.setdefault(mid, set()).update(local_ints)
     default_lang = str(meta.get("default_language", ""))
     defined_reasons = rezono_reason.defined_in_catalog(pack_dir, default_lang)
-    pack_version = pack_language_version(form for form in forms.values() if form is not None)
+    ds_forms = dataset_forms(pack_dir, meta)
+    pack_version = pack_language_version(
+        [*(form for form in forms.values() if form is not None), *ds_forms.values()]
+    )
+    if pack_version == "1":
+        for d, form in ds_forms.items():
+            module = form["module"]
+            where = f"{pack_dir.name}/{d.module}"
+            for key, message, section in header_errors(
+                module, pack, form_format=form["format"], pack_version=pack_version,
+            ):
+                if key == "rezono":
+                    n = header_line(pack_dir, d, key)
+                    code = "R028" if "(R028)" in message else "R027"
+                    errors.append(
+                        Diagnostic(code, f"{where}:{n}: {message} ({PAGE} {section})", where=where, span=(d.module, n, 1))
+                    )
     return [lower(pack_dir, d, form, pack, owners, errors, imported, pinned or {}, ints,
                   reason_owners=reason_owners, defined_reasons=defined_reasons, default_language=default_lang,
                   pack_version=pack_version)
@@ -604,6 +843,8 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
     reason_owners = reason_owners or {}
     declared_names = own.keys() | owners.keys()
     uses: set[str] = set()
+    slot_targets: dict[tuple[str, str], str] = {}
+    parent_targets: dict[str, str] = {}
     enums: dict[str, dict] = {}
     classes: dict[str, dict] = {}
     aliases: dict[str, dict] = {}
@@ -643,6 +884,7 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
                 decl, at, own, owners, declared_names, uses, refuse,
                 extended_format=extended_format, aliases=prefixes, kinds=kinds,
                 integer_types=integer_types, own_module=d.id, rezono_1=rezono_1,
+                layer=d.layer, slot_targets=slot_targets, parent_targets=parent_targets,
             )
             if lowered_kind is not None:
                 if keys:
@@ -656,6 +898,10 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
             refuse(at, "a `rule` declaration is removed in `rezono 1` (R028)")
         elif "rule" in decl and native_rules:
             continue  # The rule assembler needs the checked schema and pinned imports.
+        elif "step" in decl:
+            if form["format"] not in (SAFE_STEP_FORMAT, REZONO_1_FORMAT):
+                refuse(at, "a step declaration requires rezono.module/4 or rezono.module/5", "§6")
+            continue  # Step declarations are lowered after native rules and schema resolution.
         elif "extend" in decl:
             rezono_extend.validate(decl, at, imported, refuse, extended_format=extended_format, rezono_1=rezono_1)
         elif "asOf" in decl and extended_format:
@@ -674,6 +920,8 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
                 refuse(at, "a fact table is not lowered yet", "§5.3")
             else:
                 refuse(at, "a fact row is not lowered (no ticket yet)")
+        elif "decide" in decl:
+            refuse(at, "a decide block is not lowered in a schema module", "§5.3")
         elif "unit" in decl:
             if unit := rezono_unit.lower(decl, at, refuse):
                 aliases[decl["unit"]] = unit
@@ -715,7 +963,10 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
         )
     foreign = [f"{u}:{mid}" for u in used for mid in sorted(pinned[u])]
     schema["imports"] += foreign
-    return Lowered(d, schema, form, sorted(u for u in uses if u.partition(":")[2] == ""), foreign, reasons)
+    return Lowered(
+        d, schema, form, sorted(u for u in uses if u.partition(":")[2] == ""), foreign, reasons,
+        slot_targets, parent_targets,
+    )
 
 
 def view(schema: dict, importmap: dict) -> SchemaView:

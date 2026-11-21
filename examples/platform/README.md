@@ -31,3 +31,10 @@ Every acceptance question in [`questions.yaml`](questions.yaml) is assigned in [
 - [`facts/`](facts/) holds the authored platform topology, policy, and decision facts.
 - [`questions.yaml`](questions.yaml) and [`scenes.yaml`](scenes.yaml) list the 68 acceptance questions and their scene assignments.
 - [`test_five_scenes.py`](test_five_scenes.py) verifies scene assignments, `std-loop` integration, `std-decision` standing, these README publication counts, and per-scene offline replay recordings.
+
+## Schema path equations
+
+The platform schema uses LinkML `annotations.path_equations` to enforce cross-reference consistency before rules run:
+
+- `Pin.same_product` in [`schema/core.yaml`](schema/core.yaml) requires `service.product` to equal `release.product`, rejecting pins that point a service to another product's release.
+- `ClusterWorkerNode.same_cluster` in [`schema/cluster_worker_network.yaml`](schema/cluster_worker_network.yaml) requires `endpoint.owner` to equal `owner`, rejecting worker nodes attached to another cluster's endpoint.

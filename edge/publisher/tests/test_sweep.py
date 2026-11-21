@@ -104,11 +104,33 @@ def test_role_scoped_sweep_publication(repo, tmp_path):
     """Publish the real restricted-role sweep consumed by the Gate, REPL and MCP acceptances."""
     sh("git", "config", "core.autocrlf", "false", cwd=repo)
     explain = repo / "packs" / "std-explain"
+    decision = repo / "packs" / "std-decision"
     shutil.copytree(ROOT / "packs" / "std-explain", explain)
+    shutil.copytree(ROOT / "packs" / "std-decision", decision)
     pack = repo / PACK / "pack.yaml"
     metadata = yaml.safe_load(pack.read_text(encoding="utf-8"))
-    metadata["imports"] = [{"name": "std-explain", "path": "../std-explain", "sha256": modules.pack_hash(explain)}]
+    metadata["imports"] = [
+        {"name": "std-explain", "path": "../std-explain", "sha256": modules.pack_hash(explain)},
+        {"name": "std-decision", "path": "../std-decision", "sha256": modules.pack_hash(decision)},
+    ]
     pack.write_text(yaml.safe_dump(metadata, sort_keys=False), encoding="utf-8", newline="\n")
+
+    # Bind Alpha records to a std-decision Decision so every fact row has an origin across swept deltas.
+    schema_path = repo / PACK / "schema" / "minimal.yaml"
+    schema = yaml.safe_load(schema_path.read_text(encoding="utf-8"))
+    schema["imports"] = [*schema.get("imports", []), "std-decision:decision"]
+    schema["classes"]["Alpha"]["attributes"]["decision"] = {"range": "Decision"}
+    schema_path.write_text(yaml.safe_dump(schema, sort_keys=False), encoding="utf-8", newline="\n")
+    (repo / PACK / "facts" / "a.yaml").write_text(
+        "decision:\n"
+        "  - {id: d1, title: Initial sizing, decider: [owner], decided_on: 2026-01-01, "
+        "valid_from: 2026-01-01, valid_from_day: 20260101, state: in_force}\n"
+        "alpha:\n"
+        "  - {id: a1, title: t, size: 1, decision: d1}\n"
+        "  - {id: a2, title: u, size: 1, decision: d1}\n",
+        encoding="utf-8",
+        newline="\n",
+    )
 
     rules = repo / PACK / "rules"
     rules.mkdir(exist_ok=True)

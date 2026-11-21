@@ -191,15 +191,18 @@ function buildSchema(module: Module): {
 			kindDecls.set(decl.kind, decl);
 			const slots: Record<string, SlotDef> = {};
 			for (const s of decl.slots) {
-				slots[s.slot] = slotDefFor(s.type, s.card, s.world, s.inverse, false);
+				slots[s.slot] = slotDefFor(s.type, s.card, s.world, s.inverse?.split('.').pop(), false);
 			}
 			for (const d of decl.derived) {
 				slots[d.derived] = slotDefFor(d.type, d.card, undefined, undefined, true);
 			}
-			kinds[decl.kind] = { world: decl.world ?? 'open', id: { type: 'Text' }, slots };
+			kinds[decl.kind] = { world: decl.world ?? (module.rezono === '1' ? 'closed' : 'open'), id: { type: 'Text' }, slots };
 		} else if ('extend' in decl) {
 			const k = kinds[decl.extend];
 			if (k) {
+				for (const s of decl.slots ?? []) {
+					k.slots[s.slot] = slotDefFor(s.type, s.card, s.world, s.inverse?.split('.').pop(), false);
+				}
 				for (const d of decl.derived) {
 					k.slots[d.derived] = slotDefFor(d.type, d.card, undefined, undefined, true);
 				}
@@ -864,18 +867,22 @@ export function runExamples(module: Module): ExamplesResult {
 					const winners = trueIndices.filter(
 						(di) => !trueIndices.some((other) => other !== di && overrides.get(defs[other].name)!.has(defs[di].name))
 					);
-					if (undecided.length) {
-						const blockingUndecided = undecided.filter(
-							(u) => !trueIndices.some((ai) => overrides.get(defs[ai].name)!.has(defs[u.idx].name))
-						);
-						if (blockingUndecided.length && winners.length <= 1) {
-							return worstV(blockingUndecided.map((u) => u.v))!;
-						}
-					}
+					const blockingUndecided = undecided.filter(
+						(u) => !trueIndices.some((ai) => overrides.get(defs[ai].name)!.has(defs[u.idx].name))
+					);
 					if (winners.length > 1) {
+						const resolvingUndecided = blockingUndecided.filter((u) =>
+							winners.every((w) => overrides.get(defs[u.idx].name)!.has(defs[w].name))
+						);
+						if (resolvingUndecided.length) {
+							return worstV(resolvingUndecided.map((u) => u.v))!;
+						}
 						for (const di of winners) flags[di] = true;
 						addCoreViolation('exception_conflict', id);
 						return { s: 'invalid', reason: 'exception_conflict', cause: { relation, key: [id] } };
+					}
+					if (blockingUndecided.length) {
+						return worstV(blockingUndecided.map((u) => u.v))!;
 					}
 					if (winners.length === 1) {
 						const winIdx = winners[0];

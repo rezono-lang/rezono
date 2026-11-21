@@ -16,5 +16,5 @@ classes:
       run: {required: true}
       relation: {required: true}
       reason: {required: true}
-      at: {required: true, description: "Original event time, or empty for a legacy reading without time."}
-      event_time: {range: integer, required: true, description: "Order of the original event instant, or -1 when it is unknown."}
+      at: {required: false, description: "Original event time when known; omitted when unknown."}
+      event_time: {range: integer, required: false, description: "Order of the original event instant when known; omitted when unknown."}

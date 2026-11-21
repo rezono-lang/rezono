@@ -60,6 +60,32 @@ def bound_facets(slot: dict, is_integer: bool, constraints: object) -> dict[str,
     return rezono_numeric_limits.lower(constraints)
 
 
+def resolve_prefixed_target(
+    name: str,
+    aliases: Mapping[str, Mapping[str, list[str]]] | None,
+    at: str,
+    refuse: Refuse,
+    *,
+    role: str = "",
+) -> tuple[str, str] | None:
+    """Resolve `prefix.Name` against the module's aliased `use` packs, returning `(Name, module_id)` or refusing."""
+    prefix, _, local = name.partition(".")
+    if aliases is None or prefix not in aliases:
+        refuse(at, f"prefix {prefix} is not declared by a `use` line", "§5.1")
+        return None
+    found = aliases[prefix].get(local, [])
+    if len(found) == 1:
+        return local, found[0]
+    subject = f"{role} {name}" if role else name
+    reason = (
+        f"{subject} is declared by modules {' and '.join(found)}"
+        if found
+        else f"{subject} is not declared by the pack imported as {prefix}"
+    )
+    refuse(at, reason, "§5.1")
+    return None
+
+
 def resolve_prefixed(
     name: str,
     aliases: Mapping[str, Mapping[str, list[str]]] | None,
@@ -69,21 +95,8 @@ def resolve_prefixed(
     role: str = "",
 ) -> str | None:
     """Resolve `prefix.Name` against the module's aliased `use` packs, returning `Name` or refusing at `at`."""
-    prefix, _, local = name.partition(".")
-    if aliases is None or prefix not in aliases:
-        refuse(at, f"prefix {prefix} is not declared by a `use` line", "§5.1")
-        return None
-    found = aliases[prefix].get(local, [])
-    if len(found) == 1:
-        return local
-    subject = f"{role} {name}" if role else name
-    reason = (
-        f"{subject} is declared by modules {' and '.join(found)}"
-        if found
-        else f"{subject} is not declared by the pack imported as {prefix}"
-    )
-    refuse(at, reason, "§5.1")
-    return None
+    resolved = resolve_prefixed_target(name, aliases, at, refuse, role=role)
+    return None if resolved is None else resolved[0]
 
 
 def lower(slots: list[dict], declared: Set[str], *, implicit_identifier: bool = True) -> dict[str, dict]:
@@ -152,7 +165,8 @@ def validate(slots: list, kind: str, at: str, own: Mapping[str, str], owners: Ma
              aliases: Mapping[str, Mapping[str, list[str]]] | None = None,
              kinds: Mapping[str, list] | None = None,
              integer_types: Mapping[str, Set[str]] | None = None,
-             own_module: str = "") -> bool:
+             own_module: str = "",
+             targets: dict[tuple[str, str], str] | None = None) -> bool:
     """Check slot forms and resolve references against all the modules of the pack."""
     ok = True
     seen: set[str] = set()
@@ -218,13 +232,15 @@ def validate(slots: list, kind: str, at: str, own: Mapping[str, str], owners: Ma
         name = slot["type"]
         ints = integer_types or {}
         if "." in name:
-            resolved = resolve_prefixed(name, aliases, here, refuse)
+            resolved = resolve_prefixed_target(name, aliases, here, refuse)
             if resolved is None:
                 ok = False
+            elif targets is not None:
+                targets[(kind, slot["slot"])] = resolved[1]
             if has_constraints:
                 prefix, _, local = name.partition(".")
-                targets = (aliases or {}).get(prefix, {}).get(local, [])
-                is_integer = len(targets) == 1 and local in ints.get(targets[0], ())
+                targets_for_int = (aliases or {}).get(prefix, {}).get(local, [])
+                is_integer = len(targets_for_int) == 1 and local in ints.get(targets_for_int[0], ())
                 try:
                     constraint_facets(slot, is_integer)
                 except ValueError as error:
@@ -245,11 +261,22 @@ def validate(slots: list, kind: str, at: str, own: Mapping[str, str], owners: Ma
                 refuse(here, str(error), "§5.1")
                 ok = False
         if name in own or range_name is not None:
+            if name in own and range_name is None and targets is not None and own_module:
+                targets[(kind, slot["slot"])] = own_module
             continue
         if len(found) == 1:
             uses.add(found[0])
+            if targets is not None:
+                targets[(kind, slot["slot"])] = found[0]
             continue
-        refuse(here, f"{name} is declared by modules {' and '.join(found)} of this pack" if found else
-               f"{name} is not Date, Text, or an enum or a kind of this pack. Built-in Bool is also supported", "§5.1")
+        if found:
+            reason = (
+                f"{name} is declared by modules {' and '.join(found)}; qualify it with an import alias"
+                if any(":" in module for module in found)
+                else f"{name} is declared by modules {' and '.join(found)} of this pack"
+            )
+        else:
+            reason = f"{name} is not Date, Text, or an enum or a kind of this pack. Built-in Bool is also supported"
+        refuse(here, reason, "§5.1")
         ok = False
     return ok

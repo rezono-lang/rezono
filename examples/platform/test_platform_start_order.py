@@ -45,7 +45,10 @@ def _closure(pairs: set) -> set:
     "stated_precedes(a, b) that before closes over, with its staged candidate, and re-pin std-order in "
     "packs/std-loop/pack.yaml and examples/platform/pack.yaml and onward; then state stated_precedes(b, a) for each "
     "needs(a, b, _) in examples/platform/rules/core.dl. Keep Service.step and flow_from_step: a planner retires "
-    "them."))
+    "them. Blocked on planner: adding stated_precedes to std-order breaks protected assertions in "
+    "compiler/tests/test_theory_order.py (derived list and reference keys) and "
+    "compiler/tests/test_view_theory_axioms.py (reads(order, 'before')), and closing before directly over two "
+    "recursive rules hits NotImplementedError in compiler/rezono_compiler/rules_sql.py."))
 def test_start_order_follows_from_needs_through_std_order():
     needs = {(a, b) for a, b, _ in json.loads((PLATFORM / "oracle-rows.json").read_text(encoding="utf-8"))["needs"]}
     model, prog, label, rows = _rows()

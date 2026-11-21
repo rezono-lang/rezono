@@ -4,38 +4,38 @@ placed_flow_endpoint(owner, purpose, endpoint) :-
     cluster_flow_endpoint__endpoint(binding, endpoint), cluster_flow_endpoint__purpose(binding, purpose),
     cluster_owned_endpoint__owner(endpoint, owner), cluster_endpoint_host(endpoint, _).
 
-.decl cluster_flow_service_endpoint(service: symbol, endpoint: symbol)
-cluster_flow_service_endpoint(service, service) :-
+.decl flow_service_endpoint(service: symbol, endpoint: symbol)
+flow_service_endpoint(service, service) :-
     cluster_service_placement(service, _), cluster_endpoint_host(service, _).
-cluster_flow_service_endpoint(service, endpoint) :-
+flow_service_endpoint(service, endpoint) :-
     cluster_control_service__service(_, service), cluster_service_placement(service, owner),
     placed_flow_endpoint(owner, "control", endpoint).
 
-.decl cluster_flow_candidate(source: symbol, target: symbol, function: symbol, port: number)
+.decl flow_candidate(source: symbol, target: symbol, function: symbol, port: number)
 
 // A normal service reaches the provider. A control demand reaches the consumer's own control endpoint.
-cluster_flow_candidate(source, provider, function, port) :-
-    flow(service, provider, function, port), cluster_flow_service_endpoint(service, source),
+flow_candidate(source, provider, function, port) :-
+    flow(service, provider, function, port), flow_service_endpoint(service, source),
     cluster_service_placement(provider, _), cluster_endpoint_host(provider, _),
     !cluster_flow_transport__purpose(function, "control").
-cluster_flow_candidate(source, target, function, port) :-
+flow_candidate(source, target, function, port) :-
     flow(service, provider, function, port), cluster_control_service__service(_, provider),
     cluster_flow_transport__purpose(function, "control"), cluster_service_placement(service, owner),
-    cluster_flow_service_endpoint(service, source), placed_flow_endpoint(owner, "control", target).
+    flow_service_endpoint(service, source), placed_flow_endpoint(owner, "control", target).
 
-cluster_flow_candidate(agent, fleet, function, port) :-
+flow_candidate(agent, fleet, function, port) :-
     cluster_fleet_member(member, hub), placed_flow_endpoint(member, "agent", agent),
     placed_flow_endpoint(hub, "fleet", fleet),
     cluster_flow_transport__purpose(function, "registration"), cluster_flow_transport__port(function, port).
-cluster_flow_candidate(fleet, control, function, port) :-
+flow_candidate(fleet, control, function, port) :-
     cluster_fleet_member(member, hub), placed_flow_endpoint(hub, "fleet", fleet),
     placed_flow_endpoint(member, "control", control),
     cluster_flow_transport__purpose(function, "apply"), cluster_flow_transport__port(function, port).
-cluster_flow_candidate(worker, control, function, port) :-
+flow_candidate(worker, control, function, port) :-
     cluster__role(owner, role), cluster_role__control_placement(role, "hosted"),
     placed_flow_endpoint(owner, "worker", worker), placed_flow_endpoint(owner, "control", control),
     cluster_flow_transport__purpose(function, "control"), cluster_flow_transport__port(function, port).
-cluster_flow_candidate(source, storage, function, port) :-
+flow_candidate(source, storage, function, port) :-
     cluster_storage_use__owner(use, owner), cluster_storage_use__source_purpose(use, purpose),
     cluster_storage_use__transport(use, function), placed_flow_endpoint(owner, purpose, source),
     cluster_storage_use__destination(use, binding), cluster_flow_endpoint__endpoint(binding, storage),
@@ -44,7 +44,7 @@ cluster_flow_candidate(source, storage, function, port) :-
 
 .decl cluster_flow(source: symbol, target: symbol, function: symbol, port: number)
 cluster_flow(source, target, function, port) :-
-    cluster_flow_candidate(source, target, function, port),
+    flow_candidate(source, target, function, port),
     cluster_endpoint_zone(source, _), cluster_endpoint_zone(target, _).
 
 .decl cluster_firewall_rule(source_zone: symbol, target_zone: symbol, port: number)

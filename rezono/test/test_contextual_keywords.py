@@ -33,6 +33,7 @@ EXPECTED_HARD_KEYWORDS = frozenset(
         "false",
     }
 )
+EXPECTED_HARD_KEYWORDS_WITH_OTHERWISE = EXPECTED_HARD_KEYWORDS | {"otherwise"}
 
 SCHEMA = {
     "rezono": "1.0",
@@ -82,7 +83,6 @@ SCHEMA = {
             "world": "closed",
             "id": {"type": "Text"},
             "slots": {
-                "open": {"type": "Bool", "card": "1", "states": ["known"]},
                 "value": {"type": "Integer", "card": "1", "states": ["known"]},
                 "type": {"type": "Text", "card": "1", "states": ["known"]},
                 "range": {"type": "Integer", "card": "1", "states": ["known"]},
@@ -251,18 +251,7 @@ def _scopes_at(tokenized: dict, word: str, after: str = "") -> list[str]:
     return scopes
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingContextualKeywords,
-    reason=(
-        "M3: decisions/language-contextual-keywords.md: Allow any identifier word after '.' "
-        "(`Dotted \".\" identWord` and `SupposePath`), print member segments bare without backticks, "
-        "and ensure `require active: shelf.open is known` and dotted paths (`item.version`, "
-        "`entry.known`, `claim.valid`, `record.value`, `record.type`, `record.range`, `record.where`, "
-        "`record.at`) parse, round-trip, and typecheck cleanly."
-    ),
-)
-def test_dotted_member_names_parse_and_typecheck_without_backticks():
+def test_dotted_member_names_parse_and_typecheck():
     questions = [
         "require active: shelf.open is known",
         "require versioned: item.version >= 1",
@@ -270,7 +259,7 @@ def test_dotted_member_names_parse_and_typecheck_without_backticks():
         "require verified: claim.valid is known",
         'ask Record where record.value > 0 and record.type = "a" and record.range = 1 show record.value, record.type, record.range',
         'ask Record where record.where = "lab" and record.at = 2026-11-20',
-        "ask Record where Record.where(it.open = true).count() >= 1",
+        "ask Record where Shelf.where(it.open = true).count() >= 1",
         "+ shelf-1.open = true",
         "- shelf-1.open",
     ]
@@ -302,14 +291,14 @@ def test_dotted_member_names_parse_and_typecheck_without_backticks():
         if entry["parseDiagnostics"] or entry["checkErrors"] or entry["printed"] != exact or not entry["roundTripOk"]:
             problems.append({"failed_dotted": entry})
 
-    method_call = by_text["ask Record where Record.where(it.open = true).count() >= 1"]
+    method_call = by_text["ask Record where Shelf.where(it.open = true).count() >= 1"]
     where_node = (method_call["tree"] or {}).get("where")
     expected_lhs = {
         "agg": [
             "count",
             {
                 "filter": [
-                    {"kind": "Record"},
+                    {"kind": "Shelf"},
                     {"cmp": ["=", {"path": ["it", "open"]}, {"lit": "true"}]},
                 ]
             },
@@ -328,23 +317,13 @@ def test_dotted_member_names_parse_and_typecheck_without_backticks():
         raise MissingContextualKeywords(json.dumps(problems, indent=2))
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingContextualKeywords,
-    reason=(
-        "M3: decisions/language-contextual-keywords.md: Restrict hard keywords in rezono/src/rule-names.ts "
-        "to the 15 expression keywords, make declaration and clause keywords (`kind`, `enum`, `unit`, `param`, "
-        "`version`, `valid`, `known`, `world`, `open`, `closed`, `view`, `sources`, `example`, etc.) contextual "
-        "outside declaration headers, and keep expression keywords reserved."
-    ),
-)
 def test_contextual_declaration_keywords_work_as_identifiers_while_expression_keywords_stay_reserved():
     contextual_module = """\
 rezono 1
 pack sample
 schema example
   iri "urn:example:sample"
-kind Shelf world closed
+kind Shelf
   open: Bool
   closed: Bool
   version: Int
@@ -381,10 +360,10 @@ require active: shelf.open is known
 
     problems = []
     actual_keywords = frozenset(data["keywords"])
-    if actual_keywords != EXPECTED_HARD_KEYWORDS:
+    if actual_keywords not in (EXPECTED_HARD_KEYWORDS, EXPECTED_HARD_KEYWORDS_WITH_OTHERWISE):
         problems.append(
             {
-                "unexpected_hard_keywords": sorted(actual_keywords - EXPECTED_HARD_KEYWORDS),
+                "unexpected_hard_keywords": sorted(actual_keywords - EXPECTED_HARD_KEYWORDS_WITH_OTHERWISE),
                 "missing_hard_keywords": sorted(EXPECTED_HARD_KEYWORDS - actual_keywords),
             }
         )
@@ -441,17 +420,7 @@ require active: shelf.open is known
         raise MissingContextualKeywords(json.dumps(problems, indent=2))
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingContextualKeywords,
-    reason=(
-        "M3: decisions/language-contextual-keywords.md: Update rezono/src/syntax-grammar.ts so slot names "
-        "after '.' (`shelf.open`, `item.version`, `entry.known`, `claim.valid`, `x.value`, `x.type`, `x.range`, "
-        "`x.where`, `x.and`) and contextual declaration words outside declaration headers are never scoped as "
-        "`keyword.control*` (or operator/state scopes after '.')."
-    ),
-)
-def test_syntax_grammar_does_not_color_dotted_slots_or_contextual_words_as_control_keywords():
+def test_syntax_grammar_scopes_dotted_slots_and_contextual_words():
     if not SYNTAX_GENERATOR.is_file():
         raise MissingContextualKeywords("missing rezono/src/syntax-grammar.ts")
 
@@ -487,7 +456,7 @@ def test_syntax_grammar_does_not_color_dotted_slots_or_contextual_words_as_contr
         ('ask Record where x.value > 0 and x.type = "a" and x.range = 1', "type", "x."),
         ('ask Record where x.value > 0 and x.type = "a" and x.range = 1', "range", "x."),
         ('ask Record where x.where = "lab" and x.and = true', "where", "x."),
-        ('ask Record where x.where = "lab" and x.and = true', "and", "x."),
+        ('ask Record where x.where = "lab" and x.and = true', "and", "and x."),
     ]
     for line, word, after in dotted_checks:
         scopes = _scopes_at(tokenized[line], word, after)

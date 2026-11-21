@@ -13,7 +13,7 @@ import { parse as parseYaml } from 'yaml';
 import { canonicalJson } from '../../viewer/src/lib/canon.ts';
 import { JsonFormError, MODULE_FORMAT, moduleForm, moduleFromJson, moduleToJson, parse, parseModule, printModule, type Expr } from '../src/index.ts';
 import { lineOf } from '../src/module-json.ts';
-import { writeForm } from '../src/write-form.ts';
+import { writeForm, writeForms } from '../src/write-form.ts';
 
 const source = fileURLToPath(new URL('module.rezono', import.meta.url));
 // The form counts offsets, so a checkout that turned the line ends into CRLF would be another text.
@@ -231,10 +231,10 @@ test('every declaration the reader reads is in the form, or its text is refused 
 	assert.deepEqual(refused(['pack lab', 'extend Host', '  derived band: Tier', '    table first', '      | roomy | memory | -> band |', '      | true | high |']), ['R000 line 6']);
 	assert.deepEqual(refused(['pack lab', 'extend Host', '  derived band: Tier = low', '    table first', '      | roomy | -> band |']), ['R000 line 4']);
 	assert.deepEqual(refused(['pack lab', 'extend Host', '  derived band: Tier', '    table first', '      | roomy | -> band |', '      | true | high |', '        unless roomy then low']), ['R000 line 7']);
-	assert.deepEqual(refused(['pack lab', 'extend Host', '  derived band: Tier', '    table first', '      | roomy | -> tier |']), ['R001 line 5']);
+	assert.deepEqual(refused(['rezono 0', 'pack lab', 'extend Host', '  derived band: Tier', '    table first', '      | roomy | -> tier |']), ['R001 line 6']);
 	// What v0 reserves is read and reported (R015), and has no form.
-	assert.deepEqual(refused(['pack lab', 'extend Host', '  derived before: GiB = memory at since']), ['R015 line 3']);
-	assert.deepEqual(refused(['pack lab', 'norm patched: host.memory > 1 GiB']), ['R015 line 2']);
+	assert.deepEqual(refused(['rezono 0', 'pack lab', 'extend Host', '  derived before: GiB = memory at since']), ['R015 line 4']);
+	assert.deepEqual(refused(['rezono 0', 'pack lab', 'norm patched: host.memory > 1 GiB']), ['R015 line 3']);
 	// What the reader does not read yet is no Rezono to it (R000), and has no form.
 	for (const line of ['rule near(a: Host, b: Host): a.owner = b.owner', 'decide owner of host-a = platform by lab on 2026-01-01', 'assume host-a.memory = 1 GiB', 'theory order', 'view small = Host where roomy', 'example e', 'exception e of label', 'private unit GiB = 1024 MiB'])
 		assert.deepEqual(refused(['pack lab', 'unit GiB = 1024 MiB', line]), ['R000 line 3'], line);
@@ -347,13 +347,13 @@ test('the command writes the bytes of the form, and leaves no file for a module 
 	assert.match(said[0], /module\.rezono:36: W108 at `rate`: /);
 
 	const refusedText = join(dir, 'refused.rezono');
-	writeFileSync(refusedText, 'pack lab\nextend Host\n  derived before: GiB = memory at since\n');
+	writeFileSync(refusedText, 'rezono 0\npack lab\nextend Host\n  derived before: GiB = memory at since\n');
 	writeFileSync(join(dir, 'refused.json'), 'the form of an earlier text');
 	said.length = 0;
 	assert.equal(writeForm(refusedText, join(dir, 'refused.json'), (line) => said.push(line)), 1);
 	assert.equal(existsSync(join(dir, 'refused.json')), false);
 	assert.equal(said.length, 1);
-	assert.match(said[0], /refused\.rezono:3: R015 at `at since`: at on a value is reserved/);
+	assert.match(said[0], /refused\.rezono:4: R015 at `at since`: at on a value is reserved/);
 
 	// A text that cannot be read leaves no earlier form either, and a form is never written over its text.
 	writeFileSync(join(dir, 'gone.json'), 'the form of a text that is gone');
@@ -367,7 +367,7 @@ test('the command writes the bytes of the form, and leaves no file for a module 
 	const run = (...args: string[]) => spawnSync(process.execPath, [command, ...args], { encoding: 'utf8' });
 	const refusedRun = run(refusedText, join(dir, 'refused.json'));
 	assert.equal(refusedRun.status, 1, refusedRun.stderr);
-	assert.match(refusedRun.stderr, /refused\.rezono:3: R015/);
+	assert.match(refusedRun.stderr, /refused\.rezono:4: R015/);
 	assert.equal(existsSync(join(dir, 'refused.json')), false);
 	assert.equal(run(refusedText).status, 2);
 	const small = join(dir, 'small.rezono');
@@ -378,8 +378,8 @@ test('the command writes the bytes of the form, and leaves no file for a module 
 });
 
 test('the body of a unit is read as an expression: what v0 reserves in it is an R015, and it has no form', () => {
-	assert.deepEqual(refused(['pack lab', 'unit Old = memory at since']), ['R015 line 2']);
-	const [d] = parseModule('pack lab\nunit Old = memory at since\n').diagnostics;
+	assert.deepEqual(refused(['rezono 0', 'pack lab', 'unit Old = memory at since']), ['R015 line 3']);
+	const [d] = parseModule('rezono 0\npack lab\nunit Old = memory at since\n').diagnostics;
 	assert.deepEqual([d.code, d.span.text], ['R015', 'at since']);
 	assert.deepEqual(refused(['pack lab', 'unit Odd = 1 < 2 < 3']), ['R016 line 2']);
 	// The other bodies are as before.
@@ -413,4 +413,45 @@ test('the contract reads a label as the reader does, in either dialect: a line e
 	// ECMA-262's `.` and Python's differ on U+2028, U+2029 and a bare CR: the pattern names what it refuses.
 	assert.equal(label.test('"a b c"'), true);
 	for (const end of ['\n', '\r', '\r\n']) assert.equal(label.test(`"a${end}b"`), false, JSON.stringify(end));
+});
+
+test('batch writeForms matches single writeForm byte-for-byte and isolates refused modules', () => {
+	const dir = mkdtempSync(join(tmpdir(), 'rezono-batch-'));
+	const srcA = join(dir, 'a.rezono');
+	const srcB = join(dir, 'b.rezono');
+	const srcBad = join(dir, 'bad.rezono');
+	writeFileSync(srcA, 'rezono 0\npack lab\nunit GiB = 1024 MiB\n');
+	writeFileSync(srcB, 'rezono 0\npack lab\nkind Item world closed\n  label: Text\n');
+	writeFileSync(srcBad, 'rezono 0\npack lab\nextend Item\n  derived before: GiB = size at since\n');
+
+	const singleA = join(dir, 'single-a.json');
+	const singleB = join(dir, 'single-b.json');
+	const singleBad = join(dir, 'single-bad.json');
+	const singleBadLines: string[] = [];
+	assert.equal(writeForm(srcA, singleA), 0);
+	assert.equal(writeForm(srcB, singleB), 0);
+	assert.equal(writeForm(srcBad, singleBad, (line) => singleBadLines.push(line)), 1);
+
+	const batchA = join(dir, 'batch-a.json');
+	const batchB = join(dir, 'batch-b.json');
+	assert.equal(writeForms([[srcA, batchA], [srcB, batchB]]), 0);
+	assert.equal(readFileSync(batchA, 'utf8'), readFileSync(singleA, 'utf8'));
+	assert.equal(readFileSync(batchB, 'utf8'), readFileSync(singleB, 'utf8'));
+
+	const mixedA = join(dir, 'mixed-a.json');
+	const mixedB = join(dir, 'mixed-b.json');
+	const mixedBad = join(dir, 'mixed-bad.json');
+	writeFileSync(mixedBad, 'stale');
+	const mixedLines: string[] = [];
+	assert.equal(
+		writeForms(
+			[[srcA, mixedA], [srcBad, mixedBad], [srcB, mixedB]],
+			(line) => mixedLines.push(line),
+		),
+		1,
+	);
+	assert.equal(readFileSync(mixedA, 'utf8'), readFileSync(singleA, 'utf8'));
+	assert.equal(readFileSync(mixedB, 'utf8'), readFileSync(singleB, 'utf8'));
+	assert.equal(existsSync(mixedBad), false);
+	assert.deepEqual(mixedLines, singleBadLines);
 });

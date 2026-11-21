@@ -46,7 +46,7 @@ from .l0 import _number_spelling
 COMPLETE = "checker"  # the role whose snapshots are complete (contracts/manifest.yaml, Snapshot.complete)
 NOT_READ_IN_FULL = "not_read_in_full"  # the reason of an absence in a relation the role does not read in full
 BIGINT = ("-9223372036854775808", "9223372036854775807")  # Rezono's integer storage (docs/compiler.md, Tables)
-RULE_COLUMN_TYPES = {"string": "Text", "integer": "Integer"}  # contracts/bundle.yaml RuleColumnType
+RULE_COLUMN_TYPES = {"string": "Text", "integer": "Integer", "boolean": "Bool"}  # contracts/bundle.yaml RuleColumnType
 ID_STORAGE = {"text": "string", "integer": "integer"}  # a kind's `id_type` as the rule column that names it
 BASE = "https://rezono.example/{pack}/"  # §2.1 `base` of a pack whose pack.yaml declares no `iri:`
 MANIFEST_KEYS = ("id", "epoch", "knowledge_time", "definition_sha256", "compiled")
@@ -121,6 +121,8 @@ def schema_document(bundle: dict, full=None) -> tuple[dict, dict]:
             slot["type"] = name
         elif a["type"] == "date":
             slot["type"] = "Date"
+        elif a["type"] == "boolean":
+            slot["type"] = "Bool"
         elif a["type"] == "text":
             if a.get("patterns"):
                 if len(a["patterns"]) != 1:
@@ -239,14 +241,30 @@ def _elements(doc: dict, plan: dict, rows: dict) -> dict[tuple, str]:
     return at
 
 
-def witness_uri(w: dict) -> str:
+def witness_uri(w: dict, schema: dict | None = None) -> str:
+    if schema is not None:
+        from . import rdf
+
+        return rdf.canonical_witness_iri(schema, w)
     return "rezono:w/" + canonical_sha256(w)
+
+
+def _parse_bool(where: str, v) -> bool:
+    if isinstance(v, bool):
+        return v
+    if v == "true":
+        return True
+    if v == "false":
+        return False
+    raise FormError(f"{where}: {v!r} is not a boolean value")
 
 
 def _value(doc: dict, name: str, slot: str, a: dict, v):
     """The row JSON payload of one Rezono value of a slot (§3.2)."""
     if "target" in a:
         return {"$ref": v}
+    if a["type"] == "boolean":
+        return _parse_bool(a["table"], v)
     t = doc.get("types", {}).get(doc["kinds"][name]["slots"][slot].get("type"), {})
     return int(v) if t and _number_spelling(t) else v  # LD2: a bounded integer is a JSON number (hash-neutral)
 
@@ -292,9 +310,17 @@ def row_json(doc: dict, plan: dict, epoch: dict) -> list[dict]:
     for rel, (name, cols) in plan["derived"].items():
         slots = doc["kinds"][name]["slots"]
         for parts in epoch["rows"].get(rel, []):
-            i = canonical_json(list(parts))
-            elems[name, i] = {"$kind": name, "$id": i,
-                              **{c: {"$ref": v} if "ref" in slots[c] else v for c, v in zip(cols, parts)}}
+            key_parts = [("true" if v else "false") if isinstance(v, bool) else v for v in parts]
+            i = canonical_json(key_parts)
+            elems[name, i] = {
+                "$kind": name, "$id": i,
+                **{
+                    c: {"$ref": v} if "ref" in slots[c]
+                    else _parse_bool(f"{rel}.{c}", v) if slots[c].get("type") == "Bool"
+                    else v
+                    for c, v in zip(cols, parts)
+                },
+            }
     for w in epoch["witnesses"]:
         rel = w["conclusion"]["relation"]
         if rel in plan["derived"]:
@@ -347,7 +373,12 @@ def relations(doc: dict, plan: dict, rows: list[dict]) -> dict[str, set]:
         name, i = r["$kind"], r["$id"]
         if name in derived_table:
             t, cols = derived_table[name]
-            out[t].add(_key([r[c]["$ref"] if isinstance(r[c], dict) else r[c] for c in cols]))
+            out[t].add(_key([
+                r[c]["$ref"] if isinstance(r[c], dict)
+                else ("true" if r[c] else "false") if isinstance(r[c], bool)
+                else r[c]
+                for c in cols
+            ]))
             continue
         for kind in l0.chain(doc, name):  # an element of a subkind is an element of every kind above it
             out[kind_table[kind]].add(_key([i]))
@@ -370,7 +401,7 @@ def expected_relations(doc: dict, plan: dict, rows: dict) -> dict[str, set]:
     for t, (name, slot, a) in plan["slots"].items():
         out[t] = {_key([i, _value(doc, name, slot, a, v)]) for i, v in rows.get(t, [])}
     for t in plan["derived"]:
-        out[t] = {_key(list(k)) for k in rows.get(t, [])}
+        out[t] = {_key([("true" if v else "false") if isinstance(v, bool) else v for v in k]) for k in rows.get(t, [])}
     return out
 
 

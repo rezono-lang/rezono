@@ -12,10 +12,28 @@ interface EnumerationDecl extends Metadata {
 
 function readEnumeration(line: Logical, build: Build): EnumerationDecl {
 	const enumeration = build.strip<EnumerationDecl>(line.read!);
+	const inline = enumeration.values.length > 0;
 	for (const child of line.block) {
 		if (readMetadataLine(enumeration, child, build)) continue;
 		const member = child.read!;
 		const name = member.name as string;
+		if (!inline && member.line === 'enumBareValue') {
+			if (enumeration.values.includes(name)) {
+				build.refuse(child, 'a distinct enumeration value');
+				continue;
+			}
+			enumeration.values.push(name);
+			if (child.block.length) {
+				const members = enumeration.memberMetadata ??= {};
+				const metadata: Metadata = {};
+				build.spans.set(metadata, build.spans.get(member)!);
+				for (const property of child.block) {
+					if (!readMetadataLine(metadata, property, build)) build.refuse(property, 'enumeration member metadata');
+				}
+				members[name] = metadata;
+			}
+			continue;
+		}
 		if (member.line !== 'enumValue' || !enumeration.values.includes(name)) {
 			build.refuse(child, 'an enumeration member');
 			continue;
@@ -32,6 +50,7 @@ function readEnumeration(line: Logical, build: Build): EnumerationDecl {
 		}
 		members[name] = metadata;
 	}
+	if (!enumeration.values.length) build.refuse(line, 'at least one enumeration value');
 	return enumeration;
 }
 
@@ -49,13 +68,24 @@ function printEnumeration(decl: EnumerationDecl): string[] {
 export const enumeration = {
 	lineRules: ['EnumLine', 'EnumValueLine'],
 	grammar: String.raw`
-  EnumLine = kw<"enum"> typeName World? "=" NonemptyListOf<EnumValue, "|">
+  EnumLine = kw<"enum"> typeName World? ("=" NonemptyListOf<EnumValue, "|">)?
   EnumValueLine = kw<"value"> EnumValue
+  EnumBlockLine = EnumValueLine | DescriptionLine | ExactMappingLine | CloseMappingLine | BroadMappingLine | AnnotationLine | EnumBareValueLine | Line
+  EnumBareValueLine = EnumValue end
   EnumValue = name | valueWord
   `,
 	actions: {
-		EnumLine: (_k, t, world, _eq, values) => named(t, { line: 'enum', enum: t.sourceString, ...(world.numChildren ? { world: world.child(0).decl() } : {}), values: listOf(values) }),
-		EnumValueLine: (_kw, value) => named(value, { line: 'enumValue', name: value.sourceString })
+		EnumLine: (_k, t, world, _eq, values) =>
+			named(t, {
+				line: 'enum',
+				enum: t.sourceString,
+				...(world.numChildren ? { world: world.child(0).decl() } : {}),
+				values: values.numChildren ? listOf(values.child(0)) : [],
+			}),
+		EnumValueLine: (_kw, value) => named(value, { line: 'enumValue', name: value.sourceString }),
+		EnumBlockLine: (line) => line.decl(),
+		EnumBareValueLine: (value, _end) => named(value, { line: 'enumBareValue', name: value.sourceString }),
 	},
-	declarations: { enum: declaration('enum', readEnumeration, printEnumeration) }
+	declarations: { enum: declaration('enum', readEnumeration, printEnumeration) },
+	block: { parent: 'enum', first: 'EnumBlockLine', rest: 'EnumBlockLine', invalidFirst: () => undefined },
 } satisfies ModuleComponent;
