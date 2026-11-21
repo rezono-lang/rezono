@@ -1,10 +1,12 @@
 """Retire day-number slots and coupling rules from std-decision (decisions/standard-packs-everywhere.md,
 sections 1.3 and 1.4 step 6; decisions/no-green-by-cheapest-route.md).
 
-Enforces the end state of the date migration for packs/std-decision and its importing packs:
-- no *_day slots or ReferenceDate.day remain in packs/std-decision schema, rules, or staged candidate;
+Enforces the end state of the date migration for packs/std-decision (both live and staged candidate)
+and its importing packs via compiled schema models and rule IR:
+- no *_day slots or ReferenceDate.day remain in packs/std-decision (live or staged candidate);
 - ReferenceDate.date is a required native date slot;
 - the four date/day-number coupling schema rules on Decision are gone (only the withdrawn-decision rule remains);
+- the compiled rules of packs/std-decision (live and staged candidate) read only the native date relations;
 - no importing pack's facts write Decision.valid_from_day, Decision.valid_until_day, or ReferenceDate.day;
 - packs/std-decision compiles, rejects a ReferenceDate missing `date`, and evaluates in_force_on from pure dates.
 """
@@ -12,22 +14,20 @@ Enforces the end state of the date migration for packs/std-decision and its impo
 from __future__ import annotations
 
 from contextlib import closing
-import re
 
 import pytest
 import yaml
 
+from candidate_pack import admitted, isolated_standard_pack
 from rezono_compiler import batch, emit, facts, pack
 from rezono_compiler import rules as ir
 from support import REPO
 
 STD = REPO / "packs" / "std-decision"
-SCHEMA = STD / "schema" / "decision.yaml"
-CANDIDATE = STD / "candidate" / "decision.rezono"
 ROOTS = ("build", "examples", "packs", "run")
+DATE_RELATIONS = {"decision__valid_from", "decision__valid_until", "reference_date__date"}
 RETIRED_SLOTS = ("valid_from_day", "valid_until_day")
-RETIRED_RELATIONS = ("decision__valid_from_day", "decision__valid_until_day", "reference_date__day")
-RETIRED_REF_PATTERN = re.compile(r"\b(" + "|".join((*RETIRED_SLOTS, *RETIRED_RELATIONS)) + r")\b")
+RETIRED_RELATIONS = {"decision__valid_from_day", "decision__valid_until_day", "reference_date__day"}
 
 DECISIONS = [
     {"id": "d1", "title": "first", "state": "in_force", "decider": ["board"], "valid_from": "2026-01-01"},
@@ -54,6 +54,46 @@ def _importers():
     return found
 
 
+def _assert_pack_retired_day_numbers(model: pack.Pack, label: str) -> ir.Program:
+    """Assert that a compiled std-decision Pack (live or candidate) has no day-number slots, coupling rules, or reads."""
+    day_slots = sorted(
+        f"{kind_name}.{slot_name}"
+        for kind_name, kind_def in model.kinds.items()
+        for slot_name in kind_def.slots
+        if slot_name.endswith("_day")
+    )
+    assert not day_slots, f"{label} still keeps *_day slots: {day_slots}"
+
+    ref_slots = model.kinds["reference_date"].slots
+    assert "day" not in ref_slots, f"{label} ReferenceDate still keeps retired integer day-number slot `day`"
+    date_slot = ref_slots.get("date")
+    assert date_slot is not None and date_slot.range == "date" and date_slot.required is True, (
+        f"{label} ReferenceDate.date must be a required native date slot, got {date_slot!r}"
+    )
+
+    decision_rules = model.kinds["decision"].rules
+    coupling_rules = [
+        rule.name
+        for rule in decision_rules
+        if any(
+            cond.slot in RETIRED_SLOTS
+            for cond in (*rule.pre, *rule.post, *rule.otherwise)
+        )
+    ]
+    assert not coupling_rules, f"{label} Decision still keeps date/day-number coupling schema rules: {coupling_rules}"
+    assert len(decision_rules) == 1, (
+        f"{label} Decision should keep only the withdrawn-decision schema rule, found {len(decision_rules)}"
+    )
+
+    program = ir.load(model.rules)
+    used = set(program.base_used())
+    assert DATE_RELATIONS <= used, f"{label} rules must read native dates, missing: {sorted(DATE_RELATIONS - used)}"
+    assert not (used & RETIRED_RELATIONS), (
+        f"{label} rules still read retired day-number relations: {sorted(used & RETIRED_RELATIONS)}"
+    )
+    return program
+
+
 @pytest.mark.xfail(
     strict=True,
     raises=AssertionError,
@@ -68,63 +108,23 @@ def _importers():
         "examples/subsidy/test_subsidy_dates.py--test_subsidy_schema_has_no_day_numbers, "
         "examples/platform/test_platform_release_dates.py--test_runs_orders_releases_by_their_sourced_date "
         "and examples/platform/test_support_window_dates.py--test_support_query_retires_as_of_day_for_native_date, "
-        "and for a preparatory planner PR that removes *_day and the four coupling-rule "
-        "assertions from protected tests (such as compiler/tests/test_std_decision.py and "
+        "and for a preparatory planner PR that restates *_day rows and protected test assertions "
+        "(such as compiler/tests/test_std_decision.py, examples/platform/test_five_scenes.py, and "
         "loop/tests/test_build_decision_capture.py) before step 6 lifts this mark."
     ),
 )
 def test_std_decision_retires_day_numbers_and_coupling_rules(tmp_path):
-    doc = yaml.safe_load(SCHEMA.read_text(encoding="utf-8")) or {}
-    classes = doc.get("classes") or {}
+    # 1. Live packs/std-decision schema, rules, and compiled IR have no *_day slots, coupling rules, or reads.
+    model = pack.read(STD)
+    program = _assert_pack_retired_day_numbers(model, "packs/std-decision")
 
-    # 1. No *_day slots anywhere in packs/std-decision/schema/decision.yaml, and no ReferenceDate.day.
-    day_slots = [
-        f"{cls_name}.{slot_name}"
-        for cls_name, cls_def in classes.items()
-        for slot_name in (cls_def.get("attributes") or {})
-        if slot_name.endswith("_day")
-    ]
-    assert not day_slots, f"packs/std-decision schema still keeps *_day slots: {sorted(day_slots)}"
+    # 2. Staged Rezono candidate compiles cleanly with the exact same retired-day-number contract.
+    cand_dir = isolated_standard_pack(STD, tmp_path, "candidate", "decision")
+    with admitted(cand_dir):
+        cand_model = pack.read(cand_dir)
+        _assert_pack_retired_day_numbers(cand_model, "packs/std-decision/candidate")
 
-    ref_attrs = (classes.get("ReferenceDate") or {}).get("attributes") or {}
-    assert "day" not in ref_attrs, "ReferenceDate still keeps retired integer day-number slot `day`"
-    date_slot = ref_attrs.get("date") or {}
-    assert date_slot.get("range") == "date" and date_slot.get("required") is True, (
-        f"ReferenceDate.date must be a required native date slot, got {date_slot!r}"
-    )
-
-    # 2. The four date <-> day-number coupling schema rules on Decision are gone.
-    decision_rules = (classes.get("Decision") or {}).get("rules") or []
-    coupling_rules = [
-        idx + 1
-        for idx, rule in enumerate(decision_rules)
-        if RETIRED_REF_PATTERN.search(yaml.safe_dump(rule))
-    ]
-    assert not coupling_rules, (
-        f"Decision still keeps date/day-number coupling schema rules at positions {coupling_rules}"
-    )
-    assert len(decision_rules) == 1, (
-        f"Decision should keep only the withdrawn-decision schema rule, found {len(decision_rules)}"
-    )
-
-    # 3. Neither rules/*.dl nor candidate/decision.rezono may mention retired day-number slots or relations.
-    for dl_path in sorted((STD / "rules").glob("*.dl")):
-        hits = RETIRED_REF_PATTERN.findall(dl_path.read_text(encoding="utf-8"))
-        assert not hits, f"{dl_path.relative_to(REPO)} still references retired day numbers: {sorted(set(hits))}"
-
-    candidate_text = CANDIDATE.read_text(encoding="utf-8")
-    candidate_hits = RETIRED_REF_PATTERN.findall(candidate_text)
-    assert not candidate_hits, (
-        f"{CANDIDATE.relative_to(REPO)} still references retired day numbers: {sorted(set(candidate_hits))}"
-    )
-    assert not re.search(r"^\s+day\s*:\s*Int\b", candidate_text, re.MULTILINE), (
-        f"{CANDIDATE.relative_to(REPO)} still declares ReferenceDate.day: Int"
-    )
-    assert not re.search(r"^\s+date\s*:\s*Date\?", candidate_text, re.MULTILINE), (
-        f"{CANDIDATE.relative_to(REPO)} still keeps ReferenceDate.date optional (`Date?`) instead of required `Date`"
-    )
-
-    # 4. No fact file in packs/std-decision or its importing packs may write retired day numbers.
+    # 3. No fact file in packs/std-decision or its importing packs may write retired day numbers.
     legacy_facts: list[str] = []
     for pack_dir in [STD, *_importers()]:
         for fact_file in sorted(pack_dir.rglob("facts/*.yaml")):
@@ -148,13 +148,7 @@ def test_std_decision_retires_day_numbers_and_coupling_rules(tmp_path):
                         legacy_facts.append(f"{rel}: reference_date {row.get('id')!r} missing required date")
     assert not legacy_facts, "std-decision consumers still write retired day numbers:\n" + "\n".join(legacy_facts)
 
-    # 5. Pure-date runtime check: std-decision evaluates in_force_on from dates alone and enforces ReferenceDate.date.
-    model = pack.read(STD)
-    assert model.kinds["reference_date"].slots["date"].required is True
-    assert "day" not in model.kinds["reference_date"].slots
-    assert not (set(RETIRED_SLOTS) & set(model.kinds["decision"].slots))
-
-    program = ir.load(model.rules)
+    # 4. Pure-date runtime check: std-decision evaluates in_force_on from dates alone and enforces ReferenceDate.date.
     data = {"decision": DECISIONS, "reference_date": REFERENCE_DATES}
     with closing(batch.connect(program, facts.rows_of(model, data))) as db:
         batch.compute(db, program)
