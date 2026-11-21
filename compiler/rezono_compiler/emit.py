@@ -648,21 +648,24 @@ def rule_bundle(pack: Pack, prog) -> tuple[list, list]:
                               "head": head, "body": body,
                               "origin": {"file": r.origin[0], "line": str(r.origin[1])}}))
     held = amounts.columns(pack.rules, amounts.tables(pack))
+
+    def columns(n, r) -> list[dict]:
+        if r.role == "functional":  # what a reader sees: (key..., state, reason, value), language-rezono-1.md §4
+            return [rule_column(n, c, None, None) for c in r.row_columns]
+        return [rule_column(n, c, semantic, amount)
+                for c, semantic, amount in zip(r.key, pack.rule_semantics.get(n, (None,) * len(r.key)), held[n],
+                                               strict=True)]
+
+    properties = pack.rule_properties  # `<k>_<d>` -> (k, d) of a rezono 1 derived property (§2)
     relations = [present({"id": n, "module": r.module, "explain": r.explain,
-                          "columns": [rule_column(n, c, semantic, amount)
-                                      for c, semantic, amount in zip(
-                                          r.key,
-                                          pack.rule_semantics.get(n, (None,) * len(r.key)),
-                                          held[n],
-                                          strict=True,
-                                      )],
+                          "columns": columns(n, r),
                           "world": r.world, "absence": True if r.absence else None, "outcome": r.outcome,
                           "extend": True if r.extend else None, "closes": r.closes,
                           "checks": [v for v, _ in rules_sql.checks(prog, n)] or None,
                           "fold": True if n in folds else None,
-                          "kind": getattr(r, "kind", None),
-                          "property": getattr(r, "property", None)})
-                 for n, r in sorted(prog.relations.items()) if r.role == "derived"]
+                          "kind": properties.get(n, (None, None))[0],
+                          "property": properties.get(n, (None, None))[1]})
+                 for n, r in sorted(prog.relations.items()) if r.role in ("derived", "functional")]
     return rules, relations
 
 

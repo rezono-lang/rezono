@@ -417,7 +417,7 @@ class Pack:
         for e, values in self.enums.items():
             out += [e] + [f"{e}.{v}" for v in values]
         if self.rules:
-            out += [r["name"] for r in self.rules["relations"] if r["role"] == "derived"]
+            out += [r["name"] for r in self.rules["relations"] if r["role"] in ("derived", "functional")]
         return sorted(out)
 
 
