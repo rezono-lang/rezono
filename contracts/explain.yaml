@@ -235,7 +235,7 @@ classes:
       delta: {range: DeltaStart, inlined: true, description: "The delta or sweep the question starts from; absent for a row."}
       nodes: {range: AnswerNode, multivalued: true, inlined_as_list: true, required: true, description: "The nodes on this page; the start, at distance 0, on the first."}
       steps: {range: AnswerStep, multivalued: true, inlined_as_list: true, description: "The edges that reach a node on this page, from a node the answer shows (on this page or an earlier one); by conclusion, how, position and premise."}
-      witnesses: {range: Witness, multivalued: true, inlined_as_list: true, description: "The chosen witness of each conclusion on this page, in page order: the captions."}
+      witnesses: {range: AnswerWitness, multivalued: true, inlined_as_list: true, description: "Projection of the rule-derived founded_witness relation for each conclusion on this page, in page order and deterministic witness order (chosen witness first, decisions/one-structure-space-and-readings.md §4, decisions/publish-founded-witnesses.md)."}
       calc_witnesses: {range: CalcWitness, multivalued: true, inlined_as_list: true, description: "The witness of each calculated row on this page, in page order: its version, definition and steps, unchanged. Each premise is also an edge of the answer (positive, at its index in premises); absent when the page has none."}
       next: {description: "The cursor of the next page, <distance>,<relation>,<key> (the query parameter after); absent on the last page."}
       more: {range: RowRef, multivalued: true, inlined_as_list: true, description: "The nodes on this page where the walk stopped before its depth, to stay within the limit: each continues with the same question from that node."}
@@ -406,6 +406,14 @@ classes:
       change: {range: NodeChange, description: "For impact: what the delta did to this row for the role; every node of an impact answer has one."}
       was: {description: "For impact, a changed cell: its row in the base, as canonical key text."}
       sources: {range: Source, multivalued: true, inlined_as_list: true, description: "A base row's sources, from the role's own source set and by today's rights, as the publisher sorted them: where a walk back ends. Absent on a conclusion, and on every node of a manifest without source sets. A locator, not proof that the row is true."}
+      witnesses_truncated: {range: boolean, description: "True when this conclusion reached the per-conclusion founded-witness cap for the role (decisions/publish-founded-witnesses.md); never set because of role-hidden alternatives. Absent when not truncated."}
+  AnswerWitness:
+    is_a: Witness
+    description: >-
+      One founded witness projected onto an Answer page from the rule-derived founded_witness relation over the
+      role's witness graph (decisions/one-structure-space-and-readings.md §4, decisions/publish-founded-witnesses.md).
+    attributes:
+      iri: {pattern: "^.+witness/[0-9a-f]{64}$", description: "Canonical witness IRI (<base>witness/<H(witness)>, decisions/publication-conclusion-addresses.md §2), where H is canonical_sha256 of the witness without iri."}
   GapAnswer:
     description: What is missing for an absent start (docs/gui.md, "gap"), in the walk's order.
     attributes:
@@ -443,3 +451,4 @@ classes:
       how: {range: StepHow, required: true}
       position: {range: integer, minimum_value: 0, required: true, description: "The premise's place in the rule body, or for contributes the aggregate's place in the rule."}
       value: {pattern: "^(known:.*|unknown|not_applicable|invalid)$", description: "On a contributes step of a sum, min or max: what the premise's row contributes, the canonical text of its value with its state, as the witness's contributors_sha256 is taken over it. Absent on every other step, and where the published proof pieces state none."}
+      load_bearing: {range: boolean, description: "Projection of the rule-derived load_bearing relation over the role's witness graph: true when this premise occurs in every founded witness the role can read for this conclusion, false when an alternative founded witness omits it (decisions/one-structure-space-and-readings.md §4, decisions/publish-founded-witnesses.md). Read unchanged by the gate."}

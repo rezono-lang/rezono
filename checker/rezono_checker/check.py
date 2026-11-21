@@ -231,20 +231,18 @@ def _functional_state_ok(func, all_vals: set[str], state: str, reason: str, val:
         if len(all_vals) > 1:
             # More than one distinct known candidate yields invalid/multiple_values
             # (decisions/language-rezono-1.md §4), never masked by an empty-reason invalid input.
-            return bool(REASON.fullmatch(reason))
+            return reason == "multiple_values"
         if "invalid" in prop_states:
             return bool(REASON.fullmatch(reason)) or ("invalid" in rat_states and reason == "")
-        if "invalid" in rat_states:
-            return reason == ""
-        return bool(REASON.fullmatch(reason))
+        return reason == ""
     if "unknown" in prop_states:
         return state == "unknown" and val == "" and bool(REASON.fullmatch(reason))
     if "not_applicable" in prop_states:
         return state == "not_applicable" and val == "" and bool(REASON.fullmatch(reason))
     if len(all_vals) == 1:
         return state == "known" and reason == "" and val in all_vals and _functional_value_ok(val, func.value_type)
-    return (state == func.empty_state and val == "" and bool(REASON.fullmatch(reason))
-            and (func.empty_reason is None or reason == func.empty_reason))
+    expected_reason = "no_match" if func.empty_reason is None else func.empty_reason
+    return state == func.empty_state and val == "" and reason == expected_reason and bool(REASON.fullmatch(reason))
 
 
 def _functional_candidates(rules, func, rows, witness=None, groups=None):

@@ -146,7 +146,7 @@ def _full_rows_and_witnesses() -> tuple[dict[str, list[list[str]]], list[dict]]:
             ["i_conflict", "invalid", "multiple_values", ""],
             # More than one distinct known candidate yields invalid/multiple_values (decisions/language-rezono-1.md §4).
             ["i_conflict_oob", "invalid", "multiple_values", ""],
-            ["i_empty", "unknown", "no_value", ""],
+            ["i_empty", "unknown", "no_match", ""],
         ],
     }
     witnesses = [
@@ -163,7 +163,7 @@ def _full_rows_and_witnesses() -> tuple[dict[str, list[list[str]]], list[dict]]:
         _ratio_witness("i_mixed_bad", "invalid", "", "", ["1/2", "1/0"]),
         _ratio_witness("i_conflict", "invalid", "multiple_values", "", ["1/2", "3/4"]),
         _ratio_witness("i_conflict_oob", "invalid", "multiple_values", "", ["1/2", "3/4", min_i64]),
-        _ratio_witness("i_empty", "unknown", "no_value", "", []),
+        _ratio_witness("i_empty", "unknown", "no_match", "", []),
     ]
     return rows, witnesses
 

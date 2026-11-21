@@ -1,3 +1,11 @@
+---
+decider: [core, loop, platform]
+decided_on: 2026-11-18
+valid_from: 2026-11-18
+state: in_force
+subject: safe-step-rounds
+---
+
 # Prove safe transition rounds
 
 Use typed row deltas, the existing rule evaluator and independent certificates to select each executable round. Every visible outcome of a dispatched batch must preserve integrity and the pack's declared intermediate safety invariants. Rebuild the next round from observed state. This extends the reconciliation and observation contracts with a transition check. [Run-scoped reconciliation](loop-design.md) · [Quiet observation rounds](quiet-observation-rounds.md)

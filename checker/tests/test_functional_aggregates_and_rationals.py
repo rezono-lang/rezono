@@ -137,7 +137,7 @@ def _member_score_rows_and_witnesses() -> tuple[dict[str, list[list[str]]], list
         "score_val": [
             ["i_ok1", "known", "", "10"],
             ["i_ok2", "known", "", "20"],
-            ["i_empty", "unknown", "no_value", ""],
+            ["i_empty", "unknown", "no_match", ""],
             ["i_clash", "invalid", "multiple_values", ""],
         ],
         "opt_score": [
@@ -150,11 +150,11 @@ def _member_score_rows_and_witnesses() -> tuple[dict[str, list[list[str]]], list
             ["g_ok", "i_ok1", "known", "", "10"],
             ["g_ok", "i_ok2", "known", "", "20"],
             ["g_unknown", "i_ok1", "known", "", "10"],
-            ["g_unknown", "i_empty", "unknown", "no_value", ""],
+            ["g_unknown", "i_empty", "unknown", "no_match", ""],
             ["g_na", "i_ok1", "known", "", "10"],
-            ["g_na", "i_empty", "unknown", "no_value", ""],
+            ["g_na", "i_empty", "unknown", "no_match", ""],
             ["g_invalid", "i_ok1", "known", "", "10"],
-            ["g_invalid", "i_empty", "unknown", "no_value", ""],
+            ["g_invalid", "i_empty", "unknown", "no_match", ""],
             ["g_invalid", "i_clash", "invalid", "multiple_values", ""],
         ],
         "member_opt_score": [
@@ -170,8 +170,8 @@ def _member_score_rows_and_witnesses() -> tuple[dict[str, list[list[str]]], list
         ],
         "group_total": [
             ["g_ok", "known", "", "30"],
-            ["g_unknown", "unknown", "no_value", ""],
-            ["g_na", "unknown", "no_value", ""],
+            ["g_unknown", "unknown", "no_match", ""],
+            ["g_na", "unknown", "no_match", ""],
             ["g_invalid", "invalid", "multiple_values", ""],
         ],
         "group_opt_total": [
@@ -507,7 +507,7 @@ def test_rules_2_rational_order_conditions_in_check_and_closure():
         "cap_ratio": [
             ["a", "known", "", "3/2"],
             ["b", "known", "", "1/3"],
-            ["c", "unknown", "no_value", ""],
+            ["c", "unknown", "no_match", ""],
         ],
     }
     witnesses = [
@@ -536,7 +536,7 @@ def test_rules_2_rational_order_conditions_in_check_and_closure():
             ],
         },
         {
-            "conclusion": _ref("cap_ratio", "c", "unknown", "no_value", ""),
+            "conclusion": _ref("cap_ratio", "c", "unknown", "no_match", ""),
             "rule_id": "cap_ratio_r",
             "bindings": [{"variable": "?id", "value": "c"}],
             "premises": [{"row": _ref("item", "c"), "polarity": "positive", "stratum": 0}],
@@ -668,7 +668,7 @@ def test_functional_witness_rejects_forged_aggregate_bindings():
         "link": [["k1", "g_real"]],
         # Both g_real and g_forged sum to 10, so the forged aggregate has the exact same numeric result!
         "score": [["g_real", "r1", "10"], ["g_forged", "r1", "4"], ["g_forged", "r2", "6"]],
-        "total": [["k1", "known", "", "10"], ["k_empty", "unknown", "no_value", ""]],
+        "total": [["k1", "known", "", "10"], ["k_empty", "unknown", "no_match", ""]],
     }
     manifest, read = _manifest_and_reader(rows)
     derived = checker_rules.derived_relations(doc, loaded)
@@ -682,7 +682,7 @@ def test_functional_witness_rejects_forged_aggregate_bindings():
         }
 
     empty_w = {
-        "conclusion": _ref("total", "k_empty", "unknown", "no_value", ""),
+        "conclusion": _ref("total", "k_empty", "unknown", "no_match", ""),
         "rule_id": "total_r",
         "bindings": [{"variable": "?k", "value": "k_empty"}],
         "premises": [{"row": _ref("dom", "k_empty"), "polarity": "positive", "stratum": 0}],
@@ -828,7 +828,7 @@ def test_empty_min_max_non_state_bearing_vs_state_bearing_in_functional_derivati
         "state_score": [],
         # Non-state-bearing empty min drops candidate: g_empty -> empty_state (unknown), g_fallback -> fallback (42).
         "min_plain": [
-            ["g_empty", "unknown", "no_value", ""],
+            ["g_empty", "unknown", "no_match", ""],
             ["g_fallback", "known", "", "42"],
         ],
         # State-bearing empty min propagates not_applicable even though empty_state="unknown".
@@ -840,7 +840,7 @@ def test_empty_min_max_non_state_bearing_vs_state_bearing_in_functional_derivati
     empty_digest = sha256_json([])
     witnesses = [
         {
-            "conclusion": _ref("min_plain", "g_empty", "unknown", "no_value", ""),
+            "conclusion": _ref("min_plain", "g_empty", "unknown", "no_match", ""),
             "rule_id": "min_plain_fb",
             "bindings": [{"variable": "?g", "value": "g_empty"}],
             "premises": [{"row": _ref("g", "g_empty"), "polarity": "positive", "stratum": 0}],

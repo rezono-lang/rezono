@@ -1,11 +1,13 @@
-"""Status signs of std-view (rezono#1425): packs/std-view/{palette,key}.yaml validates against
-`Key` in contracts/view.yaml, includes every `StatusName` (including `invalid` `!`, distinct from
-`violated` `✕`), defines a unique non-colour glyph and en/nl messages for each, and achieves >= 4.5:1
-WCAG AA contrast on `paper` in light, dark, and print themes."""
+"""Status signs of std-view (decisions/std-view-invalid-sign.md): packs/std-view/{palette,key}.yaml
+validates against `Key` in contracts/view.yaml, includes every `StatusName` (including `invalid` `!`,
+distinct from `violated` `✕`), defines a unique non-colour glyph and en/nl messages for each, and
+meets WCAG contrast requirements on `paper` (>= 4.5:1) and against `ink` (>= 3.0:1 for `status.invalid`)
+in light, dark, and print themes."""
 
 import re
 from pathlib import Path
 
+import pytest
 import yaml
 from linkml.validator import validate
 
@@ -64,3 +66,22 @@ def test_statuses_and_invalid_sign_in_std_view():
         for s in statuses:
             ratio = _contrast(palettes[theme][s["color_role"]], paper)
             assert ratio >= 4.5, f"{theme} {s['color_role']} contrast {ratio:.2f}:1 < 4.5:1"
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "extra: decisions/std-view-invalid-sign.md: status.invalid in packs/std-view/palette.yaml "
+        "must achieve >= 3.0:1 WCAG contrast against ink (G183) alongside >= 4.5:1 against paper "
+        "(1.4.3) in light, dark, and print themes."
+    ),
+)
+def test_invalid_palette_token_contrasts_against_ink():
+    palette = yaml.safe_load((STD_VIEW / "palette.yaml").read_text(encoding="utf-8"))
+    palettes = {p["theme"]: {t["role"]: t["value"] for t in p["tokens"]} for p in palette["palettes"]}
+    for theme in ("light", "dark", "print"):
+        token = palettes[theme]["status.invalid"]
+        paper_ratio = _contrast(token, palettes[theme]["paper"])
+        ink_ratio = _contrast(token, palettes[theme]["ink"])
+        assert paper_ratio >= 4.5, f"{theme} status.invalid vs paper {paper_ratio:.2f}:1 < 4.5:1"
+        assert ink_ratio >= 3.0, f"{theme} status.invalid vs ink {ink_ratio:.2f}:1 < 3.0:1"
