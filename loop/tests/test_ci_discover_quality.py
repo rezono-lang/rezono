@@ -1,28 +1,29 @@
-"""Strict red tests for the quality and contract defects in ``loop/ci_discover.py``.
+"""Behavioral and strict red tests for ``loop/ci_discover.py``.
 
-Covers five contracts from ``decisions/build-reconciliation.md`` and
-``decisions/tooling-does-not-decide.md``:
+Covers ``decisions/build-reconciliation.md``, ``decisions/tooling-does-not-decide.md``,
+and ``decisions/no-green-by-cheapest-route.md`` without source-text checks or day-number
+shortcuts:
 
-1. ``rezono:schema`` is emitted by ``rezono_publisher`` / ``rezono_checker`` (with contract
-   documentation), never synthesized by ``loop/ci_discover.py``.
-2. CI shard counts come from pack facts in ``build/`` through one shared matrix renderer
-   (``loop.build_job_matrix``), with no copied shard tables or selection logic from
-   ``scripts/components.py``.
-3. Honest CI observation capture: distinct event kinds (``push``, ``schedule``,
-   ``workflow_dispatch``) are preserved instead of rewritten to ``merge_group``; missing
-   ``--before`` fails closed instead of falling back to ``HEAD`` (empty diff); changed paths
-   receive real path/manifest coverage rather than hardcoded ``"unknown"``; recorded time is
-   the source event time rather than the Git commit timestamp.
-4. No hardcoded test date ``"2027-01-15T08:00:00Z"`` in production defaults, and no
-   ``--pin-sha`` CLI override bypassing ``build/engine-pin.yaml``.
-5. End-to-end behavioral verification of ``loop/ci_discover.py`` (``ci-matrix`` and
-   ``coordinator-state``) against independent, hand-written records for happy path,
-   fail-closed ``safe_mode``, and role-scoped publication.
+- Standalone green regression test for fail-closed ``safe_mode`` across both ``ci-matrix``
+  and ``coordinator-state`` (on invalid engine pin and on manifest missing ``rezono:schema``).
+- Five strict ``@pytest.mark.xfail(strict=True, raises=AssertionError, ...)`` tests:
+  1. ``rezono:schema`` emitted directly by ``rezono_publisher`` / ``rezono_checker``, never
+     synthesized by ``loop/ci_discover.py``.
+  2. CI shard counts sourced from ``BuildShardConfig`` facts in ``build/facts/`` (with
+     ``.sources.yaml`` provenance) and rendered via the single shared renderer
+     ``loop.build_job_matrix``.
+  3. Honest CI observation capture: distinct event kinds (``push``, ``schedule``,
+     ``workflow_dispatch``), fail-closed missing ``--before``, real path coverage, and
+     explicit source ``event_time`` instead of Git commit timestamps.
+  4. Required ``knowledge_time`` without hardcoded test-date defaults, and no ``--pin-sha``
+     override bypassing ``build/engine-pin.yaml``.
+  5. End-to-end subprocess verification of ``loop/ci_discover.py`` (``ci-matrix`` with real
+     capture — no ``records_override`` — and ``coordinator-state`` with native dates only and
+     role-scoped publication).
 """
 
 from __future__ import annotations
 
-import ast
 import dataclasses
 import hashlib
 import inspect
@@ -31,6 +32,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tomllib
 from typing import Any
 
@@ -40,13 +42,11 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 CI_DISCOVER = ROOT / "loop" / "ci_discover.py"
 BUILD_DIR = ROOT / "build"
-MANIFEST_CONTRACT = ROOT / "contracts" / "manifest.yaml"
 
 COMMIT_TIME = 1_700_000_000  # 2023-11-14T22:13:20Z (deliberately far from EVENT_TIME)
 EVENT_TIME = 1_810_000_200   # 2027-05-11T01:50:00Z (distinct from COMMIT_TIME and 2027-01-15)
 EVENT_ISO = "2027-05-11T01:50:00Z"
-EVENT_DAY_STR = "2027-05-11"
-EVENT_DAY_INT = 20270511
+EVENT_DATE = "2027-05-11"
 LEASE_SECONDS = 4 * 60 * 60
 SUITES = ("alpha", "beta", "gamma", "spare")
 AUTHORITY_PATH = "observer/build-readers.json"
@@ -91,53 +91,6 @@ def _git(root: Path, *args: str, env: dict[str, str] | None = None) -> str:
 def _commit_env(epoch_seconds: int = COMMIT_TIME) -> dict[str, str]:
     stamp = f"{epoch_seconds} +0000"
     return {"GIT_AUTHOR_DATE": stamp, "GIT_COMMITTER_DATE": stamp}
-
-
-def _docstring_nodes(tree: ast.AST) -> set[int]:
-    ids: set[int] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
-            if (
-                node.body
-                and isinstance(node.body[0], ast.Expr)
-                and isinstance(node.body[0].value, ast.Constant)
-                and isinstance(node.body[0].value.value, str)
-            ):
-                ids.add(id(node.body[0].value))
-    return ids
-
-
-def _code_string_literals(tree: ast.AST) -> set[str]:
-    doc_ids = _docstring_nodes(tree)
-    return {
-        node.value
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Constant)
-        and isinstance(node.value, str)
-        and id(node) not in doc_ids
-    }
-
-
-def _embedded_python_trees(tree: ast.AST) -> list[ast.Module]:
-    embedded: list[ast.Module] = []
-    for literal in _code_string_literals(tree):
-        if "\n" not in literal or not ("import " in literal or "def " in literal):
-            continue
-        try:
-            parsed = ast.parse(literal)
-        except SyntaxError:
-            continue
-        if len(parsed.body) >= 2:
-            embedded.append(parsed)
-    return embedded
-
-
-def _all_ci_discover_code_literals() -> set[str]:
-    tree = ast.parse(CI_DISCOVER.read_text(encoding="utf-8"), filename=str(CI_DISCOVER))
-    literals = _code_string_literals(tree)
-    for sub_tree in _embedded_python_trees(tree):
-        literals.update(_code_string_literals(sub_tree))
-    return literals
 
 
 def _copy_engine_tree(dst: Path) -> None:
@@ -204,13 +157,147 @@ def _make_isolated_pinned_repo(tmp_path: Path) -> tuple[Path, str, str, str]:
     return repo, engine_sha, base_sha, head_sha
 
 
+def _make_lightweight_candidate_repo(tmp_path: Path) -> tuple[Path, str, str]:
+    """Create a fast 2-commit synthetic repo with the four suites and an engine-pin file."""
+    repo = tmp_path / "candidate"
+    repo.mkdir()
+    _git(repo, "init", "-q")
+    _create_synthetic_components(repo)
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-qm", "Base commit", env=_commit_env(COMMIT_TIME))
+    base_sha = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "update-ref", "refs/remotes/origin/main", base_sha)
+
+    (repo / "build").mkdir(exist_ok=True)
+    (repo / "build" / "engine-pin.yaml").write_text(f"engine_sha: {base_sha}\n", encoding="utf-8")
+    (repo / "alpha" / "engine.py").write_text("VALUE = 1\n", encoding="utf-8")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-qm", "Candidate change in alpha", env=_commit_env(COMMIT_TIME))
+    head_sha = _git(repo, "rev-parse", "HEAD")
+    return repo, base_sha, head_sha
+
+
+def _make_stub_publisher_repo_without_schema_check(tmp_path: Path) -> tuple[Path, str, str]:
+    """Create a minimal 2-commit repo whose pinned publisher omits ``rezono:schema``."""
+    repo = tmp_path / "stub-schema-repo"
+    repo.mkdir()
+    _git(repo, "init", "-q")
+
+    (repo / "build").mkdir(parents=True)
+    (repo / "build" / "pack.yaml").write_text("name: stub-build\nversion: 0.1.0\n", encoding="utf-8")
+
+    # Minimal stub packages under the pinned engine paths required by ci_discover._extract_pinned_engine.
+    for pkg_dir, mod_name in (
+        ("canon", "rezono_canon"),
+        ("admission", "rezono_admission"),
+        ("contracts/python", "rezono_contracts"),
+    ):
+        target = repo / pkg_dir / mod_name
+        target.mkdir(parents=True)
+        (target / "__init__.py").write_text("", encoding="utf-8")
+
+    compiler_pkg = repo / "compiler" / "rezono_compiler"
+    compiler_pkg.mkdir(parents=True)
+    (compiler_pkg / "__init__.py").write_text("", encoding="utf-8")
+    (compiler_pkg / "pack.py").write_text("def read(build_dir):\n    return None\n", encoding="utf-8")
+
+    checker_pkg = repo / "checker" / "rezono_checker"
+    checker_pkg.mkdir(parents=True)
+    (checker_pkg / "__init__.py").write_text(
+        "def check_epoch(*args, **kwargs):\n    return {'valid': True, 'findings': []}\n",
+        encoding="utf-8",
+    )
+    (checker_pkg / "metadata.py").write_text("def check(bundle, meta):\n    return []\n", encoding="utf-8")
+    (checker_pkg / "evidence.py").write_text(
+        "class Evidence:\n    def __init__(self, **kwargs):\n        self.__dict__.update(kwargs)\n",
+        encoding="utf-8",
+    )
+    (checker_pkg / "rules.py").write_text(
+        "def load_rules(doc):\n    return {}\n"
+        "def derived_relations(doc, obj):\n    return set()\n"
+        "def load_seals(doc):\n    return ()\n",
+        encoding="utf-8",
+    )
+
+    pub_pkg = repo / "edge" / "publisher" / "rezono_publisher"
+    pub_pkg.mkdir(parents=True)
+    (pub_pkg / "__init__.py").write_text("", encoding="utf-8")
+    (pub_pkg / "store.py").write_text(
+        "from pathlib import Path\n"
+        "class FileStore:\n"
+        "    def __init__(self, root):\n"
+        "        self.root = Path(root)\n"
+        "        self.root.mkdir(parents=True, exist_ok=True)\n"
+        "    def uri(self, key):\n"
+        "        return f's3://rezono/{key}'\n"
+        "    def put_new(self, key, data):\n"
+        "        p = self.root / key\n"
+        "        p.parent.mkdir(parents=True, exist_ok=True)\n"
+        "        p.write_bytes(data)\n"
+        "    def get(self, key):\n"
+        "        p = self.root / key\n"
+        "        return p.read_bytes() if p.is_file() else None\n",
+        encoding="utf-8",
+    )
+    (pub_pkg / "batch.py").write_text(
+        "class _Epoch:\n"
+        "    rules = '{}'\n"
+        "    bundle = ''\n"
+        "    check_metadata = None\n"
+        "def epoch(*args, **kwargs):\n"
+        "    return _Epoch()\n",
+        encoding="utf-8",
+    )
+    (pub_pkg / "publish.py").write_text(
+        "import hashlib, json\n"
+        "def calc_ir(epoch):\n"
+        "    return None\n"
+        "def publish(epoch, archive, roles):\n"
+        "    role = next(iter(roles))\n"
+        "    sel_bytes = json.dumps([{'key': ['r1', 'alpha', 'change']}]).encode()\n"
+        "    full_bytes = json.dumps([]).encode()\n"
+        "    wit_bytes = json.dumps({'witnesses': [], 'calc_witnesses': []}).encode()\n"
+        "    archive.put_new('sel.json', sel_bytes)\n"
+        "    archive.put_new('full.json', full_bytes)\n"
+        "    archive.put_new('wit.json', wit_bytes)\n"
+        "    return {\n"
+        "        'checks': [\n"
+        "            {'name': 'missing_required', 'status': 'green', 'violations': 0},\n"
+        "            {'name': 'rezono:proofs', 'status': 'green', 'violations': 0},\n"
+        "        ],\n"
+        "        'snapshots': [\n"
+        "            {'role': role, 'relation': 'build_selected_job', 'uri': archive.uri('sel.json'),\n"
+        "             'sha256': hashlib.sha256(sel_bytes).hexdigest(), 'complete': True, 'full': True},\n"
+        "            {'role': role, 'relation': 'build_full_selection', 'uri': archive.uri('full.json'),\n"
+        "             'sha256': hashlib.sha256(full_bytes).hexdigest(), 'complete': True, 'full': True},\n"
+        "        ],\n"
+        "        'witnesses': [\n"
+        "            {'role': role, 'uri': archive.uri('wit.json'),\n"
+        "             'sha256': hashlib.sha256(wit_bytes).hexdigest()},\n"
+        "        ],\n"
+        "    }\n",
+        encoding="utf-8",
+    )
+
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-qm", "Seed stub pinned engine without rezono:schema", env=_commit_env(COMMIT_TIME))
+    engine_sha = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "update-ref", "refs/remotes/origin/main", engine_sha)
+
+    (repo / "build" / "engine-pin.yaml").write_text(f"engine_sha: {engine_sha}\n", encoding="utf-8")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-qm", "Pin stub engine", env=_commit_env(COMMIT_TIME))
+    head_sha = _git(repo, "rev-parse", "HEAD")
+    return repo, engine_sha, head_sha
+
+
 def _archived_ref(key: str, value: Any) -> dict[str, str]:
     from rezono_canon import canonical_sha256
 
     return {"file": key, "uri": f"s3://rezono/{key}", "sha256": canonical_sha256(value)}
 
 
-def _build_selection_records_and_evidence(
+def _write_selection_evidence(
     repo: Path,
     *,
     base_sha: str,
@@ -219,8 +306,8 @@ def _build_selection_records_and_evidence(
     run_id: str,
     observed_at: int,
     evidence_dir: Path,
-) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Hand-write independent build-selection records and admitted completeness evidence for alpha/engine.py."""
+) -> str:
+    """Write independent admitted completeness evidence for ``alpha/engine.py`` and return its receipt ID."""
     from rezono_canon import canonical_bytes, canonical_sha256
 
     changed_path = "alpha/engine.py"
@@ -354,69 +441,7 @@ def _build_selection_records_and_evidence(
     index_doc = {"completeness_receipts": [_archived_ref("observations/submitted/receipt.json", receipt)]}
     (evidence_dir / "context.json").write_bytes(canonical_bytes(context_doc))
     (evidence_dir / "index.json").write_bytes(canonical_bytes(index_doc))
-
-    records: dict[str, Any] = {
-        "build_run": [{
-            "id": run_id,
-            "event": "pull_request",
-            "base_sha": base_sha,
-            "head_sha": head_sha,
-            "engine_sha": engine_sha,
-            "observed_at": observed_at,
-            "receipt": receipt_id,
-        }],
-        "loop_sweep_receipt": [{"id": receipt_id, "run": run_id, "event_time": observed_at}],
-        "build_component": [
-            {"id": suite, "run": run_id, "kind": "python", "folder": suite} for suite in SUITES
-        ],
-        "build_manifest": [
-            {
-                "id": f"{end}-{suite}",
-                "component": suite,
-                "path": f"{suite}/pyproject.toml",
-                "revision": rev,
-                "blob": _git(repo, "rev-parse", f"{rev}:{suite}/pyproject.toml"),
-            }
-            for end, rev in (("base", base_sha), ("head", head_sha))
-            for suite in SUITES
-        ],
-        "build_test_file": [
-            {"id": f"{suite}-test", "component": suite, "path": f"{suite}/test_unit.py"} for suite in SUITES
-        ],
-        "build_dependency": [
-            {
-                "id": f"{end}-{consumer}-dep",
-                "dependency": dep,
-                "consumer": consumer,
-                "kind": "manifest",
-                "manifest": f"{end}-{consumer}",
-                "source": f"{consumer}/pyproject.toml",
-            }
-            for end in ("base", "head")
-            for consumer, dep in (("beta", "alpha"), ("gamma", "beta"))
-        ],
-        "build_path": [
-            {"id": "change-1", "run": run_id, "path": changed_path, "coverage": "mapped"}
-        ],
-        "build_path_reader": [
-            {
-                "id": "reader-alpha",
-                "path": "change-1",
-                "component": "alpha",
-                "kind": "transitive",
-                "source": "alpha",
-            }
-        ],
-    }
-    sidecar = {
-        "default": {
-            "kind": "tool",
-            "name": "hand-written-selection",
-            "revision": head_sha,
-            "position": f"{base_sha}..{head_sha}",
-        }
-    }
-    return records, sidecar
+    return receipt_id
 
 
 def _claim_generation(label: str) -> str:
@@ -431,7 +456,7 @@ def _build_coordinator_records(
     run_id: str,
     observed_at: int,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Hand-write independent task, claim, and role records for coordinator-state evaluation."""
+    """Hand-write independent task, claim, and role records using native dates only (no day numbers)."""
     exp_gen = _claim_generation("task/expired")
     act_gen = _claim_generation("task/active")
     records: dict[str, Any] = {
@@ -475,9 +500,8 @@ def _build_coordinator_records(
         ],
         "reference_date": [{
             "id": "policy-day",
-            "title": "Observed reference day",
-            "date": EVENT_DAY_STR,
-            "day": EVENT_DAY_INT,
+            "title": "Observed reference date",
+            "date": EVENT_DATE,
         }],
         "build_policy_date": [{
             "id": "policy-cut",
@@ -490,7 +514,6 @@ def _build_coordinator_records(
             "title": "Claim lease duration",
             "state": "in_force",
             "valid_from": "2027-01-01",
-            "valid_from_day": 20270101,
             "decider": ["build-policy"],
         }],
         "build_claim_lease": [{
@@ -562,75 +585,289 @@ def _build_coordinator_records(
     return records, sidecar
 
 
+def test_ci_discover_fail_closed_safe_mode_for_ci_matrix_and_coordinator_state(tmp_path: Path):
+    """Both ci-matrix and coordinator-state fail closed to safe_mode on invalid pin or missing rezono:schema."""
+    from loop.build_cutover import select_suites
+
+    repo, base_sha, head_sha = _make_lightweight_candidate_repo(tmp_path)
+    bad_pin = tmp_path / "self-pin.yaml"
+    bad_pin.write_text(f"engine_sha: {head_sha}\n", encoding="utf-8")
+
+    # 1. ci-matrix fail-closed safe_mode on self-pin violation via real subprocess.
+    ci_proc = subprocess.run(
+        [
+            sys.executable,
+            str(CI_DISCOVER),
+            "ci-matrix",
+            "--root",
+            str(repo),
+            "--run",
+            "run-safe",
+            "--event",
+            "pull_request",
+            "--base-ref",
+            "main",
+            "--pin",
+            str(bad_pin),
+            "--json",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert ci_proc.returncode == 0, f"ci-matrix failed unexpectedly: {ci_proc.stderr}\n{ci_proc.stdout}"
+    safe_ci = json.loads(ci_proc.stdout)
+    assert safe_ci["outcome"] == {
+        "run": "run-safe",
+        "source": "safe_mode",
+        "safe_mode": True,
+        "safe_mode_reason": "engine-failure",
+        "use": ["alpha", "beta", "gamma", "spare"],
+        "findings": [{
+            "kind": "safe_mode",
+            "run": "run-safe",
+            "surface": "ci_selection",
+            "reason": "engine-failure",
+        }],
+    }
+    assert sorted({item["folder"] for item in safe_ci["matrix"]["python"]}) == [
+        "alpha", "beta", "gamma", "spare"
+    ]
+
+    # 2. ci-matrix selection fails closed to safe_mode on a manifest lacking rezono:schema.
+    incomplete_manifest_doc = {"checks": [{"name": "rezono:proofs", "status": "green", "violations": 0}]}
+    ci_missing_schema = select_suites(
+        run="run-safe",
+        manifest=incomplete_manifest_doc,
+        rows={"build_selected_job": [], "build_full_selection": []},
+        engine_error=None,
+        universe=SUITES,
+    )
+    assert ci_missing_schema == {
+        "run": "run-safe",
+        "source": "safe_mode",
+        "safe_mode": True,
+        "safe_mode_reason": "invalid-publication",
+        "use": ["alpha", "beta", "gamma", "spare"],
+        "findings": [{
+            "kind": "safe_mode",
+            "run": "run-safe",
+            "surface": "ci_selection",
+            "reason": "invalid-publication",
+        }],
+    }
+
+    # 3. coordinator-state fail-closed safe_mode on self-pin violation via real subprocess.
+    coord_records, coord_sidecar = _build_coordinator_records(
+        base_sha=base_sha,
+        head_sha=head_sha,
+        engine_sha=base_sha,
+        run_id="run-coord-safe",
+        observed_at=EVENT_TIME,
+    )
+    coord_file = tmp_path / "coordinator.yaml"
+    coord_file.write_text(yaml.safe_dump(coord_records), encoding="utf-8")
+    (tmp_path / "coordinator.sources.yaml").write_text(yaml.safe_dump(coord_sidecar), encoding="utf-8")
+
+    coord_engine_proc = subprocess.run(
+        [
+            sys.executable,
+            str(CI_DISCOVER),
+            "coordinator-state",
+            "--root",
+            str(repo),
+            "--run",
+            "run-coord-safe",
+            "--records",
+            str(coord_file),
+            "--pin",
+            str(bad_pin),
+            "--role",
+            "coordinator",
+            "--role-mode",
+            "may_read",
+            "--knowledge-time",
+            EVENT_ISO,
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert coord_engine_proc.returncode == 0, (
+        f"coordinator-state failed unexpectedly: {coord_engine_proc.stderr}\n{coord_engine_proc.stdout}"
+    )
+    assert json.loads(coord_engine_proc.stdout) == {
+        "run": "run-coord-safe",
+        "source": "safe_mode",
+        "safe_mode": True,
+        "safe_mode_reason": "engine-failure",
+        "assign_new_tasks": False,
+        "ready": [],
+        "waiting": [],
+        "stuck": [],
+        "claim_release_plan": [],
+        "claim_held": [],
+        "findings": [{
+            "kind": "safe_mode",
+            "run": "run-coord-safe",
+            "surface": "coordinator",
+            "reason": "engine-failure",
+        }],
+    }
+
+    # 4. coordinator-state fail-closed safe_mode on a manifest lacking rezono:schema via real subprocess.
+    incomplete_manifest = tmp_path / "manifest-no-schema.json"
+    incomplete_manifest.write_text(json.dumps(incomplete_manifest_doc), encoding="utf-8")
+    empty_rows = tmp_path / "rows-empty.json"
+    empty_rows.write_text(
+        json.dumps({
+            "build_task_ready": [],
+            "build_task_waiting": [],
+            "build_task_stuck": [],
+            "build_claim_release_plan": [],
+            "build_claim_held": [],
+        }),
+        encoding="utf-8",
+    )
+    coord_manifest_proc = subprocess.run(
+        [
+            sys.executable,
+            str(CI_DISCOVER),
+            "coordinator-state",
+            "--root",
+            str(repo),
+            "--run",
+            "run-coord-safe",
+            "--manifest",
+            str(incomplete_manifest),
+            "--rows",
+            str(empty_rows),
+            "--knowledge-time",
+            EVENT_ISO,
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert coord_manifest_proc.returncode == 0, (
+        f"coordinator-state manifest check failed unexpectedly: {coord_manifest_proc.stderr}"
+    )
+    assert json.loads(coord_manifest_proc.stdout) == {
+        "run": "run-coord-safe",
+        "source": "safe_mode",
+        "safe_mode": True,
+        "safe_mode_reason": "invalid-publication",
+        "assign_new_tasks": False,
+        "ready": [],
+        "waiting": [],
+        "stuck": [],
+        "claim_release_plan": [],
+        "claim_held": [],
+        "findings": [{
+            "kind": "safe_mode",
+            "run": "run-coord-safe",
+            "surface": "coordinator",
+            "reason": "invalid-publication",
+        }],
+    }
+
+
 @pytest.mark.xfail(
     strict=True,
     raises=AssertionError,
-    reason="M2: decisions/build-reconciliation.md: rezono:schema must be emitted by "
-           "rezono_publisher/rezono_checker and documented in contracts/manifest.yaml, "
-           "never synthesized inside loop/ci_discover.py.",
+    reason="M2: decisions/build-reconciliation.md: rezono:schema must be emitted directly by "
+           "rezono_publisher/rezono_checker and never synthesized by loop/ci_discover.py.",
 )
 def test_rezono_schema_check_emitted_by_publisher_never_synthesized_by_ci_discover(tmp_path: Path):
-    """loop/ci_discover.py never fabricates rezono:schema; rezono_publisher/rezono_checker emits it."""
-    # 1. Structural check: loop/ci_discover.py (including its embedded pinned worker script)
-    #    must never synthesize or inject a "rezono:schema" check entry.
-    synthesizes_schema = "rezono:schema" in _all_ci_discover_code_literals()
-    assert not synthesizes_schema, (
-        "loop/ci_discover.py must not synthesize or inject 'rezono:schema' into manifest checks; "
-        "that check belongs solely to rezono_publisher/rezono_checker"
-    )
+    """Behaviorally verify rezono_publisher emits rezono:schema and loop/ci_discover.py never fabricates it."""
+    from loop.build_cutover import select_suites
+    import loop.ci_discover as ci_discover
 
-    # 2. Contract documentation check: contracts/manifest.yaml must specify rezono:schema.
-    contract_text = MANIFEST_CONTRACT.read_text(encoding="utf-8")
-    assert "rezono:schema" in contract_text, (
-        "contracts/manifest.yaml must document the rezono:schema check emitted by publisher/checker"
-    )
-
-    # 3. Real publisher + checker behavioral check (independent of loop/ci_discover.py).
-    from rezono_publisher import batch, publish, store
-    work = tmp_path / "pub"
-    build_copy = work / "build"
-    shutil.copytree(BUILD_DIR, build_copy)
-    for pack_name in ("std-access", "std-decision", "std-loop", "std-order", "std-time"):
-        src = ROOT / "packs" / pack_name
-        if src.is_dir():
-            shutil.copytree(src, work / "packs" / pack_name)
-
-    base_sha, head_sha, engine_sha = "1" * 40, "2" * 40, "3" * 40
-    (build_copy / "facts").mkdir(exist_ok=True)
-    (build_copy / "facts" / "input.yaml").write_text(
-        yaml.safe_dump({
-            "build_run": [{
-                "id": "r-schema",
-                "event": "pull_request",
-                "base_sha": base_sha,
-                "head_sha": head_sha,
-                "engine_sha": engine_sha,
-                "observed_at": EVENT_TIME,
-                "receipt": "rcpt-schema",
-            }],
-            "loop_sweep_receipt": [{"id": "rcpt-schema", "run": "r-schema", "event_time": EVENT_TIME}],
-        }),
-        encoding="utf-8",
-    )
-    (build_copy / "facts" / "input.sources.yaml").write_text(
-        yaml.safe_dump({
-            "default": {
-                "kind": "tool",
-                "name": "schema-check-test",
-                "revision": head_sha,
-                "position": "r-schema",
-            }
-        }),
-        encoding="utf-8",
-    )
-
-    archive = store.FileStore(work / "archive")
-    epoch = batch.epoch(
-        build_copy,
-        epoch=1,
+    # 1. Behavioral check on loop/ci_discover.py: when a pinned publisher omits rezono:schema,
+    #    run_pinned_build_pack must NOT synthesize rezono:schema into manifest['checks'].
+    stub_repo, engine_sha, _ = _make_stub_publisher_repo_without_schema_check(tmp_path)
+    got_sha, stub_manifest, stub_rows, stub_err = ci_discover.run_pinned_build_pack(
+        root=stub_repo,
+        records={},
+        sources_sidecar=None,
         knowledge_time=EVENT_ISO,
-        sources=[("facts", "input")],
     )
+    assert stub_err is None, f"stub pinned engine failed unexpectedly: {stub_err}"
+    assert got_sha == engine_sha and isinstance(stub_manifest, dict) and isinstance(stub_rows, dict)
+    stub_check_names = [c.get("name") for c in stub_manifest.get("checks", []) if isinstance(c, dict)]
+    assert "rezono:schema" not in stub_check_names, (
+        "loop/ci_discover.py fabricated 'rezono:schema' when the pinned publisher did not emit it: "
+        f"{stub_manifest.get('checks')}"
+    )
+    rejected = select_suites(
+        run="r1",
+        manifest=stub_manifest,
+        rows=stub_rows,
+        engine_error=stub_err,
+        universe=("alpha", "beta"),
+    )
+    assert rejected["safe_mode"] is True and rejected["safe_mode_reason"] == "invalid-publication"
+
+    # 2. Direct behavioral check on real rezono_publisher + rezono_checker over a minimal pack.
+    from rezono_publisher import batch, publish, store
+
+    pack_dir = tmp_path / "mini-pack"
+    for sub in ("schema", "rules", "labels", "messages", "facts"):
+        (pack_dir / sub).mkdir(parents=True)
+    (pack_dir / "pack.yaml").write_text(
+        "name: mini-schema-probe\nversion: 0.1.0\ndefault_language: en\n", encoding="utf-8"
+    )
+    (pack_dir / "schema" / "item.yaml").write_text(
+        "id: https://rezono.example/mini-schema-probe\n"
+        "name: mini_schema_probe\n"
+        "imports: [linkml:types]\n"
+        "default_range: string\n"
+        "annotations:\n  layer: facts\n"
+        "classes:\n"
+        "  Item:\n"
+        "    attributes:\n"
+        "      id: {identifier: true}\n"
+        "      label: {required: true}\n",
+        encoding="utf-8",
+    )
+    (pack_dir / "channels.yaml").write_text("kinds:\n  - {kind: item, shape: pill}\n", encoding="utf-8")
+    (pack_dir / "labels" / "en.yaml").write_text(
+        "item: item\nitem.label: label\nitem_seen: item seen\n",
+        encoding="utf-8",
+    )
+    (pack_dir / "messages" / "en.mf2").write_text(
+        "@locale en\n"
+        "---\n"
+        "arrow.total = Each {$kind} has exactly one {$arrow}.\n"
+        "arrow.partial = Each {$kind} has at most one {$arrow}.\n"
+        "attribute.total = Each {$kind} has exactly one {$attribute}.\n"
+        "attribute.partial = Each {$kind} has at most one {$attribute}.\n"
+        "attribute.many.total = Each {$kind} has at least one {$attribute}.\n"
+        "attribute.many.partial = Each {$kind} may have more than one {$attribute}.\n"
+        "is_a = Each {$kind} is a {$parent}.\n"
+        "unique_key = Each {$key} belongs to at most one {$kind}.\n"
+        "path_equation = For each {$kind}, {$equation} holds.\n",
+        encoding="utf-8",
+    )
+    (pack_dir / "rules" / "item.dl").write_text(
+        ".decl item_seen(id: symbol)\nitem_seen(x) :- item(x).\n.output item_seen\n",
+        encoding="utf-8",
+    )
+    (pack_dir / "facts" / "input.yaml").write_text(
+        yaml.safe_dump({"item": [{"id": "i1", "label": "one"}]}), encoding="utf-8"
+    )
+    (pack_dir / "facts" / "input.sources.yaml").write_text(
+        yaml.safe_dump({
+            "default": {"kind": "tool", "name": "schema-check-test", "revision": "1" * 40, "position": "i1"}
+        }),
+        encoding="utf-8",
+    )
+
+    archive = store.FileStore(tmp_path / "mini-archive")
+    epoch = batch.epoch(pack_dir, epoch=1, knowledge_time=EVENT_ISO, sources=[("facts", "input")])
     manifest = publish.publish(epoch, archive, {"reader": "complete"})
     checks_by_name = {c["name"]: c for c in manifest.get("checks", []) if isinstance(c, dict)}
 
@@ -648,22 +885,18 @@ def test_rezono_schema_check_emitted_by_publisher_never_synthesized_by_ci_discov
         f"got checks: {sorted(checks_by_name)}"
     )
 
-    # 4. Negative check: tampering with check_metadata must block publication rather than stamp rezono:schema green.
+    # 3. Negative check: tampering with check_metadata must block publication rather than stamp rezono:schema green.
     tampered = dataclasses.replace(epoch, check_metadata={})
-    blocked = False
-    try:
-        publish.publish(tampered, store.FileStore(work / "archive-tampered"), {"reader": "complete"})
-    except publish.Blocked:
-        blocked = True
-    assert blocked, "tampered check_metadata must be rejected by rezono_publisher/rezono_checker"
+    with pytest.raises(publish.Blocked):
+        publish.publish(tampered, store.FileStore(tmp_path / "mini-archive-tampered"), {"reader": "complete"})
 
 
 @pytest.mark.xfail(
     strict=True,
     raises=AssertionError,
     reason="extra: decisions/tooling-does-not-decide.md: loop/ci_discover.py must read CI shard "
-           "counts from build/ pack facts and render the matrix through the single shared renderer "
-           "loop.build_job_matrix without copying SHARDS or matrix expansion from scripts/components.py.",
+           "counts from BuildShardConfig facts in build/facts/ (with .sources.yaml provenance) "
+           "and render the matrix through the single shared renderer loop.build_job_matrix.",
 )
 def test_ci_discover_shard_counts_come_from_build_facts_via_single_renderer(tmp_path: Path, monkeypatch):
     """Shard counts come from build/ facts and expand through loop.build_job_matrix, never scripts/components.py."""
@@ -671,67 +904,7 @@ def test_ci_discover_shard_counts_come_from_build_facts_via_single_renderer(tmp_
     import loop.ci_discover as ci_discover
     from scripts import components
 
-    source = CI_DISCOVER.read_text(encoding="utf-8")
-    tree = ast.parse(source, filename=str(CI_DISCOVER))
-
-    # 1. Structural checks: no SHARDS or legacy selection imports, no local _shard_count copy,
-    #    and must import + call loop.build_job_matrix.
-    forbidden_component_imports = {
-        "SHARDS",
-        "shard_count",
-        "affected_components",
-        "pull_request_selection",
-        "pull_request_components",
-        "FILE_CONSUMERS",
-        "PR_FILE_CONSUMERS",
-        "SHARED_READERS",
-        "FULL_SELECTION_PATHS",
-        "JOB_INPUTS",
-    }
-    imported_from_components: set[str] = set()
-    imports_job_matrix = False
-    for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom) and node.module in {"scripts.components", "components"}:
-            imported_from_components.update(alias.name for alias in node.names)
-        if isinstance(node, ast.ImportFrom) and node.module in {"loop.build_job_matrix", "build_job_matrix"}:
-            imports_job_matrix = True
-        if isinstance(node, ast.Import):
-            for alias in node.names:
-                if alias.name in {"loop.build_job_matrix", "build_job_matrix"}:
-                    imports_job_matrix = True
-        if isinstance(node, ast.ImportFrom) and node.module == "loop":
-            if any(alias.name == "build_job_matrix" for alias in node.names):
-                imports_job_matrix = True
-
-    leaked_imports = sorted(imported_from_components & forbidden_component_imports)
-    assert not leaked_imports, (
-        f"loop/ci_discover.py still imports shard/selection logic from scripts/components.py: {leaked_imports}"
-    )
-    defined_funcs = {node.name for node in tree.body if isinstance(node, ast.FunctionDef)}
-    assert "_shard_count" not in defined_funcs, (
-        "loop/ci_discover.py still defines its own _shard_count copy instead of reading build/ shard facts"
-    )
-    assert imports_job_matrix, (
-        "loop/ci_discover.py must delegate matrix rendering to the single shared renderer loop.build_job_matrix"
-    )
-
-    # 2. Schema and pack facts in build/: BuildShardConfig kind + build_shard_config facts.
-    from rezono_compiler import facts as fact_files, pack as compiler_pack
-    model = compiler_pack.read(BUILD_DIR)
-    assert "BuildShardConfig" in {k.cls for k in model.kinds.values()}, (
-        "build/ schema must declare BuildShardConfig for shard-count facts"
-    )
-    shard_rows: dict[str, int] = {}
-    for fact_path in fact_files.files(BUILD_DIR):
-        raw = yaml.safe_load(fact_path.read_text(encoding="utf-8")) or {}
-        for row in raw.get("build_shard_config", ()):
-            shard_rows[row["folder"]] = int(row["shards"])
-    for expected_folder in ("compiler", "edge/publisher", "examples", "loop"):
-        assert expected_folder in shard_rows and shard_rows[expected_folder] >= 1, (
-            f"build/facts/ is missing build_shard_config fact for {expected_folder!r}"
-        )
-
-    # 3. Behavioral check: poison scripts.components.SHARDS, vary a shard fact in build/facts/,
+    # 1. Behavioral check first: poison scripts.components.SHARDS, vary a shard fact in build/facts/,
     #    and verify expand_matrix reflects the build/ fact via loop.build_job_matrix.job_matrix.
     monkeypatch.setattr(components, "SHARDS", {"alpha": 99})
     renderer_calls: list[dict[str, Any]] = []
@@ -804,6 +977,47 @@ def test_ci_discover_shard_counts_come_from_build_facts_via_single_renderer(tmp_
         "alpha 1/2", "alpha 2/2"
     ], f"varying build/facts/shards.yaml to 2 shards did not change rendered matrix: {matrix_2['python']}"
 
+    # 2. Schema, independent repository expectations, and .sources.yaml provenance in ROOT/build/.
+    from rezono_compiler import facts as fact_files, pack as compiler_pack
+
+    model = compiler_pack.read(BUILD_DIR)
+    shard_kind = next((k for k in model.kinds.values() if k.cls == "BuildShardConfig"), None)
+    assert shard_kind is not None, "build/ schema must declare BuildShardConfig for shard-count facts"
+    assert {"folder", "shards"} <= set(shard_kind.slots), (
+        f"BuildShardConfig must declare 'folder' and 'shards' slots, got {sorted(shard_kind.slots)}"
+    )
+
+    discovered_folders = {c.folder for c in components.discover_components(ROOT)}
+    shard_rows: dict[str, int] = {}
+    shard_fact_files: list[Path] = []
+    for fact_path in fact_files.files(BUILD_DIR):
+        raw = yaml.safe_load(fact_path.read_text(encoding="utf-8")) or {}
+        if "build_shard_config" not in raw:
+            continue
+        shard_fact_files.append(fact_path)
+        fact_files.load(model, fact_path)
+        sidecar_path = fact_path.with_suffix(".sources.yaml")
+        assert sidecar_path.is_file(), (
+            f"shard fact file {fact_path.relative_to(ROOT).as_posix()} is missing its provenance sidecar "
+            f"{sidecar_path.relative_to(ROOT).as_posix()}"
+        )
+        sidecar_doc = yaml.safe_load(sidecar_path.read_text(encoding="utf-8"))
+        assert isinstance(sidecar_doc, dict) and sidecar_doc, (
+            f"provenance sidecar {sidecar_path.relative_to(ROOT).as_posix()} must be a non-empty YAML mapping"
+        )
+        for row in raw["build_shard_config"]:
+            shard_rows[row["folder"]] = int(row["shards"])
+
+    assert shard_fact_files, "build/facts/ must contain a BuildShardConfig fact file"
+    assert set(shard_rows) <= discovered_folders, (
+        f"build_shard_config names unknown repository folders: {sorted(set(shard_rows) - discovered_folders)}"
+    )
+    # Independent explicit expectations (never derived from components.SHARDS):
+    # both compiler and loop are multi-shard suites, and every declared suite has shards >= 1.
+    assert shard_rows.get("compiler", 0) >= 2, f"expected multi-shard fact for 'compiler', got {shard_rows}"
+    assert shard_rows.get("loop", 0) >= 2, f"expected multi-shard fact for 'loop', got {shard_rows}"
+    assert all(count >= 1 for count in shard_rows.values()), f"invalid shard counts: {shard_rows}"
+
 
 @pytest.mark.xfail(
     strict=True,
@@ -818,27 +1032,7 @@ def test_ci_discover_honest_observation_capture(tmp_path: Path, monkeypatch):
     import loop.ci_discover as ci_discover
     from scripts.components import Component
 
-    source = CI_DISCOVER.read_text(encoding="utf-8")
-
-    # 1. Never derive observed_at from Git commit timestamps (%ct).
-    uses_commit_time = "--format=%ct" in source
-    assert not uses_commit_time, (
-        "loop/ci_discover.py must record the source event time, never Git commit timestamp (--format=%ct)"
-    )
-
-    # 2. discover_ci_matrix must accept an explicit recorded event_time parameter.
-    sig = inspect.signature(ci_discover.discover_ci_matrix)
-    assert "event_time" in sig.parameters, (
-        "discover_ci_matrix must accept an explicit event_time parameter for the recorded source event time"
-    )
-
-    # 3. BuildEvent in build/schema/selection.yaml must support push, schedule, and workflow_dispatch.
-    selection_schema = yaml.safe_load((BUILD_DIR / "schema" / "selection.yaml").read_text(encoding="utf-8"))
-    allowed_events = set((selection_schema.get("enums") or {}).get("BuildEvent", {}).get("permissible_values") or {})
-    for ev in ("pull_request", "merge_group", "push", "schedule", "workflow_dispatch"):
-        assert ev in allowed_events, f"build/schema/selection.yaml BuildEvent must permit {ev!r}"
-
-    # 4. Prepare a two-commit repo with old COMMIT_TIME (1700000000), distinct from EVENT_TIME (1810000200).
+    # 1. Prepare a two-commit repo with old COMMIT_TIME (1700000000), distinct from EVENT_TIME (1810000200).
     repo = tmp_path / "obs-repo"
     repo.mkdir()
     _git(repo, "init", "-q")
@@ -856,7 +1050,7 @@ def test_ci_discover_honest_observation_capture(tmp_path: Path, monkeypatch):
     _git(repo, "commit", "-qm", "Change alpha and unmapped file", env=_commit_env(COMMIT_TIME))
     head_sha = _git(repo, "rev-parse", "HEAD")
 
-    # 5. push, schedule, and workflow_dispatch keep their real event kind and record EVENT_TIME (not COMMIT_TIME).
+    # 2. Behavioral check: push, schedule, and workflow_dispatch keep their true event kind and record EVENT_TIME.
     captured: list[dict[str, Any]] = []
 
     def spy_run_pinned(**kwargs):
@@ -867,13 +1061,18 @@ def test_ci_discover_honest_observation_capture(tmp_path: Path, monkeypatch):
 
     for event_name in ("push", "schedule", "workflow_dispatch"):
         captured.clear()
-        ci_discover.discover_ci_matrix(
-            root=repo,
-            run_id=f"run-{event_name}",
-            event_name=event_name,
-            before_sha=base_sha,
-            event_time=EVENT_TIME,
-        )
+        try:
+            ci_discover.discover_ci_matrix(
+                root=repo,
+                run_id=f"run-{event_name}",
+                event_name=event_name,
+                before_sha=base_sha,
+                event_time=EVENT_TIME,
+            )
+        except TypeError as exc:
+            raise AssertionError(
+                f"discover_ci_matrix must accept explicit event_time instead of using Git commit time: {exc}"
+            ) from exc
         assert captured, f"discover_ci_matrix did not invoke run_pinned_build_pack for {event_name!r}"
         build_run = captured[-1]["records"]["build_run"][0]
         assert build_run["event"] == event_name, (
@@ -886,7 +1085,13 @@ def test_ci_discover_honest_observation_capture(tmp_path: Path, monkeypatch):
             f"knowledge_time must match event time {EVENT_ISO}, got {captured[-1]['knowledge_time']!r}"
         )
 
-    # 6. Without --before on a single-commit repo (and with zero SHA), never silently fall back to HEAD (empty diff).
+    # 3. BuildEvent in build/schema/selection.yaml must permit push, schedule, and workflow_dispatch.
+    selection_schema = yaml.safe_load((BUILD_DIR / "schema" / "selection.yaml").read_text(encoding="utf-8"))
+    allowed_events = set((selection_schema.get("enums") or {}).get("BuildEvent", {}).get("permissible_values") or {})
+    for ev in ("pull_request", "merge_group", "push", "schedule", "workflow_dispatch"):
+        assert ev in allowed_events, f"build/schema/selection.yaml BuildEvent must permit {ev!r}"
+
+    # 4. Without --before on a single-commit repo (empty or zero SHA), fail closed strictly with ValueError.
     single = tmp_path / "single-commit"
     single.mkdir()
     _git(single, "init", "-q")
@@ -897,9 +1102,8 @@ def test_ci_discover_honest_observation_capture(tmp_path: Path, monkeypatch):
     _git(single, "commit", "-qm", "Root commit only", env=_commit_env(COMMIT_TIME))
 
     for missing_before in ("", "0" * 40):
-        raised = False
-        try:
-            res = ci_discover._resolve_git_range(
+        with pytest.raises(ValueError):
+            ci_discover._resolve_git_range(
                 single,
                 event_name="push",
                 base_ref="",
@@ -907,17 +1111,8 @@ def test_ci_discover_honest_observation_capture(tmp_path: Path, monkeypatch):
                 merge_group_base="",
                 merge_group_head="",
             )
-        except ValueError:
-            raised = True
-        else:
-            assert res[1] != res[2] or res[3], (
-                f"push without --before ({missing_before!r}) silently fell back to HEAD with empty diff: {res!r}"
-            )
-        assert raised, (
-            f"push without valid --before ({missing_before!r}) must fail closed with ValueError"
-        )
 
-    # 7. capture_ci_records must not hardcode coverage='unknown' for mapped component files.
+    # 5. capture_ci_records must classify mapped component paths honestly rather than hardcoding 'unknown'.
     records, _ = ci_discover.capture_ci_records(
         root=repo,
         run_id="run-cov",
@@ -947,23 +1142,15 @@ def test_ci_discover_honest_observation_capture(tmp_path: Path, monkeypatch):
 @pytest.mark.xfail(
     strict=True,
     raises=AssertionError,
-    reason="M2: decisions/build-reconciliation.md: loop/ci_discover.py must never default "
-           "knowledge_time to hardcoded test date '2027-01-15T08:00:00Z' and must not expose "
-           "a --pin-sha CLI override bypassing build/engine-pin.yaml.",
+    reason="M2: decisions/build-reconciliation.md: loop/ci_discover.py must require explicit "
+           "knowledge_time without hardcoded test-date defaults and must reject --pin-sha "
+           "CLI/API overrides bypassing build/engine-pin.yaml.",
 )
 def test_ci_discover_forbids_hardcoded_knowledge_time_and_pin_sha_override(tmp_path: Path):
     """knowledge_time is required without hardcoded test dates, and --pin-sha cannot bypass build/engine-pin.yaml."""
     import loop.ci_discover as ci_discover
 
-    source = CI_DISCOVER.read_text(encoding="utf-8")
-
-    # 1. No hardcoded test date anywhere in production loop/ci_discover.py.
-    has_hardcoded_date = "2027-01-15T08:00:00Z" in source
-    assert not has_hardcoded_date, (
-        "loop/ci_discover.py still hardcodes test date '2027-01-15T08:00:00Z'"
-    )
-
-    # 2. evaluate_coordinator_state requires explicit knowledge_time (never a hardcoded string default).
+    # 1. evaluate_coordinator_state requires explicit knowledge_time (no hardcoded default string).
     coord_sig = inspect.signature(ci_discover.evaluate_coordinator_state)
     kt_param = coord_sig.parameters.get("knowledge_time")
     assert kt_param is not None, "evaluate_coordinator_state must accept knowledge_time"
@@ -995,11 +1182,7 @@ def test_ci_discover_forbids_hardcoded_knowledge_time_and_pin_sha_override(tmp_p
         "CLI 'coordinator-state --records ...' without explicit --knowledge-time must fail"
     )
 
-    # 3. No --pin-sha CLI override or pin_sha API parameter bypassing build/engine-pin.yaml.
-    has_pin_sha_flag = "--pin-sha" in source
-    assert not has_pin_sha_flag, (
-        "loop/ci_discover.py must not provide a --pin-sha CLI flag that bypasses build/engine-pin.yaml"
-    )
+    # 2. No pin_sha API parameter or --pin-sha CLI override bypassing build/engine-pin.yaml.
     for func in (
         ci_discover.run_pinned_build_pack,
         ci_discover.discover_ci_matrix,
@@ -1023,36 +1206,23 @@ def test_ci_discover_forbids_hardcoded_knowledge_time_and_pin_sha_override(tmp_p
 @pytest.mark.xfail(
     strict=True,
     raises=AssertionError,
-    reason="M2: decisions/build-reconciliation.md: end-to-end behavioral test of loop/ci_discover.py "
-           "(ci-matrix and coordinator-state) against independent hand-written records covering happy "
-           "path, fail-closed safe_mode, and role-scoped publication. "
+    reason="M3: decisions/build-reconciliation.md: end-to-end subprocess verification of "
+           "loop/ci_discover.py (ci-matrix with real capture and coordinator-state with native "
+           "dates and role-scoped publication) against independent hand-written records. "
            "Waits for loop/tests/test_ci_discover_quality.py--test_rezono_schema_check_emitted_by_publisher_never_synthesized_by_ci_discover, "
-           "loop/tests/test_ci_discover_quality.py--test_ci_discover_honest_observation_capture, and "
-           "loop/tests/test_ci_discover_quality.py--test_ci_discover_forbids_hardcoded_knowledge_time_and_pin_sha_override.",
+           "loop/tests/test_ci_discover_quality.py--test_ci_discover_honest_observation_capture, "
+           "loop/tests/test_ci_discover_quality.py--test_ci_discover_forbids_hardcoded_knowledge_time_and_pin_sha_override, "
+           "compiler/tests/test_std_decision_dates.py--test_std_decision_rules_read_dates, and "
+           "compiler/tests/test_std_decision_day_retirement.py--test_std_decision_retires_day_numbers_and_coupling_rules.",
 )
 def test_ci_discover_end_to_end_against_hand_written_records(tmp_path: Path):
-    """End-to-end verification of ci-matrix and coordinator-state over hand-written records."""
-    import loop.ci_discover as ci_discover
-
-    # Guard prerequisites as clean AssertionErrors before calling updated signatures.
-    synthesizes_schema = "rezono:schema" in _all_ci_discover_code_literals()
-    assert not synthesizes_schema, (
-        "loop/ci_discover.py still synthesizes 'rezono:schema' instead of relying on publisher/checker"
-    )
-    assert "event_time" in inspect.signature(ci_discover.discover_ci_matrix).parameters, (
-        "discover_ci_matrix must accept explicit event_time"
-    )
-    has_hardcoded_date = "2027-01-15T08:00:00Z" in CI_DISCOVER.read_text(encoding="utf-8")
-    assert not has_hardcoded_date, (
-        "loop/ci_discover.py still carries hardcoded test date '2027-01-15T08:00:00Z'"
-    )
-
+    """End-to-end subprocess verification of ci-matrix (real capture) and coordinator-state (role publication)."""
     repo, engine_sha, base_sha, head_sha = _make_isolated_pinned_repo(tmp_path)
 
-    # --- Scenario A: ci-matrix happy path against hand-written selection records + admitted evidence ---
+    # --- Scenario A: ci-matrix real subprocess with real observation capture (no records_override) ---
     evidence_dir = tmp_path / "selection-evidence"
     evidence_dir.mkdir()
-    sel_records, sel_sidecar = _build_selection_records_and_evidence(
+    _write_selection_evidence(
         repo,
         base_sha=base_sha,
         head_sha=head_sha,
@@ -1061,16 +1231,34 @@ def test_ci_discover_end_to_end_against_hand_written_records(tmp_path: Path):
         observed_at=EVENT_TIME,
         evidence_dir=evidence_dir,
     )
-    happy_ci = ci_discover.discover_ci_matrix(
-        root=repo,
-        run_id="run-e2e",
-        event_name="pull_request",
-        base_ref="main",
-        event_time=EVENT_TIME,
-        records_override=sel_records,
-        sources_sidecar_override=sel_sidecar,
-        evidence_dir=evidence_dir,
+    ci_proc = subprocess.run(
+        [
+            sys.executable,
+            str(CI_DISCOVER),
+            "ci-matrix",
+            "--root",
+            str(repo),
+            "--run",
+            "run-e2e",
+            "--event",
+            "pull_request",
+            "--base-ref",
+            "main",
+            "--event-time",
+            str(EVENT_TIME),
+            "--evidence-dir",
+            str(evidence_dir),
+            "--json",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
     )
+    assert ci_proc.returncode == 0, (
+        f"ci-matrix subprocess failed (rc={ci_proc.returncode}):\n{ci_proc.stderr}\n{ci_proc.stdout}"
+    )
+    happy_ci = json.loads(ci_proc.stdout)
     assert happy_ci["engine_sha"] == engine_sha
     assert happy_ci["engine_error"] is None, f"unexpected engine error: {happy_ci['engine_error']}"
     assert happy_ci["outcome"] == {
@@ -1083,38 +1271,7 @@ def test_ci_discover_end_to_end_against_hand_written_records(tmp_path: Path):
     }
     assert [item["folder"] for item in happy_ci["matrix"]["python"]] == ["alpha", "beta", "gamma"]
 
-    # --- Scenario B: ci-matrix fail-closed safe_mode on invalid self-pin ---
-    bad_pin = tmp_path / "self-pin.yaml"
-    bad_pin.write_text(f"engine_sha: {head_sha}\n", encoding="utf-8")
-    safe_ci = ci_discover.discover_ci_matrix(
-        root=repo,
-        run_id="run-safe",
-        event_name="pull_request",
-        base_ref="main",
-        event_time=EVENT_TIME,
-        pin_path=bad_pin,
-        records_override=sel_records,
-        sources_sidecar_override=sel_sidecar,
-        evidence_dir=evidence_dir,
-    )
-    assert safe_ci["outcome"] == {
-        "run": "run-safe",
-        "source": "safe_mode",
-        "safe_mode": True,
-        "safe_mode_reason": "engine-failure",
-        "use": ["alpha", "beta", "gamma", "spare"],
-        "findings": [{
-            "kind": "safe_mode",
-            "run": "run-safe",
-            "surface": "ci_selection",
-            "reason": "engine-failure",
-        }],
-    }
-    assert sorted({item["folder"] for item in safe_ci["matrix"]["python"]}) == [
-        "alpha", "beta", "gamma", "spare"
-    ]
-
-    # --- Scenario C: coordinator-state happy path + role-scoped publication ---
+    # --- Scenario C: coordinator-state real subprocess with native dates + role-scoped publication ---
     coord_records, coord_sidecar = _build_coordinator_records(
         base_sha=base_sha,
         head_sha=head_sha,
@@ -1126,14 +1283,33 @@ def test_ci_discover_end_to_end_against_hand_written_records(tmp_path: Path):
     coord_file.write_text(yaml.safe_dump(coord_records), encoding="utf-8")
     (tmp_path / "coordinator.sources.yaml").write_text(yaml.safe_dump(coord_sidecar), encoding="utf-8")
 
-    coord_state = ci_discover.evaluate_coordinator_state(
-        root=repo,
-        run_id="run-coord",
-        records_path=coord_file,
-        role="coordinator",
-        role_mode="may_read",
-        knowledge_time=EVENT_ISO,
+    coord_proc = subprocess.run(
+        [
+            sys.executable,
+            str(CI_DISCOVER),
+            "coordinator-state",
+            "--root",
+            str(repo),
+            "--run",
+            "run-coord",
+            "--records",
+            str(coord_file),
+            "--role",
+            "coordinator",
+            "--role-mode",
+            "may_read",
+            "--knowledge-time",
+            EVENT_ISO,
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
     )
+    assert coord_proc.returncode == 0, (
+        f"coordinator-state subprocess failed (rc={coord_proc.returncode}):\n{coord_proc.stderr}\n{coord_proc.stdout}"
+    )
+    coord_state = json.loads(coord_proc.stdout)
     assert coord_state["source"] == "pack", f"expected pack coordinator state, got {coord_state}"
     assert coord_state["safe_mode"] is False
     assert coord_state["assign_new_tasks"] is True
@@ -1154,15 +1330,36 @@ def test_ci_discover_end_to_end_against_hand_written_records(tmp_path: Path):
 
     # Unprivileged role lacks read capability and must never receive tasks or claim release plans
     # (verified pack publication with empty role-filtered relations, not a safe_mode crash).
-    denied_state = ci_discover.evaluate_coordinator_state(
-        root=repo,
-        run_id="run-coord",
-        records_path=coord_file,
-        role="unprivileged",
-        role_mode="may_read",
-        knowledge_time=EVENT_ISO,
+    denied_proc = subprocess.run(
+        [
+            sys.executable,
+            str(CI_DISCOVER),
+            "coordinator-state",
+            "--root",
+            str(repo),
+            "--run",
+            "run-coord",
+            "--records",
+            str(coord_file),
+            "--role",
+            "unprivileged",
+            "--role-mode",
+            "may_read",
+            "--knowledge-time",
+            EVENT_ISO,
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
     )
-    assert denied_state["source"] == "pack", f"expected verified pack publication for unprivileged role, got {denied_state}"
+    assert denied_proc.returncode == 0, (
+        f"coordinator-state unprivileged subprocess failed (rc={denied_proc.returncode}):\n{denied_proc.stderr}"
+    )
+    denied_state = json.loads(denied_proc.stdout)
+    assert denied_state["source"] == "pack", (
+        f"expected verified pack publication for unprivileged role, got {denied_state}"
+    )
     assert denied_state["safe_mode"] is False
     assert denied_state["findings"] == []
     assert denied_state["ready"] == []
@@ -1170,74 +1367,3 @@ def test_ci_discover_end_to_end_against_hand_written_records(tmp_path: Path):
     assert denied_state["stuck"] == []
     assert denied_state["claim_release_plan"] == []
     assert denied_state["claim_held"] == []
-
-    # --- Scenario D: coordinator-state fail-closed safe_mode (engine failure and invalid manifest) ---
-    coord_safe_engine = ci_discover.evaluate_coordinator_state(
-        root=repo,
-        run_id="run-coord",
-        records_path=coord_file,
-        pin_path=bad_pin,
-        role="coordinator",
-        role_mode="may_read",
-        knowledge_time=EVENT_ISO,
-    )
-    assert coord_safe_engine == {
-        "run": "run-coord",
-        "source": "safe_mode",
-        "safe_mode": True,
-        "safe_mode_reason": "engine-failure",
-        "assign_new_tasks": False,
-        "ready": [],
-        "waiting": [],
-        "stuck": [],
-        "claim_release_plan": [],
-        "claim_held": [],
-        "findings": [{
-            "kind": "safe_mode",
-            "run": "run-coord",
-            "surface": "coordinator",
-            "reason": "engine-failure",
-        }],
-    }
-
-    incomplete_manifest = tmp_path / "manifest-no-schema.json"
-    incomplete_manifest.write_text(
-        json.dumps({"checks": [{"name": "rezono:proofs", "status": "green", "violations": 0}]}),
-        encoding="utf-8",
-    )
-    empty_rows = tmp_path / "rows-empty.json"
-    empty_rows.write_text(
-        json.dumps({
-            "build_task_ready": [],
-            "build_task_waiting": [],
-            "build_task_stuck": [],
-            "build_claim_release_plan": [],
-            "build_claim_held": [],
-        }),
-        encoding="utf-8",
-    )
-    coord_safe_manifest = ci_discover.evaluate_coordinator_state(
-        root=repo,
-        run_id="run-coord",
-        manifest_path=incomplete_manifest,
-        rows_path=empty_rows,
-        knowledge_time=EVENT_ISO,
-    )
-    assert coord_safe_manifest == {
-        "run": "run-coord",
-        "source": "safe_mode",
-        "safe_mode": True,
-        "safe_mode_reason": "invalid-publication",
-        "assign_new_tasks": False,
-        "ready": [],
-        "waiting": [],
-        "stuck": [],
-        "claim_release_plan": [],
-        "claim_held": [],
-        "findings": [{
-            "kind": "safe_mode",
-            "run": "run-coord",
-            "surface": "coordinator",
-            "reason": "invalid-publication",
-        }],
-    }
