@@ -11,11 +11,14 @@ def refuse_derived(at: str, refuse: Refuse) -> None:
 
 
 def validate(decl: dict, at: str, imported: bool, refuse: Refuse, *,
-             extended_format: bool = False, rezono_1: bool = False) -> None:
-    """Check the form. `rezono_table` lowers tables and `rezono_calc` lowers calculated values against the pack."""
-    from . import rezono_calc
+             extended_format: bool = False, rezono_1: bool = False, form: dict | None = None) -> None:
+    """Check the form. `rezono_table` lowers tables and `rezono_calc` lowers calculated values against the pack; in
+    rezono 1, `rezono_derived` lowers the other derived values, which may name their subject (`extend s: K`)."""
+    from . import rezono_calc, rezono_derived
 
-    if extra := set(decl) - MEMBERS:
+    derivations = [rezono_derived.is_derivation(form, derived) for derived in decl.get("derived") or []]
+    binder = rezono_1 and "binder" in decl and all(derivations)
+    if extra := set(decl) - MEMBERS - ({"binder"} if binder else set()):
         refuse(at, f"an extend with {', '.join(sorted(extra))} is not lowered", "§9.1")
         return
     if imported and not extended_format:
@@ -23,6 +26,8 @@ def validate(decl: dict, at: str, imported: bool, refuse: Refuse, *,
         return
     for index, derived in enumerate(decl.get("derived") or []):
         here = f"{at}/derived/{index}"
+        if derivations[index]:
+            continue
         table = derived.get("table") if isinstance(derived, dict) else None
         if not isinstance(table, dict):
             if extended_format:

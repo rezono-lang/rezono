@@ -122,16 +122,6 @@ def _safe_blocker_absence_rows(model):
     return run, cut, rows
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "M2: decisions/standard-packs-everywhere.md: platform_safe_rounds.dl (and any rule reaching "
-        "platform_safe_blocker) must not use vacuous absent_needs >= 0 count guards, while the "
-        "verified witness of platform_safe_blocker must still cite the admitted absence receipt "
-        "leaves (decisions/safe-step-rounds.md §4)"
-    ),
-)
 def test_platform_safe_blocker_has_no_vacuous_count_guard():
     model, program = _load_platform()
     blocker_rels = _transitive_deps(program, "platform_safe_blocker") | {"platform_safe_blocker"}
@@ -174,15 +164,6 @@ def test_platform_safe_blocker_has_no_vacuous_count_guard():
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "M2: decisions/standard-packs-everywhere.md: platform_safe_rounds.dl must derive "
-        "platform_startup_goal target and required steps/tokens from an explicit declared target "
-        "inventory rather than hardcoding fixture names (decisions/safe-step-rounds.md §4)"
-    ),
-)
 def test_platform_startup_goal_derives_target_from_declared_inventory():
     _, program = _load_platform()
     startup_rules = [r for r in program.rules.values() if r.head.relation == "platform_startup_goal"]
@@ -290,16 +271,6 @@ def _eval_restore_interval(
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "M2: decisions/standard-packs-everywhere.md: no rule reaching the safe-rounds goals may "
-        "hardcode literal 'management/availability', 'unreachable', or 'empty'; read expectations "
-        "from std-loop's LoopExpectation so changing LoopExpectation changes the outcome "
-        "(decisions/safe-step-rounds.md §4)"
-    ),
-)
 def test_platform_safe_rounds_reads_expectations_from_loop_expectation_without_hardcoded_literals():
     _, program = _load_platform()
     reaching_rels = set(SAFE_ROUND_GOALS)
