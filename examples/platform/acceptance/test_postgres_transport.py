@@ -101,22 +101,17 @@ def test_published_transport_requires_the_product_and_pinned_source():
             row["key"] = json.dumps(list(map(str, forged)), separators=(",", ":"))
             assert not check(damaged, manifest, checker_rules, read)["valid"], (source_id, relation)
 
-    pg16 = _evidence()["postgresql-16"]
+    evidence = _evidence()
     expected_sources = {
-        "postgresql-16-connection-settings": [{
+        source_id: [{
             "kind": "tool",
             "name": INSPECTION,
-            "revision": pg16["series"],
-            "position": f"L{pg16['line']}",
-            "url": pg16["url"],
-            "fragment_sha256": pg16["fragmentSha256"],
-        }],
-        "postgresql-17-connection-settings": [{
-            "kind": "git",
-            "name": "rezono-lang/rezono",
-            "revision": "90b056e6ef1d1034bb53ccac8620961150545b0f",
-            "position": "examples/platform/acceptance/product-evidence.json#/postgresql",
-        }],
+            "revision": evidence[key]["series"],
+            "position": f"L{evidence[key]['line']}",
+            "url": evidence[key]["url"],
+            "fragment_sha256": evidence[key]["fragmentSha256"],
+        }]
+        for source_id, key in SERIES_RECORDS
     }
     entries = sources.file_entries(model, ROOT / "facts/postgres_transport_source.yaml")
     assert len(entries) == len(SERIES_RECORDS) * (1 + len(FIELDS))

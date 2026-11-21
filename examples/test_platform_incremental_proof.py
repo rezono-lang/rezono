@@ -22,7 +22,10 @@ UNCHANGED = ("dns", "dns", "53")
 def inputs():
     model = pack.read(PLATFORM)
     prog = rules.load(model.rules)
-    source = facts.load(model, PLATFORM / "facts/core.yaml")
+    source = {
+        **facts.load(model, PLATFORM / "facts/core.yaml"),
+        **facts.load(model, PLATFORM / "facts/port_decision.yaml"),
+    }
     # Two independent joins from the public pack. Both Offer.port and PortDecision.port change so the
     # test holds before and after provides switches from Offer.port to PortDecision.
     selected = {

@@ -14,10 +14,12 @@
   },
   "postgresql": {
     "url": "https://www.postgresql.org/docs/17/runtime-config-connection.html",
-    "sha256": "3a2e5620073f7cbdd2f8e5e31c42e8e68945d040a2a8a9597e919f7f648dfb28",
+    "sha256": "b81caeb5d43273a53751dd12ac1ce509e30075e8e1f405e63055a830cb957fda",
     "series": "17",
     "protocol": "TCP",
-    "port": 5432
+    "port": 5432,
+    "line": 254,
+    "fragmentSha256": "7da43fad66a9a5b04a7751ae09025a490910b99e12baa23ef708fa4fa0b8141d"
   },
   "postgresql-16": {
     "url": "https://www.postgresql.org/docs/16/runtime-config-connection.html",
