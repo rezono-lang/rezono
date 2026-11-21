@@ -199,7 +199,7 @@ def _compare(native: Path, twin: Path, expected: dict, tmp_path: Path, *, declar
         "= ...`) as the Datalog @invariant: the relation declares invariant true and keeps its rows. "
         "compiler/rezono_compiler/rezono_derived.py refuses it today with R049 \"`options` on a rezono 1 derivation "
         "is not lowered yet\"; the same derivation without the option compiles. The standard packs std-decision, "
-        "std-identity, std-loop, std-order, std-part, std-review and std-time and the subsidy examples need it."
+        "std-identity, std-loop, std-order, std-part, std-review and std-time and front-door example packs need it."
     ),
 )
 def test_rezono_1_invariant_option_lowers_as_the_datalog_invariant(tmp_path):
@@ -291,7 +291,7 @@ def test_rezono_1_extend_option_lowers_as_the_datalog_extension_point(tmp_path):
         "(`reaches(a, b) = a.next = b or Item.any(m: reaches(a, m) and m.next = b)`), as the Datalog join with a "
         "body-only variable. compiler/rezono_compiler/rezono_derived.py refuses it today with R049 \"this Bool "
         "expression is not lowered to rezono.rules/2 yet\". Every standard pack with rules except std-order needs "
-        "it, and so do the subsidy examples."
+        "it, and so do front-door example packs."
     ),
 )
 def test_rezono_1_any_lowers_as_an_existential_join(tmp_path):
@@ -366,7 +366,7 @@ def test_rezono_1_arithmetic_in_a_bool_derivation_lowers(tmp_path):
         "(`derived crowded(g: Area): Bool = Item.count(area = g) >= 2`) as the Datalog count aggregate and its "
         "comparison, a group without rows counting 0. compiler/rezono_compiler/rezono_derived.py refuses it today "
         "with R049 \"an operand is a variable, a slot path or a literal here\"; `.count(...)` lowers only as the "
-        "value of a functional derivation. The standard pack std-loop and examples/subsidy-scheme need it."
+        "value of a functional derivation. The standard pack std-loop and front-door example packs need it."
     ),
 )
 def test_rezono_1_count_in_a_bool_derivation_lowers(tmp_path):
@@ -380,12 +380,13 @@ def test_rezono_1_count_in_a_bool_derivation_lowers(tmp_path):
     strict=True,
     raises=AssertionError,
     reason=(
-        "M3: decisions/language-rezono-1.md: section 5.11 (a proposal for the owner). Spell the Datalog @absence and "
-        "@outcome as the options `absence` and `outcome K` of a rezono 1 Bool derivation, with the meaning they "
-        "have on a rezono 0 rule signature (decisions/language-native-rules.md, annotations), and lower them so "
-        "that the relations declare absence true and outcome K and keep their rows and checks. The reader "
-        "refuses both options on `derived` today. std-decision, std-time and the subsidy examples need them. "
-        "Waits for the owner's decision on that proposal, and for "
+        "M3: decisions/language-rezono-1.md: section 5.11 (proposal only — NOT READY, do not pick up until "
+        "section 5.11 is decided). Spell the Datalog @absence and @outcome as the options `absence` and "
+        "`outcome K` of a rezono 1 Bool derivation, with the meaning they have on a rezono 0 rule signature "
+        "(decisions/language-native-rules.md, annotations), and lower them so that the relations declare "
+        "absence true and outcome K and keep their rows and checks. The reader refuses both options on "
+        "`derived` today. std-decision, std-time and front-door example packs need them. "
+        "Waits for the decision settling the section 5.11 proposal in decisions/language-rezono-1.md, and for "
         "compiler/tests/rezono/test_lower_rezono_1_rule_constructs.py"
         "--test_rezono_1_any_lowers_as_an_existential_join."
     ),
