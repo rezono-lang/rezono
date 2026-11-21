@@ -47,13 +47,17 @@ from collections.abc import Mapping
 from contextlib import contextmanager
 from pathlib import Path
 
+from rezono_canon import canonical_json
 from rezono_checker import access as checker_access
+from rezono_checker import turns as checker_turns
 from rezono_checker.check import shaped
 
-from . import access, difference, pointers, publish, store, timing
+from . import access, difference, pointers, publish, store, timing, turns, views
 from .cache import SweepStore
 from .__main__ import profile_settings
 from .proposal import COMMIT, base_of, git, pack_name, same_source
+
+TURNS_FORMAT = "rezono.turns/1"
 
 
 def grid(sweep: dict) -> list[int]:
@@ -195,6 +199,206 @@ def _difference(st, name, vid, change, label):
         difference.publish(st, name, vid, {"changes": [change]})
 
 
+def turns_key(pack: str, after_manifest: str, role: str) -> str:
+    """Store key of one role's turning-point object for a pair ending at `after_manifest`."""
+    return f"{pack}/{after_manifest}/{role}/turns.json"
+
+
+def _slot_column_type(semantic: object, raw_type: object) -> str:
+    if isinstance(semantic, dict):
+        case = semantic.get("case")
+        base = semantic.get("base")
+        if case == "ref":
+            return "reference"
+        if case == "enum":
+            return "enum"
+        if case == "date" or base == "date":
+            return "date"
+        if base == "boolean":
+            return "boolean"
+        if base in ("integer", "number") or case in ("money", "quantity"):
+            return "number"
+    if raw_type == "enum":
+        return "enum"
+    if raw_type == "boolean":
+        return "boolean"
+    if raw_type == "date":
+        return "date"
+    if raw_type in ("integer", "rational", "number"):
+        return "number"
+    return "text"
+
+
+def _columns_of(bundle: dict | None, rules_doc: dict | None, calc_doc: dict | None) -> dict[str, list[str]]:
+    columns: dict[str, list[str]] = {}
+    calc_rule_types: dict[str, str] = {}
+    if isinstance(calc_doc, dict):
+        for rule in calc_doc.get("rules") or ():
+            if isinstance(rule, dict) and isinstance(rule.get("rule"), str) and isinstance(rule.get("type"), str):
+                calc_rule_types[rule["rule"]] = rule["type"]
+    if isinstance(bundle, dict):
+        for kind in bundle.get("kinds") or ():
+            if isinstance(kind, dict) and isinstance(kind.get("table"), str):
+                columns[kind["table"]] = ["reference"]
+        for arrow in bundle.get("arrows") or ():
+            if isinstance(arrow, dict) and isinstance(arrow.get("table"), str):
+                columns[arrow["table"]] = ["reference", "reference"]
+        for attr in bundle.get("attributes") or ():
+            if isinstance(attr, dict) and isinstance(attr.get("table"), str):
+                columns[attr["table"]] = ["reference", _slot_column_type(attr.get("semantic"), attr.get("type"))]
+        for rel in bundle.get("relations") or ():
+            if not isinstance(rel, dict) or not isinstance(rel.get("id"), str):
+                continue
+            calc_ref = rel.get("calc")
+            if isinstance(calc_ref, str) and calc_ref:
+                rule_name = calc_ref.split("@", 1)[0]
+                sem = rel.get("semantic")
+                if isinstance(sem, dict) and sem.get("base") == "boolean":
+                    val_type = "boolean"
+                elif calc_rule_types.get(rule_name) == "boolean":
+                    val_type = "boolean"
+                else:
+                    val_type = "number"
+                columns[rel["id"]] = ["reference", val_type, "enum", "text"]
+            else:
+                cols = rel.get("columns") or ()
+                columns[rel["id"]] = [
+                    _slot_column_type(col.get("semantic"), col.get("type"))
+                    for col in cols if isinstance(col, dict)
+                ]
+    if isinstance(calc_doc, dict):
+        for rule in calc_doc.get("rules") or ():
+            if isinstance(rule, dict) and isinstance(rule.get("view"), str) and rule["view"] not in columns:
+                val_type = "boolean" if rule.get("type") == "boolean" else "number"
+                columns[rule["view"]] = ["reference", val_type, "enum", "text"]
+        for ver in calc_doc.get("versions") or ():
+            if isinstance(ver, dict) and isinstance(ver.get("view"), str) and ver["view"] not in columns:
+                val_type = "boolean" if calc_rule_types.get(ver.get("rule", "")) == "boolean" else "number"
+                columns[ver["view"]] = ["reference", val_type, "enum", "text"]
+    if isinstance(rules_doc, dict):
+        for rel in rules_doc.get("relations") or ():
+            if isinstance(rel, dict) and isinstance(rel.get("name"), str) and rel["name"] not in columns:
+                columns[rel["name"]] = [
+                    _slot_column_type(None, col.get("type"))
+                    for col in rel.get("key") or () if isinstance(col, dict)
+                ]
+    return columns
+
+
+def _compiled_json(st, manifest: dict, file: str) -> dict | None:
+    entry = next((c for c in manifest.get("compiled") or () if isinstance(c, dict) and c.get("file") == file), None)
+    if entry is None:
+        return None
+    return json.loads(views._get(st, views.key_of(entry["uri"]), entry["sha256"]))
+
+
+def _stop_data(st, manifest: dict, role: str) -> dict:
+    """Read one role's own snapshots and witness set from a verified variant manifest."""
+    snaps = sorted(
+        (s for s in manifest.get("snapshots") or () if isinstance(s, dict) and s.get("role") == role),
+        key=lambda s: s["relation"],
+    )
+    raw_snaps = views._snapshots(st, snaps)
+    rows = {rel: [canonical_json(r["key"]) for r in json.loads(data)] for rel, data in raw_snaps.items()}
+    wref = next((w for w in manifest.get("witnesses") or () if isinstance(w, dict) and w.get("role") == role), None)
+    if wref is not None:
+        sees = json.loads(views._get(st, views.key_of(wref["uri"]), wref["sha256"]))
+        witnesses = sees.get("witnesses") or []
+        calc_witnesses = sees.get("calc_witnesses") or []
+    else:
+        witnesses, calc_witnesses = [], []
+    return {"rows": rows, "witnesses": witnesses, "calc_witnesses": calc_witnesses}
+
+
+def _turns_roles(before_m: dict, after_m: dict) -> list[str]:
+    """Roles that see the status and snapshots of both stops (decisions/viewer-slip.md, Turning points)."""
+    def status_set(manifest: dict) -> set[str]:
+        variant = manifest.get("variant")
+        if not isinstance(variant, dict):
+            return set()
+        readers = variant.get("readers")
+        status_readers = variant.get("status_readers")
+        if (not isinstance(readers, list) or not isinstance(status_readers, list)
+                or not all(isinstance(r, str) and r for r in readers)
+                or not all(isinstance(r, str) and r for r in status_readers)):
+            return set()
+        rset = set(readers)
+        sset = set(status_readers)
+        if not sset <= rset:
+            return set()
+        snap_roles = {s["role"] for s in manifest.get("snapshots") or () if isinstance(s, dict) and isinstance(s.get("role"), str)}
+        return sset & snap_roles
+
+    return sorted(status_set(before_m) & status_set(after_m))
+
+
+def publish_turns(st, pack: str, base: str, sweep_name: str, before_index: int, after_index: int,
+                  epoch: int) -> list[str]:
+    """Build, independently check, and store one `rezono.turns/1` object per status-reading role for a pair
+    of neighbouring variant stops that both exist in `st`. Returns the store keys written."""
+    if after_index != before_index + 1 or before_index < 0:
+        raise ValueError(f"turns pair must be neighbouring indices, not ({before_index}, {after_index})")
+    before_vid = publish.variant_id(sweep_name, before_index, epoch)
+    after_vid = publish.variant_id(sweep_name, after_index, epoch)
+    before_raw = st.get(f"{pack}/manifests/{before_vid}.json")
+    after_raw = st.get(f"{pack}/manifests/{after_vid}.json")
+    if before_raw is None or after_raw is None:
+        return []
+    before_m = json.loads(before_raw)
+    after_m = json.loads(after_raw)
+    if (before_m.get("id") != before_vid or after_m.get("id") != after_vid
+            or before_m.get("base_manifest") != base or after_m.get("base_manifest") != base):
+        return []
+    before_v, after_v = before_m.get("variant"), after_m.get("variant")
+    if (not isinstance(before_v, dict) or not isinstance(after_v, dict)
+            or before_v.get("sweep") != sweep_name or after_v.get("sweep") != sweep_name
+            or before_v.get("index") != before_index or after_v.get("index") != after_index):
+        return []
+    pair_roles = _turns_roles(before_m, after_m)
+    missing_roles = [role for role in pair_roles if st.get(turns_key(pack, after_vid, role)) is None]
+    if not missing_roles:
+        return []
+    bundle = _compiled_json(st, after_m, "bundle/schema-bundle.json")
+    rules_doc = _compiled_json(st, after_m, "ir/rules.json")
+    calc_doc = _compiled_json(st, after_m, "ir/calc.json")
+    columns = _columns_of(bundle, rules_doc, calc_doc)
+    before_sha = publish.sha256(before_raw)
+    after_sha = publish.sha256(after_raw)
+    files: list[tuple[str, bytes]] = []
+    for role in missing_roles:
+        before_stop = _stop_data(st, before_m, role)
+        after_stop = _stop_data(st, after_m, role)
+        listed = turns.between(columns, calc_doc, before_stop, after_stop)
+        with timing.phase("checker"):
+            problems = checker_turns.check(columns, calc_doc, before_stop, after_stop, listed)
+        if problems:
+            raise publish.Blocked(
+                f"{publish.PROOFS}: role {role}: turns {before_vid}->{after_vid}: "
+                f"{len(problems)} (first: {'; '.join(problems[:3])})"
+            )
+        doc = {
+            "format": TURNS_FORMAT,
+            "pack": pack,
+            "role": role,
+            "sweep": sweep_name,
+            "base_manifest": base,
+            "before": {"index": before_index, "manifest": before_vid, "sha256": before_sha},
+            "after": {"index": after_index, "manifest": after_vid, "sha256": after_sha},
+            "turns": listed,
+        }
+        files.append((turns_key(pack, after_vid, role), views.dumps(doc)))
+    store.put_all(st, files)
+    return [key for key, _ in files]
+
+
+def _neighbor_turns(st, pack: str, base: str, sweep_name: str, index: int, count: int, epoch: int, label: str) -> None:
+    with _phase(st, label, "turns"):
+        if index > 0:
+            publish_turns(st, pack, base, sweep_name, index - 1, index, epoch)
+        if index + 1 < count:
+            publish_turns(st, pack, base, sweep_name, index, index + 1, epoch)
+
+
 def newest_commit(repo: Path, pack: str, st) -> str:
     """The commit of the pack's newest main manifest (its `rules` source): the base of `--newest`."""
     head = publish.newest_main(st, pack_name(repo / pack))
@@ -265,7 +469,8 @@ def run(repo: Path, pack: str, base_commit: str, st, roles: dict[str, str],
         if not same_source(main, base, n, base_commit):
             raise ValueError(f"the published {base} is not of commit {base_commit}: another commit with as many ancestors")
         for sw in model.sweeps:
-            for i, value in enumerate(grid(sw)):
+            values = grid(sw)
+            for i, value in enumerate(values):
                 if i % part[1] != part[0]:
                     continue  # another worker's value
                 vid = publish.variant_id(sw["name"], i, n + 1)
@@ -282,6 +487,8 @@ def run(repo: Path, pack: str, base_commit: str, st, roles: dict[str, str],
                         # whole costs its lookup, so a sweep with nothing to compute writes nothing.
                         if there == "manifest" and not explained(st, name, vid, main):
                             _difference(st, name, vid, change_of(sw), label)
+                        if there == "manifest":
+                            _neighbor_turns(st, name, base, sw["name"], i, len(values), n + 1, label)
                         result = f"{there} kept"
                     else:
                         change = {"op": "set", "kind": sw["kind"], "key": sw["key"], "slot": sw["slot"], "value": value}
@@ -307,6 +514,7 @@ def run(repo: Path, pack: str, base_commit: str, st, roles: dict[str, str],
                             with _phase(st, label, "publication"):
                                 publish.publish(e, st, {r: roles[r] for r in readers}, base=main)
                             _difference(st, name, vid, change, label)
+                            _neighbor_turns(st, name, base, sw["name"], i, len(values), n + 1, label)
                             result = "manifest"
                     done.append((vid, result))
                 finally:

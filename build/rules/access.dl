@@ -8,10 +8,13 @@ may_read(r, "role", x) :- role__capability(r, "read"), role(x).
 
 // Run, cut receipt, policy date, decisions and citations.
 may_read(r, "build_run", x) :- role__capability(r, "read"), build_run(x).
+may_read(r, "build_component", x) :- role__capability(r, "read"), build_component(x).
+may_read(r, "build_test_file", x) :- role__capability(r, "read"), build_test_file(x).
 may_read(r, "build_policy_date", x) :- role__capability(r, "read"), build_policy_date(x).
 may_read(r, "decision", x) :- role__capability(r, "read"), decision(x).
 may_read(r, "reference_date", x) :- role__capability(r, "read"), reference_date(x).
 may_read(r, "build_citation_scan", x) :- role__capability(r, "read"), build_citation_scan(x).
+may_read(r, "build_decision_citation", x) :- role__capability(r, "read"), build_decision_citation(x).
 may_read(r, "build_red_citation", x) :- role__capability(r, "read"), build_red_citation(x).
 
 // Milestone progress, release-1 completion and off-board work.
@@ -57,10 +60,13 @@ may_read(r, "build_claim_ref_read", x) :- role__capability(r, "read"), build_cla
 may_read_full(r, "role") :- role__capability(r, "read").
 
 may_read_full(r, "build_run") :- role__capability(r, "read").
+may_read_full(r, "build_component") :- role__capability(r, "read").
+may_read_full(r, "build_test_file") :- role__capability(r, "read").
 may_read_full(r, "build_policy_date") :- role__capability(r, "read").
 may_read_full(r, "decision") :- role__capability(r, "read").
 may_read_full(r, "reference_date") :- role__capability(r, "read").
 may_read_full(r, "build_citation_scan") :- role__capability(r, "read").
+may_read_full(r, "build_decision_citation") :- role__capability(r, "read").
 may_read_full(r, "build_red_citation") :- role__capability(r, "read").
 
 may_read_full(r, "build_milestone") :- role__capability(r, "read").

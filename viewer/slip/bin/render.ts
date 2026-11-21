@@ -15,12 +15,17 @@ const DOM_GLOBALS = [
 	'Node',
 	'Element',
 	'HTMLElement',
+	'HTMLMediaElement',
+	'HTMLInputElement',
+	'HTMLButtonElement',
 	'SVGElement',
 	'Text',
 	'Comment',
 	'DocumentFragment',
 	'Event',
 	'CustomEvent',
+	'FocusEvent',
+	'InputEvent',
 	'KeyboardEvent',
 	'MouseEvent',
 	'MutationObserver',
@@ -70,6 +75,7 @@ async function main(): Promise<void> {
 		};
 
 		const app = (await import(pathToFileURL(bundlePath).href)) as {
+			flush: () => void;
 			renderSlip: (
 				target: HTMLElement,
 				options: {
@@ -87,6 +93,26 @@ async function main(): Promise<void> {
 			row: request.row,
 			fetch: fetchViaGate,
 		});
+
+		for (const action of request.keys ?? []) {
+			const rowEl = win.document.querySelector(`tr[data-line="${action.line}"]`) as
+				| (HTMLElement & { focus?: () => void })
+				| null;
+			if (!rowEl) {
+				throw new Error(`No line with index ${action.line}`);
+			}
+			if (action.key !== undefined) {
+				rowEl.focus?.();
+				const event = new win.KeyboardEvent('keydown', {
+					key: action.key,
+					bubbles: true,
+					cancelable: true,
+				});
+				rowEl.dispatchEvent(event);
+				app.flush();
+				await Promise.resolve();
+			}
+		}
 
 		const html = win.document.body.innerHTML;
 		process.stdout.write(JSON.stringify({ html, files: hashes }));

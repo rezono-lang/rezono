@@ -16,3 +16,6 @@ kinds:
   - {kind: build_red_test, shape: rect}
   - {kind: build_green_transition, shape: rect}
   - {kind: build_offboard_work, shape: rect}
+  - {kind: build_citation_scan, shape: rect}
+  - {kind: build_decision_citation, shape: rect}
+  - {kind: build_red_citation, shape: rect}
