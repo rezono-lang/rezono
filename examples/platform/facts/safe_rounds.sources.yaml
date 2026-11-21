@@ -1,4 +1,0 @@
-default:
-  kind: synthetic
-  name: decisions/safe-step-rounds.md
-  position: 4-platform-acceptance
