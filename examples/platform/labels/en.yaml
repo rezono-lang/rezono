@@ -11,7 +11,6 @@ product: product
 offer: offer
 offer.product: product
 offer.function: function
-offer.port: port
 port_decision: port decision
 port_decision.product: product
 port_decision.function: function
