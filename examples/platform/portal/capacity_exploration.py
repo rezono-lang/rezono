@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
 from functools import lru_cache
 import json
 import os
@@ -63,13 +64,61 @@ def _load_exploration(tables: dict[str, list[tuple]], exploration_id: str) -> tu
     return pool, request, values
 
 
-def _role_mode(base: dict | None, role: str) -> str:
-    """Use the base manifest's access mode for `role` when published, else complete."""
+_VALID_ROLE_MODES = frozenset({access.COMPLETE, access.FILTERED})
+# Without a base manifest or explicit role_mode, only the standalone operator role (when not
+# declared as a pack role or named in access rules) defaults to complete; all other roles fail
+# closed to access.FILTERED.
+_STANDALONE_COMPLETE_ROLES = frozenset({"operator"})
+
+
+def _declared_filtered_roles(tables: dict[str, list[tuple]] | None, prog) -> set[str]:
+    """Roles named in pack role facts or as constants in may_read / may_read_full rules."""
+    roles: set[str] = set()
+    if tables:
+        roles |= {str(row[0]) for row in tables.get(access.ROLE, ()) if row}
+        roles |= {str(row[0]) for row in tables.get(access.CAPABILITY, ()) if row}
+    if prog is not None:
+        for rule in prog.rules.values():
+            head = rule.head
+            if head.relation in {access.ACCESS, access.READ_FULL} and head.terms:
+                first = head.terms[0]
+                if not ir.is_var(first):
+                    roles.add(str(first))
+    return roles
+
+
+def _role_mode(
+    base: dict | None,
+    role: str,
+    *,
+    role_mode: str | None = None,
+    tables: dict[str, list[tuple]] | None = None,
+    prog=None,
+) -> str:
+    """Resolve the publication access mode for `role` fail-closed."""
+    if role_mode is not None and role_mode not in _VALID_ROLE_MODES:
+        raise ValueError(f"unknown role_mode {role_mode!r}")
+
     if base is not None:
-        for snap in base.get("snapshots", ()):
-            if snap.get("role") == role:
-                return access.COMPLETE if snap.get("complete") else access.FILTERED
-    return access.COMPLETE
+        role_snaps = [snap for snap in base.get("snapshots", ()) if snap.get("role") == role]
+        if not role_snaps:
+            raise publish.Blocked(f"role {role!r} is not published in {base['id']}")
+        modes = {access.COMPLETE if snap.get("complete") is True else access.FILTERED for snap in role_snaps}
+        if len(modes) != 1:
+            raise publish.Blocked(f"role {role!r} has inconsistent access modes in {base['id']}")
+        resolved = next(iter(modes))
+        if role_mode is not None and role_mode != resolved:
+            raise publish.Blocked(
+                f"role {role!r} requested mode {role_mode!r} does not match {base['id']} ({resolved!r})"
+            )
+        return resolved
+
+    if role_mode is not None:
+        return role_mode
+
+    if role in _STANDALONE_COMPLETE_ROLES and role not in _declared_filtered_roles(tables, prog):
+        return access.COMPLETE
+    return access.FILTERED
 
 
 def _prepare_candidate(pack_dir: Path, lay: writer.Layout, pool: str, capacity: int,
@@ -163,17 +212,14 @@ def _run_rules_for_candidate(
         finally:
             con.close()
     elif calc_program is not None:
-        calc_db = duckdb.connect()
-        try:
+        with closing(duckdb.connect()) as calc_db, closing(duckdb.connect()) as rule_db:
             calc_db.execute(emit.DUCKDB_FUNCTIONS)
             calc_db.execute(tables_sql)
             for table, rs in sorted((params | facts).items()):
                 if rs:
                     ph = ", ".join("?" * len(rs[0]))
                     calc_db.executemany(f"INSERT INTO {emit.q(table)} VALUES ({ph})", rs)
-            calc_witnesses = batch.calculate(calc_program, calc_db, duckdb.connect(), rows)
-        finally:
-            calc_db.close()
+            calc_witnesses = batch.calculate(calc_program, calc_db, rule_db, rows)
 
     entries = []
     for rel, file_entries in sorted(base_sources_by_file.items()):
@@ -189,7 +235,13 @@ def _run_rules_for_candidate(
     return rows, candidate_checks, witnesses, calc_witnesses, protected, fact_sources, pack_sha
 
 
-def publish_exploration(pack_directory, file_store, exploration_id: str, role: str) -> str:
+def publish_exploration(
+    pack_directory,
+    file_store,
+    exploration_id: str,
+    role: str,
+    role_mode: str | None = None,
+) -> str:
     """Evaluate a written capacity_exploration in ascending order and publish its checked report."""
     pack_dir = Path(pack_directory)
     lay = writer.layout(pack_dir)
@@ -235,7 +287,7 @@ def publish_exploration(pack_directory, file_store, exploration_id: str, role: s
     base_manifest = base["id"] if base is not None else ""
     base_epoch = int(base["epoch"]) if base is not None else 0
     knowledge_time = str(base["knowledge_time"]) if base is not None else KNOWLEDGE_TIME
-    role_mode = _role_mode(base, role)
+    resolved_role_mode = _role_mode(base, role, role_mode=role_mode, tables=merged_tables, prog=prog)
 
     prepared: list[tuple[int, str, Path, Path, set[str]]] = []
     candidate_inputs: list[tuple[dict[str, list[tuple[str, ...]]], dict[str, list], list[dict]]] = []
@@ -390,7 +442,7 @@ def publish_exploration(pack_directory, file_store, exploration_id: str, role: s
     samples: list[dict] = []
     previous_manifest = base
     for (capacity, _, _, _, _), epoch_obj in zip(prepared, epochs):
-        manifest = publish.publish(epoch_obj, file_store, {role: role_mode}, reuse=previous_manifest)
+        manifest = publish.publish(epoch_obj, file_store, {role: resolved_role_mode}, reuse=previous_manifest)
         previous_manifest = manifest
         mid = manifest["id"]
         objs = publish.role_objects(file_store, pack_name, mid, role)
