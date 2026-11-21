@@ -192,16 +192,6 @@ require open_rack_feed(r: OpenRack)
 """
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingRequirementLowering,
-    reason=(
-        "M3: decisions/language-requirements.md: Lower rezono 1 require declarations directly "
-        "into rezono.rules/2 with functional outcome relation, derived violation relation, "
-        "invariant flag, means/@ bundle metadata, Feldera co-located view, and functional_open_domain refusal. "
-        "Waits for rezono/test/test_rezono_1_requirements.py--test_rezono_1_requirement_parsing_and_diagnostics."
-    ),
-)
 def test_lower_requirement_to_rules_ir(tmp_path):
     directory = _write_pack(tmp_path / "lowering", LOWERING_MODULE)
     assert not list(directory.rglob("*.dl"))

@@ -25,7 +25,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import cast
 
-from . import rezono_alias, rezono_calc, rezono_derived, rezono_enum, rezono_extend, rezono_key, rezono_kind, rezono_metadata, rezono_reason, rezono_slot, rezono_unit, strict_yaml
+from . import rezono_alias, rezono_calc, rezono_derived, rezono_enum, rezono_extend, rezono_key, rezono_kind, rezono_metadata, rezono_reason, rezono_requirements, rezono_slot, rezono_unit, strict_yaml
 from .diagnostics import Diagnostic
 from .native_literals import NATIVE_FORMAT, native_literal_errors
 from .schemaview import SchemaView
@@ -440,7 +440,7 @@ def place_pointers(value: object, at: str = "", member: str = "", *, legacy_meta
             elif member == "memberMetadata":
                 if isinstance(child, dict):
                     yield pointer
-            elif key == "means" and isinstance(child, str) and ("rule" in value or "derived" in value):
+            elif key == "means" and isinstance(child, str) and ("rule" in value or "derived" in value or "require" in value):
                 yield pointer
             elif key not in ("annotations", "prefixes", "fields"):
                 yield from place_pointers(child, pointer, key)
@@ -906,6 +906,10 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
             continue  # Step declarations are lowered after native rules and schema resolution.
         elif rezono_1 and rezono_derived.is_module_derived(decl):
             continue  # Lowered with the rules (rezono_derived.py): it needs the checked schema of the pack.
+        elif rezono_requirements.is_requirement(decl):
+            if not rezono_1:
+                refuse(at, "a `require` declaration requires rezono 1 (rezono.module/5)", "§6")
+            continue  # Lowered with the rules (rezono_requirements.py): it needs the checked schema of the pack.
         elif "extend" in decl:
             rezono_extend.validate(decl, at, imported, refuse, extended_format=extended_format, rezono_1=rezono_1,
                                    form=form)
