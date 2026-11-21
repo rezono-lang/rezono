@@ -48,6 +48,12 @@ signature_scan: signature scan
 signature_scan.covers: covers
 provides: provides
 provider: provider
+port_decided: port decided
+release_names: release names
+transport_series: transport series
+transport_series_multiple: multiple transport series
+port_known: port known
+port_unknown: port unknown
 asks: asks
 provider_chosen: provider chosen
 providers: providers
