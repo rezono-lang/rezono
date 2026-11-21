@@ -1528,13 +1528,14 @@ class Lowering:
             else:
                 hits.append((self._var(head), typ, path[1:]))
         if self._method_scopes:
-            _, member, _ = self._method_scopes[-1]
-            if member.kind is not None:
-                if self.slot(at, member.kind, head) is not None or self._prop_sig(member.kind, head) is not None:
-                    hits.append((member.terms[0], ("kind", member.kind), path))
-            elif member.columns and head in member.columns:
-                idx, col_typ = member.columns[head]
-                hits.append((member.terms[idx], col_typ, path[1:]))
+            binder, member, _ = self._method_scopes[-1]
+            if not (binder is not None and head in self.env):
+                if member.kind is not None:
+                    if self.slot(at, member.kind, head) is not None or self._prop_sig(member.kind, head) is not None:
+                        hits.append((member.terms[0], ("kind", member.kind), path))
+                elif member.columns and head in member.columns:
+                    idx, col_typ = member.columns[head]
+                    hits.append((member.terms[idx], col_typ, path[1:]))
         if allow_top_implicit and self.sig.binder == "it" and head != "it" and self.sig.kind is not None:
             if self.slot(at, self.sig.kind, head) is not None or self._prop_sig(self.sig.kind, head) is not None:
                 hits.append((("var", "it"), ("kind", self.sig.kind), path))
