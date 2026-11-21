@@ -37,7 +37,7 @@ if TYPE_CHECKING:
     from . import modules
 
 REZONO_1_FORMAT = "rezono.module/5"
-SCALARS = {"Int": "integer", "Integer": "integer", "Text": "string", "Bool": "boolean", "Date": "date"}
+SCALARS = {"Int": "integer", "Text": "string", "Bool": "boolean", "Date": "date"}
 COMPARE = rules_dl.COMPARE
 ARITH = rules_dl.ARITH
 NEGATED = {"eq": "ne", "ne": "eq", "lt": "ge", "le": "gt", "gt": "le", "ge": "lt"}
@@ -1538,9 +1538,9 @@ class Lowering:
             value = json.loads(token)
             if isinstance(value, str) and value != "_" and not value.startswith("?"):
                 return "const", value, "string"
-        if token in ("yes", "true"):
+        if token == "true":
             return "const", "true", "boolean"
-        if token in ("no", "false"):
+        if token == "false":
             return "const", "false", "boolean"
         if isinstance(token, str) and re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*", token):
             return "const", token, "string"  # an element id or a value of an enum
