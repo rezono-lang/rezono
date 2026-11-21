@@ -1,0 +1,8 @@
+{
+  "pin__service__reference": [
+    ["pin-cp", "cp"]
+  ],
+  "release__product__reference": [
+    ["kube-control-1.32.13", "kube-control"]
+  ]
+}

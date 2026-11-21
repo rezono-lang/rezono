@@ -18,6 +18,9 @@ from firewall_oracle import firewall_expectations
 
 HERE = Path(__file__).parent
 FACTS = yaml.safe_load((HERE / "facts" / "core.yaml").read_text())
+KUBE_CONTROL_RELEASE = yaml.safe_load((HERE / "facts" / "kube_control_release.yaml").read_text())
+for _kind in ("release", "pin"):
+    FACTS.setdefault(_kind, []).extend(KUBE_CONTROL_RELEASE.get(_kind, []))
 
 
 def ids(kind):

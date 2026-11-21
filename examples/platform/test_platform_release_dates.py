@@ -32,12 +32,11 @@ def _derive(model, prog, label, rows):
 
 
 @pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "M3: decisions/platform-facts-not-conclusions.md, section 4. Derive released_on(r, d) from the "
+    "M3: decisions/platform-facts-not-conclusions.md: section 4. Derive released_on(r, d) from the "
     "ProductReleaseSource whose product and version are the release's, with published as a date slot; order stable "
     "releases by it in native date order (no newest_day, no @days), and give a product with an undated stable "
     "release no newest one (release_undated). Keep released_on_day for now: no rule reads it, and a planner retires "
-    "it. Waits for compiler/tests/test_std_decision_dates.py--test_std_decision_rules_read_dates and the planner's "
-    "sources step of section 4."))
+    "it. Waits for compiler/tests/test_std_decision_dates.py--test_std_decision_rules_read_dates."))
 def test_runs_orders_releases_by_their_sourced_date():
     reference = json.loads((PLATFORM / "oracle-rows.json").read_text(encoding="utf-8"))
     keycloak = json.loads((PLATFORM / "acceptance/product-evidence.json").read_text(encoding="utf-8"))["keycloak"]

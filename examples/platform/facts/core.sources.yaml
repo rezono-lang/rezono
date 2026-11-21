@@ -14,21 +14,11 @@ records:
     name: decisions/platform-facts-not-conclusions.md
     revision: dbac8a77492843cfe1532f60e2959e3a9dd9696e
     position: 4-release-dates-point-2
-  - of: {kind: release, id: kube-control-1.32.13}
-    kind: git
-    name: rezono-lang/rezono
-    revision: dbac8a77492843cfe1532f60e2959e3a9dd9696e
-    position: decisions/platform-facts-not-conclusions.md#6-the-running-release-and-the-support-window-point-4
   - of: {kind: pin, id: pin-reg}
     kind: git
     name: rezono-lang/rezono
     revision: 0b9e8ffe2e9475f9591f58ea75d966de93818d1a
     position: decisions/platform-registry-reference.md
-  - of: {kind: pin, id: pin-cp}
-    kind: git
-    name: rezono-lang/rezono
-    revision: dbac8a77492843cfe1532f60e2959e3a9dd9696e
-    position: decisions/platform-facts-not-conclusions.md#6-the-running-release-and-the-support-window-point-4
   - of: {kind: artifact, id: a-shop}
     kind: synthetic
     name: decisions/platform-facts-not-conclusions.md
