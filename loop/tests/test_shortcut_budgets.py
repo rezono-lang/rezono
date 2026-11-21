@@ -18,16 +18,29 @@ Each test verifies:
 
 from __future__ import annotations
 
+import ast
 import json
+import os
 from pathlib import Path
 import subprocess
 
 import pytest
+import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 PACKS = ROOT / "packs"
 STD_BUDGET = PACKS / "std-budget"
 BUDGET_FILE = ROOT / "loop" / "shortcut-budget.json"
+CI_WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
+SHORTCUT_BUDGETS_PY = ROOT / "loop" / "shortcut_budgets.py"
+
+
+def _repo_base() -> str:
+    """Base git revision for repository-wide budget checks (CI PR/merge-queue base, else HEAD)."""
+    raw = (os.environ.get("SHORTCUT_BUDGET_BASE") or os.environ.get("DECISION_HEADS_BASE") or "").strip()
+    if raw and not set(raw) <= {"0"}:
+        return raw
+    return "HEAD"
 
 
 def _load_shortcut_budgets():
@@ -134,7 +147,7 @@ def test_day_number_schema_fields_budget_only_shrinks(tmp_path: Path, monkeypatc
     sb, budget = _load_shortcut_budgets()
     assert sb.BUDGET_PATH == "loop/shortcut-budget.json"
     assert "day_number_fields" in budget and isinstance(budget["day_number_fields"], dict)
-    assert sb.check_shortcut_budget("day_number_fields", ROOT) == []
+    assert sb.check_shortcut_budget("day_number_fields", ROOT, base=_repo_base()) == []
     _assert_uses_std_budget_fail_closed(sb, monkeypatch, "day_number_fields", "packs/p-legacy")
 
     # Hand-worked counter-case tree:
@@ -173,7 +186,9 @@ def test_day_number_schema_fields_budget_only_shrinks(tmp_path: Path, monkeypatc
 
     # Negative counter-case on check_shortcut_budget (refuses ceiling excess; catches a `return []` stub).
     _write_budget_json(tree, {"day_number_fields": {"examples/p-rezono": 1, "packs/p-legacy": 1}})
-    excess_findings = sb.check_shortcut_budget("day_number_fields", tree)
+    _git(tree, "init", "-q")
+    tree_base = _commit(tree, "base with ceiling excess")
+    excess_findings = sb.check_shortcut_budget("day_number_fields", tree, base=tree_base)
     assert excess_findings, "check_shortcut_budget must fail when observed count exceeds ceiling"
     assert any("packs/p-legacy" in msg for msg in excess_findings), excess_findings
 
@@ -248,7 +263,7 @@ def test_day_number_schema_fields_budget_only_shrinks(tmp_path: Path, monkeypatc
 def test_duplicate_source_blocks_budget_only_shrinks(tmp_path: Path, monkeypatch):
     sb, budget = _load_shortcut_budgets()
     assert "duplicate_source_blocks" in budget and isinstance(budget["duplicate_source_blocks"], dict)
-    assert sb.check_shortcut_budget("duplicate_source_blocks", ROOT) == []
+    assert sb.check_shortcut_budget("duplicate_source_blocks", ROOT, base=_repo_base()) == []
     cell = "examples/alpha/facts/dups.sources.yaml"
     _assert_uses_std_budget_fail_closed(sb, monkeypatch, "duplicate_source_blocks", cell)
 
@@ -303,7 +318,9 @@ def test_duplicate_source_blocks_budget_only_shrinks(tmp_path: Path, monkeypatch
 
     # Negative counter-case on check_shortcut_budget (ceiling excess fails; catches a `return []` stub).
     _write_budget_json(tree, {"duplicate_source_blocks": {cell: 1}})
-    excess_findings = sb.check_shortcut_budget("duplicate_source_blocks", tree)
+    _git(tree, "init", "-q")
+    tree_base = _commit(tree, "base with duplicate excess")
+    excess_findings = sb.check_shortcut_budget("duplicate_source_blocks", tree, base=tree_base)
     assert excess_findings, "check_shortcut_budget must fail when duplicate source blocks exceed ceiling"
     assert any(cell in msg for msg in excess_findings), excess_findings
 
@@ -378,7 +395,7 @@ def test_duplicate_source_blocks_budget_only_shrinks(tmp_path: Path, monkeypatch
 def test_rezono_pack_dl_regression_budget_only_shrinks_and_counts_offboard(tmp_path: Path, monkeypatch):
     sb, budget = _load_shortcut_budgets()
     assert "rezono_pack_dl_regression" in budget and isinstance(budget["rezono_pack_dl_regression"], dict)
-    assert sb.check_shortcut_budget("rezono_pack_dl_regression", ROOT) == []
+    assert sb.check_shortcut_budget("rezono_pack_dl_regression", ROOT, base=_repo_base()) == []
     _assert_uses_std_budget_fail_closed(sb, monkeypatch, "rezono_pack_dl_regression", "examples/hybrid")
 
     # Three hand-worked packs:
@@ -408,13 +425,15 @@ def test_rezono_pack_dl_regression_budget_only_shrinks_and_counts_offboard(tmp_p
     assert reg_after_offboard == {"examples/hybrid": 2}
     assert off_after_offboard == {"packs/legacy-dl": 4}
     _write_budget_json(tree, {"rezono_pack_dl_regression": {"examples/hybrid": 2}})
-    assert sb.check_shortcut_budget("rezono_pack_dl_regression", tree) == []
+    _git(tree, "init", "-q")
+    tree_base = _commit(tree, "base with hybrid=2 and offboard=4")
+    assert sb.check_shortcut_budget("rezono_pack_dl_regression", tree, base=tree_base) == []
 
     # Counter-case 2: backsliding a pure-Rezono pack by adding a .dl file is refused by check_shortcut_budget.
     _write(tree / "examples" / "pure-rezono" / "rules" / "backslide.dl", ".decl s(v: symbol)\n")
     reg_backslide, _ = sb.count_rezono_pack_dl_files(tree)
     assert reg_backslide == {"examples/hybrid": 2, "examples/pure-rezono": 1}
-    backslide_findings = sb.check_shortcut_budget("rezono_pack_dl_regression", tree)
+    backslide_findings = sb.check_shortcut_budget("rezono_pack_dl_regression", tree, base=tree_base)
     assert backslide_findings, "check_shortcut_budget must refuse a new .dl file in a pure-Rezono pack"
     assert any("examples/pure-rezono" in msg for msg in backslide_findings), backslide_findings
 
@@ -462,3 +481,223 @@ def test_rezono_pack_dl_regression_budget_only_shrinks_and_counts_offboard(tmp_p
         head_observed={"examples/hybrid": 2},
     )
     assert ("rezono_pack_dl_regression", "examples/hybrid") in verdict_ratchet["budget_ratchet_violation"]
+
+
+def test_ci_workflow_runs_base_shortcut_budgets_with_base_revision():
+    """CI executes the base revision's copy of loop/shortcut_budgets.py with --base on PRs and merge_group."""
+    workflow = yaml.safe_load(CI_WORKFLOW.read_text(encoding="utf-8"))
+    discover_steps = workflow["jobs"]["discover"]["steps"]
+    env_index, = [
+        i for i, step in enumerate(discover_steps)
+        if step.get("uses") == "./.github/workflows/python-environment"
+    ]
+    budget_steps = [
+        (i, step)
+        for i, step in enumerate(discover_steps)
+        if "shortcut_budgets.py" in (step.get("run") or "")
+    ]
+    assert len(budget_steps) == 1, f"expected one shortcut budget gate step in ci.yml discover, got {budget_steps}"
+    idx, step = budget_steps[0]
+    assert env_index < idx, "shortcut budget gate must run after python-environment installs rezono_compiler"
+    assert not step.get("continue-on-error"), "shortcut budget gate must block CI, never continue-on-error"
+    assert "if" not in step, "shortcut budget gate must run on every PR, merge_group and push that discover runs"
+
+    env = step.get("env") or {}
+    policy_expr = str(env.get("POLICY") or "")
+    base_expr = str(env.get("BASE") or "")
+    for required_ref in ("github.event.pull_request.base.sha", "github.event.merge_group.base_sha"):
+        assert required_ref in policy_expr, f"POLICY env must cover {required_ref}: {policy_expr!r}"
+        assert required_ref in base_expr, f"BASE env must cover {required_ref}: {base_expr!r}"
+    assert "github.sha" in policy_expr, f"POLICY env must fall back to github.sha: {policy_expr!r}"
+    assert "github.event.before" in base_expr, f"BASE env must cover push github.event.before: {base_expr!r}"
+
+    run_script = step["run"]
+    assert 'git show "$POLICY:loop/shortcut_budgets.py"' in run_script, (
+        "CI must run loop/shortcut_budgets.py from $POLICY so a candidate cannot weaken its own gate"
+    )
+    assert '--base "$BASE"' in run_script, "CI must invoke loop/shortcut_budgets.py with --base \"$BASE\""
+
+    python_steps = workflow["jobs"]["python"]["steps"]
+    check_step, = [s for s in python_steps if "components.py run-shard" in (s.get("run") or "")]
+    sb_base_expr = str((check_step.get("env") or {}).get("SHORTCUT_BUDGET_BASE") or "")
+    assert "github.event.pull_request.base.sha" in sb_base_expr, sb_base_expr
+    assert "github.event.merge_group.base_sha" in sb_base_expr, sb_base_expr
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason="extra: decisions/no-green-by-cheapest-route.md: loop/shortcut_budgets.py must refuse missing or "
+           "empty --base instead of silently equating head to base, and fail closed when any ceiling in "
+           "loop/shortcut-budget.json is raised or added relative to --base.",
+)
+def test_shortcut_budgets_refuses_missing_base_and_detects_raised_ceiling(tmp_path: Path, capsys):
+    sb, _ = _load_shortcut_budgets()
+    repo = tmp_path / "budget-raised-repo"
+    _write(repo / "packs" / "p-legacy" / "pack.yaml", "name: p-legacy\nversion: 0.1.0\ndefault_language: en\n")
+    _write(
+        repo / "packs" / "p-legacy" / "schema" / "dates.yaml",
+        "id: https://rezono.org/test/p-legacy\nname: p_legacy\nclasses:\n  Item:\n    attributes:\n"
+        "      id: {identifier: true}\n      valid_from_day: {range: integer}\n",
+    )
+    _write_budget_json(repo, {"day_number_fields": {"packs/p-legacy": 1}})
+    _git(repo, "init", "-q")
+    base_sha = _commit(repo, "base with ceiling 1")
+
+    # Raise existing ceiling (1 -> 2) and add a new cell (examples/p-new: 1) while keeping observed counts
+    # inside the raised ceilings, so only base-to-head ceiling comparison catches the regression.
+    _write(repo / "examples" / "p-new" / "pack.yaml", "name: p-new\nversion: 0.1.0\ndefault_language: en\n")
+    _write(
+        repo / "examples" / "p-new" / "schema" / "dates.yaml",
+        "id: https://rezono.org/test/p-new\nname: p_new\nclasses:\n  Item:\n    attributes:\n"
+        "      id: {identifier: true}\n      start_day: {range: integer}\n",
+    )
+    _write_budget_json(repo, {"day_number_fields": {"examples/p-new": 1, "packs/p-legacy": 2}})
+    _commit(repo, "head raises packs/p-legacy ceiling and adds examples/p-new")
+
+    # 1. Explicit --base must detect both raised ceilings via API and CLI.
+    findings = sb.check_shortcut_budget("day_number_fields", repo, base=base_sha)
+    assert any("budget_raised" in msg and "packs/p-legacy" in msg for msg in findings), findings
+    assert any("budget_raised" in msg and "examples/p-new" in msg for msg in findings), findings
+
+    rc_with_base = sb.main(["--root", str(repo), "--base", base_sha, "--budget", "day_number_fields"])
+    captured = capsys.readouterr()
+    assert rc_with_base != 0, f"CLI with --base must fail on raised ceiling, got rc={rc_with_base}"
+    assert "budget_raised" in captured.out, captured.out
+
+    # 2. Missing or empty base in check_shortcut_budget must fail closed (never silently equate base to head).
+    for label, call in (
+        ("omitted base", lambda: sb.check_shortcut_budget("day_number_fields", repo)),
+        ("base=None", lambda: sb.check_shortcut_budget("day_number_fields", repo, base=None)),
+        ("empty base", lambda: sb.check_shortcut_budget("day_number_fields", repo, base="")),
+        ("whitespace base", lambda: sb.check_shortcut_budget("day_number_fields", repo, base="   ")),
+    ):
+        try:
+            outcome = call()
+        except (TypeError, ValueError):
+            continue
+        raise AssertionError(
+            f"check_shortcut_budget with {label} must fail closed (TypeError/ValueError), "
+            f"not silently treat head as base; got {outcome!r}"
+        )
+
+    # 3. Missing or empty --base in CLI main() must fail closed (never exit 0).
+    for label, argv in (
+        ("missing --base", ["--root", str(repo), "--budget", "day_number_fields"]),
+        ("empty --base", ["--root", str(repo), "--base", "", "--budget", "day_number_fields"]),
+    ):
+        try:
+            rc = sb.main(argv)
+        except SystemExit as exc:
+            assert exc.code not in (0, None), f"CLI {label} exited cleanly with {exc.code!r}"
+            continue
+        assert rc != 0, f"CLI {label} must fail closed (non-zero exit), not silently treat head as base"
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason="extra: decisions/no-green-by-cheapest-route.md: loop/shortcut_budgets.py must count "
+           "day_number_fields from the rezono_compiler schema/module model (resolving LinkML and Rezono "
+           "scalar type aliases) instead of bespoke regex scanning over .rezono source text.",
+)
+def test_day_number_field_counter_uses_compiler_model_not_regex(tmp_path: Path):
+    sb, _ = _load_shortcut_budgets()
+
+    # 1. Structural check: forbid bespoke regex/.rezono line-scanner helpers in loop/shortcut_budgets.py.
+    source = SHORTCUT_BUDGETS_PY.read_text(encoding="utf-8")
+    tree = ast.parse(source, filename=str(SHORTCUT_BUDGETS_PY))
+    defined_names = {
+        node.name
+        for node in tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+    }
+    assigned_names = {
+        target.id
+        for node in tree.body
+        if isinstance(node, ast.Assign)
+        for target in node.targets
+        if isinstance(target, ast.Name)
+    }
+    forbidden_helpers = {"_REZONO_BLOCK_HEADER", "_REZONO_SLOT_DECL", "_strip_rezono_comment"}
+    still_present = sorted((defined_names | assigned_names) & forbidden_helpers)
+    assert not still_present, (
+        f"loop/shortcut_budgets.py still defines bespoke .rezono regex/line-scanner helpers: {still_present}"
+    )
+
+    # Any re.compile matching kind/extend/derived declarations is a bespoke Rezono parser.
+    regex_patterns = [
+        node.args[0].value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "compile"
+        and node.args
+        and isinstance(node.args[0], ast.Constant)
+        and isinstance(node.args[0].value, str)
+    ]
+    rezono_regexes = [pat for pat in regex_patterns if "kind" in pat or "extend" in pat or "derived" in pat]
+    assert not rezono_regexes, (
+        f"loop/shortcut_budgets.py must not parse .rezono declarations with regexes: {rezono_regexes}"
+    )
+
+    # Confirm the day-number counting path imports rezono_compiler (not only evaluate_shortcut_budget).
+    non_eval_compiler_imports = []
+    for node in tree.body:
+        if isinstance(node, ast.FunctionDef) and node.name in {"_load_std_budget", "evaluate_shortcut_budget"}:
+            continue
+        for sub in ast.walk(node):
+            if isinstance(sub, ast.ImportFrom) and (sub.module or "").startswith("rezono_compiler"):
+                non_eval_compiler_imports.append(sub.module)
+            elif isinstance(sub, ast.Import) and any(a.name.startswith("rezono_compiler") for a in sub.names):
+                non_eval_compiler_imports.extend(a.name for a in sub.names if a.name.startswith("rezono_compiler"))
+    assert non_eval_compiler_imports, (
+        "loop/shortcut_budgets.py must read pack schemas/modules via rezono_compiler in its day-number counter"
+    )
+
+    # 2. Behavioral semantic check: scalar type aliases in both LinkML YAML and Rezono modules resolve
+    #    through the compiler/schema model (a raw-dict/regex name check misses aliased integer types).
+    tree_dir = tmp_path / "alias-tree"
+    _write(
+        tree_dir / "packs" / "p-yaml-alias" / "pack.yaml",
+        "name: p-yaml-alias\nversion: 0.1.0\ndefault_language: en\n",
+    )
+    _write(
+        tree_dir / "packs" / "p-yaml-alias" / "schema" / "dates.yaml",
+        "id: https://rezono.org/test/p-yaml-alias\n"
+        "name: p_yaml_alias\n"
+        "imports: [linkml:types]\n"
+        "types:\n"
+        "  DayStamp:\n"
+        "    typeof: integer\n"
+        "  DayLabel:\n"
+        "    typeof: string\n"
+        "classes:\n"
+        "  Item:\n"
+        "    attributes:\n"
+        "      id: {identifier: true}\n"
+        "      effective_day: {range: DayStamp}\n"
+        "      label_day: {range: DayLabel}\n"
+        "      recorded_on: {range: date}\n",
+    )
+    _write(
+        tree_dir / "examples" / "p-rezono-alias" / "pack.yaml",
+        "name: p-rezono-alias\nversion: 0.1.0\ndefault_language: en\n",
+    )
+    _write(
+        tree_dir / "examples" / "p-rezono-alias" / "rezono" / "model.rezono",
+        "rezono 1\n"
+        "pack p-rezono-alias\n\n"
+        "type DayStamp = Int\n"
+        "type DayLabel = Text\n\n"
+        "kind Entry world closed\n"
+        "  id: Text key\n"
+        "  effective_day: DayStamp\n"
+        "  label_day: DayLabel\n"
+        "  recorded_on: Date\n",
+    )
+
+    counts = sb.count_day_number_fields(tree_dir)
+    assert counts == {"examples/p-rezono-alias": 1, "packs/p-yaml-alias": 1}, (
+        f"day-number counter must resolve integer type aliases through rezono_compiler, got {counts}"
+    )

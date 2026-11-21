@@ -94,12 +94,12 @@ classes:
       run: {required: true}
       against: {required: true}
       class: {range: EpochSurfaceClass, required: true}
-      before_major: {range: integer, required: true}
-      before_minor: {range: integer, required: true}
-      before_patch: {range: integer, required: true}
-      after_major: {range: integer, required: true}
-      after_minor: {range: integer, required: true}
-      after_patch: {range: integer, required: true}
+      before_major: {range: integer, minimum_value: 0, required: true}
+      before_minor: {range: integer, minimum_value: 0, required: true}
+      before_patch: {range: integer, minimum_value: 0, required: true}
+      after_major: {range: integer, minimum_value: 0, required: true}
+      after_minor: {range: integer, minimum_value: 0, required: true}
+      after_patch: {range: integer, minimum_value: 0, required: true}
   EpochCheck:
     description: A run-scoped check verdict copied by a step adapter.
     attributes:
@@ -108,7 +108,7 @@ classes:
       step: {range: LoopStep, required: true}
       check: {required: true}
       outcome: {range: EpochCheckOutcome, required: true}
-      violations: {range: integer, required: true}
+      violations: {range: integer, minimum_value: 0, required: true}
       source: {required: true}
   EpochRoleCheck:
     description: A role-scoped check verdict copied by a step adapter.
@@ -119,7 +119,7 @@ classes:
       role: {range: EpochRole, required: true}
       check: {required: true}
       outcome: {range: EpochCheckOutcome, required: true}
-      violations: {range: integer, required: true}
+      violations: {range: integer, minimum_value: 0, required: true}
       source: {required: true}
   EpochRequiredCheck:
     description: Plan fact naming a check that must have a verdict once its step is done.

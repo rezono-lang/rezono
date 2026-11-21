@@ -7,8 +7,12 @@ the independent, hand-worked contracts for the five shared decision forms, the c
 build/ graph migration, and pack-fact pin exceptions.
 """
 import ast
+import importlib.util
 from pathlib import Path
 import re
+import shutil
+import subprocess
+import sys
 
 import pytest
 
@@ -44,7 +48,7 @@ def test_every_script_and_workflow_if_is_audited_in_tooling_decision():
     rows = _table_rows(text)
     script_fates = {}
     for cells in rows:
-        if len(cells) >= 3 and cells[0].startswith("`scripts/"):
+        if len(cells) >= 3 and (cells[0].startswith("`scripts/") or cells[0].startswith("`loop/cluster/")):
             name = cells[0].split("`")[1]
             script_fates[name] = cells[2]
 
@@ -53,10 +57,11 @@ def test_every_script_and_workflow_if_is_audited_in_tooling_decision():
         for path in (ROOT / "scripts").glob("*.py")
         if not path.name.startswith("test_")
     )
+    required_audited = [*non_test_scripts, "loop/cluster/base_check.py"]
     assert non_test_scripts, "expected non-test Python scripts under scripts/"
-    missing_scripts = [name for name in non_test_scripts if name not in script_fates]
+    missing_scripts = [name for name in required_audited if name not in script_fates]
     assert missing_scripts == [], f"scripts missing from audit table: {missing_scripts}"
-    bad_script_fates = [name for name in non_test_scripts if not FATE_MARKER.search(script_fates[name])]
+    bad_script_fates = [name for name in required_audited if not FATE_MARKER.search(script_fates[name])]
     assert bad_script_fates == [], f"scripts without a valid fate (a)-(d): {bad_script_fates}"
 
     workflow_section = text.split("## 4. Audit table:", 1)[1].split("## 5.", 1)[0]
@@ -485,3 +490,141 @@ def test_check_pinned_reads_exceptions_from_pack_facts():
     }
     _, rows, _ = evaluate(model, data)
     assert {row[0] for row in rows["build_unpinned_package"]} == {"pip"}
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason="extra: decisions/tooling-does-not-decide.md: loop/cluster/base_check.py must share its "
+           "selection/summary/base helpers with scripts/red_before.py instead of duplicating them, "
+           "while continuing to run both from loop/cluster/ and from the isolated policy directory "
+           "created by .github/workflows/disposable-cluster.yml.",
+)
+def test_cluster_base_check_shares_helpers_with_red_before(tmp_path: Path, monkeypatch):
+    """loop/cluster/base_check.py delegates shared helpers to scripts/red_before.py (no duplicate copy)."""
+    base_check_path = ROOT / "loop" / "cluster" / "base_check.py"
+    red_before_path = ROOT / "scripts" / "red_before.py"
+    red_guard_path = ROOT / "scripts" / "red_guard.py"
+    assert base_check_path.is_file(), "loop/cluster/base_check.py is missing"
+    assert red_before_path.is_file(), "scripts/red_before.py is missing"
+
+    source = base_check_path.read_text(encoding="utf-8")
+    tree = ast.parse(source, filename=str(base_check_path))
+
+    # 1. Structural check: base_check.py must import red_before (not copy its helpers).
+    imports_red_before = False
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            if any(alias.name in {"red_before", "scripts.red_before"} for alias in node.names):
+                imports_red_before = True
+        elif isinstance(node, ast.ImportFrom):
+            mod = node.module or ""
+            if mod in {"red_before", "scripts.red_before"} or (
+                mod == "scripts" and any(alias.name == "red_before" for alias in node.names)
+            ):
+                imports_red_before = True
+        elif isinstance(node, ast.Call):
+            callee = getattr(node.func, "attr", getattr(node.func, "id", ""))
+            if callee in {"import_module", "spec_from_file_location"}:
+                if any(
+                    isinstance(sub, ast.Constant)
+                    and isinstance(sub.value, str)
+                    and "red_before" in sub.value
+                    for sub in ast.walk(node)
+                ):
+                    imports_red_before = True
+    assert imports_red_before, (
+        "loop/cluster/base_check.py must import scripts/red_before.py instead of duplicating its helpers"
+    )
+
+    # 2. No duplicated GITHUB_STEP_SUMMARY writer or direct selection file I/O in base_check.py.
+    string_literals = {
+        node.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant) and isinstance(node.value, str)
+    }
+    assert "GITHUB_STEP_SUMMARY" not in string_literals, (
+        "loop/cluster/base_check.py still duplicates GITHUB_STEP_SUMMARY writing instead of delegating "
+        "to red_before.summarize"
+    )
+    for node in tree.body:
+        if isinstance(node, ast.FunctionDef) and node.name == "read_selection":
+            calls = {
+                getattr(sub.func, "attr", getattr(sub.func, "id", ""))
+                for sub in ast.walk(node)
+                if isinstance(sub, ast.Call)
+            }
+            assert "read_text" not in calls and "open" not in calls, (
+                "loop/cluster/base_check.py read_selection still reads the selection file directly "
+                "instead of delegating to red_before.read_selection"
+            )
+
+    # 3. Behavioral delegation check: executing base_check actually invokes red_before's shared helpers.
+    scripts_dir = str(ROOT / "scripts")
+    monkeypatch.syspath_prepend(scripts_dir)
+    spec = importlib.util.spec_from_file_location("cluster_base_check_shared_test", base_check_path)
+    assert spec is not None and spec.loader is not None
+    bc = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(bc)
+
+    rb_modules = [
+        mod
+        for name, mod in list(sys.modules.items())
+        if name in {"red_before", "scripts.red_before"} and mod is not None
+    ]
+    if getattr(bc, "red_before", None) is not None and bc.red_before not in rb_modules:
+        rb_modules.append(bc.red_before)
+    assert rb_modules, "loading loop/cluster/base_check.py did not load scripts/red_before.py"
+
+    read_calls: list[Path] = []
+    summary_calls: list[tuple[str, list[str]]] = []
+
+    for rb in rb_modules:
+        orig_read = rb.read_selection
+        orig_sum = rb.summarize
+
+        def wrapped_read(selection, _orig=orig_read):
+            read_calls.append(Path(selection))
+            return _orig(selection)
+
+        def wrapped_sum(verdict, tests, _orig=orig_sum):
+            summary_calls.append((verdict, list(tests)))
+            return _orig(verdict, tests)
+
+        monkeypatch.setattr(rb, "read_selection", wrapped_read)
+        monkeypatch.setattr(rb, "summarize", wrapped_sum)
+        if getattr(bc, "read_selection", None) is orig_read:
+            monkeypatch.setattr(bc, "read_selection", wrapped_read)
+        if getattr(bc, "summarize", None) is orig_sum:
+            monkeypatch.setattr(bc, "summarize", wrapped_sum)
+
+    selection = tmp_path / "selection.txt"
+    selection.write_text("", encoding="utf-8")
+    summary_file = tmp_path / "step-summary.md"
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary_file))
+    monkeypatch.setattr(sys, "argv", [str(base_check_path), "--root", str(tmp_path), str(selection)])
+    rc = bc.main()
+    assert rc == 0, f"expected rc=0 on empty selection, got {rc}"
+    assert read_calls, "base_check.main() did not delegate selection reading to red_before.read_selection"
+    assert summary_calls, "base_check.main() did not delegate summary reporting to red_before.summarize"
+    assert summary_file.is_file() and summary_file.read_text(encoding="utf-8").strip(), (
+        "red_before.summarize did not write GITHUB_STEP_SUMMARY"
+    )
+
+    # 4. Isolated policy-dir check matching .github/workflows/disposable-cluster.yml:
+    #    base_check.py must also run when copied beside red_before.py and red_guard.py in $RUNNER_TEMP.
+    policy_dir = tmp_path / "policy"
+    policy_dir.mkdir()
+    for src in (base_check_path, red_before_path, red_guard_path):
+        shutil.copy2(src, policy_dir / src.name)
+    proc = subprocess.run(
+        [sys.executable, str(policy_dir / "base_check.py"), "--root", str(tmp_path), str(selection)],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    assert proc.returncode == 0, (
+        f"base_check.py failed when run from isolated policy dir beside red_before.py: "
+        f"{proc.stdout}\n{proc.stderr}"
+    )

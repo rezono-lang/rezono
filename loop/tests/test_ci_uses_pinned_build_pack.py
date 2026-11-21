@@ -229,15 +229,6 @@ def test_ci_workflow_executes_build_pack_on_pinned_engine_without_components_ci_
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="M2: decisions/build-reconciliation.md: Production entrypoints (not just tests) "
-           "must wire loop/build_cutover.py (select_suites), "
-           "loop/build_coordinator_reader.py (read_coordinator_state), and "
-           "loop/build_pinned_runner.py (read_engine_pin and validate_engine_pin over "
-           "build/engine-pin.yaml).",
-)
 def test_production_entrypoints_wire_build_cutover_coordinator_and_pinned_runner():
     cutover_callers: list[str] = []
     coordinator_callers: list[str] = []

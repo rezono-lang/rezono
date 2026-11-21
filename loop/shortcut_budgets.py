@@ -6,9 +6,9 @@ See decisions/no-green-by-cheapest-route.md and decisions/tooling-does-not-decid
 - `rezono_pack_dl_regression`: `.dl` files under `rules/` in packs that already have `rezono/**/*.rezono`,
   paired with visible off-board tracking of `.dl` files in packs without a `rezono/` module.
 
-All pass/fail budget verdicts (`budget_raised`, `budget_exceeded`, `budget_ratchet_violation`) and
-advisory `budget_slack` are derived strictly by evaluating `packs/std-budget` (fail-closed, no Python
-decision fallback).
+All pass/fail budget verdicts (`budget_raised`, `budget_exceeded`, `budget_ratchet_violation`,
+`budget_missing_head`), `budget_within`, and advisory `budget_slack` are derived strictly by
+evaluating `packs/std-budget` (fail-closed, no Python decision fallback).
 """
 
 from __future__ import annotations
@@ -40,8 +40,9 @@ BLOCKING_RELATIONS = (
     "budget_raised",
     "budget_exceeded",
     "budget_ratchet_violation",
+    "budget_missing_head",
 )
-RESULT_RELATIONS = (*BLOCKING_RELATIONS, "budget_slack")
+RESULT_RELATIONS = (*BLOCKING_RELATIONS, "budget_slack", "budget_within")
 
 PACK_TOP_DIRS = ("build", "examples", "packs", "run")
 EXCLUDED_DIR_NAMES = frozenset({
@@ -541,12 +542,17 @@ def check_shortcut_budget(
             else:
                 base_ceilings = head_ceilings
 
+    tracked_cells = sorted(
+        set(base_ceilings) | set(head_ceilings) | set(base_observed) | set(head_observed)
+    )
+    measured_head_observed = {cell: head_observed.get(cell, 0) for cell in tracked_cells}
+
     verdict = evaluate_shortcut_budget(
         budget_name,
         base_ceilings=base_ceilings,
         head_ceilings=head_ceilings,
         base_observed=base_observed,
-        head_observed=head_observed,
+        head_observed=measured_head_observed,
     )
 
     findings: list[str] = []
@@ -558,13 +564,24 @@ def check_shortcut_budget(
     for budget, cell in sorted(verdict["budget_exceeded"]):
         findings.append(
             f"budget_exceeded: {budget} {cell}: "
-            f"observed={head_observed.get(cell, 0)} > ceiling={head_ceilings.get(cell, 0)}"
+            f"observed={measured_head_observed.get(cell, 0)} > ceiling={head_ceilings.get(cell, 0)}"
         )
     for budget, cell in sorted(verdict["budget_ratchet_violation"]):
         findings.append(
             f"budget_ratchet_violation: {budget} {cell}: "
-            f"head_observed={head_observed.get(cell, 0)} > base_observed={base_observed.get(cell, 0)}"
+            f"head_observed={measured_head_observed.get(cell, 0)} > base_observed={base_observed.get(cell, 0)}"
         )
+    for budget, cell in sorted(verdict["budget_missing_head"]):
+        findings.append(
+            f"budget_missing_head: {budget} {cell}: missing head observation"
+        )
+    for cell in tracked_cells:
+        if (budget_name, cell) not in verdict["budget_within"] and not any(
+            (budget_name, cell) in verdict[rel] for rel in BLOCKING_RELATIONS
+        ):
+            findings.append(
+                f"budget_not_within: {budget_name} {cell}: cell did not satisfy budget_within"
+            )
     return findings
 
 
