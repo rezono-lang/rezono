@@ -28,7 +28,6 @@ import yaml
 REPO = Path(__file__).resolve().parents[3]
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 STD_ACCESS_LEGACY = FIXTURES / "std-access-legacy"
-EXACT_QUOTE_LEGACY = REPO / "run" / "fixtures" / "exact-quote-linkml"
 TIME = "2026-11-10T00:00:00Z"
 
 # Standard packs that carry schema/rule definitions (std-explain and std-view are presentation-only).
@@ -515,7 +514,7 @@ def test_build_and_epoch_packs_convert_to_rezono_1(tmp_path: Path):
     reason=(
         "extra: decisions/language-rezono-1.md: Convert every run/packs/* pack (.dl rules and embedded rezono 0 "
         "rules pipe blocks) to native rezono 1 modules with zero .dl files remaining under run/packs/ and "
-        "whole-pack equivalence (including run/packs/exact-quote against run/fixtures/exact-quote-linkml). "
+        "whole-pack equivalence (including run/packs/exact-quote exact amount_digit output). "
         "Waits for compiler/tests/rezono/test_lower_rezono_1_derived.py--test_lower_rezono_1_derived, "
         "examples/test_calculation_engine_parity.py--test_feldera_calculations_match_duckdb_and_checker, "
         "examples/test_rule_witness_engine_parity.py--test_feldera_rule_witnesses_match_batch, "
@@ -536,30 +535,48 @@ def test_run_packs_convert_to_rezono_1(tmp_path: Path):
             roles = _roles_for_pack(pack_dir, model)
             _publish_checked(pack_dir, tmp_path / f"store-{pack_dir.name}", roles)
 
-    # Whole-pack equivalence for run/packs/exact-quote against the committed legacy LinkML+Datalog oracle.
-    sample_quote = (
-        "recorded_quote:\n"
-        "  - {id: q-1}\n"
-        "quote_line:\n"
-        "  - {id: l-1, quote: q-1, quantity: 2, periods: 2, unit_micros: 164000, setup_micros: 0}\n"
+    # Exact amount_digit verification for run/packs/exact-quote using RecordedQuote / RecordedLine /
+    # QuoteDigit / QuoteCarry facts: 2 * (3 * 4 + 5) = 34 (little-endian digits: pos 0 -> 4, pos 1 -> 3).
+    sample_quote = {
+        "recorded_quote": [{"id": "q-1"}],
+        "recorded_line": [{"id": "l-1", "quote": "q-1"}],
+        "quote_digit": [
+            {"id": "d-qty-0", "line": "l-1", "operand": "quantity", "position": 0, "value": 2},
+            {"id": "d-per-0", "line": "l-1", "operand": "billed_periods", "position": 0, "value": 3},
+            {"id": "d-ppm-0", "line": "l-1", "operand": "period_price_micros", "position": 0, "value": 4},
+            {"id": "d-spm-0", "line": "l-1", "operand": "setup_price_micros", "position": 0, "value": 5},
+        ],
+        "quote_carry": [
+            {"id": f"c-{amount}-{pos}", "amount": amount, "position": pos, "value": val}
+            for amount in ("l-1", "q-1")
+            for pos, val in ((0, 0), (1, 3), (2, 0))
+        ],
+    }
+    sample_sources = (
+        "default:\n"
+        "  kind: git\n"
+        "  name: rezono-lang/rezono\n"
+        '  revision: "0000000"\n'
+        "  position: compiler/tests/rezono/test_rezono_1_pack_conversion.py#exact-quote-sample\n"
     )
-    legacy_copy = tmp_path / "exact-quote-legacy"
     native_copy = tmp_path / "exact-quote-rezono1"
-    shutil.copytree(EXACT_QUOTE_LEGACY, legacy_copy)
     shutil.copytree(run_packs_dir / "exact-quote", native_copy)
-    for copy_dir in (legacy_copy, native_copy):
-        (copy_dir / "facts").mkdir(exist_ok=True)
-        (copy_dir / "facts" / "sample.yaml").write_text(sample_quote, encoding="utf-8", newline="\n")
-    _, _, legacy_meaning = _publish_checked(legacy_copy, tmp_path / "eq-legacy-store", {"checker": "complete"})
-    _, _, native_meaning = _publish_checked(native_copy, tmp_path / "eq-native-store", {"checker": "complete"})
-    assert native_meaning.rows["amount_digit"] == legacy_meaning.rows["amount_digit"], (
-        "run/packs/exact-quote rezono 1 conversion changed derived amount_digit rows"
+    (native_copy / "facts").mkdir(exist_ok=True)
+    (native_copy / "facts" / "sample.yaml").write_text(
+        yaml.safe_dump(sample_quote, sort_keys=False), encoding="utf-8", newline="\n"
     )
-    for key in legacy_meaning.grounds:
-        if key[0] == "amount_digit":
-            assert native_meaning.grounds.get(key) == legacy_meaning.grounds[key], (
-                f"run/packs/exact-quote rezono 1 conversion changed checked grounds for {key}"
-            )
+    (native_copy / "facts" / "sample.sources.yaml").write_text(sample_sources, encoding="utf-8", newline="\n")
+    _, _, native_meaning = _publish_checked(native_copy, tmp_path / "eq-native-store", {"checker": "complete"})
+    expected_digits = {
+        ("l-1", "0", "4"),
+        ("l-1", "1", "3"),
+        ("q-1", "0", "4"),
+        ("q-1", "1", "3"),
+    }
+    got_digits = {tuple(str(cell) for cell in row) for row in native_meaning.rows["amount_digit"]}
+    assert got_digits == expected_digits, (
+        f"run/packs/exact-quote rezono 1 conversion changed derived amount_digit rows: {got_digits!r}"
+    )
 
 
 @pytest.mark.xfail(
@@ -665,11 +682,18 @@ def test_platform_pack_converts_to_rezono_1_with_intended_differences(tmp_path: 
         "section 7: conflicting Choice rows must suppress flow for (a, *, f, *)"
     )
 
-    # 2. Conflicting Pin rows for one service -> service_pin & service_runs become invalid multiple_values,
-    # and service_behind_newest emits no tuple for that service.
-    releases = [row["id"] for row in core_facts["release"]]
-    assert len(releases) >= 2
-    sample_service = services[0]
+    # 2. Conflicting Pin rows for one service (same product per Pin.same_product) -> service_pin & service_runs
+    # become invalid multiple_values, and service_behind_newest emits no tuple for that service.
+    releases_by_product: dict[str, list[str]] = {}
+    for row in core_facts["release"]:
+        releases_by_product.setdefault(row["product"], []).append(row["id"])
+    pinned_candidates = [
+        (row["id"], releases_by_product[row["product"]][:2])
+        for row in core_facts["service"]
+        if len(releases_by_product.get(row["product"], ())) >= 2
+    ]
+    assert pinned_candidates, "examples/platform must have a service whose product has >= 2 releases"
+    sample_service, sample_releases = pinned_candidates[0]
     pin_copy = tmp_path / "platform-pin-conflict"
     shutil.copytree(REPO / "packs", pin_copy / "packs")
     shutil.copytree(platform_dir, pin_copy / "examples" / "platform")
@@ -679,8 +703,8 @@ def test_platform_pack_converts_to_rezono_1_with_intended_differences(tmp_path: 
     p_core["pin"] = [
         row for row in p_core.get("pin", []) if row.get("service") != sample_service
     ] + [
-        {"id": "conflict-pin-a", "service": sample_service, "release": releases[0]},
-        {"id": "conflict-pin-b", "service": sample_service, "release": releases[1]},
+        {"id": "conflict-pin-a", "service": sample_service, "release": sample_releases[0]},
+        {"id": "conflict-pin-b", "service": sample_service, "release": sample_releases[1]},
     ]
     p_core_path.write_text(yaml.safe_dump(p_core, sort_keys=False), encoding="utf-8")
     _, _, pin_meaning = _publish_checked(p_pack, tmp_path / "pin-store", {"checker": "complete"})
