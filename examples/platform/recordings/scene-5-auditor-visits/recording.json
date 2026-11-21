@@ -1,0 +1,322 @@
+{
+  "run": "auditor-visit-handwritten-1",
+  "limit": 6,
+  "clock": {
+    "origin": "2026-11-20T11:00:00Z",
+    "ticks_per_second": 1000000
+  },
+  "pack": {
+    "path": "../../../../packs/std-loop",
+    "sha256": "1512bdc4315125b60d28488378adc81ef4cae45b1cff71e5f12d8fe546979f70"
+  },
+  "ports": [
+    {
+      "name": "audit-readback",
+      "version": "1.0.0",
+      "kind": "in",
+      "runs_on": "source",
+      "writes": "observation",
+      "row_source": "source",
+      "runtime": "in_process",
+      "consumes": [
+        "audit_verification_state"
+      ],
+      "produces": [
+        "loop_observation"
+      ],
+      "freshness": {
+        "cadence": "on_request"
+      },
+      "mapping_owner": "platform-loop",
+      "losses": [],
+      "secrets": []
+    },
+    {
+      "name": "audit-reconcile",
+      "version": "1.0.0",
+      "kind": "effect",
+      "runs_on": "approved_plan",
+      "writes": "world",
+      "row_source": "journal",
+      "runtime": "in_process",
+      "effect": {
+        "plan": "audit-plan",
+        "apply": "audit-apply",
+        "status": "audit-status"
+      },
+      "consumes": [
+        "loop_step"
+      ],
+      "produces": [
+        "audit_verification_state"
+      ],
+      "freshness": {
+        "cadence": "on_request"
+      },
+      "mapping_owner": "platform-loop",
+      "losses": [],
+      "secrets": []
+    }
+  ],
+  "records": {
+    "loop_active_run": [
+      {
+        "id": "auditor-visit-handwritten-1"
+      }
+    ],
+    "loop_step": [
+      {
+        "id": "check-decision-standing",
+        "precedes": [
+          "reconcile-cluster-rights"
+        ]
+      },
+      {
+        "id": "reconcile-cluster-rights",
+        "precedes": [
+          "confirm-audit-proof"
+        ]
+      },
+      {
+        "id": "confirm-audit-proof"
+      }
+    ],
+    "loop_requirement": [
+      {
+        "id": "rights-need-standing",
+        "run": "auditor-visit-handwritten-1",
+        "step": "reconcile-cluster-rights",
+        "token": "audit/decision-standing",
+        "reason": "standing-before-rights-check"
+      },
+      {
+        "id": "proof-needs-rights",
+        "run": "auditor-visit-handwritten-1",
+        "step": "confirm-audit-proof",
+        "token": "audit/rights-reconciled",
+        "reason": "rights-before-proof-confirmation"
+      }
+    ],
+    "loop_completion": [
+      {
+        "id": "check-decision-standing-done",
+        "run": "auditor-visit-handwritten-1",
+        "step": "check-decision-standing",
+        "token": "audit/decision-standing",
+        "reason": "decision-standing-readback"
+      },
+      {
+        "id": "reconcile-cluster-rights-done",
+        "run": "auditor-visit-handwritten-1",
+        "step": "reconcile-cluster-rights",
+        "token": "audit/rights-reconciled",
+        "reason": "cluster-rights-readback"
+      },
+      {
+        "id": "confirm-audit-proof-done",
+        "run": "auditor-visit-handwritten-1",
+        "step": "confirm-audit-proof",
+        "token": "audit/proof-verified",
+        "reason": "checker-proof-readback"
+      }
+    ],
+    "loop_expectation": [
+      {
+        "id": "audit/decision-standing",
+        "value": "in_force:deciders-verified"
+      },
+      {
+        "id": "audit/rights-reconciled",
+        "value": "managed-cluster-rights:isolated"
+      },
+      {
+        "id": "audit/proof-verified",
+        "value": "checker:verified"
+      }
+    ]
+  },
+  "initial": {
+    "id": "opening",
+    "run": "auditor-visit-handwritten-1",
+    "event_time": 0,
+    "complete": true,
+    "observations": [
+      {
+        "run": "auditor-visit-handwritten-1",
+        "sweep": "opening",
+        "port": "audit-readback",
+        "reason": "audit-opened",
+        "observation": {
+          "id": "audit-readback/opening/decision-standing",
+          "subject": "check-decision-standing",
+          "attribute": "decision_standing",
+          "value": {
+            "state": "unknown",
+            "reason": "no_value"
+          },
+          "event_time": "2026-11-20T11:00:00Z",
+          "source": {
+            "kind": "tool",
+            "name": "audit-readback",
+            "position": "opening/0"
+          },
+          "expectation": {
+            "relation": "loop_expectation__value",
+            "key": "[\"audit/decision-standing\"]"
+          }
+        }
+      },
+      {
+        "run": "auditor-visit-handwritten-1",
+        "sweep": "opening",
+        "port": "audit-readback",
+        "reason": "audit-opened",
+        "observation": {
+          "id": "audit-readback/opening/rights-reconciled",
+          "subject": "reconcile-cluster-rights",
+          "attribute": "cluster_rights",
+          "value": {
+            "state": "unknown",
+            "reason": "no_value"
+          },
+          "event_time": "2026-11-20T11:00:00Z",
+          "source": {
+            "kind": "tool",
+            "name": "audit-readback",
+            "position": "opening/0"
+          },
+          "expectation": {
+            "relation": "loop_expectation__value",
+            "key": "[\"audit/rights-reconciled\"]"
+          }
+        }
+      },
+      {
+        "run": "auditor-visit-handwritten-1",
+        "sweep": "opening",
+        "port": "audit-readback",
+        "reason": "audit-opened",
+        "observation": {
+          "id": "audit-readback/opening/proof-verified",
+          "subject": "confirm-audit-proof",
+          "attribute": "audit_proof",
+          "value": {
+            "state": "unknown",
+            "reason": "no_value"
+          },
+          "event_time": "2026-11-20T11:00:00Z",
+          "source": {
+            "kind": "tool",
+            "name": "audit-readback",
+            "position": "opening/0"
+          },
+          "expectation": {
+            "relation": "loop_expectation__value",
+            "key": "[\"audit/proof-verified\"]"
+          }
+        }
+      }
+    ]
+  },
+  "sweeps": [
+    {
+      "id": "standing",
+      "run": "auditor-visit-handwritten-1",
+      "event_time": 1000000,
+      "complete": true,
+      "observations": [
+        {
+          "run": "auditor-visit-handwritten-1",
+          "sweep": "standing",
+          "port": "audit-readback",
+          "reason": "decision-standing-confirmed",
+          "observation": {
+            "id": "audit-readback/standing/decision-standing",
+            "subject": "check-decision-standing",
+            "attribute": "decision_standing",
+            "value": {
+              "state": "known",
+              "value": "in_force:deciders-verified"
+            },
+            "event_time": "2026-11-20T11:00:01Z",
+            "source": {
+              "kind": "tool",
+              "name": "audit-readback",
+              "position": "standing/1"
+            },
+            "expectation": {
+              "relation": "loop_expectation__value",
+              "key": "[\"audit/decision-standing\"]"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "rights",
+      "run": "auditor-visit-handwritten-1",
+      "event_time": 2000000,
+      "complete": true,
+      "observations": [
+        {
+          "run": "auditor-visit-handwritten-1",
+          "sweep": "rights",
+          "port": "audit-readback",
+          "reason": "cluster-rights-verified",
+          "observation": {
+            "id": "audit-readback/rights/rights-reconciled",
+            "subject": "reconcile-cluster-rights",
+            "attribute": "cluster_rights",
+            "value": {
+              "state": "known",
+              "value": "managed-cluster-rights:isolated"
+            },
+            "event_time": "2026-11-20T11:00:02Z",
+            "source": {
+              "kind": "tool",
+              "name": "audit-readback",
+              "position": "rights/2"
+            },
+            "expectation": {
+              "relation": "loop_expectation__value",
+              "key": "[\"audit/rights-reconciled\"]"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "proved",
+      "run": "auditor-visit-handwritten-1",
+      "event_time": 3000000,
+      "complete": true,
+      "observations": [
+        {
+          "run": "auditor-visit-handwritten-1",
+          "sweep": "proved",
+          "port": "audit-readback",
+          "reason": "checker-proof-verified",
+          "observation": {
+            "id": "audit-readback/proved/proof-verified",
+            "subject": "confirm-audit-proof",
+            "attribute": "audit_proof",
+            "value": {
+              "state": "known",
+              "value": "checker:verified"
+            },
+            "event_time": "2026-11-20T11:00:03Z",
+            "source": {
+              "kind": "tool",
+              "name": "audit-readback",
+              "position": "proved/3"
+            },
+            "expectation": {
+              "relation": "loop_expectation__value",
+              "key": "[\"audit/proof-verified\"]"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

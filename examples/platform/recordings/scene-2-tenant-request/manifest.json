@@ -1,0 +1,16 @@
+{
+  "scene": 2,
+  "origin": "hand-written",
+  "expected_plans": [
+    [
+      "admit-request"
+    ],
+    [
+      "approve-delivery"
+    ],
+    [
+      "publish-delivery"
+    ]
+  ],
+  "expected_outcome": "success"
+}

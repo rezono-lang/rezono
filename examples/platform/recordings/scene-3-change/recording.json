@@ -1,0 +1,322 @@
+{
+  "run": "platform-change-handwritten-1",
+  "limit": 6,
+  "clock": {
+    "origin": "2026-11-20T10:00:00Z",
+    "ticks_per_second": 1000000
+  },
+  "pack": {
+    "path": "../../../../packs/std-loop",
+    "sha256": "1512bdc4315125b60d28488378adc81ef4cae45b1cff71e5f12d8fe546979f70"
+  },
+  "ports": [
+    {
+      "name": "change-readback",
+      "version": "1.0.0",
+      "kind": "in",
+      "runs_on": "source",
+      "writes": "observation",
+      "row_source": "source",
+      "runtime": "in_process",
+      "consumes": [
+        "change_transition_state"
+      ],
+      "produces": [
+        "loop_observation"
+      ],
+      "freshness": {
+        "cadence": "on_request"
+      },
+      "mapping_owner": "platform-loop",
+      "losses": [],
+      "secrets": []
+    },
+    {
+      "name": "change-apply",
+      "version": "1.0.0",
+      "kind": "effect",
+      "runs_on": "approved_plan",
+      "writes": "world",
+      "row_source": "journal",
+      "runtime": "in_process",
+      "effect": {
+        "plan": "change-plan",
+        "apply": "change-apply",
+        "status": "change-status"
+      },
+      "consumes": [
+        "loop_step"
+      ],
+      "produces": [
+        "change_transition_state"
+      ],
+      "freshness": {
+        "cadence": "on_request"
+      },
+      "mapping_owner": "platform-loop",
+      "losses": [],
+      "secrets": []
+    }
+  ],
+  "records": {
+    "loop_active_run": [
+      {
+        "id": "platform-change-handwritten-1"
+      }
+    ],
+    "loop_step": [
+      {
+        "id": "preview-difference",
+        "precedes": [
+          "apply-safe-step"
+        ]
+      },
+      {
+        "id": "apply-safe-step",
+        "precedes": [
+          "verify-post-change"
+        ]
+      },
+      {
+        "id": "verify-post-change"
+      }
+    ],
+    "loop_requirement": [
+      {
+        "id": "apply-needs-difference",
+        "run": "platform-change-handwritten-1",
+        "step": "apply-safe-step",
+        "token": "change/difference-computed",
+        "reason": "difference-before-transition"
+      },
+      {
+        "id": "verify-needs-apply",
+        "run": "platform-change-handwritten-1",
+        "step": "verify-post-change",
+        "token": "change/policy-applied",
+        "reason": "transition-before-verification"
+      }
+    ],
+    "loop_completion": [
+      {
+        "id": "preview-difference-done",
+        "run": "platform-change-handwritten-1",
+        "step": "preview-difference",
+        "token": "change/difference-computed",
+        "reason": "difference-readback"
+      },
+      {
+        "id": "apply-safe-step-done",
+        "run": "platform-change-handwritten-1",
+        "step": "apply-safe-step",
+        "token": "change/policy-applied",
+        "reason": "policy-apply-readback"
+      },
+      {
+        "id": "verify-post-change-done",
+        "run": "platform-change-handwritten-1",
+        "step": "verify-post-change",
+        "token": "change/readback-matched",
+        "reason": "post-change-readback"
+      }
+    ],
+    "loop_expectation": [
+      {
+        "id": "change/difference-computed",
+        "value": "entry-tls:delta-reviewed"
+      },
+      {
+        "id": "change/policy-applied",
+        "value": "entry-tls:firewall-updated"
+      },
+      {
+        "id": "change/readback-matched",
+        "value": "entry-tls:converged"
+      }
+    ]
+  },
+  "initial": {
+    "id": "proposed",
+    "run": "platform-change-handwritten-1",
+    "event_time": 0,
+    "complete": true,
+    "observations": [
+      {
+        "run": "platform-change-handwritten-1",
+        "sweep": "proposed",
+        "port": "change-readback",
+        "reason": "change-proposed",
+        "observation": {
+          "id": "change-readback/proposed/difference-computed",
+          "subject": "preview-difference",
+          "attribute": "change_difference",
+          "value": {
+            "state": "unknown",
+            "reason": "no_value"
+          },
+          "event_time": "2026-11-20T10:00:00Z",
+          "source": {
+            "kind": "tool",
+            "name": "change-readback",
+            "position": "proposed/0"
+          },
+          "expectation": {
+            "relation": "loop_expectation__value",
+            "key": "[\"change/difference-computed\"]"
+          }
+        }
+      },
+      {
+        "run": "platform-change-handwritten-1",
+        "sweep": "proposed",
+        "port": "change-readback",
+        "reason": "change-proposed",
+        "observation": {
+          "id": "change-readback/proposed/policy-applied",
+          "subject": "apply-safe-step",
+          "attribute": "policy_transition",
+          "value": {
+            "state": "unknown",
+            "reason": "no_value"
+          },
+          "event_time": "2026-11-20T10:00:00Z",
+          "source": {
+            "kind": "tool",
+            "name": "change-readback",
+            "position": "proposed/0"
+          },
+          "expectation": {
+            "relation": "loop_expectation__value",
+            "key": "[\"change/policy-applied\"]"
+          }
+        }
+      },
+      {
+        "run": "platform-change-handwritten-1",
+        "sweep": "proposed",
+        "port": "change-readback",
+        "reason": "change-proposed",
+        "observation": {
+          "id": "change-readback/proposed/readback-matched",
+          "subject": "verify-post-change",
+          "attribute": "post_change_state",
+          "value": {
+            "state": "unknown",
+            "reason": "no_value"
+          },
+          "event_time": "2026-11-20T10:00:00Z",
+          "source": {
+            "kind": "tool",
+            "name": "change-readback",
+            "position": "proposed/0"
+          },
+          "expectation": {
+            "relation": "loop_expectation__value",
+            "key": "[\"change/readback-matched\"]"
+          }
+        }
+      }
+    ]
+  },
+  "sweeps": [
+    {
+      "id": "diffed",
+      "run": "platform-change-handwritten-1",
+      "event_time": 1000000,
+      "complete": true,
+      "observations": [
+        {
+          "run": "platform-change-handwritten-1",
+          "sweep": "diffed",
+          "port": "change-readback",
+          "reason": "difference-reviewed",
+          "observation": {
+            "id": "change-readback/diffed/difference-computed",
+            "subject": "preview-difference",
+            "attribute": "change_difference",
+            "value": {
+              "state": "known",
+              "value": "entry-tls:delta-reviewed"
+            },
+            "event_time": "2026-11-20T10:00:01Z",
+            "source": {
+              "kind": "tool",
+              "name": "change-readback",
+              "position": "diffed/1"
+            },
+            "expectation": {
+              "relation": "loop_expectation__value",
+              "key": "[\"change/difference-computed\"]"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "applied",
+      "run": "platform-change-handwritten-1",
+      "event_time": 2000000,
+      "complete": true,
+      "observations": [
+        {
+          "run": "platform-change-handwritten-1",
+          "sweep": "applied",
+          "port": "change-readback",
+          "reason": "safe-step-applied",
+          "observation": {
+            "id": "change-readback/applied/policy-applied",
+            "subject": "apply-safe-step",
+            "attribute": "policy_transition",
+            "value": {
+              "state": "known",
+              "value": "entry-tls:firewall-updated"
+            },
+            "event_time": "2026-11-20T10:00:02Z",
+            "source": {
+              "kind": "tool",
+              "name": "change-readback",
+              "position": "applied/2"
+            },
+            "expectation": {
+              "relation": "loop_expectation__value",
+              "key": "[\"change/policy-applied\"]"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "verified",
+      "run": "platform-change-handwritten-1",
+      "event_time": 3000000,
+      "complete": true,
+      "observations": [
+        {
+          "run": "platform-change-handwritten-1",
+          "sweep": "verified",
+          "port": "change-readback",
+          "reason": "post-change-converged",
+          "observation": {
+            "id": "change-readback/verified/readback-matched",
+            "subject": "verify-post-change",
+            "attribute": "post_change_state",
+            "value": {
+              "state": "known",
+              "value": "entry-tls:converged"
+            },
+            "event_time": "2026-11-20T10:00:03Z",
+            "source": {
+              "kind": "tool",
+              "name": "change-readback",
+              "position": "verified/3"
+            },
+            "expectation": {
+              "relation": "loop_expectation__value",
+              "key": "[\"change/readback-matched\"]"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

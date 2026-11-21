@@ -1,0 +1,322 @@
+{
+  "run": "tenant-request-handwritten-1",
+  "limit": 6,
+  "clock": {
+    "origin": "2026-11-20T09:00:00Z",
+    "ticks_per_second": 1000000
+  },
+  "pack": {
+    "path": "../../../../packs/std-loop",
+    "sha256": "1512bdc4315125b60d28488378adc81ef4cae45b1cff71e5f12d8fe546979f70"
+  },
+  "ports": [
+    {
+      "name": "tenant-readback",
+      "version": "1.0.0",
+      "kind": "in",
+      "runs_on": "source",
+      "writes": "observation",
+      "row_source": "source",
+      "runtime": "in_process",
+      "consumes": [
+        "tenant_delivery_state"
+      ],
+      "produces": [
+        "loop_observation"
+      ],
+      "freshness": {
+        "cadence": "on_request"
+      },
+      "mapping_owner": "platform-loop",
+      "losses": [],
+      "secrets": []
+    },
+    {
+      "name": "tenant-delivery-apply",
+      "version": "1.0.0",
+      "kind": "effect",
+      "runs_on": "approved_plan",
+      "writes": "world",
+      "row_source": "journal",
+      "runtime": "in_process",
+      "effect": {
+        "plan": "delivery-plan",
+        "apply": "delivery-apply",
+        "status": "delivery-status"
+      },
+      "consumes": [
+        "loop_step"
+      ],
+      "produces": [
+        "tenant_delivery_state"
+      ],
+      "freshness": {
+        "cadence": "on_request"
+      },
+      "mapping_owner": "platform-loop",
+      "losses": [],
+      "secrets": []
+    }
+  ],
+  "records": {
+    "loop_active_run": [
+      {
+        "id": "tenant-request-handwritten-1"
+      }
+    ],
+    "loop_step": [
+      {
+        "id": "admit-request",
+        "precedes": [
+          "approve-delivery"
+        ]
+      },
+      {
+        "id": "approve-delivery",
+        "precedes": [
+          "publish-delivery"
+        ]
+      },
+      {
+        "id": "publish-delivery"
+      }
+    ],
+    "loop_requirement": [
+      {
+        "id": "approve-needs-admission",
+        "run": "tenant-request-handwritten-1",
+        "step": "approve-delivery",
+        "token": "tenant/capacity-admitted",
+        "reason": "capacity-check-before-approval"
+      },
+      {
+        "id": "publish-needs-approval",
+        "run": "tenant-request-handwritten-1",
+        "step": "publish-delivery",
+        "token": "tenant/delivery-approved",
+        "reason": "approval-before-publication"
+      }
+    ],
+    "loop_completion": [
+      {
+        "id": "admit-request-done",
+        "run": "tenant-request-handwritten-1",
+        "step": "admit-request",
+        "token": "tenant/capacity-admitted",
+        "reason": "capacity-admission-readback"
+      },
+      {
+        "id": "approve-delivery-done",
+        "run": "tenant-request-handwritten-1",
+        "step": "approve-delivery",
+        "token": "tenant/delivery-approved",
+        "reason": "approval-readback"
+      },
+      {
+        "id": "publish-delivery-done",
+        "run": "tenant-request-handwritten-1",
+        "step": "publish-delivery",
+        "token": "tenant/delivery-published",
+        "reason": "delivery-publication-readback"
+      }
+    ],
+    "loop_expectation": [
+      {
+        "id": "tenant/capacity-admitted",
+        "value": "elm/ledger:fits"
+      },
+      {
+        "id": "tenant/delivery-approved",
+        "value": "elm/ledger:approved"
+      },
+      {
+        "id": "tenant/delivery-published",
+        "value": "elm/ledger:delivered"
+      }
+    ]
+  },
+  "initial": {
+    "id": "submitted",
+    "run": "tenant-request-handwritten-1",
+    "event_time": 0,
+    "complete": true,
+    "observations": [
+      {
+        "run": "tenant-request-handwritten-1",
+        "sweep": "submitted",
+        "port": "tenant-readback",
+        "reason": "request-submitted",
+        "observation": {
+          "id": "tenant-readback/submitted/capacity-admitted",
+          "subject": "admit-request",
+          "attribute": "capacity_admission",
+          "value": {
+            "state": "unknown",
+            "reason": "no_value"
+          },
+          "event_time": "2026-11-20T09:00:00Z",
+          "source": {
+            "kind": "tool",
+            "name": "tenant-readback",
+            "position": "submitted/0"
+          },
+          "expectation": {
+            "relation": "loop_expectation__value",
+            "key": "[\"tenant/capacity-admitted\"]"
+          }
+        }
+      },
+      {
+        "run": "tenant-request-handwritten-1",
+        "sweep": "submitted",
+        "port": "tenant-readback",
+        "reason": "request-submitted",
+        "observation": {
+          "id": "tenant-readback/submitted/delivery-approved",
+          "subject": "approve-delivery",
+          "attribute": "delivery_approval",
+          "value": {
+            "state": "unknown",
+            "reason": "no_value"
+          },
+          "event_time": "2026-11-20T09:00:00Z",
+          "source": {
+            "kind": "tool",
+            "name": "tenant-readback",
+            "position": "submitted/0"
+          },
+          "expectation": {
+            "relation": "loop_expectation__value",
+            "key": "[\"tenant/delivery-approved\"]"
+          }
+        }
+      },
+      {
+        "run": "tenant-request-handwritten-1",
+        "sweep": "submitted",
+        "port": "tenant-readback",
+        "reason": "request-submitted",
+        "observation": {
+          "id": "tenant-readback/submitted/delivery-published",
+          "subject": "publish-delivery",
+          "attribute": "delivery_publication",
+          "value": {
+            "state": "unknown",
+            "reason": "no_value"
+          },
+          "event_time": "2026-11-20T09:00:00Z",
+          "source": {
+            "kind": "tool",
+            "name": "tenant-readback",
+            "position": "submitted/0"
+          },
+          "expectation": {
+            "relation": "loop_expectation__value",
+            "key": "[\"tenant/delivery-published\"]"
+          }
+        }
+      }
+    ]
+  },
+  "sweeps": [
+    {
+      "id": "admitted",
+      "run": "tenant-request-handwritten-1",
+      "event_time": 1000000,
+      "complete": true,
+      "observations": [
+        {
+          "run": "tenant-request-handwritten-1",
+          "sweep": "admitted",
+          "port": "tenant-readback",
+          "reason": "capacity-verified",
+          "observation": {
+            "id": "tenant-readback/admitted/capacity-admitted",
+            "subject": "admit-request",
+            "attribute": "capacity_admission",
+            "value": {
+              "state": "known",
+              "value": "elm/ledger:fits"
+            },
+            "event_time": "2026-11-20T09:00:01Z",
+            "source": {
+              "kind": "tool",
+              "name": "tenant-readback",
+              "position": "admitted/1"
+            },
+            "expectation": {
+              "relation": "loop_expectation__value",
+              "key": "[\"tenant/capacity-admitted\"]"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "approved",
+      "run": "tenant-request-handwritten-1",
+      "event_time": 2000000,
+      "complete": true,
+      "observations": [
+        {
+          "run": "tenant-request-handwritten-1",
+          "sweep": "approved",
+          "port": "tenant-readback",
+          "reason": "delivery-approved",
+          "observation": {
+            "id": "tenant-readback/approved/delivery-approved",
+            "subject": "approve-delivery",
+            "attribute": "delivery_approval",
+            "value": {
+              "state": "known",
+              "value": "elm/ledger:approved"
+            },
+            "event_time": "2026-11-20T09:00:02Z",
+            "source": {
+              "kind": "tool",
+              "name": "tenant-readback",
+              "position": "approved/2"
+            },
+            "expectation": {
+              "relation": "loop_expectation__value",
+              "key": "[\"tenant/delivery-approved\"]"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "delivered",
+      "run": "tenant-request-handwritten-1",
+      "event_time": 3000000,
+      "complete": true,
+      "observations": [
+        {
+          "run": "tenant-request-handwritten-1",
+          "sweep": "delivered",
+          "port": "tenant-readback",
+          "reason": "delivery-published",
+          "observation": {
+            "id": "tenant-readback/delivered/delivery-published",
+            "subject": "publish-delivery",
+            "attribute": "delivery_publication",
+            "value": {
+              "state": "known",
+              "value": "elm/ledger:delivered"
+            },
+            "event_time": "2026-11-20T09:00:03Z",
+            "source": {
+              "kind": "tool",
+              "name": "tenant-readback",
+              "position": "delivered/3"
+            },
+            "expectation": {
+              "relation": "loop_expectation__value",
+              "key": "[\"tenant/delivery-published\"]"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "scene": 1,
+  "origin": "real",
+  "captured_on": "2026-11-21",
+  "capture_evidence": "disposable-cluster:safe-start-44935693413-1:ready:sha256:27f871c243b705f6f01cd00fd2ad7e74bff14d344d7959bf45b156a33520f233",
+  "expected_plans": [
+    [
+      "prepare-namespaces"
+    ],
+    [
+      "protect-endpoints"
+    ],
+    [
+      "expose-endpoints"
+    ]
+  ],
+  "expected_outcome": "success"
+}

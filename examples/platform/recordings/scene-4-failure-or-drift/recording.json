@@ -1,0 +1,487 @@
+{
+  "run": "offline-restore-44935693413-1",
+  "limit": 6,
+  "clock": {
+    "origin": "2026-11-21T18:34:34.347287Z",
+    "ticks_per_second": 1000000
+  },
+  "pack": {
+    "path": "../../../../packs/std-loop",
+    "sha256": "1512bdc4315125b60d28488378adc81ef4cae45b1cff71e5f12d8fe546979f70"
+  },
+  "ports": [
+    {
+      "name": "backup-readback",
+      "version": "1.0.0",
+      "kind": "in",
+      "runs_on": "source",
+      "writes": "observation",
+      "row_source": "source",
+      "runtime": "in_process",
+      "consumes": [
+        "backup_event"
+      ],
+      "produces": [
+        "loop_observation"
+      ],
+      "freshness": {
+        "cadence": "on_request"
+      },
+      "mapping_owner": "platform-loop",
+      "losses": [],
+      "secrets": []
+    },
+    {
+      "name": "recovery-apply",
+      "version": "1.0.0",
+      "kind": "effect",
+      "runs_on": "approved_plan",
+      "writes": "world",
+      "row_source": "journal",
+      "runtime": "in_process",
+      "effect": {
+        "plan": "restore-plan",
+        "apply": "restore-apply",
+        "status": "restore-status"
+      },
+      "consumes": [
+        "loop_step"
+      ],
+      "produces": [
+        "backup_event"
+      ],
+      "freshness": {
+        "cadence": "on_request"
+      },
+      "mapping_owner": "platform-loop",
+      "losses": [],
+      "secrets": []
+    }
+  ],
+  "records": {
+    "loop_active_run": [
+      {
+        "id": "offline-restore-44935693413-1"
+      }
+    ],
+    "loop_step": [
+      {
+        "id": "fence-management",
+        "precedes": [
+          "restore-copy"
+        ]
+      },
+      {
+        "id": "restore-copy",
+        "precedes": [
+          "verify-fence-coverage"
+        ]
+      },
+      {
+        "id": "verify-fence-coverage"
+      }
+    ],
+    "loop_requirement": [
+      {
+        "id": "fence-needs-backup",
+        "run": "offline-restore-44935693413-1",
+        "step": "fence-management",
+        "token": "backup/captured",
+        "reason": "backup-captured"
+      },
+      {
+        "id": "fence-needs-binding",
+        "run": "offline-restore-44935693413-1",
+        "step": "fence-management",
+        "token": "backup/dataset-bound",
+        "reason": "dataset-bound"
+      },
+      {
+        "id": "restore-needs-fence",
+        "run": "offline-restore-44935693413-1",
+        "step": "restore-copy",
+        "token": "management/fence-acquired",
+        "reason": "fence-acquired"
+      },
+      {
+        "id": "restore-needs-offline",
+        "run": "offline-restore-44935693413-1",
+        "step": "restore-copy",
+        "token": "management/availability",
+        "reason": "management-offline"
+      },
+      {
+        "id": "coverage-needs-readback",
+        "run": "offline-restore-44935693413-1",
+        "step": "verify-fence-coverage",
+        "token": "management-copy/payload",
+        "reason": "recovered-readback"
+      },
+      {
+        "id": "coverage-needs-offline",
+        "run": "offline-restore-44935693413-1",
+        "step": "verify-fence-coverage",
+        "token": "management/availability",
+        "reason": "management-offline"
+      }
+    ],
+    "loop_completion": [
+      {
+        "id": "fence-management-done",
+        "run": "offline-restore-44935693413-1",
+        "step": "fence-management",
+        "token": "management/availability",
+        "reason": "opening-unreachable-probe"
+      },
+      {
+        "id": "restore-copy-done",
+        "run": "offline-restore-44935693413-1",
+        "step": "restore-copy",
+        "token": "management-copy/payload",
+        "reason": "isolated-readback"
+      },
+      {
+        "id": "verify-fence-coverage-done",
+        "run": "offline-restore-44935693413-1",
+        "step": "verify-fence-coverage",
+        "token": "management/fence-coverage",
+        "reason": "complete-fence-coverage"
+      }
+    ],
+    "loop_expectation": [
+      {
+        "id": "backup/captured",
+        "value": "6791fa6bfb916bf3ea190a5c15223cb91003bf597d084d50c9877f48d00f9879"
+      },
+      {
+        "id": "backup/dataset-bound",
+        "value": "management-catalog:management-copy-44935693413-1"
+      },
+      {
+        "id": "management/fence-acquired",
+        "value": "management-fence-44935693413-1"
+      },
+      {
+        "id": "management/availability",
+        "value": "unreachable"
+      },
+      {
+        "id": "management-copy/payload",
+        "value": "6791fa6bfb916bf3ea190a5c15223cb91003bf597d084d50c9877f48d00f9879"
+      },
+      {
+        "id": "management/fence-coverage",
+        "value": "management-fence-44935693413-1:complete"
+      }
+    ]
+  },
+  "initial": {
+    "id": "captured",
+    "run": "offline-restore-44935693413-1",
+    "event_time": 2838367,
+    "complete": true,
+    "observations": [
+      {
+        "run": "offline-restore-44935693413-1",
+        "sweep": "captured",
+        "port": "backup-readback",
+        "reason": "backup-completed/sha256:6a7503c942273c3a1170ae5f4e9a85870aa9733c63c3235e3fe4fd5459ef7bb4",
+        "observation": {
+          "id": "backup-readback/captured/backup-completed",
+          "subject": "management-backup",
+          "attribute": "payload_sha256",
+          "value": {
+            "state": "known",
+            "value": "6791fa6bfb916bf3ea190a5c15223cb91003bf597d084d50c9877f48d00f9879"
+          },
+          "event_time": "2026-11-21T18:34:34.347287Z",
+          "source": {
+            "kind": "tool",
+            "name": "backup-readback",
+            "position": "backup-completed/sha256:6a7503c942273c3a1170ae5f4e9a85870aa9733c63c3235e3fe4fd5459ef7bb4"
+          },
+          "expectation": {
+            "relation": "loop_expectation__value",
+            "key": "[\"backup/captured\"]"
+          }
+        }
+      },
+      {
+        "run": "offline-restore-44935693413-1",
+        "sweep": "captured",
+        "port": "backup-readback",
+        "reason": "management-dataset-bound/sha256:c0c216b3015efdd6455144687d89d4e79aa10ef9acdf2ccfdf277e378ba1e1ed",
+        "observation": {
+          "id": "backup-readback/captured/dataset-bound",
+          "subject": "management-backup",
+          "attribute": "dataset_binding",
+          "value": {
+            "state": "known",
+            "value": "management-catalog:management-copy-44935693413-1"
+          },
+          "event_time": "2026-11-21T18:34:37.185654Z",
+          "source": {
+            "kind": "tool",
+            "name": "backup-readback",
+            "position": "management-dataset-bound/sha256:c0c216b3015efdd6455144687d89d4e79aa10ef9acdf2ccfdf277e378ba1e1ed"
+          },
+          "expectation": {
+            "relation": "loop_expectation__value",
+            "key": "[\"backup/dataset-bound\"]"
+          }
+        }
+      },
+      {
+        "run": "offline-restore-44935693413-1",
+        "sweep": "captured",
+        "port": "backup-readback",
+        "reason": "captured/sha256:c0c216b3015efdd6455144687d89d4e79aa10ef9acdf2ccfdf277e378ba1e1ed",
+        "observation": {
+          "id": "backup-readback/captured/fence-acquired",
+          "subject": "fence-management",
+          "attribute": "fence",
+          "value": {
+            "state": "unknown",
+            "reason": "no_value"
+          },
+          "event_time": "2026-11-21T18:34:37.185654Z",
+          "source": {
+            "kind": "tool",
+            "name": "backup-readback",
+            "position": "captured/sha256:c0c216b3015efdd6455144687d89d4e79aa10ef9acdf2ccfdf277e378ba1e1ed"
+          },
+          "expectation": {
+            "relation": "loop_expectation__value",
+            "key": "[\"management/fence-acquired\"]"
+          }
+        }
+      },
+      {
+        "run": "offline-restore-44935693413-1",
+        "sweep": "captured",
+        "port": "backup-readback",
+        "reason": "captured/sha256:c0c216b3015efdd6455144687d89d4e79aa10ef9acdf2ccfdf277e378ba1e1ed",
+        "observation": {
+          "id": "backup-readback/captured/management-availability",
+          "subject": "fence-management",
+          "attribute": "availability",
+          "value": {
+            "state": "unknown",
+            "reason": "no_value"
+          },
+          "event_time": "2026-11-21T18:34:37.185654Z",
+          "source": {
+            "kind": "tool",
+            "name": "backup-readback",
+            "position": "captured/sha256:c0c216b3015efdd6455144687d89d4e79aa10ef9acdf2ccfdf277e378ba1e1ed"
+          },
+          "expectation": {
+            "relation": "loop_expectation__value",
+            "key": "[\"management/availability\"]"
+          }
+        }
+      },
+      {
+        "run": "offline-restore-44935693413-1",
+        "sweep": "captured",
+        "port": "backup-readback",
+        "reason": "captured/sha256:c0c216b3015efdd6455144687d89d4e79aa10ef9acdf2ccfdf277e378ba1e1ed",
+        "observation": {
+          "id": "backup-readback/captured/recovered-payload",
+          "subject": "restore-copy",
+          "attribute": "payload_sha256",
+          "value": {
+            "state": "unknown",
+            "reason": "no_value"
+          },
+          "event_time": "2026-11-21T18:34:37.185654Z",
+          "source": {
+            "kind": "tool",
+            "name": "backup-readback",
+            "position": "captured/sha256:c0c216b3015efdd6455144687d89d4e79aa10ef9acdf2ccfdf277e378ba1e1ed"
+          },
+          "expectation": {
+            "relation": "loop_expectation__value",
+            "key": "[\"management-copy/payload\"]"
+          }
+        }
+      },
+      {
+        "run": "offline-restore-44935693413-1",
+        "sweep": "captured",
+        "port": "backup-readback",
+        "reason": "captured/sha256:c0c216b3015efdd6455144687d89d4e79aa10ef9acdf2ccfdf277e378ba1e1ed",
+        "observation": {
+          "id": "backup-readback/captured/fence-coverage",
+          "subject": "verify-fence-coverage",
+          "attribute": "coverage",
+          "value": {
+            "state": "unknown",
+            "reason": "no_value"
+          },
+          "event_time": "2026-11-21T18:34:37.185654Z",
+          "source": {
+            "kind": "tool",
+            "name": "backup-readback",
+            "position": "captured/sha256:c0c216b3015efdd6455144687d89d4e79aa10ef9acdf2ccfdf277e378ba1e1ed"
+          },
+          "expectation": {
+            "relation": "loop_expectation__value",
+            "key": "[\"management/fence-coverage\"]"
+          }
+        }
+      }
+    ]
+  },
+  "sweeps": [
+    {
+      "id": "fenced",
+      "run": "offline-restore-44935693413-1",
+      "event_time": 6034837,
+      "complete": true,
+      "observations": [
+        {
+          "run": "offline-restore-44935693413-1",
+          "sweep": "fenced",
+          "port": "backup-readback",
+          "reason": "management-fence-acquired/sha256:997c9c1e709be79c61f1d711499d8ded7bdff0bc99aba7404f974ab1d48bd673",
+          "observation": {
+            "id": "backup-readback/fenced/fence-acquired",
+            "subject": "fence-management",
+            "attribute": "fence",
+            "value": {
+              "state": "known",
+              "value": "management-fence-44935693413-1"
+            },
+            "event_time": "2026-11-21T18:34:40.321987Z",
+            "source": {
+              "kind": "tool",
+              "name": "backup-readback",
+              "position": "management-fence-acquired/sha256:997c9c1e709be79c61f1d711499d8ded7bdff0bc99aba7404f974ab1d48bd673"
+            },
+            "expectation": {
+              "relation": "loop_expectation__value",
+              "key": "[\"management/fence-acquired\"]"
+            }
+          }
+        },
+        {
+          "run": "offline-restore-44935693413-1",
+          "sweep": "fenced",
+          "port": "backup-readback",
+          "reason": "management-unreachable-opening/sha256:b3cbb64d11b2deef6bb135ffe838051dce077afb54bb9877131c25974712df0f",
+          "observation": {
+            "id": "backup-readback/fenced/opening-unreachable",
+            "subject": "fence-management",
+            "attribute": "availability",
+            "value": {
+              "state": "known",
+              "value": "unreachable"
+            },
+            "event_time": "2026-11-21T18:34:40.382124Z",
+            "source": {
+              "kind": "tool",
+              "name": "backup-readback",
+              "position": "management-unreachable-opening/sha256:b3cbb64d11b2deef6bb135ffe838051dce077afb54bb9877131c25974712df0f"
+            },
+            "expectation": {
+              "relation": "loop_expectation__value",
+              "key": "[\"management/availability\"]"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "restored",
+      "run": "offline-restore-44935693413-1",
+      "event_time": 8926759,
+      "complete": true,
+      "observations": [
+        {
+          "run": "offline-restore-44935693413-1",
+          "sweep": "restored",
+          "port": "backup-readback",
+          "reason": "recovered-read/sha256:7be9c0d49cea2b8a220185a5a19ea59cbeb32c9ef81065b0e1b72b8b1bb42c2d",
+          "observation": {
+            "id": "backup-readback/restored/recovered-read",
+            "subject": "restore-copy",
+            "attribute": "payload_sha256",
+            "value": {
+              "state": "known",
+              "value": "6791fa6bfb916bf3ea190a5c15223cb91003bf597d084d50c9877f48d00f9879"
+            },
+            "event_time": "2026-11-21T18:34:43.274046Z",
+            "source": {
+              "kind": "tool",
+              "name": "backup-readback",
+              "position": "recovered-read/sha256:7be9c0d49cea2b8a220185a5a19ea59cbeb32c9ef81065b0e1b72b8b1bb42c2d"
+            },
+            "expectation": {
+              "relation": "loop_expectation__value",
+              "key": "[\"management-copy/payload\"]"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "verified",
+      "run": "offline-restore-44935693413-1",
+      "event_time": 9133972,
+      "complete": true,
+      "observations": [
+        {
+          "run": "offline-restore-44935693413-1",
+          "sweep": "verified",
+          "port": "backup-readback",
+          "reason": "management-unreachable-closing/sha256:20e46bcaceabb3692c0bb6862cfac6dae76eae04e5b408b0f6421a28a2a7fa56",
+          "observation": {
+            "id": "backup-readback/verified/closing-unreachable",
+            "subject": "verify-fence-coverage",
+            "attribute": "availability",
+            "value": {
+              "state": "known",
+              "value": "unreachable"
+            },
+            "event_time": "2026-11-21T18:34:43.336852Z",
+            "source": {
+              "kind": "tool",
+              "name": "backup-readback",
+              "position": "management-unreachable-closing/sha256:20e46bcaceabb3692c0bb6862cfac6dae76eae04e5b408b0f6421a28a2a7fa56"
+            },
+            "expectation": {
+              "relation": "loop_expectation__value",
+              "key": "[\"management/availability\"]"
+            }
+          }
+        },
+        {
+          "run": "offline-restore-44935693413-1",
+          "sweep": "verified",
+          "port": "backup-readback",
+          "reason": "management-fence-coverage/sha256:7500d55ceab136964ad7ffec0a084b039e5d8e343cd1eeaad33bea6c9bc0ef20",
+          "observation": {
+            "id": "backup-readback/verified/fence-coverage",
+            "subject": "verify-fence-coverage",
+            "attribute": "coverage",
+            "value": {
+              "state": "known",
+              "value": "management-fence-44935693413-1:complete"
+            },
+            "event_time": "2026-11-21T18:34:43.481259Z",
+            "source": {
+              "kind": "tool",
+              "name": "backup-readback",
+              "position": "management-fence-coverage/sha256:7500d55ceab136964ad7ffec0a084b039e5d8e343cd1eeaad33bea6c9bc0ef20"
+            },
+            "expectation": {
+              "relation": "loop_expectation__value",
+              "key": "[\"management/fence-coverage\"]"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
