@@ -40,6 +40,7 @@ def isolated(tmp_path: Path, form: str) -> Path:
     legacy_helpers().materialize_legacy_packs(
         root,
         ("packs/std-decision", "examples/subsidy-scheme"),
+        prefer_live=True,
     )
     target = root / "examples/subsidy-scheme"
     if form == "legacy":

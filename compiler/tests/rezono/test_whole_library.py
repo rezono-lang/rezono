@@ -21,7 +21,7 @@ DATASETS = {"valid", "errors"}
 
 def isolated(tmp_path, form):
     root = tmp_path / form
-    legacy_helpers().materialize_legacy_packs(root, ("examples/library",))
+    legacy_helpers().materialize_legacy_packs(root, ("examples/library",), prefer_live=True)
     directory = root / "examples/library"
     if form != "legacy":
         shutil.rmtree(directory / "schema", ignore_errors=True)

@@ -148,14 +148,122 @@ def read_legacy_archive() -> dict[str, dict[str, bytes]]:
     return by_pack
 
 
-def materialize_legacy_packs(dest_root: Path, pack_prefixes: tuple[str, ...] | None = None) -> None:
-    """Extract legacy packs matching `pack_prefixes` (or all packs when None) from `legacy-packs.tar.gz`."""
+def _materialized_files_for_pack(
+    pack_rel: str,
+    by_pack: dict[str, dict[str, bytes]],
+    *,
+    prefer_live: bool,
+) -> tuple[str, dict[str, bytes]]:
+    """Return `(source, {rel_file: bytes})` where `source` is `'live'` or `'archive'`."""
+    if prefer_live:
+        live_dir = REPO / pack_rel
+        if live_dir.is_dir() and not pack_is_rezono_1(live_dir):
+            return (
+                "live",
+                {rel_file: path.read_bytes() for rel_file, path in _archived_files_for_pack(pack_rel).items()},
+            )
+    return "archive", by_pack[pack_rel]
+
+
+def _repin_mixed_imports(dest_root: Path, sources: dict[str, str]) -> None:
+    """Re-pin `imports[].sha256` inside `dest_root` across live/archive boundaries without hiding live drift.
+
+    When `prefer_live=True` materializes a mix of still-legacy live packs and already-converted archived packs
+    into `dest_root`, a live pack's `pack.yaml` pins the live (`rezono 1`) hash of a converted import while
+    `dest_root` holds that import's archived legacy snapshot (and conversely if an archived pack imports a
+    still-legacy pack modified after the archive snapshot). Re-pinning in dependency-first order keeps the
+    materialized closure consistent while leaving genuine live-to-live pin mismatches untouched.
+    """
+    from rezono_compiler import modules
+
+    by_dest_dir = {(dest_root / pack_rel).resolve(): pack_rel for pack_rel in sources}
+    live_hashes: dict[str, str] = {}
+    repinned: set[str] = set()
+    visited: set[str] = set()
+
+    def live_hash(pack_rel: str) -> str:
+        if pack_rel not in live_hashes:
+            live_hashes[pack_rel] = modules.pack_hash(REPO / pack_rel)
+        return live_hashes[pack_rel]
+
+    def visit(pack_rel: str) -> None:
+        if pack_rel in visited:
+            return
+        visited.add(pack_rel)
+        pack_dir = (dest_root / pack_rel).resolve()
+        meta_path = pack_dir / "pack.yaml"
+        if not meta_path.is_file():
+            return
+        raw_text = meta_path.read_bytes().decode("utf-8")
+        meta = yaml.safe_load(raw_text) or {}
+        imports = meta.get("imports") or []
+        if not isinstance(imports, list) or not imports:
+            return
+
+        dep_rels: list[tuple[dict, str]] = []
+        for entry in imports:
+            if not isinstance(entry, dict) or not isinstance(entry.get("path"), str):
+                continue
+            target_dir = (pack_dir / entry["path"]).resolve()
+            target_rel = by_dest_dir.get(target_dir)
+            if target_rel is not None:
+                visit(target_rel)
+                dep_rels.append((entry, target_rel))
+
+        importer_source = sources[pack_rel]
+        updated = raw_text
+        changed = False
+        for entry, target_rel in dep_rels:
+            pinned_sha = entry.get("sha256")
+            if not isinstance(pinned_sha, str):
+                continue
+            target_dir = (dest_root / target_rel).resolve()
+            dest_sha = modules.pack_hash(target_dir)
+            if dest_sha == pinned_sha:
+                continue
+            target_source = sources[target_rel]
+            target_changed_world = (target_source != importer_source) or (target_rel in repinned)
+            if not target_changed_world:
+                continue
+            if importer_source == "live" and pinned_sha != live_hash(target_rel):
+                continue
+            updated = updated.replace(pinned_sha, dest_sha, 1)
+            changed = True
+
+        if changed:
+            meta_path.write_bytes(updated.encode("utf-8"))
+            repinned.add(pack_rel)
+
+    for pack_rel in sorted(sources):
+        visit(pack_rel)
+
+
+def materialize_legacy_packs(
+    dest_root: Path,
+    pack_prefixes: tuple[str, ...] | None = None,
+    *,
+    prefer_live: bool = False,
+) -> None:
+    """Materialize legacy packs matching `pack_prefixes` (or all packs when None).
+
+    When `prefer_live` is False (default, used by `rezono 1` conversion equivalence tests), every pack is
+    extracted verbatim from `legacy-packs.tar.gz`. When `prefer_live` is True (used by reader and
+    staged-candidate tests), any pack that is still legacy on disk (`not pack_is_rezono_1`) is copied from
+    the live checkout and each pack switches to its frozen archive snapshot once it converts to `rezono 1`.
+    """
     by_pack = read_legacy_archive()
-    for pack_rel, files in by_pack.items():
-        if pack_prefixes is not None and not any(
-            pack_rel == prefix or pack_rel.startswith(prefix + "/") for prefix in pack_prefixes
-        ):
-            continue
+    selected = [
+        pack_rel
+        for pack_rel in by_pack
+        if pack_prefixes is None
+        or any(pack_rel == prefix or pack_rel.startswith(prefix + "/") for prefix in pack_prefixes)
+    ]
+    # Materialize parent packs before nested packs (e.g. examples/platform before tenant-capacity/interface).
+    selected.sort(key=lambda rel_path: (len(rel_path), rel_path))
+    sources: dict[str, str] = {}
+    for pack_rel in selected:
+        source, files = _materialized_files_for_pack(pack_rel, by_pack, prefer_live=prefer_live)
+        sources[pack_rel] = source
         pack_dir = dest_root / pack_rel
         if pack_dir.exists():
             shutil.rmtree(pack_dir)
@@ -163,6 +271,8 @@ def materialize_legacy_packs(dest_root: Path, pack_prefixes: tuple[str, ...] | N
             target = pack_dir / rel_file
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(data)
+    if prefer_live and sources:
+        _repin_mixed_imports(dest_root, sources)
 
 
 def admit_legacy_std_packs(stack: ExitStack, root: Path) -> None:

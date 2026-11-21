@@ -36,7 +36,7 @@ def test_pack_converter_converts_standard_pack_constructs(tmp_path):
     node = os.environ.get("REZONO_NODE", "node")
     legacy_root = tmp_path / "legacy"
     helpers = legacy_helpers()
-    helpers.materialize_legacy_packs(legacy_root, PACKS)
+    helpers.materialize_legacy_packs(legacy_root, PACKS, prefer_live=True)
     with ExitStack() as stack:
         helpers.admit_legacy_std_packs(stack, legacy_root)
         for relative in PACKS:

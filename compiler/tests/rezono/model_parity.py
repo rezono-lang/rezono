@@ -35,9 +35,22 @@ def _legacy_archive_files() -> dict[str, bytes]:
     }
 
 
+@cache
+def _legacy_archive_pack_roots() -> tuple[str, ...]:
+    """Archived legacy pack roots, longest first so nested packs match before parents."""
+    return tuple(sorted(legacy_helpers().read_legacy_archive(), key=len, reverse=True))
+
+
 def legacy_file_bytes(relative: str) -> bytes:
-    """Return raw bytes for `relative` from the shared legacy archive, falling back to the checkout."""
+    """Return raw bytes for `relative`, preferring live files until the owning pack converts to `rezono 1`."""
     key = Path(relative).as_posix()
+    helpers = legacy_helpers()
+    owner = next((pack_rel for pack_rel in _legacy_archive_pack_roots() if key.startswith(pack_rel + "/")), None)
+    if owner is not None:
+        live_pack = ROOT / owner
+        live_file = ROOT / key
+        if live_pack.is_dir() and not helpers.pack_is_rezono_1(live_pack) and live_file.is_file():
+            return live_file.read_bytes()
     archived = _legacy_archive_files().get(key)
     if archived is not None:
         return archived

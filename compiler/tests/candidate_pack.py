@@ -77,10 +77,10 @@ def verify_candidate_forms(pack_dir: Path, modules: tuple[str, ...], tmp_path: P
 
 
 def isolated_standard_pack(pack_dir: Path, tmp_path: Path, form: str, module_name: str, layer: str = "facts") -> Path:
-    """Build an isolated copy of a standard pack in either its archived legacy or staged candidate form."""
+    """Build an isolated copy of a standard pack in either its legacy or staged candidate form."""
     pack_rel = pack_dir.resolve().relative_to(REPO.resolve()).as_posix()
     root = tmp_path / form
-    legacy_helpers().materialize_legacy_packs(root, (pack_rel,))
+    legacy_helpers().materialize_legacy_packs(root, (pack_rel,), prefer_live=True)
     target = root / pack_rel
     if form == "legacy":
         return target

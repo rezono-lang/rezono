@@ -33,7 +33,7 @@ class MissingStagedCandidate(AssertionError):
 
 def _copy_isolated(tmp_path: Path, pack_rel: str, form: str) -> Path:
     root = tmp_path / form
-    legacy_helpers().materialize_legacy_packs(root, ("packs", pack_rel))
+    legacy_helpers().materialize_legacy_packs(root, ("packs", pack_rel), prefer_live=True)
     target = root / pack_rel
     source = REPO / pack_rel
     if (source / "facts").is_dir() and not (target / "facts").exists():
