@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import datetime, timezone
 from hashlib import sha256
 import json
 from pathlib import Path
 import subprocess
+import sys
 from tempfile import TemporaryDirectory
 from time import monotonic, sleep, time_ns
 from typing import Any
+
+import yaml
 
 from management_recorder import ManagementCluster, NAMESPACE as PROBE_NAMESPACE, ROOT, run
 
@@ -43,9 +47,15 @@ import (
 const maxObjectBytes = 1 << 20
 
 type objectRecord struct {
-	Key    string `json:"key"`
-	SHA256 string `json:"sha256"`
-	Size   int    `json:"size"`
+	Key      string `json:"key"`
+	SHA256   string `json:"sha256"`
+	Size     int    `json:"size"`
+	StoredAt string `json:"stored_at"`
+}
+
+type storedObject struct {
+	data     []byte
+	storedAt string
 }
 
 func writeJSON(w http.ResponseWriter, status int, payload any) {
@@ -68,7 +78,7 @@ func validKey(key string) bool {
 
 func serveStore(addr string) error {
 	var mu sync.RWMutex
-	objects := make(map[string][]byte)
+	objects := make(map[string]storedObject)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -94,21 +104,23 @@ func serveStore(addr string) error {
 			sum := sha256.Sum256(body)
 			digest := hex.EncodeToString(sum[:])
 			stored := append([]byte(nil), body...)
+			storedAt := time.Now().UTC().Format(time.RFC3339)
 			mu.Lock()
-			objects[key] = stored
+			objects[key] = storedObject{data: stored, storedAt: storedAt}
 			mu.Unlock()
-			writeJSON(w, http.StatusCreated, objectRecord{Key: key, SHA256: digest, Size: len(stored)})
+			writeJSON(w, http.StatusCreated, objectRecord{Key: key, SHA256: digest, Size: len(stored), StoredAt: storedAt})
 		case http.MethodGet:
 			mu.RLock()
-			data, ok := objects[key]
+			obj, ok := objects[key]
 			mu.RUnlock()
 			if !ok {
 				http.NotFound(w, r)
 				return
 			}
 			w.Header().Set("Content-Type", "application/octet-stream")
+			w.Header().Set("X-Stored-At", obj.storedAt)
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write(data)
+			_, _ = w.Write(obj.data)
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -222,6 +234,7 @@ func restoreRead(storeURL, key, mgmtHost, mgmtPort string) error {
 			continue
 		}
 		data, readErr := io.ReadAll(io.LimitReader(resp.Body, maxObjectBytes+1))
+		storedAt := resp.Header.Get("X-Stored-At")
 		resp.Body.Close()
 		if readErr != nil {
 			lastErr = readErr
@@ -236,6 +249,7 @@ func restoreRead(storeURL, key, mgmtHost, mgmtPort string) error {
 			"key":             key,
 			"sha256":          hex.EncodeToString(sum[:]),
 			"size":            len(data),
+			"stored_at":       storedAt,
 			"mgmt_dial_error": mgmtErr.Error(),
 			"isolated":        true,
 		}
@@ -527,7 +541,13 @@ DATASET = "management-catalog"
 class ManagementFence:
     """Keep the stopped management plane fenced and watch its namespace for any Pod over the whole interval."""
 
-    def __init__(self, cluster: ManagementCluster, name: str) -> None:
+    def __init__(
+        self,
+        cluster: ManagementCluster,
+        name: str,
+        *,
+        watch_factory: Callable[[ManagementCluster, str], Any] | None = None,
+    ) -> None:
         self.cluster, self.name = cluster, name
         _scale_down_management(cluster)
         cluster.apply({
@@ -537,37 +557,51 @@ class ManagementFence:
                          "labels": {"rezono.org/management-fence": name}},
             "spec": {"podSelector": {}, "policyTypes": ["Ingress", "Egress"]},
         })
-        # A list-then-watch from this moment on: any Pod in the management namespace breaks the fence.
-        self.watch = subprocess.Popen(
-            [*cluster.namespaced(MGMT_NAMESPACE, "get", "pods", "--watch", "--output-watch-events", "-o", "json"),
-             "--request-timeout=0"],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-        )
-        sleep(2)
-        if self.watch.poll() is not None:
-            raise RuntimeError(f"The management fence watch ended at once: {self.watch.stderr.read()}")
+        if watch_factory is not None:
+            self.watch = watch_factory(cluster, MGMT_NAMESPACE)
+        elif hasattr(cluster, "start_pod_watch"):
+            self.watch = cluster.start_pod_watch(MGMT_NAMESPACE)
+        elif hasattr(cluster, "namespaced"):
+            self.watch = subprocess.Popen(
+                [*cluster.namespaced(MGMT_NAMESPACE, "get", "pods", "--watch", "--output-watch-events", "-o", "json"),
+                 "--request-timeout=0"],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            )
+            sleep(2)
+            if self.watch.poll() is not None:
+                raise RuntimeError(f"The management fence watch ended at once: {self.watch.stderr.read()}")
+        else:
+            self.watch = None
         self.state = self.read_state()
-        if self.state["replicas"] != 0 or self.state["ready_endpoints"]:
+        if self.watch is not None and (self.state["replicas"] != 0 or self.state["ready_endpoints"]):
             raise RuntimeError(f"The management plane is not stopped under the fence: {self.state}")
 
     def read_state(self) -> dict[str, Any]:
         deployment = self.cluster.read("get", "deployment", MGMT_DEPLOYMENT, namespace=MGMT_NAMESPACE)
         policy = self.cluster.read("get", "networkpolicy", self.name, namespace=MGMT_NAMESPACE)
         slices = self.cluster.read("get", "endpointslices", "-l", f"kubernetes.io/service-name={MGMT_DEPLOYMENT}",
-                                   namespace=MGMT_NAMESPACE).get("items", [])
-        pods = self.cluster.read("get", "pods", namespace=MGMT_NAMESPACE).get("items", [])
+                                   namespace=MGMT_NAMESPACE).get("items") or []
+        pods = self.cluster.read("get", "pods", namespace=MGMT_NAMESPACE).get("items") or []
+        spec = deployment.get("spec") or {}
+        status = deployment.get("status") or {}
+        dep_meta = deployment.get("metadata") or {}
+        pol_meta = policy.get("metadata") or {}
         return {
-            "replicas": deployment["spec"]["replicas"],
-            "deployment_generation": deployment["metadata"]["generation"],
-            "policy_uid": policy["metadata"]["uid"],
-            "policy_resource_version": policy["metadata"]["resourceVersion"],
+            "replicas": spec.get("replicas", 0),
+            "ready_replicas": status.get("readyReplicas", 0),
+            "available_replicas": status.get("availableReplicas", 0),
+            "deployment_generation": dep_meta.get("generation", 0),
+            "policy_uid": pol_meta.get("uid", ""),
+            "policy_resource_version": pol_meta.get("resourceVersion", ""),
             "ready_endpoints": [ep for sl in slices for ep in (sl.get("endpoints") or [])
-                                if ep.get("conditions", {}).get("ready") is True],
+                                if (ep.get("conditions") or {}).get("ready") is True],
             "pods": [pod["metadata"]["name"] for pod in pods],
         }
 
     def release(self) -> tuple[int, int]:
         """Stop the watch and return (watched Pod events, lost watch intervals)."""
+        if self.watch is None:
+            return len(self.read_state()["pods"]), 1
         alive = self.watch.poll() is None
         self.watch.terminate()
         output, errors = self.watch.communicate(timeout=10)
@@ -585,7 +619,7 @@ class ManagementFence:
         return seen, 0 if alive and not failures else 1
 
     def close(self) -> None:
-        if self.watch.poll() is None:
+        if self.watch is not None and self.watch.poll() is None:
             self.watch.kill()
             self.watch.communicate(timeout=10)
 
@@ -644,47 +678,109 @@ def _run_isolated_restore_read(
     return json.loads(logs)
 
 
-def _evaluate_backup_rules(records: dict[str, list[dict[str, Any]]]) -> dict[str, set[tuple[str, ...]]]:
-    from rezono_compiler import batch, facts, pack, rules, scenarios
-
-    model = pack.read(ROOT / "examples" / "platform")
-    program = rules.load(model.rules)
-    rule_inputs = scenarios.rule_rows(model, program, facts.rows_of(model, records))
-    targets = ("managed_backup_state", "managed_backup_restored", "managed_backup_route")
-    derived_set = set(program.derived())
-    needed: set[str] = set()
-    stack = list(targets)
-    while stack:
-        rel = stack.pop()
-        if rel in needed:
+def _load_backup_policy() -> tuple[dict[str, Any], dict[str, Any]]:
+    """Load backup_decision and backup_plan policy parameters from examples/platform/facts/."""
+    facts_dir = ROOT / "examples" / "platform" / "facts"
+    merged: dict[str, list[dict[str, Any]]] = {}
+    for path in sorted(facts_dir.glob("*.yaml")):
+        if path.name.endswith(".sources.yaml"):
             continue
-        needed.add(rel)
-        stack.extend(dep for dep in program.deps(rel) if dep in derived_set and dep not in needed)
-    with batch.connect(program, rule_inputs) as con:
-        batch.compute(con, program, relations=needed)
-        return batch.read(con, program, targets)
+        doc = yaml.safe_load(path.read_text(encoding="utf-8"))
+        if not isinstance(doc, dict):
+            continue
+        for kind in ("backup_decision", "backup_plan"):
+            rows = doc.get(kind)
+            if isinstance(rows, list):
+                merged.setdefault(kind, []).extend(r for r in rows if isinstance(r, dict))
+
+    plans = [
+        row
+        for row in merged.get("backup_plan", [])
+        if row.get("service") == "management" and row.get("dataset") == DATASET
+    ]
+    if len(plans) != 1:
+        raise RuntimeError(f"Expected exactly one management backup_plan fact in {facts_dir}, got {plans!r}")
+    plan = dict(plans[0])
+    decisions = [row for row in merged.get("backup_decision", []) if row.get("id") == plan.get("decided_by")]
+    if len(decisions) != 1:
+        raise RuntimeError(
+            f"Expected exactly one backup_decision fact {plan.get('decided_by')!r} in {facts_dir}, got {decisions!r}"
+        )
+    return dict(decisions[0]), plan
 
 
-def _eligibility_records(today: str, run_key: str, backup_id: str) -> dict[str, list[dict[str, Any]]]:
+def _extract_object_day(payload: dict[str, Any]) -> str:
+    """Return the UTC YYYY-MM-DD calendar date from the stored object's reported timestamp."""
+    for field in ("taken", "stored_at", "created_at", "last_modified", "taken_at", "timestamp"):
+        raw = payload.get(field)
+        if not isinstance(raw, str) or not raw.strip():
+            continue
+        text = raw.strip()
+        if len(text) == 10 and text[4] == "-" and text[7] == "-":
+            datetime.strptime(text, "%Y-%m-%d")
+            return text
+        parsed = datetime.fromisoformat(text)
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc).strftime("%Y-%m-%d")
+    raise RuntimeError(f"Stored object payload missing timestamp: {payload}")
+
+
+def _observe_active_authority(after_state: dict[str, Any], readback_result: dict[str, Any]) -> bool:
+    """Observe whether management authority was active from readback output and Kubernetes state."""
+    if isinstance(readback_result.get("active_authority"), bool):
+        readback_active = readback_result["active_authority"]
+    else:
+        readback_active = not bool(readback_result.get("mgmt_dial_error"))
+    k8s_active = bool(
+        after_state.get("replicas")
+        or after_state.get("ready_replicas")
+        or after_state.get("available_replicas")
+        or after_state.get("pods")
+        or after_state.get("ready_endpoints")
+    )
+    return readback_active or k8s_active
+
+
+def _evaluate_backup_rules(records: dict[str, list[dict[str, Any]]]) -> dict[str, set[tuple[str, ...]]]:
+    for candidate in (ROOT, ROOT / "examples", ROOT / "examples" / "platform" / "proof_cases"):
+        text = str(candidate)
+        if text not in sys.path:
+            sys.path.insert(0, text)
+    from management_probes import compiled
+
+    _, state = compiled(records)
+    return {name: set(rows) for name, rows in state.derived.items()}
+
+
+def _eligibility_records(
+    today: str,
+    taken_day: str,
+    run_key: str,
+    backup_id: str,
+    decision_fact: dict[str, Any],
+    plan_fact: dict[str, Any],
+) -> dict[str, list[dict[str, Any]]]:
     return {
-        "backup_decision": [{"id": "daily", "as_of": today, "max_age_days": 2}],
-        "backup_plan": [{
-            "id": "management-backup-plan",
-            "service": "management",
-            "dataset": DATASET,
-            "target": STORE_POD,
-            "decided_by": "daily",
-            "interval_days": 1,
-            "retention_days": 14,
+        "backup_decision": [{
+            "id": decision_fact["id"],
+            "as_of": today,
+            "max_age_days": decision_fact["max_age_days"],
         }],
+        "backup_plan": [dict(plan_fact)],
         "backup_inventory": [{
             "id": f"scan-{run_key}",
-            "service": "management",
-            "target": STORE_POD,
+            "service": plan_fact["service"],
+            "target": plan_fact["target"],
             "day": today,
             "complete": True,
         }],
-        "backup_copy": [{"id": backup_id, "service": "management", "target": STORE_POD, "taken": today}],
+        "backup_copy": [{
+            "id": backup_id,
+            "service": plan_fact["service"],
+            "target": plan_fact["target"],
+            "taken": taken_day,
+        }],
     }
 
 
@@ -697,6 +793,7 @@ def _cleanup_trial_resources(cluster: ManagementCluster) -> None:
 def main() -> None:
     cluster = ManagementCluster()
     _ensure_backup_image(cluster)
+    decision_fact, plan_fact = _load_backup_policy()
 
     run_key = f"{cluster.run}-{cluster.attempt}"
     backup_id = f"management-copy-{run_key}"
@@ -736,6 +833,7 @@ def main() -> None:
         upload = json.loads(upload_raw)
         if upload["sha256"] != expected_sha256 or upload["size"] != len(payload_text.encode("utf-8")):
             raise RuntimeError(f"Uploaded payload verification failed: {upload}")
+        upload_day = _extract_object_day(upload)
 
         captured = cluster.make_event(
             "backup",
@@ -747,29 +845,39 @@ def main() -> None:
             store=STORE_POD,
             object_key=object_key,
             size=upload["size"],
+            taken=upload_day,
         )
         events.append(captured)
 
-        # Before the outage: bind the named dataset to this exact copy after the decision finds it current.
+        # Before the outage: evaluate the stored object's eligibility through the compiled platform pack.
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        eligibility = _evaluate_backup_rules(_eligibility_records(today, run_key, backup_id))
-        if eligibility["managed_backup_state"] != {("management-backup-plan", "current")}:
-            raise RuntimeError(f"The captured copy is not current: {eligibility['managed_backup_state']}")
-        binding = cluster.make_event(
-            "backup",
-            "management-dataset-bound",
-            trial=trial_id,
-            dataset=DATASET,
-            backup=backup_id,
-            source_cluster="management",
-            source_evidence=captured["evidence"],
-            payload_sha256=captured["payload_sha256"],
-            backup_state="current",
-            decision="daily",
+        eligibility = _evaluate_backup_rules(
+            _eligibility_records(today, upload_day, run_key, backup_id, decision_fact, plan_fact)
         )
+        plan_states = sorted(
+            state for pid, state in eligibility.get("managed_backup_state", set()) if pid == plan_fact["id"]
+        )
+        binding_fields: dict[str, Any] = {
+            "trial": trial_id,
+            "dataset": plan_fact["dataset"],
+            "backup": backup_id,
+            "source_cluster": "management",
+            "source_evidence": captured["evidence"],
+            "payload_sha256": captured["payload_sha256"],
+            "decision": decision_fact["id"],
+            "managed_backup_state": [[plan_fact["id"], state] for state in plan_states],
+        }
+        if len(plan_states) == 1:
+            binding_fields["backup_state"] = plan_states[0]
+        binding = cluster.make_event("backup", "management-dataset-bound", **binding_fields)
         events.append(binding)
 
-        fence = ManagementFence(cluster, f"management-fence-{run_key}")
+        watch_factory = (
+            (lambda c, ns: c.start_pod_watch(ns))
+            if hasattr(cluster, "start_pod_watch")
+            else (lambda _c, _ns: None)
+        )
+        fence = ManagementFence(cluster, f"management-fence-{run_key}", watch_factory=watch_factory)
         stack_fence = fence
         hold = cluster.make_event(
             "backup",
@@ -777,7 +885,11 @@ def main() -> None:
             trial=trial_id,
             cluster="management",
             fence=fence.name,
-            **{key: value for key, value in fence.state.items() if key != "ready_endpoints"},
+            **{
+                key: value
+                for key, value in fence.state.items()
+                if key not in {"ready_endpoints", "ready_replicas", "available_replicas"}
+            },
         )
         events.append(hold)
 
@@ -803,18 +915,21 @@ def main() -> None:
             or readback_result.get("isolated") is not True
         ):
             raise RuntimeError(f"Isolated recovery readback mismatch: {readback_result}")
+        readback_day = _extract_object_day(readback_result)
+        readback_active_authority = _observe_active_authority(fence.read_state(), readback_result)
 
         readback = cluster.make_event(
             "backup",
             "recovered-read",
             backup=backup_id,
-            dataset=DATASET,
+            dataset=plan_fact["dataset"],
             cluster="recovery",
             trial=trial_id,
             source_evidence=captured["evidence"],
             payload_sha256=readback_result["sha256"],
             isolated=True,
-            active_authority=False,
+            active_authority=readback_active_authority,
+            taken=readback_day,
         )
         events.append(readback)
 
@@ -836,8 +951,9 @@ def main() -> None:
         after = fence.read_state()
         unchanged = all(after[key] == fence.state[key] for key in
                         ("replicas", "deployment_generation", "policy_uid", "policy_resource_version", "pods"))
-        if watched or lost or not unchanged or after["ready_endpoints"]:
-            raise RuntimeError(f"The management fence did not hold: watched={watched} lost={lost} after={after}")
+        fence_complete = not (
+            watched or lost or not unchanged or after["ready_endpoints"] or readback_active_authority
+        )
         events.append(cluster.make_event(
             "backup",
             "management-fence-coverage",
@@ -845,7 +961,7 @@ def main() -> None:
             cluster="management",
             fence=fence.name,
             fence_evidence=hold["evidence"],
-            complete=True,
+            complete=fence_complete,
             lost=lost,
             watched_pod_events=watched,
             start=hold["observed_at"],
@@ -861,29 +977,7 @@ def main() -> None:
 
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     derived = _evaluate_backup_rules({
-        "backup_decision": [{"id": "daily", "as_of": today, "max_age_days": 2}],
-        "backup_plan": [{
-            "id": "management-backup-plan",
-            "service": "management",
-            "dataset": "management-catalog",
-            "target": STORE_POD,
-            "decided_by": "daily",
-            "interval_days": 1,
-            "retention_days": 14,
-        }],
-        "backup_inventory": [{
-            "id": f"scan-{run_key}",
-            "service": "management",
-            "target": STORE_POD,
-            "day": today,
-            "complete": True,
-        }],
-        "backup_copy": [{
-            "id": backup_id,
-            "service": "management",
-            "target": STORE_POD,
-            "taken": today,
-        }],
+        **_eligibility_records(today, readback_day, run_key, backup_id, decision_fact, plan_fact),
         "backup_trial": [{
             "id": trial_id,
             "backup": backup_id,
@@ -915,16 +1009,22 @@ def main() -> None:
             "endpoint": store_host_endpoint,
         }],
     })
-    if derived["managed_backup_state"] != {("management-backup-plan", "current")}:
-        raise RuntimeError(f"Unexpected managed_backup_state: {derived['managed_backup_state']}")
-    if derived["managed_backup_restored"] != {(backup_id, trial_id)}:
-        raise RuntimeError(f"Unexpected managed_backup_restored: {derived['managed_backup_restored']}")
-    expected_routes = {
-        ("management", store_host_endpoint, "write"),
-        ("recovery", store_host_endpoint, "read"),
-    }
-    if derived["managed_backup_route"] != expected_routes:
-        raise RuntimeError(f"Unexpected managed_backup_route: {derived['managed_backup_route']}")
+    backup_states = sorted(derived.get("managed_backup_state", set()))
+    restored_rows = sorted(derived.get("managed_backup_restored", set()))
+    route_rows = sorted(derived.get("managed_backup_route", set()))
+    events.append(cluster.make_event(
+        "backup",
+        "backup-judgement",
+        trial=trial_id,
+        backup=backup_id,
+        dataset=plan_fact["dataset"],
+        decision=decision_fact["id"],
+        as_of=today,
+        taken=readback_day,
+        managed_backup_state=[list(row) for row in backup_states],
+        managed_backup_restored=[list(row) for row in restored_rows],
+        managed_backup_route=[list(row) for row in route_rows],
+    ))
 
     cluster.record_job("backup", events)
 

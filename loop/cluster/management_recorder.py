@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 import subprocess
 from tempfile import TemporaryDirectory
-from time import time_ns
+from time import sleep, time_ns
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -87,6 +87,18 @@ class ManagementCluster:
     def wait(self, *args: str, namespace: str | None = None, limit: int = 90) -> None:
         command = self.namespaced(namespace, "wait", *args) if namespace else [*self.command, "wait", *args]
         run(*command, limit=limit)
+
+    def start_pod_watch(self, namespace: str) -> subprocess.Popen[str]:
+        """Start a long-lived `kubectl get pods --watch` stream and fail closed if it exits immediately."""
+        watch = subprocess.Popen(
+            [*self.namespaced(namespace, "get", "pods", "--watch", "--output-watch-events", "-o", "json"),
+             "--request-timeout=0"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        sleep(2)
+        if watch.poll() is not None:
+            raise RuntimeError(f"The management fence watch ended at once: {watch.stderr.read()}")
+        return watch
 
     def ensure_namespace(self, name: str, labels: dict[str, str] | None = None) -> None:
         metadata: dict[str, Any] = {"name": name}
