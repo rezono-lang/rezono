@@ -25,7 +25,7 @@ def _legacy_library(tmp_path: Path) -> Path:
     helpers = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(helpers)
     root = tmp_path / "legacy-source"
-    helpers.materialize_legacy_packs(root, ("examples/library",))
+    helpers.materialize_legacy_packs(root, ("examples/library",), prefer_live=True)
     return root / "examples" / "library"
 
 

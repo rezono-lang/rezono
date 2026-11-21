@@ -50,8 +50,8 @@ def strip_award(scheme_dir: Path) -> None:
 
 
 def examples(root: Path) -> Path:
-    """The two subsidy examples and the standard packs from the legacy archive, at their own relative places."""
-    legacy_helpers().materialize_legacy_packs(root, ("packs", SCHEME, SUBSIDY))
+    """The two subsidy examples and the standard packs in legacy form, at their own relative places."""
+    legacy_helpers().materialize_legacy_packs(root, ("packs", SCHEME, SUBSIDY), prefer_live=True)
     return root
 
 

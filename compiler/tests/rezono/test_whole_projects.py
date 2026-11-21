@@ -33,7 +33,7 @@ MODULES = ("projects", *DATASETS)
 
 def isolated(tmp_path: Path, form: str) -> Path:
     root = tmp_path / form
-    legacy_helpers().materialize_legacy_packs(root, ("examples/projects",))
+    legacy_helpers().materialize_legacy_packs(root, ("examples/projects",), prefer_live=True)
     directory = root / "examples/projects"
     if form != "legacy":
         shutil.rmtree(directory / "schema", ignore_errors=True)
