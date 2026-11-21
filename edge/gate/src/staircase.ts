@@ -3,6 +3,7 @@ import type { ArchivedFile, Manifest, Snapshot, WitnessSet } from '../../../cont
 import type { CalcWitness, Witness } from '../../../contracts/typescript/generated/proof.ts';
 import { canonicalJson, canonicalSha256 } from '../../../viewer/src/lib/canon.ts';
 import { AskError } from './ask.ts';
+import { visibleStaircases } from './catalogue.ts';
 import { compareKey, compareText } from './pieces.ts';
 import {
 	earlierWithdrawal, epochWithdrawal, hasSortedKey, rangeMatchingRows, rowWithdrawal, rowsWithdrawal,
@@ -19,6 +20,7 @@ export interface StaircaseEpochView {
 	snaps: Map<string, Snapshot>;
 	bundle: {
 		pack: { id: string; base?: string };
+		kinds?: { id: string }[];
 		relations?: { id: string; columns?: { name: string }[] }[];
 		channels?: { staircases?: StaircaseReading[] };
 	};
@@ -65,6 +67,16 @@ function fault(): never {
 	throw new AskError(500, 'invalid publication');
 }
 
+async function readableEpochSnapshots(view: StaircaseEpochView): Promise<Snapshot[]> {
+	const readable: Snapshot[] = [];
+	for (const snapshot of view.snaps.values()) {
+		if (snapshot.complete || snapshot.full === true || (await view.rows(snapshot.relation)).length > 0) {
+			readable.push(snapshot);
+		}
+	}
+	return readable;
+}
+
 function selectReading(readings: readonly StaircaseReading[], readingParam: string | null): StaircaseReading | undefined {
 	if (readingParam !== null) {
 		return readingParam.length ? readings.find((entry) => entry.id === readingParam) : undefined;
@@ -94,64 +106,111 @@ function resolveColumns(epochView: StaircaseEpochView, reading: StaircaseReading
 	return { colNames, subjectIdx, validTimeIdx, stateIdx, valueIdx, reasonIdx };
 }
 
-async function resolveEpochValidAt(
+async function resolveAsOfSnapshotValidAt(
 	epochView: StaircaseEpochView,
 	withdrawals: readonly WithdrawalRecord[]
 ): Promise<string | undefined> {
-	if (epochView.snaps.has('calc__as_of')) {
-		const asOfRows = await epochView.rows('calc__as_of');
-		const row = asOfRows.find((entry) => entry.key[0] === 'as_of' && entry.key.length >= 2);
-		if (row) {
-			const withdrawn = rowWithdrawal(withdrawals, epochView.manifest.id, 'calc__as_of', row.key);
-			if (withdrawn) throw new WithdrawnError(withdrawn);
-			return row.key[1];
-		}
-	}
+	if (!epochView.snaps.has('calc__as_of')) return undefined;
+	const asOfRows = await epochView.rows('calc__as_of');
+	const allWithdrawn = rowsWithdrawal(withdrawals, epochView.manifest.id, 'calc__as_of', asOfRows);
+	if (allWithdrawn) throw new WithdrawnError(allWithdrawn);
+	const row = asOfRows.find((entry) => entry.key[0] === 'as_of' && entry.key.length >= 2 && entry.key[1].length > 0);
+	if (!row) return undefined;
+	const withdrawn = rowWithdrawal(withdrawals, epochView.manifest.id, 'calc__as_of', row.key);
+	if (withdrawn) throw new WithdrawnError(withdrawn);
+	return row.key[1];
+}
+
+async function resolveCalcIrValidAt(epochView: StaircaseEpochView): Promise<string | undefined> {
 	const calcRef = epochView.compiled('ir/calc.json');
-	if (calcRef) {
-		const calcDoc = await epochView.object(calcRef, 'bundles');
-		if (record(calcDoc) && record(calcDoc.as_of) && typeof calcDoc.as_of.valid_at === 'string'
-			&& calcDoc.as_of.valid_at.length > 0) {
-			return calcDoc.as_of.valid_at;
-		}
+	if (!calcRef) return undefined;
+	const calcDoc = await epochView.object(calcRef, 'bundles');
+	if (record(calcDoc) && record(calcDoc.as_of) && typeof calcDoc.as_of.valid_at === 'string'
+		&& calcDoc.as_of.valid_at.length > 0) {
+		return calcDoc.as_of.valid_at;
 	}
 	return undefined;
 }
 
-async function checkPremiseWithdrawals(
+function witnessRefKey(relation: string, key: string): string {
+	return relation + '\u0000' + key;
+}
+
+async function checkProofClosureWithdrawals(
 	epochView: StaircaseEpochView,
 	withdrawals: readonly WithdrawalRecord[],
-	witness: Witness | CalcWitness
+	rootWitness: Witness | CalcWitness,
+	witnessByRef: ReadonlyMap<string, Witness | CalcWitness>
 ): Promise<void> {
 	if (!withdrawals.some((entry) => entry.rows.length > 0)) return;
+	const manifestId = epochView.manifest.id;
 	let withdrawn: WithdrawalRecord | undefined;
-	const checkRef = async (relation: string, rawKey: string) => {
-		if (!epochView.snaps.has(relation)) return;
-		let parsed: unknown;
-		try { parsed = JSON.parse(rawKey); } catch { return; }
-		if (!keyParts(parsed)) return;
-		if (!hasSortedKey(await epochView.rows(relation), parsed)) return;
-		withdrawn = earlierWithdrawal(withdrawn, rowWithdrawal(withdrawals, epochView.manifest.id, relation, parsed));
+	const visited = new Set<string>();
+	const checkedRelations = new Set<string>();
+	const queue: (Witness | CalcWitness)[] = [rootWitness];
+
+	const checkRelationRows = async (relation: string) => {
+		if (checkedRelations.has(relation) || !epochView.snaps.has(relation)) return;
+		checkedRelations.add(relation);
+		const rows = await epochView.rows(relation);
+		withdrawn = earlierWithdrawal(withdrawn, rowsWithdrawal(withdrawals, manifestId, relation, rows));
+		for (const row of rows) {
+			const ref = witnessByRef.get(witnessRefKey(relation, canonicalJson(row.key)));
+			if (ref && !visited.has(witnessRefKey(ref.conclusion.relation, ref.conclusion.key))) {
+				queue.push(ref);
+			}
+		}
 	};
-	if ('rule_id' in witness) {
-		for (const premise of witness.premises ?? []) {
-			await checkRef(premise.row.relation, premise.row.key);
+
+	const checkRowRef = async (relation: string, rawKey: string, checkCollection = false) => {
+		let parsed: unknown;
+		try { parsed = JSON.parse(rawKey); } catch { parsed = undefined; }
+		if (keyParts(parsed)) {
+			withdrawn = earlierWithdrawal(withdrawn, rowWithdrawal(withdrawals, manifestId, relation, parsed));
 		}
-	} else {
-		for (const premise of witness.premises ?? []) {
-			await checkRef(premise.relation, premise.key);
+		if (checkCollection) {
+			await checkRelationRows(relation);
 		}
-		for (const step of witness.steps ?? []) {
-			if (typeof step.relation === 'string' && typeof step.element === 'string'
-				&& epochView.snaps.has(step.relation)) {
-				const matching = rangeMatchingRows(await epochView.rows(step.relation), { prefix: [step.element] });
-				withdrawn = earlierWithdrawal(
-					withdrawn,
-					rowsWithdrawal(withdrawals, epochView.manifest.id, step.relation, matching)
-				);
+		const next = witnessByRef.get(witnessRefKey(relation, rawKey));
+		if (next && !visited.has(witnessRefKey(next.conclusion.relation, next.conclusion.key))) {
+			queue.push(next);
+		}
+	};
+
+	while (queue.length > 0) {
+		const w = queue.pop()!;
+		const id = witnessRefKey(w.conclusion.relation, w.conclusion.key);
+		if (visited.has(id)) continue;
+		visited.add(id);
+
+		await checkRowRef(w.conclusion.relation, w.conclusion.key);
+
+		if ('rule_id' in w) {
+			for (const premise of w.premises ?? []) {
+				await checkRowRef(premise.row.relation, premise.row.key, premise.polarity === 'negative');
+			}
+			for (const agg of w.aggregates ?? []) {
+				await checkRelationRows(agg.relation);
+			}
+		} else {
+			for (const premise of w.premises ?? []) {
+				await checkRowRef(premise.relation, premise.key);
+			}
+			for (const readRelation of w.reads ?? []) {
+				await checkRelationRows(readRelation);
+			}
+			for (const step of w.steps ?? []) {
+				if (typeof step.relation === 'string' && epochView.snaps.has(step.relation)) {
+					if (typeof step.element === 'string') {
+						const matching = rangeMatchingRows(await epochView.rows(step.relation), { prefix: [step.element] });
+						withdrawn = earlierWithdrawal(withdrawn, rowsWithdrawal(withdrawals, manifestId, step.relation, matching));
+					}
+					await checkRelationRows(step.relation);
+				}
 			}
 		}
 	}
+
 	if (withdrawn) throw new WithdrawnError(withdrawn);
 }
 
@@ -186,9 +245,9 @@ export async function readStaircase<T extends StaircaseEpochView>(opts: {
 	const { pack, role, targetView, currentView, withdrawals, subject, reading: readingParam, loadEpoch, stillReadable } = opts;
 	if (!subject) throw new AskError(400, 'a staircase reading needs a subject');
 
-	const selected = selectReading(targetView.bundle.channels?.staircases ?? [], readingParam);
+	const targetVisible = visibleStaircases(targetView.bundle, await readableEpochSnapshots(targetView));
+	const selected = selectReading(targetVisible, readingParam);
 	if (!selected) return undefined;
-	if (!targetView.snaps.has(selected.relation)) return undefined;
 
 	const knowledgeTimes: { manifest: string; epoch: number; knowledge_time: string }[] = [];
 	const collected: (StaircaseCell & { epoch: number })[] = [];
@@ -204,8 +263,11 @@ export async function readStaircase<T extends StaircaseEpochView>(opts: {
 			if (!await stillReadable(epochView, currentView) || !await stillReadable(epochView, targetView)) continue;
 		}
 
-		const epochReading = selectReading(epochView.bundle.channels?.staircases ?? [], selected.id);
-		if (!epochReading || !epochView.snaps.has(epochReading.relation)) continue;
+		const epochVisible = epochView === targetView
+			? targetVisible
+			: visibleStaircases(epochView.bundle, await readableEpochSnapshots(epochView));
+		const epochReading = selectReading(epochVisible, selected.id);
+		if (!epochReading) continue;
 
 		if (epochView.snaps.has(epochReading.subject)) {
 			const subjRows = await epochView.rows(epochReading.subject);
@@ -242,23 +304,38 @@ export async function readStaircase<T extends StaircaseEpochView>(opts: {
 		}
 		const witnessByRef = new Map<string, Witness | CalcWitness>();
 		for (const w of [...published.witnesses, ...(published.calc_witnesses ?? [])]) {
-			witnessByRef.set(w.conclusion.relation + '\u0000' + w.conclusion.key, w);
+			witnessByRef.set(witnessRefKey(w.conclusion.relation, w.conclusion.key), w);
 		}
 
-		const epochValidAt = epochReading.valid_time_source === 'as_of'
-			? await resolveEpochValidAt(epochView, withdrawals)
+		const snapshotValidAt = epochReading.valid_time_source === 'as_of'
+			? await resolveAsOfSnapshotValidAt(epochView, withdrawals)
 			: undefined;
+		let calcIrValidAt: string | undefined;
+		let calcIrLoaded = false;
 		const base = epochView.bundle.pack.base || `https://rezono.example/${epochView.bundle.pack.id}/`;
 
 		for (const row of matchingRows) {
-			const w = witnessByRef.get(epochReading.relation + '\u0000' + canonicalJson(row.key));
+			const w = witnessByRef.get(witnessRefKey(epochReading.relation, canonicalJson(row.key)));
 			if (!w) fault();
-			await checkPremiseWithdrawals(epochView, withdrawals, w);
-			const validAt = validTimeIdx >= 0
-				? row.key[validTimeIdx]
-				: (epochValidAt
-					?? (!('rule_id' in w) && typeof w.valid_at === 'string' && w.valid_at.length ? w.valid_at : undefined)
-					?? epochView.manifest.knowledge_time.slice(0, 10));
+			await checkProofClosureWithdrawals(epochView, withdrawals, w, witnessByRef);
+			let validAt: string;
+			if (validTimeIdx >= 0) {
+				validAt = row.key[validTimeIdx];
+			} else {
+				const fromWitness = !('rule_id' in w) && typeof w.valid_at === 'string' && w.valid_at.length > 0
+					? w.valid_at
+					: undefined;
+				let resolved = snapshotValidAt ?? fromWitness;
+				if (resolved === undefined) {
+					if (!calcIrLoaded) {
+						calcIrValidAt = await resolveCalcIrValidAt(epochView);
+						calcIrLoaded = true;
+					}
+					resolved = calcIrValidAt;
+				}
+				if (resolved === undefined) fault();
+				validAt = resolved;
+			}
 			const { state, value, reason } = interpretOutcome(row.key, stateIdx, valueIdx, reasonIdx);
 			const sha256 = await canonicalSha256(w);
 			collected.push({

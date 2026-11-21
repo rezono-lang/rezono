@@ -612,7 +612,8 @@ export async function openLocalGate(root: string, role: string): Promise<Handle>
 						loadEpoch: (mid) => source.current(mid),
 						stillReadable
 					});
-					return staircase ? json(staircase, 200, standing) : missing();
+					if (!staircase || await source.latest() !== headKey(pack, current.manifest.epoch)) return missing();
+					return json(staircase, 200, standing);
 				}
 				if (req.method === 'POST' && route === 'ask') {
 					const body = await bodyOf(req);

@@ -1814,7 +1814,10 @@ def channels(pack: Pack, pack_dir: Path, packs: dict, renames: dict, errors: lis
                     continue
             sc = staircase_binding(pack, raw, names, view_kind_maps, owner, relation_cols, where, errors)
             if sc and (sc["id"] in seen_staircases or (source != path and sc["id"] in staircases)):
-                errors.append(f"{where}: a second staircase '{sc['id']}' (a staircase's id names its reading)")
+                errors.append(diagnostics.Diagnostic(
+                    "duplicate_staircase",
+                    f"{where}: a second staircase '{sc['id']}' (a staircase's id names its reading)",
+                ))
             elif sc:
                 seen_staircases.add(sc["id"])
                 staircases[sc["id"]] = sc
@@ -2373,34 +2376,34 @@ def staircase_binding(pack: Pack, raw, names: dict, view_kind_maps: dict[tuple[s
     need = {"id", "title_message", "subject", "relation"}
     optional = {"subject_column", "valid_time_column", "valid_time_source", "state_column", "value_column", "reason_column"}
     if not isinstance(raw, dict) or not need <= set(raw) or set(raw) - need - optional:
-        errors.append(f"{where}: a staircase needs id, title_message, subject and relation")
+        errors.append(diagnostics.Diagnostic("invalid_staircase", f"{where}: a staircase needs id, title_message, subject and relation"))
         return None
     where = f"{where}: staircase {raw['id']}"
     if not isinstance(raw["id"], str) or not re.fullmatch(ID, raw["id"]):
-        errors.append(f"{where}: an id is lower case (a-z, 0-9, _)")
+        errors.append(diagnostics.Diagnostic("invalid_staircase", f"{where}: an id is lower case (a-z, 0-9, _)"))
         return None
     if not isinstance(raw["title_message"], str) or not raw["title_message"]:
-        errors.append(f"{where}: title_message must be a message id")
+        errors.append(diagnostics.Diagnostic("invalid_staircase", f"{where}: title_message must be a message id"))
         return None
     raw_subject = str(raw["subject"])
     subject = view_kind_maps.get((owner, raw_subject)) or renamed(raw_subject, names)
     if subject not in pack.kinds:
-        errors.append(f"{where}: subject '{raw['subject']}' is not a kind")
+        errors.append(diagnostics.Diagnostic("unknown_kind", f"{where}: subject '{raw['subject']}' is not a kind"))
         return None
     relation = str(raw["relation"])
     cols = relation_cols.get(relation)
     if cols is None:
-        errors.append(f"{where}: relation '{relation}' is not a derived relation or calculation view")
+        errors.append(diagnostics.Diagnostic("unknown_relation", f"{where}: relation '{relation}' is not a derived relation or calculation view"))
         return None
     if ("valid_time_column" in raw) == ("valid_time_source" in raw):
-        errors.append(f"{where}: specify exactly one of valid_time_column or valid_time_source")
+        errors.append(diagnostics.Diagnostic("invalid_staircase", f"{where}: specify exactly one of valid_time_column or valid_time_source"))
         return None
     if "valid_time_source" in raw and raw["valid_time_source"] != "as_of":
-        errors.append(f"{where}: valid_time_source must be 'as_of'")
+        errors.append(diagnostics.Diagnostic("invalid_staircase", f"{where}: valid_time_source must be 'as_of'"))
         return None
     for field_ in ("subject_column", "valid_time_column", "state_column", "value_column", "reason_column"):
         if field_ in raw and (not isinstance(raw[field_], str) or raw[field_] not in cols):
-            errors.append(f"{where}: {field_} '{raw[field_]}' is not a column of {relation}")
+            errors.append(diagnostics.Diagnostic("unknown_column", f"{where}: {field_} '{raw[field_]}' is not a column of {relation}"))
             return None
     out = {
         "id": raw["id"],
