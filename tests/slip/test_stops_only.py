@@ -29,21 +29,6 @@ def amount_line(page):
     return line
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=(MissingSlipPage, AssertionError),
-    reason=(
-        "extra: decisions/viewer-slip.md: Waits for tests/slip/test_role_part_of_bundle.py--test_role_part_of_bundle, "
-        "tests/slip/test_head_status_and_hash.py--test_head_status_and_hash, "
-        "tests/slip/test_message_filled.py--test_message_filled, tests/slip/test_slip_rule_row.py--"
-        "test_slip_rule_row (the page), tests/slip/test_variant_difference_local.py--"
-        "test_variant_difference_local and tests/slip/test_turn_unknown_neighbour.py--test_turn_unknown_neighbour. "
-        "Then put the control of a sweep on the line of its cell in viewer/slip/: one [data-stop] per published "
-        "grid value with data-status and data-turn, opened by the key of suppose and moved stop by stop, and the "
-        "fold (del for the old value, ins for the new) from the difference of the selected stop "
-        "(decisions/viewer-slip.md, What if, on the line). Expectation: tests/fixtures/slip, stops by hand."
-    ),
-)
 def test_stops_only(tmp_path):
     store, _, done = publish_sweeps(tmp_path)
     drop_variant(store, next(vid for vid, _ in done if vid.startswith("v-item_amount-03-")))

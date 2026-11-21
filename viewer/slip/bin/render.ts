@@ -76,6 +76,7 @@ async function main(): Promise<void> {
 
 		const app = (await import(pathToFileURL(bundlePath).href)) as {
 			flush: () => void;
+			whenIdle: () => Promise<void>;
 			renderSlip: (
 				target: HTMLElement,
 				options: {
@@ -110,7 +111,18 @@ async function main(): Promise<void> {
 				});
 				rowEl.dispatchEvent(event);
 				app.flush();
-				await Promise.resolve();
+				await app.whenIdle();
+			}
+			if (action.stop !== undefined) {
+				const stopEl = rowEl.querySelector(`[data-stop="${action.stop}"]`) as
+					| (HTMLElement & { click?: () => void })
+					| null;
+				if (!stopEl) {
+					throw new Error(`No stop ${action.stop} on line ${action.line}`);
+				}
+				stopEl.click?.();
+				app.flush();
+				await app.whenIdle();
 			}
 		}
 
