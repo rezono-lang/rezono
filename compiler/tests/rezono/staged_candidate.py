@@ -8,7 +8,7 @@ schema bundle, and compiled rule IR.
 
 from __future__ import annotations
 
-from contextlib import nullcontext
+from contextlib import ExitStack
 from copy import deepcopy
 import json
 import os
@@ -19,7 +19,8 @@ import sys
 
 import yaml
 
-from rezono_compiler import emit, modules, pack, standard_packs
+from model_parity import legacy_helpers
+from rezono_compiler import emit, pack
 
 
 REPO = Path(__file__).resolve().parents[3]
@@ -32,17 +33,12 @@ class MissingStagedCandidate(AssertionError):
 
 def _copy_isolated(tmp_path: Path, pack_rel: str, form: str) -> Path:
     root = tmp_path / form
+    legacy_helpers().materialize_legacy_packs(root, ("packs", pack_rel))
     target = root / pack_rel
-    if (REPO / "packs").is_dir():
-        shutil.copytree(REPO / "packs", root / "packs", dirs_exist_ok=True)
     source = REPO / pack_rel
+    if (source / "facts").is_dir() and not (target / "facts").exists():
+        shutil.copytree(source / "facts", target / "facts")
     if form == "legacy":
-        shutil.copytree(
-            source,
-            target,
-            ignore=shutil.ignore_patterns("candidate"),
-            dirs_exist_ok=True,
-        )
         return target
 
     candidate_dir = source / "candidate"
@@ -53,41 +49,42 @@ def _copy_isolated(tmp_path: Path, pack_rel: str, form: str) -> Path:
         raise MissingStagedCandidate(f"{pack_rel}/candidate/ contains no .rezono modules")
 
     schema_layers: dict[str, str] = {}
-    if (source / "schema").is_dir():
-        for schema_path in sorted((source / "schema").rglob("*.yaml")):
+    if (target / "schema").is_dir():
+        for schema_path in sorted((target / "schema").rglob("*.yaml")):
             doc = yaml.safe_load(schema_path.read_text(encoding="utf-8")) or {}
             layer = (doc.get("annotations") or {}).get("layer")
             if isinstance(layer, str):
-                mod = schema_path.relative_to(source / "schema").with_suffix("").as_posix()
+                mod = schema_path.relative_to(target / "schema").with_suffix("").as_posix()
                 schema_layers[mod] = layer
 
-    if target.exists():
-        shutil.rmtree(target)
-    shutil.copytree(
-        source,
-        target,
-        ignore=shutil.ignore_patterns("schema", "rules", "candidate"),
-        dirs_exist_ok=True,
-    )
+    shutil.rmtree(target / "schema", ignore_errors=True)
+    shutil.rmtree(target / "rules", ignore_errors=True)
+    shutil.rmtree(target / "rezono", ignore_errors=True)
     shutil.copytree(candidate_dir, target / "rezono")
 
     entries = []
     node = os.environ.get("REZONO_NODE", "node")
+    stage = tmp_path / "regenerated"
+    stage.mkdir(parents=True, exist_ok=True)
     for rezono_path in rezono_files:
         rel_mod = rezono_path.relative_to(candidate_dir).with_suffix("").as_posix()
         form_path = rezono_path.with_suffix(".json")
         if not form_path.is_file():
             raise AssertionError(f"missing generated form {pack_rel}/candidate/{rel_mod}.json")
-        regenerated = tmp_path / "regenerated" / f"{rel_mod.replace('/', '_')}.json"
-        regenerated.parent.mkdir(parents=True, exist_ok=True)
+        stem = rel_mod.replace("/", "_")
+        lf_source = stage / f"{stem}.rezono"
+        lf_source.write_bytes(rezono_path.read_bytes().replace(b"\r\n", b"\n"))
+        regenerated = stage / f"{stem}.json"
         result = subprocess.run(
-            [node, str(READER), str(rezono_path), str(regenerated)],
+            [node, str(READER), str(lf_source), str(regenerated)],
             capture_output=True,
             encoding="utf-8",
             check=False,
         )
         assert result.returncode == 0, f"reader failed on {rel_mod}.rezono:\n{result.stderr or result.stdout}"
-        assert regenerated.read_bytes() == form_path.read_bytes(), (
+        actual = regenerated.read_bytes().replace(b"\r\n", b"\n")
+        expected = form_path.read_bytes().replace(b"\r\n", b"\n")
+        assert actual == expected, (
             f"{pack_rel}/candidate/{rel_mod}.json does not match write-form.ts output"
         )
         entries.append({
@@ -141,13 +138,8 @@ def _semantic_rules(ir: dict) -> dict:
 
 def compile_isolated(tmp_path: Path, pack_rel: str, form: str) -> tuple[pack.Pack, dict[str, bytes]]:
     directory = _copy_isolated(tmp_path, pack_rel, form)
-    meta = yaml.safe_load((directory / "pack.yaml").read_bytes())
-    name = str(meta["name"])
-    if form == "candidate" and standard_packs.is_standard_name(name):
-        context = standard_packs.trial(name, modules.pack_hash(directory))
-    else:
-        context = nullcontext()
-    with context:
+    with ExitStack() as stack:
+        legacy_helpers().admit_legacy_std_packs(stack, tmp_path / form)
         model = pack.read(directory)
         files = emit.compile_pack(model)
     return model, files

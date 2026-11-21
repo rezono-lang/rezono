@@ -690,13 +690,6 @@ def test_ci_workflow_runs_base_shortcut_budgets_with_base_revision(tmp_path: Pat
     assert "budget_ratchet_violation" in weakened_script.stdout, weakened_script.stdout
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="extra: decisions/no-green-by-cheapest-route.md: loop/shortcut_budgets.py must refuse missing or "
-           "empty --base instead of silently equating head to base, and fail closed when any ceiling in "
-           "loop/shortcut-budget.json is raised or added relative to --base.",
-)
 def test_shortcut_budgets_refuses_missing_base_and_detects_raised_ceiling(tmp_path: Path, capsys):
     sb, _ = _load_shortcut_budgets()
     repo = tmp_path / "budget-raised-repo"
@@ -760,13 +753,6 @@ def test_shortcut_budgets_refuses_missing_base_and_detects_raised_ceiling(tmp_pa
         assert rc != 0, f"CLI {label} must fail closed (non-zero exit), not silently treat head as base"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="extra: decisions/no-green-by-cheapest-route.md: loop/shortcut_budgets.py must count "
-           "day_number_fields from the rezono_compiler schema/module model (resolving LinkML and Rezono "
-           "scalar type aliases) instead of bespoke regex scanning over .rezono source text.",
-)
 def test_day_number_field_counter_uses_compiler_model_not_regex(tmp_path: Path):
     sb, _ = _load_shortcut_budgets()
 

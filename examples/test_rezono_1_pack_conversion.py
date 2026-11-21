@@ -1,7 +1,9 @@
 """Per-group strict red tests for single-pass pack rule conversion to native `rezono 1` modules
 for standard packs (`packs/std-*`), front-door examples (`examples/subsidy`, `examples/subsidy-scheme`,
 `examples/library`, `examples/projects`), and `examples/platform`
-(decisions/language-rezono-1.md, sections 1, 2, 5.5, 5.8, 5.10, 6, 7 and 8).
+(decisions/language-rezono-1.md, sections 1, 2, 5.5, 5.8, 5.10, 6, 7 and 8;
+decisions/standard-packs-everywhere.md, section 1.4;
+decisions/platform-facts-not-conclusions.md, sections 3, 4 and 5).
 
 Companions for the other two conversion groups live in their owning components:
 - `loop/tests/test_rezono_1_build_epoch_conversion.py` (`build/` and `epoch/`)
@@ -16,15 +18,25 @@ import json
 from pathlib import Path
 import shutil
 import sys
-import tarfile
 
 import pytest
 import yaml
 
 
 REPO = Path(__file__).resolve().parents[1]
-LEGACY_ARCHIVE = Path(__file__).resolve().parent / "fixtures" / "rezono-1-legacy" / "legacy-packs.tar.gz"
-TIME = "2026-11-10T00:00:00Z"
+LEGACY_HELPERS_PATH = REPO / "examples" / "fixtures" / "rezono-1-legacy" / "helpers.py"
+
+
+def _load_python_module(path: Path, name: str):
+    spec = importlib.util.spec_from_file_location(name, path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+_LEGACY = _load_python_module(LEGACY_HELPERS_PATH, "rezono_1_legacy_helpers")
+TIME = _LEGACY.TIME
 
 # Standard packs that carry schema/rule definitions (std-explain and std-view are presentation-only).
 RULED_STD_PACKS = (
@@ -43,6 +55,7 @@ RULED_STD_PACKS = (
 # used to compare every ruled standard pack non-vacuously via `scripts.convert_pack.compare_publications`.
 # Theory packs with abstract kinds (`std-identity`, `std-order`, `std-part`, `std-time`) are exercised
 # through a minimal consumer schema declaring a concrete child kind (`is_a: ...`).
+# Calendar dates use ISO dates only (no day-number stopgaps; decisions/standard-packs-everywhere.md §1.4).
 STD_PACK_EXERCISES: dict[str, dict] = {
     "std-budget": {
         "rows": {
@@ -59,10 +72,10 @@ STD_PACK_EXERCISES: dict[str, dict] = {
     "std-decision": {
         "rows": {
             "decision": [
-                {"id": "d-1", "title": "Sample", "state": "in_force", "decider": "board", "valid_from": "2026-01-01"},
+                {"id": "d-1", "title": "Sample", "state": "in_force", "decider": ["board"], "valid_from": "2026-01-01"},
             ],
             "reference_date": [
-                {"id": "now", "title": "Now", "day": 20260601, "date": "2026-06-01"},
+                {"id": "now", "title": "Now", "date": "2026-06-01"},
             ],
         },
     },
@@ -94,6 +107,7 @@ STD_PACK_EXERCISES: dict[str, dict] = {
             "item": [{"id": "whole"}, {"id": "part", "part_of": "whole"}],
         },
     },
+    # Waits for packs/std-review native date migration (decisions/standard-packs-everywhere.md §1.4 step 5).
     "std-review": {
         "rows": {
             "change": [
@@ -109,13 +123,13 @@ STD_PACK_EXERCISES: dict[str, dict] = {
                     "reviewer": "bob",
                     "role": "reviewer",
                     "verdict": "accepted",
-                    "day": 10,
+                    "date": "2026-06-10",
                     "content_sha256": "a" * 64,
                     "support_sha256": "b" * 64,
                 },
             ],
             "role_grant": [
-                {"id": "rg-1", "subject": "bob", "role": "reviewer", "from_day": 1},
+                {"id": "rg-1", "subject": "bob", "role": "reviewer", "valid_from": "2026-06-01"},
             ],
             "review_phase": [
                 {"id": "ph-1", "phase": "strict", "owner": "owner"},
@@ -154,7 +168,8 @@ SUBSIDY_CALC_RELATIONS = (
     "payment_difference",
 )
 
-# Per-derivation contract for examples/platform/rules/core.dl (decisions/language-rezono-1.md, section 7).
+# Per-derivation contract for examples/platform/rules/core.dl
+# (decisions/language-rezono-1.md §7 + forward note from decisions/platform-facts-not-conclusions.md §§4-5).
 PLATFORM_RETIRED_RELATIONS = frozenset({
     "provider",
     "providers",
@@ -162,6 +177,10 @@ PLATFORM_RETIRED_RELATIONS = frozenset({
     "unmet_need",
     "stable_release",
     "has_stable",
+    "newest_day",
+    "product_newest_day",
+    "flow_from_step",
+    "needs_service",
 })
 PLATFORM_LEGACY_RENAMED_RELATIONS = frozenset({
     "zone_of",
@@ -169,7 +188,6 @@ PLATFORM_LEGACY_RENAMED_RELATIONS = frozenset({
     "provider_chosen",
     "pinned",
     "runs",
-    "newest_day",
     "behind_newest",
     "authenticates",
     "verified",
@@ -182,8 +200,6 @@ PLATFORM_CORE_FUNCTIONAL = frozenset({
     "service_cluster",
     "service_pin",
     "service_runs",
-    "product_newest_day",
-    "flow_from_step",
 })
 PLATFORM_RENAMED_BOOL = frozenset({
     "service_behind_newest",
@@ -211,175 +227,16 @@ PLATFORM_STEP_RELATIONS = frozenset({
     "platform_startup_goal",
     "platform_restore_goal",
 })
-# All legacy relation names covered by section 7's explicit intended-difference mapping.
+# All legacy and native relation names covered by section 7's explicit intended-difference mapping.
 PLATFORM_SECTION_7_LEGACY = (
     PLATFORM_RETIRED_RELATIONS
     | PLATFORM_LEGACY_RENAMED_RELATIONS
-    | {"needs", "flow_from_step"}
+    | {"needs"}
 )
 PLATFORM_SECTION_7_NATIVE = (
     PLATFORM_CORE_FUNCTIONAL
     | PLATFORM_RENAMED_BOOL
-    | {"needs_service"}
 )
-
-
-def _rel(path: Path) -> str:
-    return path.relative_to(REPO).as_posix()
-
-
-def _dl_files_under(directory: Path) -> list[str]:
-    return sorted(_rel(path) for path in directory.rglob("*.dl"))
-
-
-def _synthetic_sidecar(position: str) -> str:
-    return yaml.safe_dump(
-        {
-            "default": {
-                "kind": "synthetic",
-                "name": "examples/test_rezono_1_pack_conversion.py",
-                "position": position,
-            }
-        },
-        sort_keys=False,
-    )
-
-
-def _read_legacy_archive() -> dict[str, dict[str, bytes]]:
-    """Read `legacy-packs.tar.gz` into `{pack_rel: {file_rel: bytes}}`."""
-    raw: dict[str, bytes] = {}
-    with tarfile.open(LEGACY_ARCHIVE, "r:gz") as tf:
-        for member in tf.getmembers():
-            assert (
-                member.isfile()
-                and not member.issym()
-                and not member.islnk()
-                and not member.name.startswith("/")
-                and "\\" not in member.name
-                and ".." not in member.name.split("/")
-            ), member.name
-            handle = tf.extractfile(member)
-            assert handle is not None
-            raw[member.name] = handle.read()
-    pack_roots = sorted(
-        (name[: -len("/pack.yaml")] for name in raw if name.endswith("/pack.yaml")),
-        key=len,
-        reverse=True,
-    )
-    by_pack: dict[str, dict[str, bytes]] = {root: {} for root in pack_roots}
-    for name, data in raw.items():
-        owner = next(root for root in pack_roots if name.startswith(root + "/"))
-        by_pack[owner][name[len(owner) + 1 :]] = data
-    return by_pack
-
-
-def _materialize_legacy_packs(dest_root: Path, pack_prefixes: tuple[str, ...]) -> None:
-    """Extract legacy packs matching `pack_prefixes` from `legacy-packs.tar.gz` into `dest_root`."""
-    by_pack = _read_legacy_archive()
-    for pack_rel, files in by_pack.items():
-        if not any(pack_rel == prefix or pack_rel.startswith(prefix + "/") for prefix in pack_prefixes):
-            continue
-        pack_dir = dest_root / pack_rel
-        if pack_dir.exists():
-            shutil.rmtree(pack_dir)
-        for rel_file, data in files.items():
-            target = pack_dir / rel_file
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_bytes(data)
-
-
-def _admit_legacy_std_packs(stack: ExitStack, root: Path) -> None:
-    """Register every legacy `packs/std-*` materialized under `root` via `standard_packs.trial`."""
-    from rezono_compiler import modules, standard_packs
-
-    packs_dir = root / "packs"
-    if not packs_dir.is_dir():
-        return
-    for pack_yaml in sorted(packs_dir.glob("std-*/pack.yaml")):
-        std_dir = pack_yaml.parent
-        stack.enter_context(standard_packs.trial(std_dir.name, modules.pack_hash(std_dir)))
-
-
-def _form_has_derivation(decls: list[dict]) -> bool:
-    for decl in decls:
-        if not isinstance(decl, dict):
-            continue
-        if "derived" in decl and isinstance(decl["derived"], str):
-            return True
-        if "step" in decl:
-            return True
-        nested = decl.get("derived")
-        if isinstance(nested, list) and nested:
-            return True
-    return False
-
-
-def _assert_pack_is_native_rezono_1(pack_dir: Path, *, expect_rules: bool) -> tuple[object, dict[str, bytes], dict, dict]:
-    """Verify a pack has zero `.dl` rules, native `rezono.module/5` (`rezono 1`) forms, and compiles cleanly."""
-    dl_files = _dl_files_under(pack_dir)
-    assert not dl_files, f"{_rel(pack_dir)} still contains .dl rule files: {dl_files}"
-
-    meta_path = pack_dir / "pack.yaml"
-    assert meta_path.is_file(), f"missing {_rel(meta_path)}"
-    meta = yaml.safe_load(meta_path.read_bytes()) or {}
-    entries = meta.get("rezono") or []
-    assert entries, f"{_rel(pack_dir)}/pack.yaml must declare native rezono 1 modules under `rezono:`"
-
-    has_derivation = False
-    for entry in entries:
-        module_path = pack_dir / entry["module"]
-        form_path = pack_dir / entry["form"]
-        assert module_path.is_file(), f"missing module {_rel(module_path)}"
-        assert form_path.is_file(), f"missing module form {_rel(form_path)}"
-
-        form = json.loads(form_path.read_bytes())
-        assert form.get("format") == "rezono.module/5", (
-            f"{_rel(form_path)} must use format rezono.module/5, got {form.get('format')!r}"
-        )
-        module = form.get("module") or {}
-        assert module.get("rezono") == "1", (
-            f"{_rel(form_path)} must record module.rezono == '1', got {module.get('rezono')!r}"
-        )
-        decls = module.get("decls") or []
-        for decl in decls:
-            if isinstance(decl, dict):
-                assert "rules" not in decl, f"{_rel(form_path)} still contains a legacy `rules` pipe block"
-                assert "rule" not in decl, f"{_rel(form_path)} still contains a rezono 0 `rule` declaration"
-        if _form_has_derivation(decls):
-            has_derivation = True
-
-    if expect_rules:
-        assert has_derivation, (
-            f"{_rel(pack_dir)} must define native rezono 1 `derived` (or `step`) declarations"
-        )
-
-    from rezono_compiler import emit, pack
-
-    model = pack.read(pack_dir)
-    files = emit.compile_pack(model)
-    bundle = json.loads(files["bundle/schema-bundle.json"])
-    info = bundle.get("pack") or {}
-    assert info.get("language_version") == "1", (
-        f"{_rel(pack_dir)} bundle/schema-bundle.json must record language_version == '1': {info!r}"
-    )
-
-    ir = json.loads(files["ir/rules.json"]) if "ir/rules.json" in files else {}
-    if expect_rules:
-        non_base = [r for r in ir.get("relations", []) if r.get("role") != "base"]
-        assert non_base, f"{_rel(pack_dir)} compiled ir/rules.json has no derived or functional relations"
-    return model, files, bundle, ir
-
-
-def _roles_for_pack(pack_dir: Path, model) -> dict[str, str]:
-    """Discover declared `Role` ids in a pack for per-role publication."""
-    roles: dict[str, str] = {"checker": "complete"}
-    from rezono_compiler import facts as fact_files
-
-    for path in fact_files.files(pack_dir):
-        loaded = fact_files.load(model, path)
-        for row in loaded.get("role", ()):
-            roles[str(row[0])] = "may_read"
-    return roles
 
 
 def _build_consumer_for_std_pack(root: Path, std_name: str, spec: dict, label: str) -> Path:
@@ -431,7 +288,9 @@ def _build_consumer_for_std_pack(root: Path, std_name: str, spec: dict, label: s
         yaml.safe_dump(spec["rows"], sort_keys=False), encoding="utf-8", newline="\n"
     )
     (consumer / "facts" / "exercise.sources.yaml").write_text(
-        _synthetic_sidecar(f"std-pack-exercise:{std_name}"), encoding="utf-8", newline="\n"
+        _LEGACY.synthetic_sidecar("examples/test_rezono_1_pack_conversion.py", f"std-pack-exercise:{std_name}"),
+        encoding="utf-8",
+        newline="\n",
     )
     return consumer
 
@@ -456,49 +315,42 @@ def _publish_with_witnesses(pack_dir: Path, store_dir: Path, roles: dict[str, st
     return epoch, manifest, meaning, witnesses
 
 
-def _load_python_module(path: Path, name: str):
-    spec = importlib.util.spec_from_file_location(name, path)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
 def _conflict_witness_candidates(witnesses: dict, relation: str, key: list[str]) -> set[str]:
-    """Extract all candidate values/identifiers referenced by conflict witnesses for `(relation, key)`."""
-    target_key = json.dumps(key, separators=(",", ":"))
-    found: set[str] = set()
+    """Read competing candidate identifiers from one canonical place: positive `premises` reachable from
+    the `invalid multiple_values` Witness for `(relation, key)` (contracts/proof.yaml)."""
+    by_conclusion: dict[tuple[str, str], list[dict]] = {}
     for witness in witnesses.get("witnesses", ()):
         conclusion = witness.get("conclusion") or {}
-        if conclusion.get("relation") != relation:
+        by_conclusion.setdefault((conclusion.get("relation", ""), conclusion.get("key", "")), []).append(witness)
+
+    root = (relation, json.dumps([*key, "invalid", "multiple_values", ""], separators=(",", ":")))
+    seen: set[tuple[str, str]] = set()
+    queue = [root]
+    found: set[str] = set()
+    while queue:
+        node = queue.pop()
+        if node in seen:
             continue
-        concl_key = conclusion.get("key", "")
-        if concl_key != target_key and not concl_key.startswith(target_key[:-1] + ","):
-            continue
-        for candidate in witness.get("candidates", ()):
-            if isinstance(candidate, dict):
-                if "value" in candidate:
-                    found.add(str(candidate["value"]))
-                for binding in candidate.get("bindings", ()):
-                    found.add(str(binding.get("value", "")))
-                for premise in candidate.get("premises", ()):
-                    for cell in json.loads(premise["row"]["key"]):
-                        found.add(str(cell))
-            else:
-                found.add(str(candidate))
-        for binding in witness.get("bindings", ()):
-            found.add(str(binding.get("value", "")))
-        for premise in witness.get("premises", ()):
-            for cell in json.loads(premise["row"]["key"]):
-                found.add(str(cell))
+        seen.add(node)
+        for witness in by_conclusion.get(node, ()):
+            for premise in witness.get("premises", ()):
+                if premise.get("polarity") != "positive":
+                    continue
+                row = premise["row"]
+                found.update(str(cell) for cell in json.loads(row["key"]))
+                ref = (row["relation"], row["key"])
+                if ref in by_conclusion and ref not in seen:
+                    queue.append(ref)
     return found
 
 
 def test_legacy_example_and_std_archive_integrity():
-    """Verify `examples/fixtures/rezono-1-legacy/legacy-packs.tar.gz` is well-formed (regular files only,
-    no symlinks or path traversal) and contains every expected legacy pack root and its `.dl`/rule definitions."""
-    assert LEGACY_ARCHIVE.is_file(), f"missing {_rel(LEGACY_ARCHIVE)}"
-    by_pack = _read_legacy_archive()
+    """Verify the shared legacy archive is well-formed and holds every expected standard/example pack.
+
+    Live byte-for-byte drift checks (`_LEGACY.assert_legacy_packs_match_archive`) run during explicit
+    planner archive refreshes rather than PR CI, because `legacy-packs.tar.gz` is protected by
+    `scripts/red_guard.py` while worker PRs legitimately update unconverted legacy packs.
+    """
     expected_packs = {
         *(f"packs/{name}" for name in RULED_STD_PACKS),
         "packs/std-explain",
@@ -510,11 +362,6 @@ def test_legacy_example_and_std_archive_integrity():
         "examples/platform",
         "examples/platform/tenant-capacity/interface",
     }
-    assert expected_packs <= set(by_pack), f"missing packs in archive: {sorted(expected_packs - set(by_pack))}"
-    for pack_rel in sorted(expected_packs):
-        meta = yaml.safe_load(by_pack[pack_rel]["pack.yaml"])
-        assert isinstance(meta, dict) and meta.get("name"), f"invalid pack.yaml in archive for {pack_rel}"
-
     expected_dl_packs = {
         *(f"packs/{name}" for name in RULED_STD_PACKS if name != "std-access"),
         "examples/subsidy",
@@ -522,14 +369,15 @@ def test_legacy_example_and_std_archive_integrity():
         "examples/platform",
         "examples/platform/tenant-capacity/interface",
     }
-    for pack_rel in sorted(expected_dl_packs):
-        dl_files = [rel for rel in by_pack[pack_rel] if rel.endswith(".dl")]
-        assert dl_files, f"archive pack {pack_rel} is missing legacy .dl definitions"
-
-    assert "rezono/access.rezono" in by_pack["packs/std-access"], "archive packs/std-access missing access.rezono"
-    for pack_rel in ("examples/library", "examples/projects"):
-        fact_files = [rel for rel in by_pack[pack_rel] if rel.startswith("facts/") and rel.endswith(".yaml")]
-        assert fact_files, f"archive pack {pack_rel} is missing baseline facts/*.yaml"
+    _LEGACY.assert_legacy_archive_integrity(
+        expected_packs,
+        expected_dl_packs=expected_dl_packs,
+        expected_files={
+            "packs/std-access": {"rezono/access.rezono"},
+            "examples/library": {"facts/valid.yaml", "facts/errors.yaml"},
+            "examples/projects": {"facts/valid.yaml", "facts/errors.yaml"},
+        },
+    )
 
 
 @pytest.mark.xfail(
@@ -541,27 +389,29 @@ def test_legacy_example_and_std_archive_integrity():
         "equivalence via compare_publications across every derived relation, checked grounds, and per-role views. "
         "Waits for compiler/tests/rezono/test_lower_rezono_1_derived.py--test_lower_rezono_1_derived, "
         "examples/test_calculation_engine_parity.py--test_feldera_calculations_match_duckdb_and_checker, "
-        "and examples/test_rule_witness_engine_parity.py--test_feldera_rule_witnesses_match_batch."
+        "examples/test_rule_witness_engine_parity.py--test_feldera_rule_witnesses_match_batch, "
+        "compiler/tests/test_std_decision_dates.py--test_std_decision_rules_read_dates, "
+        "and packs/std-review native date migration (decisions/standard-packs-everywhere.md section 1.4 step 5)."
     ),
 )
 def test_standard_packs_convert_to_rezono_1(tmp_path: Path):
     std_packs = sorted(p.parent for p in (REPO / "packs").glob("std-*/pack.yaml"))
     assert std_packs, "expected standard packs under packs/std-*"
 
-    dl_files = sorted(_rel(path) for pack_dir in std_packs for path in pack_dir.rglob("*.dl"))
+    dl_files = sorted(_LEGACY.rel(path) for pack_dir in std_packs for path in pack_dir.rglob("*.dl"))
     assert not dl_files, f"packs/std-* still contains .dl files: {dl_files}"
 
     by_name = {pack_dir.name: pack_dir for pack_dir in std_packs}
     for name in RULED_STD_PACKS:
         assert name in by_name, f"missing expected standard pack packs/{name}"
-        _assert_pack_is_native_rezono_1(by_name[name], expect_rules=True)
+        _LEGACY.assert_pack_is_native_rezono_1(by_name[name], expect_rules=True)
 
     for pack_dir in std_packs:
         if pack_dir.name in RULED_STD_PACKS:
             continue
         meta = yaml.safe_load((pack_dir / "pack.yaml").read_bytes()) or {}
         if meta.get("rezono") or (pack_dir / "schema").is_dir():
-            _assert_pack_is_native_rezono_1(pack_dir, expect_rules=False)
+            _LEGACY.assert_pack_is_native_rezono_1(pack_dir, expect_rules=False)
 
     if str(REPO) not in sys.path:
         sys.path.insert(0, str(REPO))
@@ -571,7 +421,7 @@ def test_standard_packs_convert_to_rezono_1(tmp_path: Path):
 
     packs_inv = language_usage.inventory(REPO)
     legacy_std = [
-        _rel(folder)
+        _LEGACY.rel(folder)
         for folder in std_packs
         if "relational-rule" in {
             f
@@ -583,7 +433,7 @@ def test_standard_packs_convert_to_rezono_1(tmp_path: Path):
 
     # Materialize the legacy std-* snapshot tree once alongside a clean native std-* tree.
     legacy_root = tmp_path / "legacy-root"
-    _materialize_legacy_packs(legacy_root, ("packs",))
+    _LEGACY.materialize_legacy_packs(legacy_root, ("packs",))
     native_root = tmp_path / "native-root"
     shutil.copytree(REPO / "packs", native_root / "packs")
 
@@ -612,9 +462,9 @@ def test_standard_packs_convert_to_rezono_1(tmp_path: Path):
         (consumer / "pack.yaml").write_text(yaml.safe_dump(meta, sort_keys=False), encoding="utf-8", newline="\n")
         with ExitStack() as stack:
             if legacy:
-                _admit_legacy_std_packs(stack, root)
+                _LEGACY.admit_legacy_std_packs(stack, root)
             model = pack.read(consumer)
-            roles = _roles_for_pack(consumer, model)
+            roles = _LEGACY.roles_for_pack(consumer, model)
             epoch = publisher_batch.epoch(consumer, epoch=1, knowledge_time=TIME, sources=[("rules", "std-access")])
         return epoch, roles
 
@@ -627,7 +477,7 @@ def test_standard_packs_convert_to_rezono_1(tmp_path: Path):
         legacy_consumer = _build_consumer_for_std_pack(legacy_root, std_name, spec, "legacy")
         native_consumer = _build_consumer_for_std_pack(native_root, std_name, spec, "native")
         with ExitStack() as stack:
-            _admit_legacy_std_packs(stack, legacy_root)
+            _LEGACY.admit_legacy_std_packs(stack, legacy_root)
             legacy_epoch = publisher_batch.epoch(
                 legacy_consumer, epoch=1, knowledge_time=TIME, sources=[("rules", f"legacy-{std_name}")]
             )
@@ -662,7 +512,7 @@ def test_standard_packs_convert_to_rezono_1(tmp_path: Path):
 def test_front_door_examples_convert_to_rezono_1(tmp_path: Path):
     compiled = {}
     for rel_path, expect_rules in FRONT_DOOR_EXAMPLES:
-        compiled[rel_path] = _assert_pack_is_native_rezono_1(REPO / rel_path, expect_rules=expect_rules)
+        compiled[rel_path] = _LEGACY.assert_pack_is_native_rezono_1(REPO / rel_path, expect_rules=expect_rules)
 
     if str(REPO) not in sys.path:
         sys.path.insert(0, str(REPO))
@@ -671,7 +521,7 @@ def test_front_door_examples_convert_to_rezono_1(tmp_path: Path):
     from scripts import convert_pack
 
     legacy_root = tmp_path / "legacy"
-    _materialize_legacy_packs(
+    _LEGACY.materialize_legacy_packs(
         legacy_root,
         ("packs", "examples/library", "examples/projects", "examples/subsidy", "examples/subsidy-scheme"),
     )
@@ -683,11 +533,11 @@ def test_front_door_examples_convert_to_rezono_1(tmp_path: Path):
     shutil.copytree(subsidy_dir / "facts", legacy_subsidy / "facts")
 
     subsidy_model, _, _, _ = compiled["examples/subsidy"]
-    roles = _roles_for_pack(subsidy_dir, subsidy_model)
+    roles = _LEGACY.roles_for_pack(subsidy_dir, subsidy_model)
     assert {"checker", "case_officer", "policy_adviser", "propose", "public", "viewer"} <= set(roles), roles
 
     with ExitStack() as stack:
-        _admit_legacy_std_packs(stack, legacy_root)
+        _LEGACY.admit_legacy_std_packs(stack, legacy_root)
         legacy_sub_epoch = publisher_batch.epoch(
             legacy_subsidy, epoch=1, knowledge_time=TIME, sources=[("rules", "legacy-subsidy")]
         )
@@ -790,36 +640,39 @@ def test_front_door_examples_convert_to_rezono_1(tmp_path: Path):
         "and examples/platform/tenant-capacity/interface) to native rezono 1 modules with whole-pack equivalence "
         "across ALL platform relations against its legacy snapshot plus explicit verification of every section 7 "
         "intended semantic difference (invalid multiple_values with full candidate witnesses, unknown no_match, "
-        "unknown no_value, and not_applicable empty). "
+        "not_applicable no_match, and unknown no_value; retiring product_newest_day, flow_from_step, and "
+        "needs_service per decisions/platform-facts-not-conclusions.md §§4-5). "
         "Waits for compiler/tests/rezono/test_lower_rezono_1_derived.py--test_lower_rezono_1_derived, "
         "examples/test_calculation_engine_parity.py--test_feldera_calculations_match_duckdb_and_checker, "
         "examples/test_rule_witness_engine_parity.py--test_feldera_rule_witnesses_match_batch, "
-        "and examples/test_rezono_1_pack_conversion.py--test_standard_packs_convert_to_rezono_1."
+        "examples/test_rezono_1_pack_conversion.py--test_standard_packs_convert_to_rezono_1, "
+        "examples/platform/test_platform_release_dates.py--test_runs_orders_releases_by_their_sourced_date, "
+        "and examples/platform/test_platform_start_order.py--test_start_order_follows_from_needs_through_std_order."
     ),
 )
 def test_platform_pack_converts_to_rezono_1_with_intended_differences(tmp_path: Path):
     platform_dir = REPO / "examples" / "platform"
     iface_dir = platform_dir / "tenant-capacity" / "interface"
 
-    dl_files = _dl_files_under(platform_dir)
+    dl_files = _LEGACY.dl_files_under(platform_dir)
     assert not dl_files, f"examples/platform still contains .dl files: {dl_files}"
 
-    _assert_pack_is_native_rezono_1(iface_dir, expect_rules=True)
-    platform_model, _, _, platform_ir = _assert_pack_is_native_rezono_1(platform_dir, expect_rules=True)
+    _LEGACY.assert_pack_is_native_rezono_1(iface_dir, expect_rules=True)
+    platform_model, _, _, platform_ir = _LEGACY.assert_pack_is_native_rezono_1(platform_dir, expect_rules=True)
 
     by_name = {r["name"]: r for r in platform_ir.get("relations", []) if r.get("role") != "base"}
 
     # Safe-step / round relations remain compiled under rezono 1.
     assert PLATFORM_STEP_RELATIONS <= set(by_name), sorted(PLATFORM_STEP_RELATIONS - set(by_name))
 
-    # Pinned section 7 contract: retired/legacy names absent, every functional & Bool relation asserted unconditionally.
+    # Pinned section 7 + platform-facts-not-conclusions contract: retired/legacy names absent,
+    # every functional & Bool relation asserted unconditionally.
     leftover_retired = sorted((PLATFORM_RETIRED_RELATIONS | PLATFORM_LEGACY_RENAMED_RELATIONS) & set(by_name))
     assert not leftover_retired, f"retired or renamed legacy core.dl relations still present: {leftover_retired}"
 
     for rel_name in sorted(PLATFORM_CORE_FUNCTIONAL):
         assert rel_name in by_name, f"missing rezono 1 functional derivation {rel_name!r}"
         assert by_name[rel_name].get("role") == "functional", (rel_name, by_name[rel_name])
-    assert by_name.get("needs_service", {}).get("role") == "derived", by_name.get("needs_service")
 
     for rel_name in sorted(PLATFORM_RENAMED_BOOL | PLATFORM_UNCHANGED_BOOL):
         assert rel_name in by_name, f"missing rezono 1 Bool derivation {rel_name!r}"
@@ -838,16 +691,16 @@ def test_platform_pack_converts_to_rezono_1_with_intended_differences(tmp_path: 
 
     # Materialize legacy examples/platform (+ tenant-capacity/interface + legacy std-*) with the live facts.
     legacy_root = tmp_path / "legacy"
-    _materialize_legacy_packs(legacy_root, ("packs", "examples/platform"))
+    _LEGACY.materialize_legacy_packs(legacy_root, ("packs", "examples/platform"))
     legacy_platform = legacy_root / "examples" / "platform"
     shutil.copytree(platform_dir / "facts", legacy_platform / "facts")
     shutil.copytree(iface_dir / "facts", legacy_platform / "tenant-capacity" / "interface" / "facts")
 
-    roles = _roles_for_pack(platform_dir, platform_model)
+    roles = _LEGACY.roles_for_pack(platform_dir, platform_model)
     assert "checker" in roles and len(roles) > 1, roles
 
     with ExitStack() as stack:
-        _admit_legacy_std_packs(stack, legacy_root)
+        _LEGACY.admit_legacy_std_packs(stack, legacy_root)
         legacy_epoch = publisher_batch.epoch(
             legacy_platform, epoch=1, knowledge_time=TIME, sources=[("rules", "legacy-platform")]
         )
@@ -891,7 +744,6 @@ def test_platform_pack_converts_to_rezono_1_with_intended_differences(tmp_path: 
     assert _known_pairs("service_cluster") == set(legacy_pub.rows["on_cluster"])
     assert {(row[0],) for row in native_pub.rows["service_pin"] if row[1] == "known"} == set(legacy_pub.rows["pinned"])
     assert _known_pairs("service_runs") == set(legacy_pub.rows["runs"])
-    assert _known_pairs("product_newest_day") == set(legacy_pub.rows["newest_day"])
     assert {(row[0], row[1]) for row in native_pub.rows["chosen"] if row[2] == "known"} == set(
         legacy_pub.rows["provider_chosen"]
     )
@@ -904,17 +756,26 @@ def test_platform_pack_converts_to_rezono_1_with_intended_differences(tmp_path: 
     assert {(row[0], row[1]) for row in native_pub.rows["needs"] if row[2] == "unknown"} == set(
         legacy_pub.rows["unmet_need"]
     )
-    assert {(row[0], row[1], row[4]) for row in native_pub.rows["flow_from_step"] if row[2] == "known"} == set(
-        legacy_pub.rows["flow_from_step"]
-    )
     assert set(native_pub.rows["service_behind_newest"]) == {(row[0],) for row in legacy_pub.rows["behind_newest"]}
     assert set(native_pub.rows["service_authenticates"]) == set(legacy_pub.rows["authenticates"])
     assert set(native_pub.rows["service_verified"]) == set(legacy_pub.rows["verified"])
     assert set(native_pub.rows["service_unverified_supply"]) == set(legacy_pub.rows["unverified_supply"])
 
-    # oracle-rows.json updated in lockstep with rezono 1 bundle names (section 5.5).
+    # oracle-rows.json updated in lockstep with rezono 1 bundle names (section 5.5 + platform-facts-not-conclusions).
     oracle_rows = json.loads((platform_dir / "oracle-rows.json").read_text(encoding="utf-8"))
-    for retired in ("ambiguous_provider", "unmet_need", "zone_of", "on_cluster", "runs", "behind_newest", "unverified_supply"):
+    for retired in (
+        "ambiguous_provider",
+        "unmet_need",
+        "zone_of",
+        "on_cluster",
+        "runs",
+        "newest_day",
+        "product_newest_day",
+        "flow_from_step",
+        "needs_service",
+        "behind_newest",
+        "unverified_supply",
+    ):
         assert retired not in oracle_rows, (
             f"examples/platform/oracle-rows.json must migrate off legacy key {retired!r} in lockstep (section 5.5)"
         )
@@ -930,10 +791,8 @@ def test_platform_pack_converts_to_rezono_1_with_intended_differences(tmp_path: 
     # First prove the legacy pack emits BOTH flows; then prove rezono 1 emits invalid multiple_values
     # with both providers named in the conflict witness, and emits ZERO flows for (consumer, *, fn, *).
     providers_by_fn: dict[str, list[tuple[str, str]]] = {}
-    for offer in core_facts["offer"]:
-        for svc in core_facts["service"]:
-            if svc["product"] == offer["product"]:
-                providers_by_fn.setdefault(offer["function"], []).append((svc["id"], str(offer["port"])))
+    for svc_id, fn_id, port in sorted(legacy_pub.rows["provides"]):
+        providers_by_fn.setdefault(str(fn_id), []).append((str(svc_id), str(port)))
     multi_provider_choices = [
         (svc["id"], dem["function"], providers_by_fn[dem["function"]][0], providers_by_fn[dem["function"]][1])
         for dem in core_facts["demand"]
@@ -962,7 +821,7 @@ def test_platform_pack_converts_to_rezono_1_with_intended_differences(tmp_path: 
     legacy_choice_pack = legacy_choice_root / "examples" / "platform"
     _mutate_conflicting_choice(legacy_choice_pack)
     with ExitStack() as stack:
-        _admit_legacy_std_packs(stack, legacy_choice_root)
+        _LEGACY.admit_legacy_std_packs(stack, legacy_choice_root)
         legacy_choice_epoch = publisher_batch.epoch(
             legacy_choice_pack, epoch=1, knowledge_time=TIME, sources=[("rules", "legacy-choice")]
         )
@@ -1040,8 +899,8 @@ def test_platform_pack_converts_to_rezono_1_with_intended_differences(tmp_path: 
         )
 
     # Scenario 3: `unknown no_match` (unprovided function demand + unpinned service with no stable release)
-    # and `not_applicable empty` (Product.newest_day when a product has zero stable releases).
-    empty_root = tmp_path / "native-no-match-and-empty"
+    # and `not_applicable no_match` (optional `chosen` with no choice row).
+    empty_root = tmp_path / "native-no-match"
     shutil.copytree(REPO / "packs", empty_root / "packs")
     shutil.copytree(platform_dir, empty_root / "examples" / "platform")
     e_pack = empty_root / "examples" / "platform"
@@ -1060,11 +919,9 @@ def test_platform_pack_converts_to_rezono_1_with_intended_differences(tmp_path: 
     )
     empty_needs = {(r[0], r[1]): (r[2], r[3]) for r in empty_pub.rows["needs"]}
     empty_chosen = {(r[0], r[1]): (r[2], r[3]) for r in empty_pub.rows["chosen"]}
-    empty_newest = {r[0]: (r[1], r[2]) for r in empty_pub.rows["product_newest_day"]}
     empty_runs = {r[0]: (r[1], r[2]) for r in empty_pub.rows["service_runs"]}
     assert empty_needs[(sample_service, "unprovided-fn")] == ("unknown", "no_match"), empty_needs
     assert empty_chosen[(sample_service, "unprovided-fn")] == ("not_applicable", "no_match"), empty_chosen
-    assert empty_newest[sample_product] == ("not_applicable", "empty"), empty_newest
     assert empty_runs[sample_service] == ("unknown", "no_match"), empty_runs
 
     # Scenario 4: `unknown no_value` (Service.zone and Service.cluster when a service is missing its required `role` slot).

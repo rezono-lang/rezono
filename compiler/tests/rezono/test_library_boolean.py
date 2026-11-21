@@ -1,14 +1,9 @@
 """Compare lowering with the library schema, independently of the Rezono reader."""
 
-from pathlib import Path
-
 import pytest
-import yaml
 
+from model_parity import schema_file
 from rezono_compiler import rezono_module
-
-
-LIBRARY = Path(__file__).resolve().parents[3] / "examples" / "library"
 
 
 def test_library_boolean_slot(tmp_path):
@@ -24,5 +19,5 @@ def test_library_boolean_slot(tmp_path):
     errors = []
     result = rezono_module.lower(tmp_path, declaration, form, "library", {}, errors)
     assert not errors, errors
-    schema = yaml.safe_load((LIBRARY / "schema/library.yaml").read_text(encoding="utf-8"))
+    schema = schema_file("examples/library/schema/library.yaml")
     assert result.schema["classes"]["Copy"]["attributes"][name] == schema["classes"]["Copy"]["attributes"][name]

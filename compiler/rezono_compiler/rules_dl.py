@@ -105,6 +105,18 @@ class Embedded:
 
 
 @dataclass(frozen=True)
+class RuleNote:
+    """The sentence and the source written on a rule clause or derivation, and where its `means` stands."""
+
+    means: str | None
+    source: str | None
+    where: str
+    line: int
+    column: int
+    at: str
+
+
+@dataclass(frozen=True)
 class NativeSource:
     """Authored rule statements with their resolved names and head positions."""
 
@@ -115,6 +127,7 @@ class NativeSource:
     statements: tuple[tuple, ...]
     columns: tuple[int, ...]
     semantics: tuple[tuple[str, tuple[dict | None, ...]], ...] = ()
+    notes: tuple[RuleNote | None, ...] = ()
 
 
 @dataclass
@@ -497,6 +510,7 @@ def module_of(source: str, root: str, stem: str) -> str:
 
 def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, calc_parts=None,
          folds: dict | None = None, bodies: dict | None = None, spans: dict | None = None,
+         rule_notes: dict[str, tuple[str, RuleNote]] | None = None,
          generated: list | None = None, embedded: tuple[Embedded, ...] = (),
          native: tuple[NativeSource, ...] = (),
          semantics: dict | None = None) -> tuple[dict | None, list[str]]:
@@ -560,6 +574,7 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
         try:
             if isinstance(contents, NativeSource):
                 text, stmts, starts = contents.text, contents.statements, list(contents.columns)
+                notes: list[RuleNote | None] = list(contents.notes) if contents.notes else [None] * len(starts)
                 if semantics is not None:
                     semantics.update(contents.semantics)
             else:
@@ -568,6 +583,7 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
                 stmts = [remap_statement(s, renames.get(source, {})) for s in parse_file(text, where, starts)]
                 if at is not None:  # a column of the generated text is no place in the module
                     stmts, starts = [at_line(s, at) for s in stmts], [1] * len(starts)
+                notes = [None] * len(starts)
             # The same module can also supply generated rules. Keep its aligned authored text.
             texts.setdefault(where, text)
         except RuleError as e:
@@ -645,7 +661,7 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
             elif s[0] == "io":
                 io.append((where, source, *s[1:]))
             else:
-                rules_src.append((module, where, s[1], s[2], s[3], source, starts.pop(0)))
+                rules_src.append((module, where, s[1], s[2], s[3], source, starts.pop(0), notes.pop(0)))
     for name, (closed, where, line, source) in closing.items():
         # The invariant the marker stands for, as the rule a pack would write for it, so it is
         # read, typed, compiled and proved as any rule. The IR holds its shape (rules.load); here only what
@@ -666,7 +682,7 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
             rules_src.append((owners[name], where, (check, key, line),
                               [("lit", "positive", (name, key, line)),
                                ("lit", "positive", (closed, key[:len(decls[closed])] + rest, line))], line, source,
-                              texts[where].split("\n")[line - 1].find(".decl") + 1))
+                              texts[where].split("\n")[line - 1].find(".decl") + 1, None))
     if errors:
         raise RuleError("\n".join(errors))
     for where, source, kind, names, line in io:
@@ -695,7 +711,7 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
         count[head[0]] = count.get(head[0], 0) + 1
     seen, used = {}, set()
     relations, rules = {}, []
-    for module, where, head, body, line, source, column in rules_src:
+    for module, where, head, body, line, source, column, note in rules_src:
         rel = head[0]
         if rel not in decls:
             errors.append(f"{where}:{line}: {rel} has no .decl" + (" (it is a table; rules cannot define facts)" if rel in tables else ""))
@@ -740,6 +756,8 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
             bodies[rid] = tuple(LITERAL[b[0]] for b in body)
         if spans is not None:
             spans[rid] = (where, line, column)
+        if note is not None and rule_notes is not None:
+            rule_notes[rid] = (source, note)
         for a in [rule["head"], *rule["body"], *rule.get("aggregates", [])]:
             used.add(a["relation"])
     used |= {k for k in outcomes.values() if k in tables}  # totality reads every element of the kind

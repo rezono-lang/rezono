@@ -82,6 +82,8 @@ export interface ParsedModule {
 	 * at its number), `applies` at its slot, a check statement at the whole statement.
 	 */
 	spans: WeakMap<object, Span>;
+	/** Places of primitive members that carry their own span (such as a `means` line on a rule or derivation). */
+	memberSpans?: WeakMap<object, Map<string, Span>>;
 }
 
 export interface ParseModuleOptions {
@@ -103,6 +105,7 @@ export function parseDeclarations(text: string): Omit<ParsedModule, 'module'> & 
 
 function readModule(text: string, bare: boolean, packVersion?: LanguageVersion): ParsedModule {
 	const spans = new WeakMap<object, Span>();
+	const memberSpans = new WeakMap<object, Map<string, Span>>();
 	const errors: Diagnostic[] = [];
 	const later: Diagnostic[] = [];
 	const map = points(text);
@@ -153,7 +156,17 @@ function readModule(text: string, bare: boolean, packVersion?: LanguageVersion):
 	const build: Build = {
 		version: declaredVersion,
 		spans,
+		memberSpans,
 		later,
+		placeMember(owner, member, span) {
+			if (!span) return;
+			let map = memberSpans.get(owner);
+			if (!map) {
+				map = new Map();
+				memberSpans.set(owner, map);
+			}
+			map.set(member, span);
+		},
 		refuse(line, expected, to) {
 			errors.push({ code: 'R000', span: firstWordSpan(line, to), args: [expected] });
 		},
@@ -293,6 +306,7 @@ function readModule(text: string, bare: boolean, packVersion?: LanguageVersion):
 	return {
 		module,
 		diagnostics: [...later, ...versionGaps(module, spans)].sort(inOrder),
-		spans
+		spans,
+		memberSpans
 	};
 }
