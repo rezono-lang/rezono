@@ -106,13 +106,14 @@ class Embedded:
 
 @dataclass(frozen=True)
 class RuleNote:
-    """Optional sentence and source carried by a native rule clause."""
+    """The sentence and the source written on a rule clause or derivation, and where its `means` stands."""
 
-    means: str | None = None
-    source: str | None = None
-    means_at: str = ""
-    means_line: int = 1
-    means_column: int = 1
+    means: str | None
+    source: str | None
+    where: str
+    line: int
+    column: int
+    at: str
 
 
 @dataclass(frozen=True)
@@ -125,8 +126,8 @@ class NativeSource:
     text: str
     statements: tuple[tuple, ...]
     columns: tuple[int, ...]
-    notes: tuple[RuleNote | None, ...] = ()
     semantics: tuple[tuple[str, tuple[dict | None, ...]], ...] = ()
+    notes: tuple[RuleNote | None, ...] = ()
 
 
 @dataclass
@@ -509,8 +510,7 @@ def module_of(source: str, root: str, stem: str) -> str:
 
 def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, calc_parts=None,
          folds: dict | None = None, bodies: dict | None = None, spans: dict | None = None,
-         rule_sources: dict[str, str] | None = None,
-         rule_sentences: dict[str, tuple[str, RuleNote, str]] | None = None,
+         rule_notes: dict[str, tuple[str, RuleNote]] | None = None,
          generated: list | None = None, embedded: tuple[Embedded, ...] = (),
          native: tuple[NativeSource, ...] = (),
          semantics: dict | None = None) -> tuple[dict | None, list[str]]:
@@ -756,11 +756,8 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
             bodies[rid] = tuple(LITERAL[b[0]] for b in body)
         if spans is not None:
             spans[rid] = (where, line, column)
-        if note is not None:
-            if note.source is not None and rule_sources is not None:
-                rule_sources[rid] = note.source
-            if note.means is not None and rule_sentences is not None:
-                rule_sentences[rid] = (source, note, where)
+        if note is not None and rule_notes is not None:
+            rule_notes[rid] = (source, note)
         for a in [rule["head"], *rule["body"], *rule.get("aggregates", [])]:
             used.add(a["relation"])
     used |= {k for k in outcomes.values() if k in tables}  # totality reads every element of the kind

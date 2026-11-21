@@ -12,7 +12,6 @@ from .rezono_lowering import Refuse
 CODE = re.compile(r"[a-z][a-z0-9_]*")
 TEXT = re.compile(r'"(?:\\[^\n\r]|[^"\\\n\r])*"')
 ENTRY = re.compile(r"^([a-z][a-z0-9_.]*)\s*=\s*", re.M)
-PLACEHOLDER = re.compile(r"(\{\$[A-Za-z_][A-Za-z0-9_]*\})")
 
 
 def unquote(raw: str) -> str:
@@ -20,39 +19,18 @@ def unquote(raw: str) -> str:
     return re.sub(r"\\(.)", r"\1", raw[1:-1], flags=re.DOTALL)
 
 
-def escape_pattern(text: str, *, keep_placeholders: bool = False) -> str:
-    """Escape `\\`, `{` and `}` in `text` for MessageFormat 2, optionally keeping `{$name}` placeholders."""
-    if not keep_placeholders:
-        return text.replace("\\", "\\\\").replace("{", "\\{").replace("}", "\\}")
-    parts = PLACEHOLDER.split(text)
-    return "".join(
-        part if index % 2 == 1 else part.replace("\\", "\\\\").replace("{", "\\{").replace("}", "\\}")
-        for index, part in enumerate(parts)
-    )
-
-
-def message_entry(key: str, text: str, *, keep_placeholders: bool = False) -> str:
-    """Format one MessageFormat 2 resource line `<key> = {{TEXT}}`."""
-    escaped = escape_pattern(text, keep_placeholders=keep_placeholders)
-    return f"{key} = {{{{{escaped}}}}}\n"
-
-
 def mf2_entry(code: str, label: str) -> str:
     """Format a reason sentence as one MessageFormat 2 resource line."""
-    return message_entry(f"reason.{code}", label)
-
-
-def append_messages(body: str, items: Iterable[tuple[str, str]], *, keep_placeholders: bool = False) -> str:
-    """Append `<key> = {{TEXT}}` lines to a MessageFormat 2 resource body."""
-    added = "".join(message_entry(key, text, keep_placeholders=keep_placeholders) for key, text in items)
-    if not added:
-        return body
-    return (body + "\n" if body and not body.endswith("\n") else body) + added
+    escaped = label.replace("\\", "\\\\").replace("{", "\\{").replace("}", "\\}")
+    return f"reason.{code} = {{{{{escaped}}}}}\n"
 
 
 def append_entries(body: str, items: Iterable[tuple[str, str]]) -> str:
     """Append lowered reason sentences to a MessageFormat 2 resource body."""
-    return append_messages(body, ((f"reason.{code}", label) for code, label in items))
+    added = "".join(mf2_entry(code, label) for code, label in items)
+    if not added:
+        return body
+    return (body + "\n" if body and not body.endswith("\n") else body) + added
 
 
 def defined_in_catalog(pack_dir: Path, default_language: object) -> set[str]:

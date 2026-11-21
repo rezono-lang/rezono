@@ -152,6 +152,7 @@ export function readDerived(line: Logical, build: Build, scope: 'member' | 'modu
 			if (decl.means !== undefined) build.refuse(child, 'one `means` line');
 			else {
 				decl.means = child.read!.means as string;
+				build.placeMember(decl, 'means', build.spans.get(child.read!));
 				if (child.read!.source !== undefined) {
 					if (decl.source !== undefined) build.refuse(child, 'one `@` source');
 					else decl.source = child.read!.source as string;

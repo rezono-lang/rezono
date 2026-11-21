@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 import json
 from pathlib import Path
 import re
@@ -61,9 +61,8 @@ def lower_source(module: modules.Module, form: dict, root: str,
     except (OSError, UnicodeError) as error:
         raise CompileError(f"{where}: cannot read the native rule positions") from error
     offsets = {place["at"]: place["start"] for place in form["spans"]}
-    ends = {place["at"]: place["end"] for place in form["spans"]}
     statements, columns, notes, semantics, refused = [], [], [], {}, []
-    site = Site(where, text, offsets, ends)
+    site = Site(where, text, offsets)
     for at, declaration in declarations:
         # Every declaration is checked, so a refusal in one does not hide the refusal of another; a module with
         # any refusal lowers no rule at all.
@@ -75,20 +74,8 @@ def lower_source(module: modules.Module, form: dict, root: str,
         raise CompileError("\n".join(str(diagnostic) for diagnostic in refused), refused)
     return rules_dl.NativeSource(
         module.pack, module.file.stem, where, text, tuple(statements), tuple(columns),
-        tuple(notes), tuple(semantics.items()),
+        tuple(semantics.items()), tuple(notes),
     )
-
-
-def means_span(site: Site, at: str, fallback: tuple[int, int]) -> tuple[int, int]:
-    """The (line, column) of a rule clause's `means` line in its authored source."""
-    end_str = site.ends.get(f"{at}/when") or site.offsets.get(at, "0")
-    end = int(end_str) if end_str.isdigit() else 0
-    pos = min(end, len(site.text))
-    match = re.search(r"^[ \t]+means(?=[ \t\"]|$)", site.text[pos:], re.M)
-    if match is None:
-        return fallback
-    offset = pos + match.start() + len(match.group()) - len("means")
-    return site.text.count("\n", 0, offset) + 1, offset - site.text.rfind("\n", 0, offset)
 
 
 def lower_declaration(site: Site, linked: native_rule_signatures.Linked, module: modules.Module, at: str,
@@ -111,13 +98,14 @@ def lower_declaration(site: Site, linked: native_rule_signatures.Linked, module:
     if set(declaration) - {"rule", "columns", "args", "when", "options", "means", "source"}:
         refuse(where, at, line, column, "Rule options and locals are not lowered yet")
     if ("means" in declaration or "source" in declaration) and "when" not in declaration:
-        refuse(where, at, line, column, "A rule sentence or source needs a `when` clause", "R048")
+        refuse(where, at, line, column, "A rule sentence or source needs a `when` clause", "R000")
     means = declaration.get("means")
     if means is not None and not isinstance(means, str):
-        refuse(where, f"{at}/means", line, column, "A rule sentence must be text", "R048")
+        m_line, m_col = site.span(f"{at}/means")[1:] if f"{at}/means" in offsets else (line, column)
+        refuse(where, f"{at}/means", m_line, m_col, "A rule sentence must be text", "R000")
     source_ref = declaration.get("source")
     if source_ref is not None and not isinstance(source_ref, str):
-        refuse(where, f"{at}/source", line, column, "A rule source must be text", "R048")
+        refuse(where, f"{at}/source", line, column, "A rule source must be text", "R000")
     if options is not None:
         for index, option in enumerate(options):
             opt_at = f"{at}/options/{index}"
@@ -142,10 +130,9 @@ def lower_declaration(site: Site, linked: native_rule_signatures.Linked, module:
         branches = alternatives(f"{at}/when", declaration["when"])
         note: rules_dl.RuleNote | None = None
         if means is not None or source_ref is not None:
-            m_line, m_col = means_span(site, at, (line, column)) if means is not None else (line, column)
-            note = rules_dl.RuleNote(
-                means=means, source=source_ref, means_at=f"{at}/means", means_line=m_line, means_column=m_col,
-            )
+            note_at = f"{at}/means"
+            m_line, m_col = site.span(note_at)[1:] if means is not None and note_at in offsets else (line, column)
+            note = rules_dl.RuleNote(means, source_ref, where, m_line, m_col, note_at)
         for premises in branches:
             body: list[tuple] = []
             bound: set[str] = set()
@@ -237,7 +224,6 @@ class Site:
     file: str
     text: str
     offsets: dict[str, str]
-    ends: dict[str, str] = field(default_factory=dict)
 
     def span(self, at: str) -> spans.Span:
         offset = int(self.offsets[at])
