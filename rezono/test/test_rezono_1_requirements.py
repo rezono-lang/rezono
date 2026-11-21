@@ -135,15 +135,6 @@ class MissingRequirementSyntax(AssertionError):
     """The reader did not parse, round-trip, or validate rezono 1 `require` declarations."""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingRequirementSyntax,
-    reason=(
-        "M3: decisions/language-requirements.md: Parse rezono 1 existential and cardinality "
-        "require declarations into rezono.module/5, round-trip print losslessly, keep ordinary "
-        "require checks collision-free, and reject malformed requirement syntax with R000"
-    ),
-)
 def test_rezono_1_requirement_parsing_and_diagnostics():
     valid, missing_exists, zero_at_least, multi_no_over, dup_when, v0_refused = read_modules(
         VALID_REQUIREMENTS,

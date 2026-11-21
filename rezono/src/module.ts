@@ -56,6 +56,7 @@ export type { DerivedDecl } from './module-derived.ts';
 export type { FactRow, FactTable } from './module-facts.ts';
 export type { ExtendDecl, KindDecl } from './module-kind.ts';
 export type { ParamDecl } from './module-parameter.ts';
+export type { RequirementBound, RequirementBoundOp, RequirementDecl, RequirementExists, RequirementOption } from './module-requirement.ts';
 export type { SlotDecl } from './module-slot.ts';
 export type { StepChange, StepConfirm, StepDecl, StepEffect, StepForbid, StepSlot } from './module-step.ts';
 export type { Card, LanguageVersion, World } from './module-support.ts';

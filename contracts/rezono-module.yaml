@@ -151,6 +151,12 @@ enums:
     description: "`partial` is the default and is not written (v0 §5d)."
     permissible_values:
       total: {description: The value is proven known.}
+  RequirementBoundOp:
+    description: Cardinality bound operator of a `require` `exists` clause.
+    permissible_values:
+      at_least: {}
+      at_most: {}
+      exactly: {}
 
 classes:
   SchemaMetadata:
@@ -642,6 +648,7 @@ classes:
           - *source_decl
           - *decide_decl
           - range: StepDecl
+          - range: RequirementDecl
 
   Rezono1Use:
     description: "A `use` line in rezono 1: one hyphenated pack name, without dots."
@@ -797,6 +804,64 @@ classes:
     attributes:
       reader: {required: true, range: StepCall, inlined: true}
       token: {required: true, range: Expr, inlined: true}
+
+  RequirementDecl:
+    description: A rezono 1 existential or cardinality requirement declaration (decisions/language-requirements.md).
+    attributes:
+      require: {required: true, range: Name}
+      params: {required: true, range: RuleColumn, multivalued: true, inlined_as_list: true, minimum_cardinality: 1}
+      options: {range: RequirementOption, multivalued: true, inlined_as_list: true, minimum_cardinality: 1, maximum_cardinality: 1}
+      over: {range: RequirementOver, inlined: true}
+      when: {range: Expr, inlined: true}
+      exists: {required: true, range: RequirementExists, multivalued: true, inlined_as_list: true, minimum_cardinality: 1}
+      means: {range: string, description: "The requirement's sentence in the pack's default language."}
+      source: {description: "The source reference after `@`."}
+    all_of:
+      - any_of:
+          - slot_conditions: {means: {required: true}}
+          - slot_conditions: {source: {value_presence: ABSENT}}
+
+  RequirementOption:
+    description: An authored modifier on a requirement declaration.
+    attributes:
+      invariant: {required: true, range: TrueFlag}
+
+  RequirementOver:
+    description: The finite closed domain relation for a requirement (`over relation(p1, ..., pm)`).
+    attributes:
+      relation:
+        required: true
+        any_of:
+          - {range: RuleRef}
+          - {range: StepKindName}
+      args:
+        required: true
+        range: Name
+        multivalued: true
+        minimum_cardinality: 1
+        list_elements_unique: true
+
+  RequirementExists:
+    description: One existential or cardinality obligation clause under `require`.
+    attributes:
+      binder: {required: true, range: Name}
+      kind: {range: RuleType}
+      relation: {range: RuleRef}
+      bound: {range: RequirementBound, inlined: true}
+      where: {range: Expr, inlined: true}
+    exactly_one_of:
+      - slot_conditions: {kind: {required: true}, relation: {value_presence: ABSENT}}
+      - slot_conditions: {relation: {required: true}, kind: {value_presence: ABSENT}}
+
+  RequirementBound:
+    description: An explicit cardinality bound on an `exists` clause.
+    attributes:
+      op: {required: true, range: RequirementBoundOp}
+      count: {required: true, range: DecimalText}
+    all_of:
+      - any_of:
+          - slot_conditions: {op: {equals_string_in: [at_most, exactly]}}
+          - slot_conditions: {count: {pattern: "^[1-9][0-9]*$"}}
 
   RulesDecl:
     description: An embedded relational rules block (decisions/language-rules.md).
