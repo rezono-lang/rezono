@@ -768,12 +768,6 @@ def test_ci_discover_fail_closed_safe_mode_for_ci_matrix_and_coordinator_state(t
     }
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="M2: decisions/build-reconciliation.md: rezono:schema must be emitted directly by "
-           "rezono_publisher/rezono_checker and never synthesized by loop/ci_discover.py.",
-)
 def test_rezono_schema_check_emitted_by_publisher_never_synthesized_by_ci_discover(tmp_path: Path):
     """Behaviorally verify rezono_publisher emits rezono:schema and loop/ci_discover.py never fabricates it."""
     from loop.build_cutover import select_suites
