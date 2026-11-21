@@ -246,14 +246,6 @@ def _native_rule_lowering_duplicates_note_validation() -> list[str]:
     return problems
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "M3: decisions/language-readable-rules.md: section 2; unify non-text means/source "
-        "validation in rezono_derived.py and refuse with R000 at .../means and .../source "
-        "for both rule clauses and derived declarations"
-    ),
-)
 def test_unify_note_validation_for_rules_and_derived(tmp_path):
     # Counter-cases: valid text means and source lower cleanly for both rule clauses and derived declarations.
     rule_means_line, [native_src] = _lower_rule_note(tmp_path / "ok-rule", means="{$a} is tagged.", source="policy#art-3")
