@@ -74,7 +74,7 @@ def world(model, st, approved):
         return json.loads(st.get(objs[key]))
     rows = {rel: {tuple(r["key"]) for r in read(f"relations/{rel}.json")} for rel in RELATIONS}
     witnesses = {(r["conclusion"]["relation"], tuple(json.loads(r["conclusion"]["key"]))): r
-                 for r in read("witnesses.json")["witnesses"]}
+                 for r in reversed(read("witnesses.json")["witnesses"])}
     observed = {k: st.get(v) for k, v in objs.items() if k.startswith("relations/landing_sighting")}
     assert [r["key"] for r in read("relations/landing_sighting__request.json")] == [["observation-seven", FIRST]]
     return e.pack, m["id"], rows, witnesses, observed

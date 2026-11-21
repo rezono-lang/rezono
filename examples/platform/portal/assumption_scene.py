@@ -29,7 +29,7 @@ def _read_side(store, pack: str, manifest: str, role: str, relations: Sequence[s
     witnesses: dict[tuple[str, tuple[str, ...]], dict] = {}
     for witness in load("witnesses.json")["witnesses"]:
         conclusion = witness["conclusion"]
-        witnesses[(conclusion["relation"], tuple(json.loads(conclusion["key"])))] = witness
+        witnesses.setdefault((conclusion["relation"], tuple(json.loads(conclusion["key"]))), witness)
 
     return rows, witnesses
 

@@ -86,7 +86,7 @@ def witnesses(s, role: str) -> dict:
     def walk(x):
         if isinstance(x, dict):
             if "conclusion" in x and "rule_id" in x:
-                found[(x["conclusion"]["relation"], json.dumps(x["conclusion"]["key"]))] = x
+                found.setdefault((x["conclusion"]["relation"], json.dumps(x["conclusion"]["key"])), x)
             for v in x.values():
                 walk(v)
         elif isinstance(x, list):
@@ -236,7 +236,7 @@ def test_a_changed_credential_is_refused_at_input(tmp_path, where):
 def proof_leaves(s, role: str, relation: str, key: list) -> set[tuple[str, str]]:
     """The rows a published proof of one conclusion rests on, down to its base rows."""
     witnesses = {(w["conclusion"]["relation"], w["conclusion"]["key"]): w
-                 for w in json.loads(s.get(publish.role_objects(s, PACK, "m-1", role)["witnesses.json"]))["witnesses"]}
+                 for w in reversed(json.loads(s.get(publish.role_objects(s, PACK, "m-1", role)["witnesses.json"]))["witnesses"])}
     todo, seen, leaves = [(relation, json.dumps(key, separators=(",", ":")))], set(), set()
     while todo:
         node = todo.pop()
