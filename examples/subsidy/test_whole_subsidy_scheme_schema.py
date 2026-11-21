@@ -8,6 +8,7 @@ assessment, costs, findings and scheme.
 
 from __future__ import annotations
 
+from contextlib import ExitStack
 from pathlib import Path
 import json
 import shutil
@@ -19,6 +20,7 @@ from rezono_compiler import emit, pack
 from candidate_pack import (
     MissingCandidatePack,
     REPO,
+    legacy_helpers,
     unplaced,
     verify_candidate_forms,
 )
@@ -35,9 +37,12 @@ SOURCES = {
 
 def isolated(tmp_path: Path, form: str) -> Path:
     root = tmp_path / form
-    shutil.copytree(REPO / "packs/std-decision", root / "packs/std-decision", ignore=shutil.ignore_patterns("candidate"))
+    legacy_helpers().materialize_legacy_packs(
+        root,
+        ("packs/std-decision", "examples/subsidy-scheme"),
+        prefer_live=True,
+    )
     target = root / "examples/subsidy-scheme"
-    shutil.copytree(SCHEME, target, ignore=shutil.ignore_patterns("candidate"))
     if form == "legacy":
         return target
     verify_candidate_forms(SCHEME, MODULES, tmp_path)
@@ -63,7 +68,9 @@ def isolated(tmp_path: Path, form: str) -> Path:
 
 def compiled(tmp_path: Path, form: str) -> dict:
     directory = isolated(tmp_path, form)
-    files = emit.compile_pack(pack.read(directory))
+    with ExitStack() as stack:
+        legacy_helpers().admit_legacy_std_packs(stack, directory.parents[1])
+        files = emit.compile_pack(pack.read(directory))
     # Every file except schema-bundle.json and ir/rules.json (whose spans/origins name the source file) matches
     # byte-for-byte; schema-bundle.json and ir/rules.json match after normalising own source spans/origins.
     return {

@@ -145,7 +145,8 @@ def test_the_pack_compiles_on_its_own_and_carries_roles_and_questions():
     model = pack.read(STD)
     assert not model.meta.get("theory") and not (STD / "facts").exists()
     layer = {"purpose", "principle", "alternative", "exception"}  # the justification layer (EX9)
-    assert set(model.kinds) == {"decision", "ground", "subject", "reference_date"} | layer
+    base = {"decision", "ground", "subject", "reference_date"} | layer
+    assert base <= set(model.kinds) <= base | {"conclusion_citation"}
     bundle = json.loads(emit.compile_pack(model)["bundle/schema-bundle.json"])
     roles = {k["id"]: k.get("slot_roles") for k in bundle["kinds"]}["decision"]
     assert roles == {"name": "decision.title", "known_from": "decision.decided_on",

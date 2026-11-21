@@ -407,10 +407,11 @@ def _functional_rules(prog, rel):
          f"St_ > 0, !{prefix}_NotMinRsn({_join_args(key_vars, ['St_', 'Rsn_'])})."),
         (f"{name}({_join_args(key_vars, [_quote(empty_state), _quote(empty_reason), sentinel])}) :- "
          f"{prefix}_Dom({_join_args(key_vars)}), !{prefix}_HasCand({_join_args(key_vars)})."),
-        (f"{name}({inv_head}) :- "
-         f"{prefix}_MaxSt({_join_args(key_vars, ['3'])}), {prefix}_MinRsn({_join_args(key_vars, ['3', 'Rsn_'])})."),
         (f"{name}({mv_head}) :- "
-         f"{prefix}_MaxSt({_join_args(key_vars, ['MaxSt_'])}), MaxSt_ < 3, {prefix}_Conflict({_join_args(key_vars)})."),
+         f"{prefix}_Conflict({_join_args(key_vars)})."),
+        (f"{name}({inv_head}) :- "
+         f"{prefix}_MaxSt({_join_args(key_vars, ['3'])}), !{prefix}_Conflict({_join_args(key_vars)}), "
+         f"{prefix}_MinRsn({_join_args(key_vars, ['3', 'Rsn_'])})."),
         (f"{name}({unk_head}) :- "
          f"{prefix}_MaxSt({_join_args(key_vars, ['2'])}), !{prefix}_Conflict({_join_args(key_vars)}), "
          f"{prefix}_MinRsn({_join_args(key_vars, ['2', 'Rsn_'])})."),
@@ -590,6 +591,27 @@ def lowered(prog):
     return ["\n".join([_decl(prog.relations[n]) for n in made] + [_rule(prog, r) for r in rules]) + "\n"] if rules else []
 
 
+def _native_lowered(prog, covered_origins, existing_texts):
+    """Emit Soufflé declarations and rules for native rezono 1 derivations not covered by legacy `.dl` or pipe text."""
+    declared = {m.group(1) for text in existing_texts for m in _DECL.finditer(text)}
+    native_rules = [r for r in sorted(prog.rules.values(), key=lambda r: r.id) if r.origin[0] not in covered_origins]
+    native_heads = {r.head.relation for r in native_rules}
+    native_rels = [
+        rel for rel in sorted(prog.relations.values(), key=lambda r: r.name)
+        if rel.role in ("derived", "functional") and (rel.name not in declared or rel.name in native_heads)
+    ]
+    if not native_rules and not native_rels:
+        return []
+    lines = [_decl(rel) for rel in native_rels if rel.name not in declared]
+    for r in native_rules:
+        if prog.relations[r.head.relation].role != "functional":
+            lines.append(_rule(prog, r))
+    for rel in native_rels:
+        if rel.role == "functional":
+            lines += _functional_rules(prog, rel)
+    return ["\n".join(lines) + "\n"] if lines else []
+
+
 def closure(pack_dir, prog=None):
     """The rule texts of a pack's import closure (an imported pack brings its rules, and the
     program is the union over the closure): rules/*.dl and authored relational rule blocks in rezono/*.rezono
@@ -599,8 +621,8 @@ def closure(pack_dir, prog=None):
     The names come from the compiler's binding of the schemas, as the tables in `source` do; what a rule says
     comes from its text.
     With `prog`, the compiled program, the texts read the relations of a view where the compiler bound them
-    (`view_bound`), and the rules of the view follow (`lowered`)."""
-    from rezono_compiler import modules, pack, rezono_relational, rezono_table
+    (`view_bound`), and the rules of the view and any native rezono 1 derivations follow."""
+    from rezono_compiler import modules, pack, rezono_relational, rezono_table, rules as ir
 
     pack_dir = Path(pack_dir)
     meta, errors = pack.read_meta(pack_dir), []
@@ -628,12 +650,18 @@ def closure(pack_dir, prog=None):
     forms = {m.rel: m.form for m in mods if m.pack_dir == pack_dir and m.form is not None}
     has_tables = any(isinstance(decl, dict) and "extend" in decl
                      for form in forms.values() for decl in form.get("module", {}).get("decls", ()))
-    tables = ([g.text for g in rezono_table.lower_pack(pack.read(pack_dir), meta, pack_dir, errors, forms=forms)]
-              if has_tables else [])
+    generated_tables = (rezono_table.lower_pack(pack.read(pack_dir), meta, pack_dir, errors, forms=forms)
+                        if has_tables else [])
+    tables = [g.text for g in generated_tables]
     assert not errors, errors
+    has_rezono_1 = any(m.form and m.form.get("format") == "rezono.module/5" for m in mods)
+    if prog is None and has_rezono_1:
+        prog = ir.load(pack.read(pack_dir).rules)
     if prog is None:
         return [text for _, text in texts] + tables
-    return [view_bound(text, where, prog) for where, text in texts] + tables + lowered(prog)
+    covered = {where for where, _ in texts} | {g.module for g in generated_tables} | {VIEW}
+    base_texts = [view_bound(text, where, prog) for where, text in texts] + tables + lowered(prog)
+    return base_texts + _native_lowered(prog, covered, base_texts)
 
 
 def _var(tok):
@@ -802,9 +830,10 @@ def source(prog, texts):
         literals |= lits
     if any("UtcKey(" in text for text in kept):
         modes.add("utc_instant")
-    modes |= {c.compare_as for r in prog.rules.values() if r.origin[0] == VIEW for c in r.conditions if c.compare_as}
+    modes |= {c.compare_as for r in prog.rules.values() for c in r.conditions if c.compare_as}
     uses_days = (has_days or any("DayNum(" in text for text in kept)
-                 or any(s.op == DAYS for r in prog.rules.values() if r.origin[0] == VIEW for s in r.assignments))
+                 or any(s.op == DAYS for r in prog.rules.values() for s in r.assignments)
+                 or _uses_date_order(prog))
     declared = set(columns)
     for rel in sorted(prog.relations.values(), key=lambda r: r.name):
         if rel.role in INPUT and rel.name not in declared:
@@ -812,7 +841,8 @@ def source(prog, texts):
     for text in kept:
         lines.append(re.sub(r"^\s*\.(input|output)\b[^\n]*$", "", text, flags=re.M))
     lines += [f".input {n}" for n in sorted(declared) if prog.relations.get(n) and prog.relations[n].role == "base"]
-    lines += [f".output {r.name}" for r in sorted(prog.relations.values(), key=lambda r: r.name) if r.role == "derived"]
+    lines += [f".output {r.name}" for r in sorted(prog.relations.values(), key=lambda r: r.name)
+              if r.role in ("derived", "functional")]
     if uses_days:
         lines += _day_rules(prog, literals)
     if "utc_instant" in modes:

@@ -115,6 +115,7 @@ classes:
       labels: {range: Label, multivalued: true, inlined_as_list: true}
       messages: {range: MessageResource, multivalued: true, inlined_as_list: true, required: true}
       channels: {range: Channels, required: true, inlined: true}
+      key: {range: KeyOfSigns, required: true, inlined: true, description: "The key of signs from std-view (decisions/release-1-scope.md section 4): statuses, tones, signs and differences, with their labels in messages."}
       jurisdictions: {multivalued: true, description: Reserved for std-jurisdiction; empty in M1.}
       questions: {range: Question, multivalued: true, inlined_as_list: true, description: "The explanation questions (contracts/explain.yaml): imported ones first, then the pack's own. Absent when there are none."}
       reader_questions: {range: ReaderQuestion, multivalued: true, inlined_as_list: true, description: "The reader questions (contracts/explain.yaml): imported ones first, then the pack's own. Absent when there are none."}
@@ -300,6 +301,7 @@ classes:
       stable_id: {required: true, pattern: "^[a-z][a-z0-9_]*~[0-9a-f]{12}$", description: "MOD2: the id that a rename and an added element leave as it is (docs/compiler.md#stable-ids-and-spans). `id` stays the name the engine, labels and messages use."}
       span: {range: Span, required: true, inlined: true, description: "MOD2: where its head is written; for a rule a view generates, the view in views.yaml."}
       message: {required: true}
+      source: {description: "Where the rule clause comes from, as written after `@`."}
       relation: {description: The derived relation of the head.}
       module: {description: The rule module (rules/<module>.dl).}
       variables: {range: RuleVariable, multivalued: true, inlined_as_list: true}
@@ -430,6 +432,14 @@ classes:
       lang: {required: true}
       resource: {required: true}
 
+  KeyOfSigns:
+    description: "The key of signs from std-view (decisions/release-1-scope.md section 4): statuses, tones, signs and differences, carried by every schema bundle."
+    attributes:
+      statuses: {range: StatusSign, multivalued: true, inlined_as_list: true, required: true, description: One sign per status.}
+      tones: {range: ToneSign, multivalued: true, inlined_as_list: true, required: true, description: Evaluation signs.}
+      signs: {range: LegendSign, multivalued: true, inlined_as_list: true, required: true, description: The epistemic legend.}
+      differences: {range: DifferenceSign, multivalued: true, inlined_as_list: true, required: true, description: One sign per difference.}
+
   Channels:
     description: "The pack's part of the key; colour roles, glyphs and statuses come from std-view, and a house style gives the pack's own values for some of those roles."
     attributes:
@@ -441,6 +451,7 @@ classes:
       timelines: {range: TimelineSheet, multivalued: true, inlined_as_list: true, description: "Timeline sheets, by element id (`<kind>.<slot>`), checked by the compiler."}
       nests: {range: NestSheet, multivalued: true, inlined_as_list: true, description: "Nest sheets, by element id (`<kind>.<slot>`) and relation name, checked by the compiler."}
       reports: {range: ReportSheet, multivalued: true, inlined_as_list: true, description: "Reports, by element id (`<kind>.<slot>`), checked by the compiler."}
+      staircases: {range: StaircaseReading, multivalued: true, inlined_as_list: true, description: "Bitemporal staircase readings, checked by the compiler."}
       home: {range: HomeSheet, inlined: true, description: "The pack home's hero and claim, from the pack's own channel table or one import's (one home per pack), checked by the compiler."}
       house_style: {range: HouseStyle, inlined: true, description: "The pack's house style, from the pack's own channel table or one import's (one house style per pack), checked by the compiler: palettes in the order light, dark, print, and in each the roles sorted by name."}
       images: {range: ImageBinding, multivalued: true, inlined_as_list: true, description: "The image slot per kind, by element id, sorted by kind."}
@@ -449,7 +460,7 @@ classes:
 
   ChannelSource:
     attributes:
-      id: {required: true, pattern: "^(relief|home|house_style|(kinds|arrows|flows|matrices|timelines|nests|reports|images)/.+)$", description: "The binding: `<section>/<kind, arrow or sheet id>`, or the section of the one relief, home or house style."}
+      id: {required: true, pattern: "^(relief|home|house_style|(kinds|arrows|flows|matrices|timelines|nests|reports|staircases|images)/.+)$", description: "The binding: `<section>/<kind, arrow or sheet id>`, or the section of the one relief, home or house style."}
       span: {range: Span, required: true, inlined: true}
 
   Icon:

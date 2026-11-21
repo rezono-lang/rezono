@@ -172,7 +172,7 @@ def test_checker_verifies_functional_derivation_and_access():
         "cand": [["g1", "k1", "v1"], ["g1", "k3", "v1"], ["g1", "k3", "v2"]],
         "pick": [
             ["g1", "k1", "known", "", "v1"],
-            ["g1", "k2", "unknown", "no_value", ""],
+            ["g1", "k2", "unknown", "no_match", ""],
             ["g1", "k3", "invalid", "multiple_values", ""],
         ],
     }
@@ -181,7 +181,7 @@ def test_checker_verifies_functional_derivation_and_access():
         _cand_witness("g1", "k3", "v1"),
         _cand_witness("g1", "k3", "v2"),
         _pick_witness("g1", "k1", "known", "", "v1", ["v1"]),
-        _pick_witness("g1", "k2", "unknown", "no_value", "", []),
+        _pick_witness("g1", "k2", "unknown", "no_match", "", []),
         _pick_witness("g1", "k3", "invalid", "multiple_values", "", ["v1", "v2"]),
     ]
 
@@ -203,7 +203,7 @@ def test_checker_verifies_functional_derivation_and_access():
     # 2c. Multi-key outcome_total: dropping one domain key row from `pick` must fail with outcome_total.
     missing_row = deepcopy(base_rows)
     missing_row["pick"] = [row for row in missing_row["pick"] if row[:2] != ["g1", "k2"]]
-    missing_w = [w for w in base_witnesses if w["conclusion"] != _ref("pick", "g1", "k2", "unknown", "no_value", "")]
+    missing_w = [w for w in base_witnesses if w["conclusion"] != _ref("pick", "g1", "k2", "unknown", "no_match", "")]
     rep_missing = _epoch(publish_doc, missing_row, missing_w)
     if "outcome_total" not in _error_reasons(rep_missing):
         problems.append(f"missing multi-key domain row did not trigger outcome_total: {rep_missing['findings']}")
@@ -212,7 +212,7 @@ def test_checker_verifies_functional_derivation_and_access():
     forged_known = deepcopy(base_rows)
     forged_known["pick"] = [
         ["g1", "k1", "known", "", "v1"],
-        ["g1", "k2", "unknown", "no_value", ""],
+        ["g1", "k2", "unknown", "no_match", ""],
         ["g1", "k3", "known", "", "v1"],
     ]
     forged_known_w = [

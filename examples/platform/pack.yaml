@@ -5,9 +5,9 @@ imports:
   - {name: std-order, path: ../../packs/std-order, sha256: 6c56982cfaa6535835b594be2fb280655795a96f0308d8e5d423c6040f923495}
   - {name: std-part, path: ../../packs/std-part, sha256: 207f4f097f68e6dade792b714754e0f279ce2c948be8adce82108a3abc18cca9}
   - {name: std-identity, path: ../../packs/std-identity, sha256: 129e5321602dea3b58ea5220103c4d313237d0dbf5e640c677b24fc98e5d265b}
-  - {name: std-time, path: ../../packs/std-time, sha256: bb2863a03792228005fa6784ed1022c07ac82139cdbf0ff7914cd273b3e046a7}
+  - {name: std-time, path: ../../packs/std-time, sha256: 8086365e4aecf05bada7b2eb7571242dd26fbbf2b84c767a7c221bcf6c436f6d}
   - {name: std-access, path: ../../packs/std-access, sha256: 8e004b9bd062be365acfb3db30d9bb26fe393c3b979bd77e8d69fc60aae111e6}
   - {name: std-decision, path: ../../packs/std-decision, sha256: 98e8f4243a571ee7e45de9de136df0098adfd462087761ea3209b91c25c256cb}
   - {name: std-explain, path: ../../packs/std-explain, sha256: 72e2897cd9baaa4962cf2235f83a332262b4da1e6d34e82d5f64d8335e27be0b}
-  - {name: std-loop, path: ../../packs/std-loop, sha256: 85933c453fbc5cc2f39364f2a17fd0366de91eb708281ef8981b8131c06cac29}
+  - {name: std-loop, path: ../../packs/std-loop, sha256: 1512bdc4315125b60d28488378adc81ef4cae45b1cff71e5f12d8fe546979f70}
   - {name: platform-capacity-interface, path: tenant-capacity/interface, sha256: 70f4ddbc8cebdcd40f5deb95ddb90165e964012bc04d5225998e49f65014befb}

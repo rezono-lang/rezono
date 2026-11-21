@@ -7,12 +7,13 @@ compiler lowering. The converter must emit them and pass its own schema comparis
 while continuing to refuse unknown mapping fields.
 """
 
+from contextlib import ExitStack
 import os
 from pathlib import Path
-import shutil
 
 import pytest
 
+from model_parity import legacy_helpers
 from scripts.convert_pack import ConversionError, candidate, sources
 
 
@@ -33,18 +34,22 @@ class MissingConverterConstruct(AssertionError):
 
 def test_pack_converter_converts_standard_pack_constructs(tmp_path):
     node = os.environ.get("REZONO_NODE", "node")
-    for relative in PACKS:
-        name = Path(relative).name
-        original = tmp_path / name
-        destination = tmp_path / f"{name}-candidate"
-        shutil.copytree(REPO / relative, original)
-        try:
-            candidate(original, destination, node)
-        except ConversionError as error:
-            raise MissingConverterConstruct(f"{relative}: {error}") from error
-        assert not list((destination / "schema").rglob("*.yaml")) if (destination / "schema").exists() else True
-        assert not list((destination / "rules").glob("*.dl")) if (destination / "rules").exists() else True
-        assert list((destination / "rezono").rglob("*.rezono")), relative
+    legacy_root = tmp_path / "legacy"
+    helpers = legacy_helpers()
+    helpers.materialize_legacy_packs(legacy_root, PACKS, prefer_live=True)
+    with ExitStack() as stack:
+        helpers.admit_legacy_std_packs(stack, legacy_root)
+        for relative in PACKS:
+            name = Path(relative).name
+            original = legacy_root / relative
+            destination = original.parent / f"{name}-candidate"
+            try:
+                candidate(original, destination, node)
+            except ConversionError as error:
+                raise MissingConverterConstruct(f"{relative}: {error}") from error
+            assert not list((destination / "schema").rglob("*.yaml")) if (destination / "schema").exists() else True
+            assert not list((destination / "rules").glob("*.dl")) if (destination / "rules").exists() else True
+            assert list((destination / "rezono").rglob("*.rezono")), relative
 
     # Counter-case: an unrepresented mapping field is still refused instead of silently dropped.
     extra = tmp_path / "unrepresented"

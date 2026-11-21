@@ -86,6 +86,14 @@ class ProtectedTable(RuleError, Diagnosed):
         Diagnosed.__init__(self, "\n".join(messages), tuple(Diagnostic(self.CODE, message) for message in messages))
 
 
+class DuplicateDerivation(RuleError, Diagnosed):
+    """A functional derivation of a rezono 1 module under the name of a table or of another relation."""
+    CODE = "duplicate_relation"
+
+    def __init__(self, message: str):
+        Diagnosed.__init__(self, message, (Diagnostic(self.CODE, message),))
+
+
 @dataclass(frozen=True)
 class Embedded:
     """Rule text placed at its original source lines and columns."""
@@ -94,6 +102,18 @@ class Embedded:
     stem: str
     file: str
     text: str
+
+
+@dataclass(frozen=True)
+class RuleNote:
+    """The sentence and the source written on a rule clause or derivation, and where its `means` stands."""
+
+    means: str | None
+    source: str | None
+    where: str
+    line: int
+    column: int
+    at: str
 
 
 @dataclass(frozen=True)
@@ -107,6 +127,7 @@ class NativeSource:
     statements: tuple[tuple, ...]
     columns: tuple[int, ...]
     semantics: tuple[tuple[str, tuple[dict | None, ...]], ...] = ()
+    notes: tuple[RuleNote | None, ...] = ()
 
 
 @dataclass
@@ -489,6 +510,7 @@ def module_of(source: str, root: str, stem: str) -> str:
 
 def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, calc_parts=None,
          folds: dict | None = None, bodies: dict | None = None, spans: dict | None = None,
+         rule_notes: dict[str, tuple[str, RuleNote]] | None = None,
          generated: list | None = None, embedded: tuple[Embedded, ...] = (),
          native: tuple[NativeSource, ...] = (),
          semantics: dict | None = None) -> tuple[dict | None, list[str]]:
@@ -531,6 +553,7 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
         return None, []
     tables = base_tables(pack)
     decls, owners, explains, io, rules_src, errors, warnings = {}, {}, {}, [], [], [], []
+    functional = {}  # name -> (key columns, its domain, value and policies): a rezono 1 functional derivation
     invariants, absences, outcomes = set(), set(), {}
     extensions, declared_in, options, closing = set(), {}, {}, {}
     visible = {root: {root, *imports}}
@@ -551,6 +574,7 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
         try:
             if isinstance(contents, NativeSource):
                 text, stmts, starts = contents.text, contents.statements, list(contents.columns)
+                notes: list[RuleNote | None] = list(contents.notes) if contents.notes else [None] * len(starts)
                 if semantics is not None:
                     semantics.update(contents.semantics)
             else:
@@ -559,6 +583,7 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
                 stmts = [remap_statement(s, renames.get(source, {})) for s in parse_file(text, where, starts)]
                 if at is not None:  # a column of the generated text is no place in the module
                     stmts, starts = [at_line(s, at) for s in stmts], [1] * len(starts)
+                notes = [None] * len(starts)
             # The same module can also supply generated rules. Keep its aligned authored text.
             texts.setdefault(where, text)
         except RuleError as e:
@@ -623,10 +648,20 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
                     if explain not in ("materialize", "on_demand"):
                         errors.append(f"{where}:{line}: @explain is materialize, on_demand or fold, not '{explain}'")
                     explains[name] = explain
+            elif s[0] == "functional":
+                # A functional derivation of a rezono 1 module (rezono_derived.py): its key columns are its
+                # declaration; a rule's head adds the value, a body reads (key..., state, reason, value).
+                _, name, cols, line, meta = s
+                if name in decls or name in tables or name in calc_inputs:
+                    raise DuplicateDerivation(f"{where}:{line}: {name} is declared twice (also in "
+                                              f"{owners.get(name, 'the schema')})")
+                decls[name], owners[name], declared_in[name] = list(cols), module, source
+                options[name] = (None, False, False, None, None, False)
+                functional[name] = meta
             elif s[0] == "io":
                 io.append((where, source, *s[1:]))
             else:
-                rules_src.append((module, where, s[1], s[2], s[3], source, starts.pop(0)))
+                rules_src.append((module, where, s[1], s[2], s[3], source, starts.pop(0), notes.pop(0)))
     for name, (closed, where, line, source) in closing.items():
         # The invariant the marker stands for, as the rule a pack would write for it, so it is
         # read, typed, compiled and proved as any rule. The IR holds its shape (rules.load); here only what
@@ -647,7 +682,7 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
             rules_src.append((owners[name], where, (check, key, line),
                               [("lit", "positive", (name, key, line)),
                                ("lit", "positive", (closed, key[:len(decls[closed])] + rest, line))], line, source,
-                              texts[where].split("\n")[line - 1].find(".decl") + 1))
+                              texts[where].split("\n")[line - 1].find(".decl") + 1, None))
     if errors:
         raise RuleError("\n".join(errors))
     for where, source, kind, names, line in io:
@@ -660,7 +695,9 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
                 errors.append(f"{where}:{line}: .output {n} is not a derived relation")
 
     def columns(name):
-        """The column types of a relation, or None if it is unknown (reported later)."""
+        """The column types of a relation as a rule reads it, or None if it is unknown (reported later)."""
+        if name in functional:
+            return [t for _, t in decls[name]] + ["string", "string", functional[name]["value"]["type"]]
         if name in decls:
             return [t for _, t in decls[name]]
         if name in tables:
@@ -674,7 +711,7 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
         count[head[0]] = count.get(head[0], 0) + 1
     seen, used = {}, set()
     relations, rules = {}, []
-    for module, where, head, body, line, source, column in rules_src:
+    for module, where, head, body, line, source, column, note in rules_src:
         rel = head[0]
         if rel not in decls:
             errors.append(f"{where}:{line}: {rel} has no .decl" + (" (it is a table; rules cannot define facts)" if rel in tables else ""))
@@ -708,7 +745,9 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
         seen[rel] = seen.get(rel, 0) + 1
         rid = rel if count[rel] == 1 else f"{rel}_{seen[rel]}"
         try:
-            rule = to_rule(rid, module, where, head, body, line, columns)
+            rule = to_rule(rid, module, where, head, body, line, columns,
+                           head_columns=lambda name: ([t for _, t in decls[name]] + [functional[name]["value"]["type"]]
+                                                      if name in functional else columns(name)))
         except RuleError as e:
             errors.append(str(e))
             continue
@@ -717,6 +756,8 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
             bodies[rid] = tuple(LITERAL[b[0]] for b in body)
         if spans is not None:
             spans[rid] = (where, line, column)
+        if note is not None and rule_notes is not None:
+            rule_notes[rid] = (source, note)
         for a in [rule["head"], *rule["body"], *rule.get("aggregates", [])]:
             used.add(a["relation"])
     used |= {k for k in outcomes.values() if k in tables}  # totality reads every element of the kind
@@ -738,6 +779,10 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
         relations[name] = {"name": name, "role": "base", "key": [{"name": c, "type": t} for c, t in tables[name]],
                            "world": worlds.get(name, "closed")}
     for name, cols in decls.items():
+        if name in functional:
+            relations[name] = {"name": name, "role": "functional", "module": owners[name],
+                               "key": [{"name": c, "type": t} for c, t in cols], **functional[name]}
+            continue
         if name in PROTECTED:  # admitted rows enter as base rows; an empty relation leaves what needs it unknown
             relations[name] = {"name": name, "role": "base", "key": [{"name": c, "type": t} for c, t in cols],
                                "world": "closed"}
@@ -766,7 +811,7 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
     if errors:
         raise RuleError("\n".join(errors))
     seals = seal_docs(pack)
-    doc = {"format": ir.FORMAT, "pack": pack.meta["name"],
+    doc = {"format": ir.FORMAT_V2 if functional else ir.FORMAT, "pack": pack.meta["name"],
            "relations": sorted(relations.values(), key=lambda r: r["name"]),
            "rules": sorted(rules, key=lambda r: r["id"])}
     if seals:
@@ -777,7 +822,7 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
     except ir.IRError as e:
         raise RuleError(f"rules: {e}") from None
     for name, rel in relations.items():
-        if rel["role"] != "derived":
+        if rel["role"] not in ("derived", "functional"):
             continue
         projecting = [r.id for r in prog.rules_for(name) if r.projects]
         mode = explains.get(name) or ("on_demand" if projecting else "materialize")
@@ -860,10 +905,11 @@ def _terms(item):
     return [item[2], item[3]]
 
 
-def to_rule(rid, module, where, head, body, line, columns=lambda name: None) -> dict:
+def to_rule(rid, module, where, head, body, line, columns=lambda name: None, head_columns=None) -> dict:
     """One parsed rule as an IR rule (without strata and witness; with_strata fills them in).
 
-    Constants keep the type they are written in: "2" is text and 2 a number, also in a comparison."""
+    Constants keep the type they are written in: "2" is text and 2 a number, also in a comparison. `head_columns`
+    gives the columns a head writes where they differ from those a body reads (a functional derivation)."""
     def fail(msg):
         raise RuleError(f"{where}:{line}: {msg}")
 
@@ -888,8 +934,9 @@ def to_rule(rid, module, where, head, body, line, columns=lambda name: None) -> 
         return t[2] if t[0] == "const" else vtypes.get(t[1]) if t[0] == "var" else None
 
     atoms = [head] + [b[2] for b in body if b[0] == "lit"] + [b[4] for b in body if b[0] == "agg"]
-    for name, terms, _ in atoms:
-        for i, (t, ct) in enumerate(zip(terms, columns(name) or [])):
+    for position, (name, terms, _) in enumerate(atoms):
+        typed = (head_columns or columns)(name) if position == 0 else columns(name)
+        for i, (t, ct) in enumerate(zip(terms, typed or [])):
             if t[0] == "const" and t[2] != ct:
                 fail(f"{show(t)} is {t[2]}, but column {i + 1} of {name} is {ct}")
     for b in body:

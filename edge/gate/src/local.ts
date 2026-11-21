@@ -11,6 +11,7 @@ import { readPublishedVariantDifference, scenarioAnswer, type DifferenceCursor }
 import { ask as evaluate, roleSchema, type Asking } from './expr.ts';
 import { compareKey, pageByKey, type KeyRange } from './pieces.ts';
 import { rowQueryScope, type RowSelection } from './row-query.ts';
+import { readStaircase } from './staircase.ts';
 import {
 	earlierWithdrawal, epochWithdrawal, hasSortedKey, loadWithdrawals, rangeMatchingRows, rowsWithdrawal, rowWithdrawal,
 	standingHeaders, withdrawalBody, WithdrawnError, type WithdrawalRecord
@@ -145,23 +146,35 @@ async function bodyOf(req: Request): Promise<QuestionBody> {
 	}
 }
 
+type VerifiedObject = { value: unknown; sha256: string; status: 'green' | 'unavailable' };
+
 function publication(store: Store, pack: string, role: string) {
 	let remaining = PUBLICATION_BYTES;
-	async function read(key: string, sha?: string, optional = false, decode: (text: string) => unknown = JSON.parse): Promise<unknown> {
+	async function readVerified(key: string, sha?: string, optional = false, decode: (text: string) => unknown = JSON.parse): Promise<VerifiedObject | undefined> {
 		if (sha !== undefined && !SHA256.test(sha)) fault();
 		const bytes = await store.get(key, remaining);
 		if (!bytes) return optional ? undefined : fault();
 		remaining -= bytes.byteLength;
-		if (sha && createHash('sha256').update(bytes).digest('hex') !== sha) fault();
-		try { return decode(new TextDecoder('utf-8', { fatal: true }).decode(bytes)); }
+		const digest = createHash('sha256').update(bytes).digest('hex');
+		if (sha !== undefined && digest !== sha) fault();
+		const status: 'green' | 'unavailable' = sha !== undefined ? 'green' : 'unavailable';
+		try { return { value: decode(new TextDecoder('utf-8', { fatal: true }).decode(bytes)), sha256: digest, status }; }
 		catch { return fault(); }
 	}
-	async function object(ref: ObjectRef, category: 'objects' | 'bundles', decode?: (text: string) => unknown) {
+	async function read(key: string, sha?: string, optional = false, decode: (text: string) => unknown = JSON.parse): Promise<unknown> {
+		return (await readVerified(key, sha, optional, decode))?.value;
+	}
+	async function objectVerified(ref: ObjectRef, category: 'objects' | 'bundles', decode?: (text: string) => unknown): Promise<VerifiedObject> {
 		if (typeof ref.uri !== 'string' || !/^s3:\/\/[A-Za-z0-9._-]+\//.test(ref.uri)) fault();
 		const key = ref.uri.replace(/^s3:\/\/[^/]+\//, '');
 		if (!key.startsWith(pack + '/' + category + '/') || typeof ref.sha256 !== 'string') fault();
 		if (category === 'objects' && key !== pack + '/objects/' + ref.sha256 + '.json') fault();
-		return await read(key, ref.sha256, false, decode);
+		const result = await readVerified(key, ref.sha256, false, decode);
+		if (!result) fault();
+		return result;
+	}
+	async function object(ref: ObjectRef, category: 'objects' | 'bundles', decode?: (text: string) => unknown) {
+		return (await objectVerified(ref, category, decode)).value;
 	}
 	const latest = async () => (await store.list(pack + '/heads/', { limit: 1 }))[0];
 	return {
@@ -217,7 +230,7 @@ function publication(store: Store, pack: string, role: string) {
 				pageByKey(await rows(relation), at);
 			return {
 				manifest, manifestSha256: head.sha256, witnessCheck: witness,
-				compiled, snaps, bundle: bundle as unknown as Bundle, schema, rows, range, object, read
+				compiled, snaps, bundle: bundle as unknown as Bundle, schema, rows, range, object, objectVerified, read
 			};
 		}
 	};
@@ -258,24 +271,32 @@ async function readableSnapshots(view: Current): Promise<Snapshot[]> {
 	return readable;
 }
 
-function listed(view: Current) {
+async function listed(view: Current, role: string) {
 	const { manifest, manifestSha256, witnessCheck: witness, schema, snaps } = view;
+	const trust_tier = MAIN.test(manifest.id) && witness === 'green' ? 'sealed' : 'provisional_checked';
+	const may_propose = snaps.has('may_propose')
+		? (await view.rows('may_propose')).some((row) => row.key[0] === role)
+		: false;
 	return {
 		id: manifest.id, epoch: manifest.epoch, knowledge_time: manifest.knowledge_time,
 		access_semantics: 2, definition_sha256: manifest.definition_sha256,
 		manifest_sha256: manifestSha256,
 		...(witness !== undefined && { witness_check: witness }),
+		trust_tier,
+		may_propose,
 		compiled: [{ file: schema.file, sha256: schema.sha256 }],
 		snapshots: [...snaps.values()].map(({ relation, role, complete, full, format }) => ({ relation, role, complete, full, format }))
 	};
 }
 
+const ORIGIN_SIGNS = new Set(['origin_decision', 'origin_vendor', 'origin_design', 'origin_observation']);
 const SOURCE_FIELDS = new Set(['kind', 'name', 'position', 'revision', 'url', 'retrieved_at',
-	'fragment_sha256', 'ownership', 'licence', 'attribution']);
+	'fragment_sha256', 'ownership', 'licence', 'attribution', 'origin_sign']);
 
 function sourceRecord(x: unknown): x is Source {
 	return record(x) && typeof x.kind === 'string' && typeof x.name === 'string' && typeof x.position === 'string'
-		&& Object.entries(x).every(([field, value]) => SOURCE_FIELDS.has(field) && typeof value === 'string');
+		&& Object.entries(x).every(([field, value]) => SOURCE_FIELDS.has(field) && typeof value === 'string')
+		&& (x.origin_sign === undefined || ORIGIN_SIGNS.has(x.origin_sign));
 }
 
 function sourcesOf(view: Current, role: string): SourcesOf | undefined {
@@ -404,7 +425,8 @@ function isManifestRoute(method: string, parts: readonly string[], search: URLSe
 	}
 	if (parts.length === 3 && id === 'manifests' && route === manifestId) return true;
 	if (id !== manifestId) return false;
-	if (parts.length === 4 && (route === 'snapshots' || route === 'rows' || route === 'ask')) return true;
+	if (parts.length === 4 && (route === 'snapshots' || route === 'rows' || route === 'ask'
+		|| (route === 'readings' && parts[3] === 'staircase'))) return true;
 	if (parts.length === 3 && route === 'rows') return true;
 	if (method === 'POST' && parts.length === 3 && route === 'ask') return true;
 	return false;
@@ -423,7 +445,8 @@ async function named(view: Current, withdrawals: readonly WithdrawalRecord[], ro
 	if (direct) throw new WithdrawnError(direct);
 	const ref = view.manifest.witnesses?.find((set) => set.role === role);
 	if (!ref) return missing();
-	const published = await view.object(ref as WitnessSet, 'objects') as Witnesses;
+	const verified = await view.objectVerified(ref as WitnessSet, 'objects');
+	const published = verified.value as Witnesses;
 	if (!record(published) || !Array.isArray(published.witnesses) || !Array.isArray(published.hidden) || published.hidden.length
 		|| (published.calc_witnesses !== undefined && !Array.isArray(published.calc_witnesses))) fault();
 	const compiled = view.compiled('ir/rules.json');
@@ -445,7 +468,25 @@ async function named(view: Current, withdrawals: readonly WithdrawalRecord[], ro
 		}
 		if (withdrawn) throw new WithdrawnError(withdrawn);
 	}
-	return answer;
+	const checkedConclusions = new Map<string, RowRef>();
+	for (const w of answer.witnesses ?? []) {
+		checkedConclusions.set(w.conclusion.relation + '\u0000' + w.conclusion.key, w.conclusion);
+	}
+	for (const w of answer.calc_witnesses ?? []) {
+		checkedConclusions.set(w.conclusion.relation + '\u0000' + w.conclusion.key, w.conclusion);
+	}
+	const checked_witnesses = [...checkedConclusions.values()].map((conclusion) => ({
+		conclusion,
+		status: verified.status,
+		piece_sha256: verified.sha256
+	}));
+	return {
+		...answer,
+		reader_hashes: {
+			status: verified.status,
+			...(checked_witnesses.length ? { checked_witnesses } : {})
+		}
+	} as Answer;
 }
 
 async function batch(view: Current, withdrawals: readonly WithdrawalRecord[], search: URLSearchParams) {
@@ -530,13 +571,13 @@ export async function openLocalGate(root: string, role: string): Promise<Handle>
 			}
 			const standing = standingHeaders(pack, view.manifest.epoch, current.manifest.id, current.manifest.epoch);
 			const response = await (async () => {
-				if (parts.length === 2 && id === 'head') return json(listed(view), 200, standing);
+				if (parts.length === 2 && id === 'head') return json(await listed(view, role), 200, standing);
 				if (parts.length === 2 && id === 'bundle') {
 					const selected = url.searchParams.get('m');
 					return selected === null || selected === view.manifest.id
 						? json(roleBundle(view.bundle, await readableSnapshots(view)), 200, standing) : missing();
 				}
-				if (parts.length === 3 && id === 'manifests' && route === view.manifest.id) return json(listed(view), 200, standing);
+				if (parts.length === 3 && id === 'manifests' && route === view.manifest.id) return json(await listed(view, role), 200, standing);
 				if (id !== view.manifest.id) return missing();
 				if (parts.length === 4 && route === 'snapshots') {
 					const rows = await view.rows(item);
@@ -597,6 +638,21 @@ export async function openLocalGate(root: string, role: string): Promise<Handle>
 						return json(scenarioAnswer(item, id, variant, published), 200, standing);
 					}
 					return json(await named(view, withdrawals, role, item, url.searchParams), 200, standing);
+				}
+				if (parts.length === 4 && route === 'readings' && item === 'staircase') {
+					const staircase = await readStaircase({
+						pack,
+						role,
+						targetView: view,
+						currentView: current,
+						withdrawals,
+						subject: url.searchParams.get('subject'),
+						reading: url.searchParams.get('reading'),
+						loadEpoch: (mid) => source.current(mid),
+						stillReadable
+					});
+					if (!staircase || await source.latest() !== headKey(pack, current.manifest.epoch)) return missing();
+					return json(staircase, 200, standing);
 				}
 				if (req.method === 'POST' && route === 'ask') {
 					const body = await bodyOf(req);

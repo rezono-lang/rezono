@@ -7,7 +7,7 @@
   },
   "duplicate_source_blocks": {
     "examples/platform/facts/cluster_flow.sources.yaml": 4,
-    "examples/platform/facts/core.sources.yaml": 21,
+    "examples/platform/facts/core.sources.yaml": 7,
     "examples/subsidy/facts/credentials.sources.yaml": 4
   },
   "rezono_pack_dl_regression": {

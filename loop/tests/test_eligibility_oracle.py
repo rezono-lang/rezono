@@ -5,11 +5,11 @@ packs/std-loop/rules/unblocked.dl exists, ready.dl carries it and this oracle ch
 checks unblocked, so ready can take its certified meaning while the eligibility stays checked.
 """
 
-from loop_oracle import RULES, evaluate
+from loop_oracle import evaluate, has_relation
 
 
 def test_eligibility_evidence():
-    relation = "unblocked" if (RULES / "unblocked.dl").is_file() else "ready"
+    relation = "unblocked" if has_relation("unblocked") else "ready"
     columns = {
         "eligible": "run step reason",
         "waiting": "run step token reason",

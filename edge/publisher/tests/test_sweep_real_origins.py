@@ -98,14 +98,6 @@ def _checker_sources(st, manifest_id: str) -> list[dict]:
     return json.loads(st.get(key))
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "extra: decisions/fact-origin-required.md: edge/publisher/rezono_publisher/sweep.py must "
-        "not blindly stamp kind='synthetic' on swept cells of a pack with real cited origins "
-        "(note: edge/publisher/ requires independent pre-land review via p1-read-<sha>)"
-    ),
-)
 def test_sweep_preserves_real_origins_without_synthetic_stamp(tmp_path):
     repo = _make_repo(tmp_path, {"default": VENDOR_DOCUMENT})
     st = store.FileStore(tmp_path / "store")
@@ -146,14 +138,6 @@ def test_sweep_preserves_real_origins_without_synthetic_stamp(tmp_path):
         }, f"sweeping a cited pack must not pollute rezono:origins: {variant_manifest['checks']}"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "extra: decisions/fact-origin-required.md: edge/publisher/rezono_publisher/sweep.py must "
-        "not falsely satisfy rezono:origins on an uncited cell by stamping kind='synthetic' "
-        "(note: edge/publisher/ requires independent pre-land review via p1-read-<sha>)"
-    ),
-)
 def test_sweep_does_not_falsely_satisfy_origins_check_with_synthetic(tmp_path):
     # a2 has a real document origin; a1 has only a self-citing git locator to its own fact file
     # (decisions/fact-origin-required.md §2: not an origin -> 3 uncited rows on main).

@@ -7,14 +7,27 @@ platform_step_confirmed_need(run, step, token, reason) :-
     needed(run, step, token, _),
     known(run, token, reason).
 
+// Tokens that are step prerequisites in a run.
+.decl platform_needed_token(run: symbol, token: symbol)
+platform_needed_token(run, token) :-
+    needed(run, _, token, _).
+
 // A scoped empty-inventory observation established at a cut through an admitted completeness receipt.
 .decl platform_cut_empty_scope(run: symbol, cut: symbol, token: symbol, reason: symbol)
-platform_cut_empty_scope(run, cut, token, reason) :-
-    current(run, token, "absent", "empty", reason),
+platform_cut_empty_scope(run, cut, "platform/managed-scope", reason) :-
+    expectation("platform/managed-scope", expected_val),
+    current(run, "platform/managed-scope", "absent", expected_val, reason),
+    !platform_needed_token(run, "platform/managed-scope"),
     loop_observation__run(ev, run),
-    loop_observation__token(ev, token),
+    loop_observation__token(ev, "platform/managed-scope"),
+    loop_observation__state(ev, "absent"),
+    loop_observation__value(ev, expected_val),
+    loop_observation__scope(ev, scope),
     loop_observation__sweep(ev, cut),
-    loop_observation__reason(ev, reason).
+    loop_observation__reason(ev, reason),
+    complete_sweep_interval(run, scope, cut, start, stop),
+    sweep_member(run, scope, cut, node),
+    covered_sweep_node(run, scope, cut, start, stop, node).
 
 // A step's needed token observed absent at a cut through an admitted completeness receipt.
 .decl platform_step_absent_need(run: symbol, step: symbol, cut: symbol, token: symbol, reason: symbol)
@@ -23,8 +36,18 @@ platform_step_absent_need(run, step, cut, token, reason) :-
     current(run, token, "absent", _, reason),
     loop_observation__run(ev, run),
     loop_observation__token(ev, token),
+    loop_observation__state(ev, "absent"),
+    loop_observation__scope(ev, scope),
     loop_observation__sweep(ev, cut),
-    loop_observation__reason(ev, reason).
+    loop_observation__reason(ev, reason),
+    complete_sweep_interval(run, scope, cut, start, stop),
+    sweep_member(run, scope, cut, node),
+    covered_sweep_node(run, scope, cut, start, stop, node).
+
+// Whether a step has any prerequisite observed absent at a cut through an admitted receipt.
+.decl platform_step_has_absent_need(run: symbol, step: symbol, cut: symbol)
+platform_step_has_absent_need(run, step, cut) :-
+    platform_step_absent_need(run, step, cut, _, _).
 
 // Safe frontier: only steps admitted into std-loop's certified ready relation at the current cut,
 // citing either all confirmed prerequisites or, for an opening step with no prerequisites,
@@ -44,25 +67,62 @@ platform_safe_frontier(run, cut, step) :-
     empty_scopes > 0.
 
 // Safe blocker: steps blocked by a step safety obligation at the current cut,
-// retaining any admitted scoped-absence grounds for the step's missing prerequisites.
+// citing admitted scoped-absence grounds for missing prerequisites when present.
 .decl platform_safe_blocker(run: symbol, cut: symbol, step: symbol, obligation: symbol)
 platform_safe_blocker(run, cut, step, obligation) :-
     step_safety_blocker(run, step, cut, obligation, reason),
     waiting(run, step, obligation, reason),
-    absent_needs = count : { platform_step_absent_need(run, step, cut, _, _) },
-    absent_needs >= 0.
+    platform_step_absent_need(run, step, cut, _, _).
+platform_safe_blocker(run, cut, step, obligation) :-
+    step_safety_blocker(run, step, cut, obligation, reason),
+    waiting(run, step, obligation, reason),
+    !platform_step_has_absent_need(run, step, cut).
 
-// Safe platform startup goal: protection and entry exposure completed and observed ready
-// at the current cut, alongside a confirmed denial of the deliberate recovery-isolation probe.
+// Declared required step completed in a run for a startup target.
+.decl platform_startup_completed_step(run: symbol, goal: symbol, step: symbol, reason: symbol)
+platform_startup_completed_step(run, goal, step, reason) :-
+    platform_startup_target__required_step(goal, step),
+    done(run, step, reason).
+
+// Distinct completed required steps per run and startup target.
+.decl platform_startup_satisfied_step(run: symbol, goal: symbol, step: symbol)
+platform_startup_satisfied_step(run, goal, step) :-
+    platform_startup_completed_step(run, goal, step, _).
+
+// Declared required observation token confirmed in a run for a startup target.
+.decl platform_startup_confirmed_token(run: symbol, goal: symbol, token: symbol, reason: symbol)
+platform_startup_confirmed_token(run, goal, token, reason) :-
+    platform_startup_target__required_token(goal, token),
+    known(run, token, reason).
+
+// Distinct confirmed required tokens per run and startup target.
+.decl platform_startup_satisfied_token(run: symbol, goal: symbol, token: symbol)
+platform_startup_satisfied_token(run, goal, token) :-
+    platform_startup_confirmed_token(run, goal, token, _).
+
+// Declared and satisfied counts for each startup target inventory in an active run.
+.decl platform_startup_counts(run: symbol, goal: symbol, declared_steps: number, done_steps: number, declared_tokens: number, known_tokens: number)
+platform_startup_counts(run, goal, declared_steps, done_steps, declared_tokens, known_tokens) :-
+    active(run),
+    platform_startup_target(goal),
+    declared_steps = count : { platform_startup_target__required_step(goal, _) },
+    done_steps = count : { platform_startup_satisfied_step(run, goal, _) },
+    declared_tokens = count : { platform_startup_target__required_token(goal, _) },
+    known_tokens = count : { platform_startup_satisfied_token(run, goal, _) }.
+
+// Safe platform startup goal: all declared required steps completed, all declared required
+// observation tokens confirmed, and the declared completion step/token ready at the current cut.
 .decl platform_startup_goal(run: symbol, cut: symbol, target: symbol, status: symbol)
-platform_startup_goal(run, cut, "platform", status) :-
+platform_startup_goal(run, cut, target, status) :-
     step_safety_current_cut(run, cut),
-    done(run, "protect-entry", _),
-    done(run, "expose-entry", _),
-    completion(run, "expose-entry", "lb/listener", status),
-    known(run, "lb/network-policy", _),
-    known(run, "lb/router-policy", _),
-    known(run, "restore-bad/network-probe", _).
+    platform_startup_target__target(goal, target),
+    platform_startup_target__completion_step(goal, completion_step),
+    platform_startup_target__completion_token(goal, completion_token),
+    completion(run, completion_step, completion_token, status),
+    done(run, completion_step, _),
+    platform_startup_counts(run, goal, step_total, step_total, token_total, token_total),
+    step_total > 0,
+    token_total > 0.
 
 // A restore trial whose control plane is outside the recovery target.
 .decl platform_restore_foreign_control(trial: symbol)
@@ -102,16 +162,18 @@ platform_restore_bound_copy(run, trial, source, dataset, readback, digest) :-
     managed_backup_restored(backup, trial),
     platform_restore_dataset_match(trial, backup, capture, dataset).
 
-// Management unreachable observation with its event time.
-.decl platform_restore_offline_obs(run: symbol, ev: symbol, event_time: number)
-platform_restore_offline_obs(run, ev, event_time) :-
+// Known observation matching its declared LoopExpectation value, with its event time.
+.decl platform_restore_offline_obs(run: symbol, token: symbol, ev: symbol, event_time: number)
+platform_restore_offline_obs(run, token, ev, event_time) :-
+    expectation(token, expected_val),
     loop_observation__run(ev, run),
-    loop_observation__token(ev, "management/availability"),
+    loop_observation__token(ev, token),
     loop_observation__state(ev, "known"),
-    loop_observation__value(ev, "unreachable"),
+    loop_observation__value(ev, expected_val),
     loop_observation__event_time(ev, event_time).
 
-// An offline interval invalidated by any same-run observation that management was not known unreachable.
+// An offline interval invalidated by any same-run observation of its fence token
+// within [t_start, t_end] that does not confirm the expected LoopExpectation value.
 .decl platform_restore_interval_broken(fence_interval: symbol)
 platform_restore_interval_broken(fence_interval) :-
     restore_offline_interval(fence_interval),
@@ -119,51 +181,21 @@ platform_restore_interval_broken(fence_interval) :-
     restore_offline_interval__start_evidence(fence_interval, start_ev),
     restore_offline_interval__end_evidence(fence_interval, end_ev),
     loop_observation__run(start_ev, run),
+    loop_observation__token(start_ev, token),
     loop_observation__event_time(start_ev, t_start),
     loop_observation__run(end_ev, run),
+    loop_observation__token(end_ev, token),
     loop_observation__event_time(end_ev, t_end),
     loop_observation__run(ev, run),
-    loop_observation__token(ev, "management/availability"),
+    loop_observation__token(ev, token),
     loop_observation__event_time(ev, t_ev),
     t_start <= t_ev,
     t_ev <= t_end,
-    loop_observation__value(ev, val),
-    val != "unreachable".
-platform_restore_interval_broken(fence_interval) :-
-    restore_offline_interval(fence_interval),
-    restore_offline_interval__run(fence_interval, run),
-    restore_offline_interval__start_evidence(fence_interval, start_ev),
-    restore_offline_interval__end_evidence(fence_interval, end_ev),
-    loop_observation__run(start_ev, run),
-    loop_observation__event_time(start_ev, t_start),
-    loop_observation__run(end_ev, run),
-    loop_observation__event_time(end_ev, t_end),
-    loop_observation__run(ev, run),
-    loop_observation__token(ev, "management/availability"),
-    loop_observation__event_time(ev, t_ev),
-    t_start <= t_ev,
-    t_ev <= t_end,
-    loop_observation__state(ev, st),
-    st != "known".
-platform_restore_interval_broken(fence_interval) :-
-    restore_offline_interval(fence_interval),
-    restore_offline_interval__run(fence_interval, run),
-    restore_offline_interval__start_evidence(fence_interval, start_ev),
-    restore_offline_interval__end_evidence(fence_interval, end_ev),
-    loop_observation__run(start_ev, run),
-    loop_observation__event_time(start_ev, t_start),
-    loop_observation__run(end_ev, run),
-    loop_observation__event_time(end_ev, t_end),
-    loop_observation__run(ev, run),
-    loop_observation__token(ev, "management/availability"),
-    loop_observation__event_time(ev, t_ev),
-    t_start <= t_ev,
-    t_ev <= t_end,
-    !platform_restore_offline_obs(run, ev, t_ev).
+    !platform_restore_offline_obs(run, token, ev, t_ev).
 
-// Verified offline fence interval covering the opening probe, readback and closing probe.
-.decl platform_restore_interval_verified(run: symbol, trial: symbol, readback: symbol, digest: symbol)
-platform_restore_interval_verified(run, trial, readback, digest) :-
+// Verified offline fence interval covering the opening probe, readback and closing probe for a fence token.
+.decl platform_restore_interval_verified_token(run: symbol, trial: symbol, readback: symbol, digest: symbol, token: symbol)
+platform_restore_interval_verified_token(run, trial, readback, digest, token) :-
     restore_offline_interval(fence_interval),
     restore_offline_interval__run(fence_interval, run),
     restore_offline_interval__trial(fence_interval, trial),
@@ -173,16 +205,23 @@ platform_restore_interval_verified(run, trial, readback, digest) :-
     start_ev != end_ev,
     start_ev != readback,
     end_ev != readback,
-    platform_restore_offline_obs(run, start_ev, t_start),
-    platform_restore_offline_obs(run, end_ev, t_end),
+    platform_restore_offline_obs(run, token, start_ev, t_start),
+    platform_restore_offline_obs(run, token, end_ev, t_end),
     loop_observation__run(readback, run),
+    loop_observation__token(readback, readback_token),
+    readback_token != token,
     loop_observation__state(readback, "known"),
     loop_observation__value(readback, digest),
     loop_observation__event_time(readback, t_readback),
     t_start <= t_readback,
     t_readback <= t_end,
-    known(run, "management/availability", end_ev),
+    known(run, token, end_ev),
     !platform_restore_interval_broken(fence_interval).
+
+// Verified offline fence interval covering the opening probe, readback and closing probe.
+.decl platform_restore_interval_verified(run: symbol, trial: symbol, readback: symbol, digest: symbol)
+platform_restore_interval_verified(run, trial, readback, digest) :-
+    platform_restore_interval_verified_token(run, trial, readback, digest, _).
 
 // Offline management dataset restore goal: matching isolated copy bound to the named dataset,
 // independent recovery prerequisites, completed restore step, and full offline fence interval
@@ -194,8 +233,10 @@ platform_restore_goal(run, cut, dataset, readback) :-
     restore_trial_bound(trial),
     !platform_restore_foreign_control(trial),
     !platform_restore_binding_on_source(trial, source),
-    done(run, _, readback),
-    platform_restore_interval_verified(run, trial, readback, digest).
+    done(run, step, readback),
+    needed(run, step, fence_token, "management-offline"),
+    known(run, fence_token, _),
+    platform_restore_interval_verified_token(run, trial, readback, digest, fence_token).
 
 .output platform_safe_frontier
 .output platform_safe_blocker

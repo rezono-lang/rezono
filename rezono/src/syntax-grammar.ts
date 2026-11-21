@@ -43,7 +43,7 @@ const EXTRA_DECLARATION_HEADERS = [
 ] as const;
 const DECLARATION_ENTRY_RULES = [
 	'Line', 'Question', 'ExampleSectionLine', 'ExampleExpectLine',
-	'StepClauseLine', 'StepEffectLine', 'RuleMeansLine', 'NativeRuleLine',
+	'StepClauseLine', 'StepEffectLine', 'RequirementClauseLine', 'RuleMeansLine', 'NativeRuleLine',
 ] as const;
 
 const WORD_BEFORE = '(?<![A-Za-z0-9_])(?<![A-Za-z0-9_]-)';

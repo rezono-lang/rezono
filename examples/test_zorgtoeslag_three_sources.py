@@ -104,12 +104,13 @@ def _expected_value(case: dict) -> int | tuple[str, str]:
 
 
 def _claimant_id(case: dict) -> str:
-    return str(case.get("claimant") or case.get("persoon") or case["household"])
+    return str(case["claimant"])
 
 
 def _facts_root(pack_dir: Path) -> Path:
     facts_dir = pack_dir / "facts"
-    return facts_dir if facts_dir.is_dir() else pack_dir / "facts.rezono"
+    assert facts_dir.is_dir(), f"{facts_dir.relative_to(ROOT).as_posix()} does not exist yet"
+    return facts_dir
 
 
 def _as_date(value) -> datetime.date:
@@ -128,38 +129,21 @@ def _load_pack_rows(model, pack_dir: Path, as_of: datetime.date, known: datetime
     return rows
 
 
-def _derived_insured_map(
-    derived: dict[str, list[tuple]], calc_results: dict[str, dict]
-) -> dict[str, bool | tuple[str, str]]:
-    """Read derived `insured` per person from M3 calculation rules or binary M2 derived relations."""
-    if "insured" in calc_results:
-        out: dict[str, bool | tuple[str, str]] = {}
-        for subject, (state, val, reason, *_rest) in calc_results["insured"].items():
-            if state == "known":
-                assert val in {"true", "false"} and reason == "", (subject, state, val, reason)
-                out[str(subject)] = val == "true"
-            else:
-                assert val == "", (subject, state, val, reason)
-                out[str(subject)] = (str(state), str(reason))
-        return out
-    if "insured" in derived:
-        out = {}
-        for row in derived["insured"]:
-            assert len(row) == 2, (
-                f"derived `insured` must carry (person, bool) to distinguish false from unknown: {row!r}"
-            )
-            raw = row[1]
-            if isinstance(raw, bool):
-                out[str(row[0])] = raw
-            elif str(raw).lower() in {"true", "false"}:
-                out[str(row[0])] = str(raw).lower() == "true"
-            else:
-                raise AssertionError(f"unexpected `insured` value in derived relation: {row!r}")
-        return out
-    raise AssertionError(
-        f"pack must derive `insured` as a calculation rule or derived relation, "
-        f"found relations {sorted(derived)} and rules {sorted(calc_results)}"
+def _derived_insured_map(calc_results: dict[str, dict]) -> dict[str, bool | tuple[str, str]]:
+    """Read derived `insured` per person from the calculation rule (`state`, `value`, `reason`)."""
+    assert "insured" in calc_results, (
+        f"pack must derive `insured` as a calculation rule with explicit state/reason, "
+        f"found rules {sorted(calc_results)}"
     )
+    out: dict[str, bool | tuple[str, str]] = {}
+    for subject, (state, val, reason, *_rest) in calc_results["insured"].items():
+        if state == "known":
+            assert val in {"true", "false"} and reason == "", (subject, state, val, reason)
+            out[str(subject)] = val == "true"
+        else:
+            assert val == "", (subject, state, val, reason)
+            out[str(subject)] = (str(state), str(reason))
+    return out
 
 
 def _derived_joint_income_map(derived: dict[str, list[tuple]], calc_results: dict[str, dict]) -> dict[str, int]:
@@ -208,7 +192,7 @@ def _assert_no_bsn_like_identifiers(pack_dir: Path) -> None:
     fact_files = [
         p
         for p in sorted(pack_dir.rglob("*.rezono"))
-        if p.is_file() and ("facts" in p.parts or p.name == "facts.rezono")
+        if p.is_file() and "facts" in p.relative_to(pack_dir).parts
     ]
     assert fact_files, f"no .rezono fact files found under {pack_dir}"
     for path in fact_files:
@@ -523,15 +507,14 @@ def test_three_source_allowance_matches_extended_oracle_for_all_17_cases():
             f"proof witness for toeslagpartner{pair} must cite {expected_citation!r}, got {witness_sources}"
         )
 
-    insured_map = _derived_insured_map(feb_derived, feb_got)
+    insured_map = _derived_insured_map(feb_got)
     for person in ("p-ann", "p-bob", "p-fay", "p-gus", "p-hal", "p-kim", "p-leo", "p-noa"):
         assert insured_map.get(person) is True, (person, insured_map)
     for person in ("p-dex", "p-eve"):
         assert insured_map.get(person) is False, (person, insured_map)
-    if "insured" in feb_got:
-        assert insured_map.get("p-ivy") == ("unknown", "no_version_applies"), insured_map
-    else:
-        assert "p-ivy" not in insured_map, f"p-ivy has no Polis on 2026-02-01 and must stay unknown: {insured_map}"
+    assert insured_map.get("p-ivy") == ("unknown", "no_version_applies"), (
+        f"p-ivy has no Polis on 2026-02-01 and must yield explicit ('unknown', 'no_version_applies'): {insured_map}"
+    )
 
     ji_map = _derived_joint_income_map(feb_derived, feb_got)
     assert ji_map.get("p-leo") == 2600000, ji_map
@@ -610,11 +593,7 @@ def test_silently_merging_civil_and_tax_partner_gives_wrong_toeslagpartner_outco
         "reference.py must expose merge_tax_partner_into_civil(facts_dir, dest_dir) to construct the silent-merge counterexample"
     )
     without_tax_partner = tmp_path / "no-tax-partner"
-    if facts_source.is_dir():
-        shutil.copytree(facts_source, without_tax_partner)
-    else:
-        without_tax_partner.mkdir()
-        shutil.copy2(facts_source, without_tax_partner / facts_source.name)
+    shutil.copytree(facts_source, without_tax_partner)
     _strip_tax_partner_rezono_blocks(without_tax_partner)
     assert oracle.toeslagpartner(without_tax_partner, "p-leo", "p-mia", feb, cut) is False
     assert oracle.allowance(without_tax_partner, "p-leo", feb, cut) == 13500
@@ -635,9 +614,12 @@ def test_silently_merging_civil_and_tax_partner_gives_wrong_toeslagpartner_outco
     strict=True,
     raises=AssertionError,
     reason="extra: decisions/no-green-by-cheapest-route.md: Retire the transitional legacy single-source "
-           "Household branch in examples/zorgtoeslag-slice/facts.rezono and examples/zorgtoeslag-slice/reference.py "
-           "once the three-source slice publishes (cleanup of the protected compiler/tests/rezono/test_zorgtoeslag_slice.py "
-           "happens in a separate planner PR per scripts/red_guard.py). "
+           "Household intermediate kind and branch in examples/zorgtoeslag-slice/ (compiled pack, "
+           "facts.rezono, and reference.py) once the three-source slice publishes — verified structurally "
+           "on the compiled model and behaviorally across renamed single-source kinds so renaming "
+           "Household cannot bypass retirement (cleanup of the protected "
+           "compiler/tests/rezono/test_zorgtoeslag_slice.py happens in a separate planner PR per "
+           "scripts/red_guard.py). "
            "Waits for examples/test_zorgtoeslag_three_sources.py--test_three_source_allowance_matches_extended_oracle_for_all_17_cases.",
 )
 def test_retire_legacy_single_source_household_branch_in_zorgtoeslag_slice(tmp_path: Path):
@@ -645,12 +627,57 @@ def test_retire_legacy_single_source_household_branch_in_zorgtoeslag_slice(tmp_p
     assert not (SLICE / "facts.rezono").exists(), (
         "transitional single-source examples/zorgtoeslag-slice/facts.rezono must be retired"
     )
+
+    # 1. Structural model check (immune to renaming Household -> BenefitUnit / Claimant / Huishouden):
+    #    The compiled three-source slice declares ZERO own intermediate base kinds — every kind comes
+    #    from the four imported source packs, no stored partner/insured/joint_income slot exists on
+    #    any kind, and the `allowance` calculation is anchored directly on zorgtoeslag-person's Persoon.
+    from rezono_compiler import calc, emit, pack, rules as ir
+
+    model = pack.read(SLICE)
+    assert model.calc is not None, "examples/zorgtoeslag-slice must declare a compiled calculation program"
+    program = calc.build(model, model.calc)
+    bundle = emit.bundle(model, [], ir.load(model.rules))
+
+    allowed_source_packs = set(SOURCE_PACKS.values())
+    slice_owned_kinds = []
+    person_kind_ids = []
+    for kind in bundle.get("kinds") or []:
+        owner_pack = kind["module"].partition(":")[0] if ":" in kind["module"] else model.name
+        if owner_pack not in allowed_source_packs and not owner_pack.startswith("std-"):
+            slice_owned_kinds.append((kind["id"], owner_pack))
+        if owner_pack == SOURCE_PACKS["person"]:
+            person_kind_ids.append(kind["id"])
+    assert not slice_owned_kinds, (
+        "zorgtoeslag-slice must retire its intermediate single-source kind (even if renamed) and "
+        f"declare zero own base kinds; found {slice_owned_kinds}"
+    )
+    assert len(person_kind_ids) == 1 and person_kind_ids[0].endswith("persoon"), person_kind_ids
+
+    stored_legacy_slots = [
+        attr["id"]
+        for attr in bundle.get("attributes") or []
+        if attr["id"].rpartition(".")[2] in {"partner", "insured", "joint_income"}
+    ]
+    assert not stored_legacy_slots, (
+        f"retired single-source stored attributes still exist in compiled schema: {stored_legacy_slots}"
+    )
+
+    assert "allowance" in program.rules, f"missing allowance rule in calc.Program: {sorted(program.rules)}"
+    persoon_kind_names = {
+        k.name
+        for k in model.kinds.values()
+        if k.cls == "Persoon" and k.module.partition(":")[0] == SOURCE_PACKS["person"]
+    }
+    assert program.subject == person_kind_ids[0] or program.subject in persoon_kind_names, (
+        f"allowance calculation must anchor on Persoon, not an intermediate kind: subject={program.subject!r}"
+    )
+
+    # 2. Oracle cleanup check: no legacy single-source detector or Household branch remains in reference.py.
     oracle = _load_oracle()
     assert not hasattr(oracle, "_is_legacy_household_source"), (
         "transitional _is_legacy_household_source branch in reference.py must be retired"
     )
-
-    # Substantive check: no legacy `household` fact branch remains in reference.py's AST.
     oracle_strings = {
         node.value.lower()
         for node in ast.walk(ast.parse(ORACLE.read_text(encoding="utf-8")))
@@ -660,23 +687,45 @@ def test_retire_legacy_single_source_household_branch_in_zorgtoeslag_slice(tmp_p
         "examples/zorgtoeslag-slice/reference.py still contains a legacy 'household' branch"
     )
 
-    # Behavioral counter-case: a legacy single-source Household `.rezono` file must be refused by reference.py.
-    legacy = tmp_path / "legacy-household.rezono"
-    legacy.write_text(
+    # 3. Behavioral counter-cases (immune to renaming Household):
+    #    - Any legacy single-source file carrying stored partner/insured/joint_income under `Household`
+    #      OR a renamed intermediate kind (`BenefitUnit`, `Huishouden`) must be refused with ValueError.
+    for kind_name in ("Household", "BenefitUnit", "Huishouden"):
+        legacy = tmp_path / f"legacy-{kind_name.lower()}.rezono"
+        legacy.write_text(
+            "rezono 0\n"
+            "pack zorgtoeslag-slice\n\n"
+            f"fact {kind_name}\n"
+            "  | id  | partner |\n"
+            "  | ann | false   |\n\n"
+            f"fact {kind_name.lower()} ann, valid 2020-01-01.., known 2020-01-05\n"
+            "  insured = true\n"
+            f"fact {kind_name.lower()} ann, valid 2026-01-01..<2027-01-01, known 2025-12-01\n"
+            "  joint_income = 2500000\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+        with pytest.raises(ValueError):
+            oracle.allowance(legacy, "ann", datetime.date(2026, 2, 1), datetime.date(2026, 2, 10))
+
+    #    - Even attaching stored partner/insured/joint_income directly to `Persoon` without
+    #      civil/tax/insurer facts must be refused fail-closed with ValueError.
+    stored_on_persoon = tmp_path / "legacy-on-persoon.rezono"
+    stored_on_persoon.write_text(
         "rezono 0\n"
         "pack zorgtoeslag-slice\n\n"
-        "fact Household\n"
-        "  | id  | partner |\n"
-        "  | ann | false   |\n\n"
-        "fact household ann, valid 2020-01-01.., known 2020-01-05\n"
+        "fact Persoon\n"
+        "  | id    | partner |\n"
+        "  | p-ann | false   |\n\n"
+        "fact persoon p-ann, valid 2020-01-01.., known 2020-01-05\n"
         "  insured = true\n"
-        "fact household ann, valid 2026-01-01..<2027-01-01, known 2025-12-01\n"
+        "fact persoon p-ann, valid 2026-01-01..<2027-01-01, known 2025-12-01\n"
         "  joint_income = 2500000\n",
         encoding="utf-8",
         newline="\n",
     )
     with pytest.raises(ValueError):
-        oracle.allowance(legacy, "ann", datetime.date(2026, 2, 1), datetime.date(2026, 2, 10))
+        oracle.allowance(stored_on_persoon, "p-ann", datetime.date(2026, 2, 1), datetime.date(2026, 2, 10))
 
 
 @pytest.mark.xfail(

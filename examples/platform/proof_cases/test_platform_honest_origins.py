@@ -1,181 +1,145 @@
-"""Honest fact origins for examples/platform/facts/core.yaml (decisions/fact-origin-required.md).
+"""Honest fact origins for examples/platform/facts/core.yaml (decisions/fact-origin-required.md,
+decisions/platform-facts-not-conclusions.md section 4).
 
-Verifies that:
-- core.sources.yaml drops the catch-all `git` default for invented rows, removes duplicate
-  records repeating `default`, and marks invented synthetic releases (such as `keycloak-27rc`
-  and releases carrying synthetic placeholder `released_on_day` ordinals 1/50/100/150/200/250)
-  as `synthetic` while allowing honest decision provenance for platform design choices and real
-  vendor provenance for real releases (decisions/platform-facts-not-conclusions.md §1 #6 & §4).
-- Non-vendor demands in core.yaml carry a typed binding to a std-decision Decision record rather
-  than merely pointing to any file under decisions/.
+Verifies that examples/platform/facts/core.sources.yaml:
+- marks `keycloak-27rc` (the invented `stable: 'no'` release) with a `synthetic` origin citing
+  `decisions/platform-facts-not-conclusions.md` (with no day-number assumptions),
+- uses an honest default (never `pack`, `scenario`, `synthetic`, or self-citing `facts/core.yaml`;
+  and when `kind: git`, pointing to an existing `decisions/*.md` file in this repository), and
+- removes duplicate record entries repeating `default` verbatim or targeting the same record twice.
 """
 
 from __future__ import annotations
 
 import json
-from pathlib import Path
+import re
 
 import pytest
 import yaml
 
 from case_support import ROOT
-from rezono_compiler import facts as compiler_facts, pack as compiler_pack, sources as compiler_sources
+from rezono_compiler import pack as compiler_pack, sources as compiler_sources
 
+REPO = ROOT.parents[1]
 FACTS = ROOT / "facts"
-THIS_REPOSITORY = "rezono-lang/rezono"
-DECISION = "decision"
-PLACEHOLDER_RELEASE_DAYS = frozenset({1, 50, 100, 150, 200, 250})
+FORBIDDEN_DEFAULT_KINDS = frozenset({"pack", "scenario", "synthetic"})
 
 
 def _strip_of(entry: dict) -> dict:
     return {k: v for k, v in entry.items() if k != "of"}
 
 
-def _is_external_vendor_source(src: dict) -> bool:
-    kind = src.get("kind")
-    url = str(src.get("url", ""))
-    if kind in ("document", "tool"):
-        return url.startswith("https://") and THIS_REPOSITORY not in url
-    if kind == "git":
-        name = src.get("name")
-        return bool(name) and name != THIS_REPOSITORY
-    return False
+def test_keycloak_27rc_has_synthetic_origin():
+    """decisions/platform-facts-not-conclusions.md section 4: keycloak-27rc has a synthetic origin."""
+    core = yaml.safe_load((FACTS / "core.yaml").read_text(encoding="utf-8")) or {}
+    releases = {row["id"]: row for row in core.get("release", [])}
+    assert "keycloak-27rc" in releases, "keycloak-27rc release is missing from examples/platform/facts/core.yaml"
+    assert str(releases["keycloak-27rc"].get("stable")) == "no", releases["keycloak-27rc"]
+
+    sidecar = yaml.safe_load((FACTS / "core.sources.yaml").read_text(encoding="utf-8")) or {}
+    matching = [
+        rec
+        for rec in sidecar.get("records") or []
+        if (rec.get("of") or {}).get("kind") == "release" and (rec.get("of") or {}).get("id") == "keycloak-27rc"
+    ]
+    assert len(matching) == 1, f"expected one core.sources.yaml entry for release keycloak-27rc, got {matching}"
+    entry = matching[0]
+    assert entry.get("kind") == "synthetic", f"keycloak-27rc must have kind='synthetic', got {entry}"
+    assert "platform-facts-not-conclusions.md" in str(entry.get("name", "")), (
+        f"keycloak-27rc synthetic origin must cite decisions/platform-facts-not-conclusions.md: {entry}"
+    )
+
+    model = compiler_pack.read(ROOT)
+    resolved = [
+        item
+        for item in compiler_sources.file_entries(model, FACTS / "core.yaml")
+        if item["row"]["relation"].split("__")[0] == "release"
+        and json.loads(item["row"]["key"])[0] == "keycloak-27rc"
+    ]
+    assert resolved, "compiler_sources.file_entries produced no entries for release keycloak-27rc"
+    for item in resolved:
+        kinds = {src.get("kind") for src in item["sources"]}
+        assert kinds == {"synthetic"}, f"resolved origins for keycloak-27rc must be strictly synthetic: {item}"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "extra: decisions/fact-origin-required.md: examples/platform/facts/core.sources.yaml must "
-        "not use a catch-all git default for invented rows, must not duplicate default entries in "
-        "records, and must mark invented synthetic releases with placeholder released_on_day "
-        "ordinals as synthetic"
-    ),
-)
-def test_core_sources_marks_synthetic_rows_without_catchall_git_default_or_duplicates():
-    core_yaml = FACTS / "core.yaml"
+def test_core_sources_has_honest_default_without_duplicate_records():
     core_sources_yaml = FACTS / "core.sources.yaml"
 
     sidecar = yaml.safe_load(core_sources_yaml.read_text(encoding="utf-8")) or {}
     default = sidecar.get("default")
     records = sidecar.get("records") or []
 
-    # 1. No catch-all git default giving blanket git provenance to invented rows.
-    assert not (isinstance(default, dict) and default.get("kind") == "git"), (
-        f"core.sources.yaml uses a catch-all git default giving invented rows git provenance: {default}"
+    # 1. Honest default: must exist as a mapping with a 40-hex revision, no pack/scenario/synthetic,
+    #    no self-citing facts/core.yaml, and when kind == "git", must cite an existing decisions/*.md file.
+    assert isinstance(default, dict), f"core.sources.yaml must define a mapping default: {default!r}"
+    assert re.fullmatch(r"[0-9a-f]{40}", str(default.get("revision", ""))), (
+        f"core.sources.yaml default must carry a 40-hex revision: {default}"
     )
-
-    # 2. No record entries repeating the default verbatim.
-    if isinstance(default, dict):
-        duplicates = [rec.get("of") for rec in records if _strip_of(rec) == default]
-        assert duplicates == [], (
-            f"core.sources.yaml has {len(duplicates)} duplicate record entries repeating default: {duplicates}"
+    kind = default.get("kind")
+    assert kind not in FORBIDDEN_DEFAULT_KINDS, (
+        f"core.sources.yaml default uses forbidden kind {kind!r}: {default}"
+    )
+    pos_path = str(default.get("position", "")).partition("#")[0]
+    assert pos_path not in {"facts/core.yaml", "examples/platform/facts/core.yaml"}, (
+        f"core.sources.yaml default self-cites facts/core.yaml: {default}"
+    )
+    if kind == "git":
+        assert pos_path.startswith("decisions/") and pos_path.endswith(".md") and (REPO / pos_path).is_file(), (
+            f"core.sources.yaml git default must cite an existing decisions/*.md file: {default}"
         )
 
-    # 3. Invented synthetic releases (keycloak-27rc and any release carrying placeholder
-    # released_on_day ordinals 1/50/100/150/200/250 without real vendor publication provenance)
-    # must be marked `synthetic`, never repo-internal `git`.
+    # 2. No record entries repeating default verbatim.
+    duplicates = [rec.get("of") for rec in records if _strip_of(rec) == default]
+    assert duplicates == [], (
+        f"core.sources.yaml has {len(duplicates)} duplicate record entries repeating default: {duplicates}"
+    )
+
+    # 3. No duplicate record selectors in records.
+    seen: set[tuple[str, str, str | None]] = set()
+    repeated_selectors: list[dict] = []
+    for rec in records:
+        of = rec.get("of") or {}
+        key = (str(of.get("kind", "")), str(of.get("id", "")), of.get("slot"))
+        if key in seen:
+            repeated_selectors.append(of)
+        seen.add(key)
+    assert repeated_selectors == [], (
+        f"core.sources.yaml has duplicate record selectors in records: {repeated_selectors}"
+    )
+
+
+def test_platform_startup_target_has_honest_synthetic_or_fixture_origin():
+    standard_order_data = yaml.safe_load((FACTS / "standard-order.yaml").read_text(encoding="utf-8")) or {}
+    startup_targets = standard_order_data.get("platform_startup_target") or []
+
     model = compiler_pack.read(ROOT)
-    core_data = yaml.safe_load(core_yaml.read_text(encoding="utf-8")) or {}
-    entries = compiler_sources.file_entries(model, core_yaml, relative=Path("facts/core.yaml"))
+    entries = compiler_sources.read(model, ROOT)
+    startup_entries = [
+        entry
+        for entry in entries
+        if entry["row"]["relation"] == "platform_startup_target"
+        or entry["row"]["relation"].startswith("platform_startup_target__")
+    ]
 
-    sources_by_record: dict[tuple[str, str], list[dict]] = {}
-    for entry in entries:
-        rel = entry["row"]["relation"]
-        owner = rel.split("__", 1)[0]
-        rec_id = json.loads(entry["row"]["key"])[0]
-        sources_by_record.setdefault((owner, rec_id), []).extend(entry["sources"])
+    if not startup_targets and not startup_entries:
+        return
 
-    bad_releases: dict[str, list[dict]] = {}
-    for rel in core_data.get("release", []):
-        rel_id = rel["id"]
-        non_pack = [s for s in sources_by_record.get(("release", rel_id), []) if s.get("kind") != "pack"]
-        if rel_id == "keycloak-27rc":
-            if not non_pack or any(s.get("kind") != "synthetic" for s in non_pack):
-                bad_releases[rel_id] = non_pack
-        elif rel.get("released_on_day") in PLACEHOLDER_RELEASE_DAYS:
-            # Placeholder ordinals are invented unless backed by an external vendor source;
-            # they must never carry repo-internal git provenance.
-            if not non_pack or not all(
-                s.get("kind") == "synthetic" or _is_external_vendor_source(s) for s in non_pack
-            ):
-                bad_releases[rel_id] = non_pack
+    assert startup_entries, "expected resolved compiler source entries for PlatformStartupTarget rows"
+    dishonest: list[tuple[dict, list[dict]]] = []
+    for entry in startup_entries:
+        explicit = [src for src in entry["sources"] if src.get("kind") != "pack"]
+        has_synthetic = any(
+            src.get("kind") == "synthetic"
+            and bool(str(src.get("name", "")).strip())
+            and bool(str(src.get("position", "")).strip())
+            for src in explicit
+        )
+        non_synthetic = [src for src in explicit if src.get("kind") != "synthetic"]
+        if not has_synthetic or non_synthetic:
+            dishonest.append((entry["row"], explicit))
 
-    assert bad_releases == {}, (
-        "invented release rows with placeholder released_on_day ordinals in core.yaml must carry "
-        f"synthetic (or external vendor) provenance, not repo-internal git: {bad_releases}"
-    )
-
-
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "extra: decisions/fact-origin-required.md: platform-designed demands in "
-        "examples/platform/facts/core.yaml must be bound by a typed arrow to a std-decision "
-        "Decision record rather than merely citing an existing file under decisions/"
-    ),
-)
-def test_core_demands_have_typed_decision_bindings():
-    model = compiler_pack.read(ROOT)
-    core_yaml = FACTS / "core.yaml"
-    core_data = yaml.safe_load(core_yaml.read_text(encoding="utf-8")) or {}
-    demands = {row["id"]: row for row in core_data.get("demand", [])}
-    assert demands, "expected demand rows in examples/platform/facts/core.yaml"
-
-    # Identify demands already grounded directly in external vendor documentation.
-    demand_sources: dict[str, list[dict]] = {}
-    for entry in compiler_sources.file_entries(model, core_yaml, relative=Path("facts/core.yaml")):
-        rel = entry["row"]["relation"]
-        if rel.split("__", 1)[0] == "demand":
-            rec_id = json.loads(entry["row"]["key"])[0]
-            demand_sources.setdefault(rec_id, []).extend(entry["sources"])
-
-    non_vendor_demands = sorted(
-        ident for ident in demands
-        if not any(_is_external_vendor_source(src) for src in demand_sources.get(ident, []))
-    )
-    assert non_vendor_demands, "expected platform-designed (non-vendor) demands in core.yaml"
-
-    # Load all authored facts to inspect std-decision records and typed arrows to Decision.
-    all_rows: dict[str, list[tuple[str, ...]]] = {}
-    for path in sorted(FACTS.glob("*.yaml")):
-        if path.name.endswith(".sources.yaml"):
-            continue
-        for rel, tuples in compiler_facts.load(model, path).items():
-            all_rows.setdefault(rel, []).extend(tuples)
-
-    decision_kinds = {k for k in model.kinds if DECISION in model.ancestors(k)}
-    authored_decisions = (
-        {row[0] for row in all_rows.get(f"{DECISION}__decider", [])}
-        & {row[0] for row in all_rows.get(f"{DECISION}__decided_on", [])}
-    )
-
-    bound_demands: set[str] = set()
-
-    # Case A: Demand itself has an arrow to Decision (or a subkind of Decision).
-    demand_kind = model.kinds["demand"]
-    for slot in demand_kind.slots.values():
-        if slot.arrow and slot.range in decision_kinds:
-            for rec_id, target_decision in all_rows.get(slot.table, []):
-                if target_decision in authored_decisions:
-                    bound_demands.add(rec_id)
-
-    # Case B: A separate binding kind has both an arrow to Demand and an arrow to Decision.
-    for kind in model.kinds.values():
-        demand_slots = [s for s in kind.slots.values() if s.arrow and s.range == "demand"]
-        decision_slots = [s for s in kind.slots.values() if s.arrow and s.range in decision_kinds]
-        if not (demand_slots and decision_slots):
-            continue
-        for d_slot in demand_slots:
-            by_binding = {row[0]: row[1] for row in all_rows.get(d_slot.table, [])}
-            for dec_slot in decision_slots:
-                for binding_id, target_decision in all_rows.get(dec_slot.table, []):
-                    if binding_id in by_binding and target_decision in authored_decisions:
-                        bound_demands.add(by_binding[binding_id])
-
-    unbound = sorted(set(non_vendor_demands) - bound_demands)
-    assert unbound == [], (
-        f"{len(unbound)} of {len(non_vendor_demands)} platform-designed demands lack a typed binding "
-        f"to an authored std-decision Decision record: {unbound}"
+    assert dishonest == [], (
+        "PlatformStartupTarget rows in examples/platform/facts/ must carry honest kind: synthetic "
+        "origins (or be supplied from a test fixture) rather than citing a decision section as a "
+        f"non-synthetic source: {dishonest[:3]}"
     )

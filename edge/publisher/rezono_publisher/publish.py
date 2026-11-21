@@ -106,6 +106,7 @@ class Epoch:
 
 
 PROOFS = "rezono:proofs"  # the check of the witnesses by the checker; not a relation name (no colon there)
+SCHEMA = "rezono:schema"  # compiled schema bundle and its logical check outcomes (never synthesized downstream)
 ACCESS_CHECK = "rezono:access"  # the read rules give a kind in full, and the data agrees
 ACCESS_SEMANTICS = 2  # the gate refuses a manifest without it
 PUBLICATION_REQUIRED = "publication_required"  # decisions/role-publication-requirements.md
@@ -339,6 +340,58 @@ def metadata_checked(e: Epoch) -> None:
         raise Blocked(f"{PROOFS}: {len(errors)} (first: {first})")
 
 
+def schema_check(e: Epoch) -> dict | None:
+    """Verify the compiled schema bundle and its logical check results before emitting `rezono:schema`.
+
+    Returns None when the epoch carries no schema bundle; otherwise requires a compiled bundle whose
+    declared logical checks all appear in `e.checks` with status `"green"` (zero violations) or
+    `"warning"` (propagated as a warning), never fabricating a green check.
+    """
+    if not e.bundle:
+        if any(c.get("name") == SCHEMA for c in e.checks):
+            raise Blocked(f"{SCHEMA}: caller cannot supply {SCHEMA} without a schema bundle")
+        return None
+    try:
+        doc = json.loads(e.bundle)
+    except (TypeError, ValueError) as err:
+        raise Blocked(f"{SCHEMA}: the schema bundle is not JSON: {err}") from err
+    if not checker_metadata.compiled(doc) or not isinstance(doc.get("checks"), list):
+        raise Blocked(f"{SCHEMA}: the schema bundle is not a compiled bundle")
+    by_name: dict[str, dict] = {}
+    for c in e.checks:
+        name = c.get("name")
+        if name == SCHEMA:
+            raise Blocked(f"{SCHEMA}: {SCHEMA} must be emitted by the publisher, not pre-supplied")
+        if isinstance(name, str):
+            if name in by_name:
+                raise Blocked(f"{SCHEMA}: duplicate check result for {name}")
+            by_name[name] = c
+    has_warning = False
+    warnings = 0
+    for entry in doc["checks"]:
+        view = entry.get("view") if isinstance(entry, dict) else None
+        if not isinstance(view, str) or not view:
+            raise Blocked(f"{SCHEMA}: malformed check declaration in schema bundle")
+        result = by_name.get(view)
+        if result is None:
+            raise Blocked(f"{SCHEMA}: missing schema check result for {view}")
+        status = result.get("status")
+        violations = result.get("violations")
+        if type(violations) is not int or violations < 0:
+            raise Blocked(f"{SCHEMA}: {view}: invalid violations count {violations!r}")
+        if status == "green":
+            if violations != 0:
+                raise Blocked(f"{SCHEMA}: {view}: green check has {violations} violations")
+        elif status == "warning":
+            has_warning = True
+            warnings += violations
+        else:
+            raise Blocked(f"{SCHEMA}: {view}: {violations}")
+    if has_warning:
+        return {"name": SCHEMA, "status": "warning", "violations": warnings}
+    return {"name": SCHEMA, "status": "green", "violations": 0}
+
+
 def checked(e: Epoch, role: str, snapshots: dict, witnesses: list, full=None, calc_witnesses=None,
             complete=None, instances=None) -> None:
     """Blocked unless the checker finds no error in the proofs of this role."""
@@ -420,6 +473,7 @@ def plan(e: Epoch, store, roles: dict[str, str], base: dict | None = None,
     red = [c for c in e.checks if c["status"] == "red"]
     if red:
         raise Blocked(", ".join(f"{c['name']}: {c['violations']}" for c in red))
+    schema_result = schema_check(e)
     if not roles:
         raise ValueError("no roles: nothing would be readable")
     if not e.definition_sha256:
@@ -543,6 +597,7 @@ def plan(e: Epoch, store, roles: dict[str, str], base: dict | None = None,
         "schema_version": e.schema_version,
         "sources": [{"source_id": s, "position": p} for s, p in sorted(e.sources)],
         "checks": sorted([*(dict(c) for c in e.checks), {"name": PROOFS, "status": "green", "violations": 0},
+                          *([schema_result] if schema_result is not None else []),
                           *([{"name": ASSETS, "status": "green", "violations": 0}] if images else []),
                           *([{"name": SOURCES, "status": "green", "violations": 0}] if entries is not None else [])],
                          key=lambda c: c["name"]),

@@ -7,8 +7,12 @@ the independent, hand-worked contracts for the five shared decision forms, the c
 build/ graph migration, and pack-fact pin exceptions.
 """
 import ast
+import importlib.util
 from pathlib import Path
 import re
+import shutil
+import subprocess
+import sys
 
 import pytest
 
@@ -44,7 +48,7 @@ def test_every_script_and_workflow_if_is_audited_in_tooling_decision():
     rows = _table_rows(text)
     script_fates = {}
     for cells in rows:
-        if len(cells) >= 3 and cells[0].startswith("`scripts/"):
+        if len(cells) >= 3 and (cells[0].startswith("`scripts/") or cells[0].startswith("`loop/cluster/")):
             name = cells[0].split("`")[1]
             script_fates[name] = cells[2]
 
@@ -53,10 +57,11 @@ def test_every_script_and_workflow_if_is_audited_in_tooling_decision():
         for path in (ROOT / "scripts").glob("*.py")
         if not path.name.startswith("test_")
     )
+    required_audited = [*non_test_scripts, "loop/cluster/base_check.py"]
     assert non_test_scripts, "expected non-test Python scripts under scripts/"
-    missing_scripts = [name for name in non_test_scripts if name not in script_fates]
+    missing_scripts = [name for name in required_audited if name not in script_fates]
     assert missing_scripts == [], f"scripts missing from audit table: {missing_scripts}"
-    bad_script_fates = [name for name in non_test_scripts if not FATE_MARKER.search(script_fates[name])]
+    bad_script_fates = [name for name in required_audited if not FATE_MARKER.search(script_fates[name])]
     assert bad_script_fates == [], f"scripts without a valid fate (a)-(d): {bad_script_fates}"
 
     workflow_section = text.split("## 4. Audit table:", 1)[1].split("## 5.", 1)[0]
@@ -485,3 +490,282 @@ def test_check_pinned_reads_exceptions_from_pack_facts():
     }
     _, rows, _ = evaluate(model, data)
     assert {row[0] for row in rows["build_unpinned_package"]} == {"pip"}
+
+
+def test_cluster_base_check_shares_helpers_with_red_before(tmp_path: Path, monkeypatch):
+    """loop/cluster/base_check.py delegates shared helpers to scripts/red_before.py (no duplicate copy)."""
+    base_check_path = ROOT / "loop" / "cluster" / "base_check.py"
+    red_before_path = ROOT / "scripts" / "red_before.py"
+    red_guard_path = ROOT / "scripts" / "red_guard.py"
+    assert base_check_path.is_file(), "loop/cluster/base_check.py is missing"
+    assert red_before_path.is_file(), "scripts/red_before.py is missing"
+
+    source = base_check_path.read_text(encoding="utf-8")
+    tree = ast.parse(source, filename=str(base_check_path))
+
+    # 1. Structural check: base_check.py must import red_before (not copy its helpers).
+    imports_red_before = False
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            if any(alias.name in {"red_before", "scripts.red_before"} for alias in node.names):
+                imports_red_before = True
+        elif isinstance(node, ast.ImportFrom):
+            mod = node.module or ""
+            if mod in {"red_before", "scripts.red_before"} or (
+                mod == "scripts" and any(alias.name == "red_before" for alias in node.names)
+            ):
+                imports_red_before = True
+        elif isinstance(node, ast.Call):
+            callee = getattr(node.func, "attr", getattr(node.func, "id", ""))
+            if callee in {"import_module", "spec_from_file_location"}:
+                if any(
+                    isinstance(sub, ast.Constant)
+                    and isinstance(sub.value, str)
+                    and "red_before" in sub.value
+                    for sub in ast.walk(node)
+                ):
+                    imports_red_before = True
+    assert imports_red_before, (
+        "loop/cluster/base_check.py must import scripts/red_before.py instead of duplicating its helpers"
+    )
+
+    # 2. No duplicated GITHUB_STEP_SUMMARY writer or direct selection file I/O in base_check.py.
+    string_literals = {
+        node.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant) and isinstance(node.value, str)
+    }
+    assert "GITHUB_STEP_SUMMARY" not in string_literals, (
+        "loop/cluster/base_check.py still duplicates GITHUB_STEP_SUMMARY writing instead of delegating "
+        "to red_before.summarize"
+    )
+    for node in tree.body:
+        if isinstance(node, ast.FunctionDef) and node.name == "read_selection":
+            calls = {
+                getattr(sub.func, "attr", getattr(sub.func, "id", ""))
+                for sub in ast.walk(node)
+                if isinstance(sub, ast.Call)
+            }
+            assert "read_text" not in calls and "open" not in calls, (
+                "loop/cluster/base_check.py read_selection still reads the selection file directly "
+                "instead of delegating to red_before.read_selection"
+            )
+
+    # 3. Behavioral delegation check: executing base_check actually invokes red_before's shared helpers.
+    scripts_dir = str(ROOT / "scripts")
+    monkeypatch.syspath_prepend(scripts_dir)
+    spec = importlib.util.spec_from_file_location("cluster_base_check_shared_test", base_check_path)
+    assert spec is not None and spec.loader is not None
+    bc = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(bc)
+
+    rb_modules = [
+        mod
+        for name, mod in list(sys.modules.items())
+        if name in {"red_before", "scripts.red_before"} and mod is not None
+    ]
+    if getattr(bc, "red_before", None) is not None and bc.red_before not in rb_modules:
+        rb_modules.append(bc.red_before)
+    assert rb_modules, "loading loop/cluster/base_check.py did not load scripts/red_before.py"
+
+    read_calls: list[Path] = []
+    summary_calls: list[tuple[str, list[str]]] = []
+
+    for rb in rb_modules:
+        orig_read = rb.read_selection
+        orig_sum = rb.summarize
+
+        def wrapped_read(selection, _orig=orig_read):
+            read_calls.append(Path(selection))
+            return _orig(selection)
+
+        def wrapped_sum(verdict, tests, _orig=orig_sum):
+            summary_calls.append((verdict, list(tests)))
+            return _orig(verdict, tests)
+
+        monkeypatch.setattr(rb, "read_selection", wrapped_read)
+        monkeypatch.setattr(rb, "summarize", wrapped_sum)
+        if getattr(bc, "read_selection", None) is orig_read:
+            monkeypatch.setattr(bc, "read_selection", wrapped_read)
+        if getattr(bc, "summarize", None) is orig_sum:
+            monkeypatch.setattr(bc, "summarize", wrapped_sum)
+
+    selection = tmp_path / "selection.txt"
+    selection.write_text("", encoding="utf-8")
+    summary_file = tmp_path / "step-summary.md"
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary_file))
+    monkeypatch.setattr(sys, "argv", [str(base_check_path), "--root", str(tmp_path), str(selection)])
+    rc = bc.main()
+    assert rc == 0, f"expected rc=0 on empty selection, got {rc}"
+    assert read_calls, "base_check.main() did not delegate selection reading to red_before.read_selection"
+    assert summary_calls, "base_check.main() did not delegate summary reporting to red_before.summarize"
+    assert summary_file.is_file() and summary_file.read_text(encoding="utf-8").strip(), (
+        "red_before.summarize did not write GITHUB_STEP_SUMMARY"
+    )
+
+    # 4. Isolated policy-dir check matching .github/workflows/disposable-cluster.yml:
+    #    base_check.py must also run when copied beside red_before.py and red_guard.py in $RUNNER_TEMP.
+    policy_dir = tmp_path / "policy"
+    policy_dir.mkdir()
+    for src in (base_check_path, red_before_path, red_guard_path):
+        shutil.copy2(src, policy_dir / src.name)
+    proc = subprocess.run(
+        [sys.executable, str(policy_dir / "base_check.py"), "--root", str(tmp_path), str(selection)],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    assert proc.returncode == 0, (
+        f"base_check.py failed when run from isolated policy dir beside red_before.py: "
+        f"{proc.stdout}\n{proc.stderr}"
+    )
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason="extra: decisions/tooling-does-not-decide.md: fate (c) for loop/cluster/base_check.py. "
+           "Move the base-check exit verdict decision (0 vs 1 from JUnit passed/failed/skipped "
+           "outcomes) into packs/std-review (Form 2 commit-pinned evidence) and retire the Python "
+           "verdict branches with zero Python fallback (fail closed if packs/std-review cannot "
+           "evaluate or does not derive evidence_current).",
+)
+def test_cluster_base_check_derives_verdict_through_std_review(tmp_path: Path, monkeypatch):
+    """Fate (c): loop/cluster/base_check.py derives its exit verdict through packs/std-review with no Python fallback."""
+    from rezono_compiler import batch as compiler_batch, facts as compiler_facts, pack as compiler_pack
+
+    base_check_path = ROOT / "loop" / "cluster" / "base_check.py"
+    assert base_check_path.is_file(), "loop/cluster/base_check.py is missing"
+
+    source = base_check_path.read_text(encoding="utf-8")
+    tree = ast.parse(source, filename=str(base_check_path))
+
+    # 1. Structural check: base_check.py must import rezono_compiler and load packs/std-review.
+    imports_compiler = any(
+        (isinstance(node, ast.ImportFrom) and (node.module or "").startswith("rezono_compiler"))
+        or (isinstance(node, ast.Import) and any(a.name.startswith("rezono_compiler") for a in node.names))
+        for node in ast.walk(tree)
+    )
+    assert imports_compiler, (
+        "loop/cluster/base_check.py must evaluate packs/std-review via rezono_compiler instead of deciding in Python"
+    )
+    mentions_std_review = any(
+        isinstance(node, ast.Constant) and isinstance(node.value, str) and "std-review" in node.value
+        for node in ast.walk(tree)
+    )
+    assert mentions_std_review, (
+        "loop/cluster/base_check.py must reference packs/std-review for its base-check evidence verdict"
+    )
+
+    # 2. Behavioral check: all 5 (passed, failed, skipped) outcomes are evaluated through packs/std-review
+    #    using raw observed counts (no Python pre-decision into evidence_attestation outcome strings).
+    scripts_dir = str(ROOT / "scripts")
+    monkeypatch.syspath_prepend(scripts_dir)
+    spec = importlib.util.spec_from_file_location("cluster_base_check_std_review_test", base_check_path)
+    assert spec is not None and spec.loader is not None
+    bc = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(bc)
+
+    selection = tmp_path / "selection.txt"
+    selection.write_text("tests/test_cluster_probe.py::test_probe\n", encoding="utf-8")
+
+    read_pack_names: list[str] = []
+    orig_pack_read = compiler_pack.read
+
+    def spy_pack_read(path, *args, **kwargs):
+        read_pack_names.append(Path(path).name)
+        return orig_pack_read(path, *args, **kwargs)
+
+    monkeypatch.setattr(compiler_pack, "read", spy_pack_read)
+
+    observed_fact_calls: list[dict] = []
+    orig_rows_of = compiler_facts.rows_of
+
+    def spy_rows_of(model, records, *args, **kwargs):
+        observed_fact_calls.append(dict(records))
+        return orig_rows_of(model, records, *args, **kwargs)
+
+    monkeypatch.setattr(compiler_facts, "rows_of", spy_rows_of)
+
+    batch_read_calls: list[list[str]] = []
+    orig_batch_read = compiler_batch.read
+
+    def spy_batch_read(con, program, relations, *args, **kwargs):
+        batch_read_calls.append(list(relations))
+        return orig_batch_read(con, program, relations, *args, **kwargs)
+
+    monkeypatch.setattr(compiler_batch, "read", spy_batch_read)
+
+    def _run_with_counts(passed: int, failed: int, skipped: int) -> int:
+        monkeypatch.setattr(bc, "run_file", lambda root, path, ids, report: (passed, failed, skipped))
+        monkeypatch.setattr(sys, "argv", [str(base_check_path), "--root", str(tmp_path), str(selection)])
+        return bc.main()
+
+    cases = [
+        (0, 1, 0, 0),
+        (2, 1, 0, 0),
+        (2, 0, 0, 1),
+        (0, 1, 1, 1),
+        (0, 0, 1, 1),
+    ]
+    for passed, failed, skipped, expected_rc in cases:
+        before_facts = len(observed_fact_calls)
+        before_reads = len(batch_read_calls)
+        rc = _run_with_counts(passed, failed, skipped)
+        assert rc == expected_rc, f"counts={(passed, failed, skipped)} expected rc={expected_rc}, got {rc}"
+        assert len(batch_read_calls) > before_reads, (
+            f"base_check.main() did not evaluate packs/std-review for counts={(passed, failed, skipped)}"
+        )
+        assert len(observed_fact_calls) > before_facts, (
+            f"base_check.main() did not submit observed facts to packs/std-review for counts={(passed, failed, skipped)}"
+        )
+        latest_records = observed_fact_calls[-1]
+        assert not latest_records.get("evidence_attestation"), (
+            "loop/cluster/base_check.py must not pre-decide passed/failed in Python and pass pre-decided "
+            f"evidence_attestation rows; got {latest_records['evidence_attestation']!r}"
+        )
+        int_values = {
+            v
+            for rows in latest_records.values()
+            if isinstance(rows, list)
+            for row in rows
+            if isinstance(row, dict)
+            for v in row.values()
+            if type(v) is int
+        }
+        assert {passed, failed, skipped} <= int_values, (
+            f"packs/std-review input rows must receive raw observed counts {(passed, failed, skipped)}, "
+            f"saw integer values {sorted(int_values)}"
+        )
+
+    assert "std-review" in read_pack_names, f"base_check.py never loaded packs/std-review: {read_pack_names}"
+
+    # 3. Fail-closed / zero-Python-fallback check: if packs/std-review returns empty evidence_current
+    #    or fails to evaluate, base_check.main() must NEVER fall back to returning 0 for (0, 1, 0).
+    monkeypatch.setattr(
+        compiler_batch,
+        "read",
+        lambda con, program, relations, *args, **kwargs: {rel: set() for rel in relations},
+    )
+    try:
+        rc_empty = _run_with_counts(0, 1, 0)
+    except SystemExit as exc:
+        assert exc.code not in (0, None), f"base_check exited 0 when evidence_current was empty: {exc.code!r}"
+    except RuntimeError:
+        pass
+    else:
+        assert rc_empty != 0, "base_check fell back to rc=0 when packs/std-review returned empty evidence_current"
+
+    def _boom(*args, **kwargs):
+        raise RuntimeError("packs/std-review unavailable")
+
+    monkeypatch.setattr(compiler_batch, "connect", _boom)
+    try:
+        rc_err = _run_with_counts(0, 1, 0)
+    except SystemExit as exc:
+        assert exc.code not in (0, None), f"base_check exited 0 when packs/std-review failed: {exc.code!r}"
+    except RuntimeError:
+        pass
+    else:
+        assert rc_err != 0, "base_check fell back to rc=0 when packs/std-review failed to evaluate"

@@ -85,12 +85,6 @@ def test_a_confirmed_disagreement_requires_complete_comparison_evidence(tmp_path
     assert incident.disagreements(*records({CASES[0]: message})) == [junit_key(CASES[0])[1]]
 
 
-@pytest.mark.xfail(strict=True, raises=ValueError, reason=(
-    "M3: compiler/ci/feldera_shards.py does not yet expect "
-    "compiler/tests/test_recorded_dates.py::test_independent_date_equality and "
-    "examples/test_calculation_engine_parity.py::test_feldera_calculations_match_duckdb_and_checker[subsidy] in the live "
-    "collection. Each joins its shard there and stays out of ORIGINAL, as INTERFACE does. Lift this mark "
-    "in the pull request that routes the last of the two; the other leaves it."))
 @pytest.mark.parametrize("missing_subsidy_report", [False, True])
 def test_classifier_uses_complete_reports_from_the_parallel_comparison(tmp_path, missing_subsidy_report):
     ci = Path(incident.__file__).resolve().parent
@@ -98,6 +92,8 @@ def test_classifier_uses_complete_reports_from_the_parallel_comparison(tmp_path,
         "examples/test_feldera_rules.py::test_incremental_on_feldera_equals_batch[platform/tenant-capacity/interface]",
         "compiler/tests/test_boolean_rule_inputs.py::test_native_boolean_rule_inputs",
         "compiler/tests/test_recorded_dates.py::test_independent_date_equality",
+        "compiler/tests/test_rules_sql_and_access_guards.py::test_rational_functional_base_fact_bounds_and_invalid_denominator",
+        "compiler/tests/test_rules_sql_and_access_guards.py::test_zero_rule_functional_relation_emits_valid_sql_with_empty_state",
         "compiler/tests/test_ordered_rule_scalars_engines.py::test_feldera_orders_typed_values",
         "examples/test_calculation_engine_parity.py::test_feldera_calculations_match_duckdb_and_checker[subsidy]",
     ]

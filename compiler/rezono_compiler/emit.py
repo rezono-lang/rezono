@@ -8,7 +8,7 @@ import sys
 from dataclasses import dataclass
 
 from . import rules as ir
-from . import amounts, calc, calc_sql, checks as bundled, feldera_names, normalise, rules_split, rules_sql, seal, spans, types
+from . import amounts, calc, calc_sql, checks as bundled, feldera_names, key_of_signs, normalise, rules_split, rules_sql, seal, spans, types
 from .diagnostics import Diagnostic
 from .pack import LAYERS, CompileError, Pack
 from .sqltext import literal, q
@@ -640,6 +640,7 @@ def rule_bundle(pack: Pack, prog) -> tuple[list, list]:
         meaning[sense] = r.id
         rules.append(present({"id": r.id, "stable_id": stable, "span": placed(pack.rule_spans.get(r.id)),
                               "relation": r.head.relation, "module": r.module, "message": f"rule.{r.id}",
+                              "source": pack.rule_sources.get(r.id),
                               "variables": variable_types(prog, r),
                               "aggregates": [present({"position": i, "relation": a.atom.relation,
                                                       "function": a.function, "over": a.over})
@@ -713,6 +714,7 @@ def calc_semantic(calc_prog, name: str) -> dict:
 
 def bundle(pack: Pack, checks, prog=None, calc_prog=None) -> dict:
     """The schema bundle, as contracts/bundle.yaml describes it."""
+    key_data, key_messages = key_of_signs.load()
     kinds, arrows, attributes, keys, equations, pages = [], [], [], [], [], []
     ids = stable_ids(pack)
     for k, kind in pack.kinds.items():
@@ -781,8 +783,9 @@ def bundle(pack: Pack, checks, prog=None, calc_prog=None) -> dict:
         "checks": bundle_checks(checks),
         "pages": pages,
         "labels": pack.labels,
-        "messages": [{"lang": lang, "resource": text} for lang, text in sorted(pack.messages.items())],
+        "messages": key_of_signs.merge_messages(pack.messages, key_messages),
         "channels": pack.channels,
+        "key": key_data,
         "jurisdictions": [],
     } | ({"questions": pack.questions} if pack.questions else {}) \
       | ({"reader_questions": pack.reader_questions} if pack.reader_questions else {}) \

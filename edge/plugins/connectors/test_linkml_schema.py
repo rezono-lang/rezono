@@ -1,5 +1,6 @@
 """Verify standalone exports with LinkML's own reader and compare complete normalized bundles."""
 
+import importlib.util
 import json
 from pathlib import Path
 import shutil
@@ -13,8 +14,19 @@ from rezono_compiler import emit, pack
 
 
 HERE = Path(__file__).parent
-LIBRARY = HERE.parents[2] / "examples/library"
+REPO = HERE.parents[2]
 FIXTURES = HERE / "fixtures"
+LEGACY_HELPERS_PATH = REPO / "examples" / "fixtures" / "rezono-1-legacy" / "helpers.py"
+
+
+def _legacy_library(tmp_path: Path) -> Path:
+    spec = importlib.util.spec_from_file_location("rezono_1_legacy_helpers", LEGACY_HELPERS_PATH)
+    assert spec is not None and spec.loader is not None
+    helpers = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(helpers)
+    root = tmp_path / "legacy-source"
+    helpers.materialize_legacy_packs(root, ("examples/library",), prefer_live=True)
+    return root / "examples" / "library"
 
 
 def exported(source, dest):
@@ -54,13 +66,14 @@ def rebuilt(source, root, dest):
 
 
 def test_library_round_trip_preserves_the_complete_normalized_bundle(tmp_path):
-    root = exported(LIBRARY, tmp_path / "one")
+    library = _legacy_library(tmp_path)
+    root = exported(library, tmp_path / "one")
     view = SchemaView(str(root))
     assert view.induced_slot("reference_only", "Copy").range == "boolean"
     assert view.induced_slot("title", "Work").required
     first = tmp_path / "first"
-    initial = rebuilt(LIBRARY, root, first)
-    assert library_semantics(compiled_bundle(LIBRARY), LIBRARY) == library_semantics(initial, first)
+    initial = rebuilt(library, root, first)
+    assert library_semantics(compiled_bundle(library), library) == library_semantics(initial, first)
     root = exported(first, tmp_path / "two")
     second = rebuilt(first, root, tmp_path / "second")
     assert initial == second

@@ -2,7 +2,7 @@
 
 from collections.abc import Mapping, Set
 
-from . import rezono_equation, rezono_metadata, rezono_slot
+from . import rezono_derived, rezono_equation, rezono_metadata, rezono_slot
 from .names import NAME
 from .rezono_extend import refuse_derived
 from .rezono_lowering import Refuse
@@ -144,7 +144,8 @@ def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]]
           rezono_1: bool = False,
           layer: str = "",
           slot_targets: dict[tuple[str, str], str] | None = None,
-          parent_targets: dict[str, str] | None = None) -> dict | None:
+          parent_targets: dict[str, str] | None = None,
+          form: dict | None = None) -> dict | None:
     """`kinds` holds the slots of each kind of the module, which an inverse slot reads."""
     ok = True
     allowed = (MEMBERS | {"checks", "deprecated", "embedded", "equations", "parent", "relationship"} | rezono_metadata.FIELDS
@@ -214,6 +215,13 @@ def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]]
         ok = False
     for index, derived in enumerate(decl.get("derived") or []):
         here = f"{at}/derived/{index}"
+        if (rezono_1 and isinstance(derived, dict) and isinstance(derived.get("table"), dict)
+                and derived["table"].get("table") == "priority"):
+            refuse(here, "`table priority` is removed in `rezono 1` (R028); use `table first` instead", "§5.4")
+            ok = False
+            continue
+        elif rezono_derived.is_derivation(form, derived):
+            continue  # lowered with the rules to rezono.rules/2 (rezono_derived.py)
         if not extended_format:
             refuse_derived(here, refuse)
             ok = False

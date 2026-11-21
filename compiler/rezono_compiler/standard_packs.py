@@ -21,11 +21,11 @@ TABLE: dict[str, str] = {
     "std-decision": "98e8f4243a571ee7e45de9de136df0098adfd462087761ea3209b91c25c256cb",
     "std-explain": "72e2897cd9baaa4962cf2235f83a332262b4da1e6d34e82d5f64d8335e27be0b",
     "std-identity": "129e5321602dea3b58ea5220103c4d313237d0dbf5e640c677b24fc98e5d265b",
-    "std-loop": "85933c453fbc5cc2f39364f2a17fd0366de91eb708281ef8981b8131c06cac29",
+    "std-loop": "1512bdc4315125b60d28488378adc81ef4cae45b1cff71e5f12d8fe546979f70",
     "std-order": "6c56982cfaa6535835b594be2fb280655795a96f0308d8e5d423c6040f923495",
     "std-part": "207f4f097f68e6dade792b714754e0f279ce2c948be8adce82108a3abc18cca9",
     "std-review": "ad0a9b9c585ff348f96b7a57c3cbe5ba70e811fcd5d2796e4bc894668c0091ea",
-    "std-time": "bb2863a03792228005fa6784ed1022c07ac82139cdbf0ff7914cd273b3e046a7",
+    "std-time": "8086365e4aecf05bada7b2eb7571242dd26fbbf2b84c767a7c221bcf6c436f6d",
     "std-view": "a544468e9e64efbe31dfc5ccf72f1eccbf508dafc55f7087a39ab9b4dd4bff60",
 }
 

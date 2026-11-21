@@ -42,21 +42,28 @@ INT = re.compile(r"^(0|-?[1-9][0-9]*)$")   # canonical: no leading zeros, no "-0
 RATIONAL = re.compile(r"^(0|-?[1-9][0-9]*)(/[1-9][0-9]*)?$")
 NAT = re.compile(r"^(0|[1-9][0-9]*)$")
 BIGINT = (-2**63, 2**63 - 1)   # the engines' integer: a constant outside it is no value on any engine
+BOUND = 2**63 - 1              # rezono.rules/2 symmetric 64-bit exact-number bound
+SYMMETRIC_BOUND = (-BOUND, BOUND)
 MAX_LEVELS = 64   # a counter is unrolled into at most this many strata: each one is a join more on every engine
 
 
-def is_rational(t: str) -> bool:
+def integer_bounds(fmt: str = FORMAT_V2) -> tuple[int, int]:
+    """Return the signed constant bounds for `fmt` (`rezono.rules/2` symmetric, `rezono.rules/1` legacy)."""
+    return SYMMETRIC_BOUND if fmt == FORMAT_V2 else BIGINT
+
+
+def is_rational(t: str, *, bounds: tuple[int, int] = SYMMETRIC_BOUND) -> bool:
     """True if `t` is canonical exact rational text: an integer or reduced fraction `n/d` with d > 1."""
     if not RATIONAL.match(t):
         return False
     num_s, sep, den_s = t.partition("/")
     num = int(num_s)
-    if not (BIGINT[0] <= num <= BIGINT[1]):
+    if not (bounds[0] <= num <= bounds[1]):
         return False
     if not sep:
         return True
     den = int(den_s)
-    return 1 < den <= BIGINT[1] and math.gcd(abs(num), den) == 1
+    return 1 < den <= bounds[1] and math.gcd(abs(num), den) == 1
 
 
 class IRError(ValueError):
@@ -530,7 +537,7 @@ def load(doc, require_witness=True):
             assignments=tuple(Assignment(s["var"], s["op"], s["left"], s["right"]) for s in d.get("assignments", [])),
             origin=(d["origin"]["file"], _nat(d["origin"]["line"], rid)),
         )
-        _check_rule(rule, relations)
+        _check_rule(rule, relations, fmt=fmt)
         rules[rid] = rule
         w = d.get("witness")
         if w is None and require_witness:
@@ -551,7 +558,7 @@ def load(doc, require_witness=True):
 
 
 def _check_access_boundary(prog):
-    """Neither may_read nor may_read_full may depend (directly or transitively) on a functional derivation
+    """Neither may_read nor may_read_full may be or depend (directly or transitively) on a functional derivation
     or a calculation selection (decisions/language-rezono-1.md, section 4)."""
     calc_rels = {n for n, r in prog.relations.items() if r.role == "calc"}
     if calc_rels:
@@ -564,7 +571,7 @@ def _check_access_boundary(prog):
     if func_rels:
         after_func = prog.downstream(func_rels)
         for access_rel in ACCESS_RELATIONS:
-            if access_rel in after_func:
+            if access_rel in func_rels or access_rel in after_func:
                 raise IRError("access_depends_on_functional",
                               f"{access_rel} cannot depend on a functional derivation")
 
@@ -613,7 +620,9 @@ def _check_outcomes(prog):
                                              "in lower snake case (its message is reason.<reason>)")
 
 
-def _check_rule(rule, relations):
+def _check_rule(rule, relations, *, fmt=FORMAT):
+    bounds = integer_bounds(fmt)
+
     def rel(atom, *, is_head=False):
         r = relations.get(atom.relation)
         if r is None:
@@ -630,7 +639,7 @@ def _check_rule(rule, relations):
             raise IRError("bad_constant", f"{rule.id}: {t!r} is not an integer")
         if col.type == "integer":
             fits(t)
-        if col.type == "rational" and not is_rational(t):
+        if col.type == "rational" and not is_rational(t, bounds=bounds):
             raise IRError("bad_constant", f"{rule.id}: {t!r} is not a canonical rational")
         if col.type == "boolean" and t not in BOOLEAN:
             raise IRError("bad_constant", f"{rule.id}: {t!r} is not a boolean")
@@ -638,8 +647,9 @@ def _check_rule(rule, relations):
             raise IRError("bad_constant", f"{rule.id}: {t!r} is not allowed in a date column")
 
     def fits(t):
-        if not BIGINT[0] <= int(t) <= BIGINT[1]:
-            raise IRError("constant_out_of_range", f"{rule.id}: {t} does not fit a BIGINT")
+        if not bounds[0] <= int(t) <= bounds[1]:
+            limit = f"symmetric 64-bit bound (+/-{BOUND})" if fmt == FORMAT_V2 else "a BIGINT"
+            raise IRError("constant_out_of_range", f"{rule.id}: {t} does not fit {limit}")
 
     head = rel(rule.head, is_head=True)
     if head.role not in ("derived", "functional"):
@@ -750,7 +760,7 @@ def _check_rule(rule, relations):
                 raise IRError("bad_constant", f"{rule.id}: {t!r} is compared with an integer")
             if not is_var(t) and kinds == {"integer"}:
                 fits(t)
-            if not is_var(t) and kinds == {"rational"} and not is_rational(t):
+            if not is_var(t) and kinds == {"rational"} and not is_rational(t, bounds=bounds):
                 raise IRError("bad_constant", f"{rule.id}: {t!r} is compared with a rational")
     for b in rule.body:
         if b.polarity == "negative":

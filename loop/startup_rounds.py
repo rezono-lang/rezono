@@ -326,15 +326,32 @@ def load_startup_topology(
     facts_file = Path(facts_path)
     model, program, needed_derived = _load_platform_pack(pack_root)
     fact_rows = compiler_facts.load(model, facts_file)
-    sig_facts = pack_root / "facts" / "artifact_signature.yaml"
+    facts_dir = pack_root / "facts"
+    resolved_facts = facts_file.resolve()
+    sig_facts = facts_dir / "artifact_signature.yaml"
     if (
         sig_facts.is_file()
-        and facts_file.resolve().parent == sig_facts.resolve().parent
-        and facts_file.resolve() != sig_facts.resolve()
+        and resolved_facts.parent == sig_facts.resolve().parent
+        and resolved_facts != sig_facts.resolve()
         and not any(k in fact_rows for k in ("artifact_signature", "signature_scan"))
     ):
         for table, rows in compiler_facts.load(model, sig_facts).items():
             fact_rows.setdefault(table, []).extend(rows)
+    sibling_dir = facts_dir if resolved_facts.parent == facts_dir.resolve() else resolved_facts.parent
+    port_decisions = sibling_dir / "port_decision.yaml"
+    if (
+        port_decisions.is_file()
+        and resolved_facts != port_decisions.resolve()
+        and "port_decision" not in fact_rows
+    ):
+        for table, rows in compiler_facts.load(model, port_decisions).items():
+            fact_rows.setdefault(table, []).extend(rows)
+    if "vendor_default_transport_source" not in fact_rows:
+        for transport_file in sorted(sibling_dir.glob("*_transport_source.yaml")):
+            if resolved_facts == transport_file.resolve():
+                continue
+            for table, rows in compiler_facts.load(model, transport_file).items():
+                fact_rows.setdefault(table, []).extend(rows)
     inputs = compiler_scenarios.rule_rows(model, program, fact_rows)
     base_requested = tuple(rel for rel in TOPOLOGY_BASE_RELATIONS if rel in program.relations)
     requested = (*TOPOLOGY_DERIVED_RELATIONS, *base_requested)

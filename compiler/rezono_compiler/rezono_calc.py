@@ -11,7 +11,7 @@ import re
 from collections.abc import Iterable, Mapping, Sequence, Set
 from typing import TYPE_CHECKING
 
-from . import rezono_exceptions, rezono_module
+from . import rezono_derived, rezono_exceptions, rezono_module
 from .diagnostics import Diagnostic
 from .names import ISO_DATE
 from .rezono_lowering import Refuse
@@ -43,6 +43,8 @@ OVERRIDE_MEMBERS = frozenset({"definition", "reason"})
 CLAUSE_MEMBERS = frozenset({"when", "then", "source"})
 PARAM_MEMBERS = frozenset({"param", "type", "per", "value", "source", "versions"})
 PARAM_SOURCE_MEMBERS = frozenset({"kind", "slot", "nameSlot"})
+PARAM_VERSION_MEMBERS = frozenset({"version", "valid", "known", "value", "source"})
+DIMENSIONLESS_TYPES = frozenset({"Ratio", "Int"})
 
 
 def _param_source(decl: object) -> tuple[str, str, str] | None:
@@ -59,28 +61,31 @@ def _is_calc_derived(item: object) -> bool:
     return isinstance(item, dict) and not isinstance(item.get("table"), dict)
 
 
-def _subject_of_decl(decl: object) -> tuple[str, list[tuple[int, dict]]] | None:
+def _subject_of_decl(decl: object, form: dict | None = None) -> tuple[str, list[tuple[int, dict]]] | None:
+    """The subject kind and the calculated values of a kind or an extension; in rezono 1 a derived value without
+    calculation members is no calculation (rezono_derived.py)."""
     if not isinstance(decl, dict):
         return None
     kind_name = decl.get("extend") if "extend" in decl else decl.get("kind") if "kind" in decl else None
     if not isinstance(kind_name, str):
         return None
-    derived = [(idx, dv) for idx, dv in enumerate(decl.get("derived") or []) if _is_calc_derived(dv)]
+    derived = [(idx, dv) for idx, dv in enumerate(decl.get("derived") or [])
+               if _is_calc_derived(dv) and not rezono_derived.is_derivation(form, dv)]
     return (kind_name, derived) if derived else None
 
 
 def has_calculation(form: dict) -> bool:
-    """Whether a module form carries an `as of` line, a row-backed parameter, or any non-table derived value."""
+    """Whether a module form carries an `as of` line, a row-backed parameter, or any non-table derived value.
+    rezono 1 modules lower all derivations to rezono.rules/2 (rezono_derived.py), never rezono.calc/1."""
     if form.get("format") not in (
         rezono_module.IDENTIFIER_FORMAT,
         *rezono_module.NATIVE_FORMATS,
-        rezono_module.REZONO_1_FORMAT,
     ):
         return False
     for decl in form["module"]["decls"]:
         if isinstance(decl, dict) and ("asOf" in decl or "param" in decl):
             return True
-        if _subject_of_decl(decl) is not None:
+        if _subject_of_decl(decl, form) is not None:
             return True
     return False
 
@@ -107,7 +112,7 @@ def module_rules(form: dict) -> tuple[str | None, set[str]]:
     subject: str | None = None
     rules: set[str] = set()
     for decl in form["module"]["decls"]:
-        found = _subject_of_decl(decl)
+        found = _subject_of_decl(decl, form)
         if found is None:
             continue
         kind_name, derived = found
@@ -148,22 +153,68 @@ def validate_param(decl: object, at: str, refuse: Refuse) -> bool:
     if not isinstance(decl.get("type"), str) or not decl["type"]:
         refuse(at, "a parameter needs a type (R050)", SECTION)
         ok = False
-    if "value" in decl or "versions" in decl:
-        refuse(at, "inline parameter is not lowered (R050)", SECTION)
-        ok = False
     if "per" in decl:
         refuse(at, "a parameter with `per` is not lowered (R050)", SECTION)
         ok = False
-    if "source" not in decl:
-        if "value" not in decl and "versions" not in decl:
-            refuse(at, "inline parameter needs `from Kind.slot by nameSlot` (R050)", SECTION)
-            ok = False
-    else:
+    has_inline = "value" in decl or "versions" in decl
+    if "source" in decl and has_inline:
+        refuse(at, "parameter cannot have both source and inline value/versions (R050)", SECTION)
+        ok = False
+    elif "value" in decl and "versions" in decl:
+        refuse(at, "parameter cannot have both value and versions (R050)", SECTION)
+        ok = False
+    elif "source" in decl:
         src = decl["source"]
         if (not isinstance(src, dict) or set(src) != PARAM_SOURCE_MEMBERS
                 or not all(isinstance(src.get(k), str) and src[k] for k in ("kind", "slot", "nameSlot"))):
             refuse(f"{at}/source", "parameter source needs kind, slot and nameSlot (R050)", SECTION)
             ok = False
+    elif "versions" in decl:
+        versions = decl["versions"]
+        if not isinstance(versions, list) or not versions:
+            refuse(f"{at}/versions", "versions must be a non-empty list (R050)", SECTION)
+            ok = False
+        else:
+            seen_versions: set[str] = set()
+            for vi, ver in enumerate(versions):
+                vat = f"{at}/versions/{vi}"
+                if not isinstance(ver, dict):
+                    refuse(vat, "version must be an object (R050)", SECTION)
+                    ok = False
+                    continue
+                if extra := set(ver) - PARAM_VERSION_MEMBERS:
+                    refuse(vat, f"a parameter version with {', '.join(sorted(extra))} is not lowered (R050)", SECTION)
+                    ok = False
+                if not isinstance(ver.get("version"), str) or not ver["version"]:
+                    refuse(vat, "version needs a version label (R050)", SECTION)
+                    ok = False
+                elif ver["version"] in seen_versions:
+                    refuse(vat, f"duplicate parameter version {ver['version']!r} (R050)", SECTION)
+                    ok = False
+                else:
+                    seen_versions.add(ver["version"])
+                if not isinstance(ver.get("value"), dict):
+                    refuse(f"{vat}/value", "parameter version needs a value expression (R050)", SECTION)
+                    ok = False
+                if "valid" in ver:
+                    rng = ver["valid"]
+                    if (not isinstance(rng, list) or len(rng) not in (1, 2)
+                            or not all(isinstance(d, str) and ISO_DATE.fullmatch(d) for d in rng)):
+                        refuse(f"{vat}/valid", "valid must be one or two ISO dates (R050)", SECTION)
+                        ok = False
+                if "known" in ver and (not isinstance(ver["known"], str) or not ISO_DATE.fullmatch(ver["known"])):
+                    refuse(f"{vat}/known", "known must be an ISO date (R050)", SECTION)
+                    ok = False
+                if "source" in ver and (not isinstance(ver["source"], str) or not ver["source"]):
+                    refuse(vat, "parameter version source must be non-empty text (R050)", SECTION)
+                    ok = False
+    elif "value" in decl:
+        if not isinstance(decl["value"], dict):
+            refuse(f"{at}/value", "parameter value must be an expression (R050)", SECTION)
+            ok = False
+    else:
+        refuse(at, "parameter needs `from Kind.slot by nameSlot`, `= value`, or `versions` (R050)", SECTION)
+        ok = False
     return ok
 
 
@@ -334,7 +385,7 @@ def validate_derived(dv: object, at: str, refuse: Refuse) -> bool:
     return ok
 
 
-def validate_module(decls: list, refuse: Refuse) -> None:
+def validate_module(decls: list, refuse: Refuse, form: dict | None = None) -> None:
     """Check module-level calculation constraints: one subject, one parameter source, at most one `as of`."""
     first_subject: str | None = None
     first_source: tuple[str, str, str] | None = None
@@ -362,7 +413,7 @@ def validate_module(decls: list, refuse: Refuse) -> None:
                     f"and {src[0]}.{src[1]} by {src[2]} (R050)",
                     SECTION,
                 )
-        found = _subject_of_decl(decl)
+        found = _subject_of_decl(decl, form)
         if found is None:
             continue
         kind_name, _ = found
@@ -634,19 +685,27 @@ def lower_module(
 
     doc: dict = {"format": FORMAT, "pack": module.pack, "rules": [], "templates": []}
     local_params: set[str] = set()
+    inline_params: list[tuple[str, dict]] = []
+    inline_param_names: set[str] = set()
     for decl_idx, decl in enumerate(form["module"]["decls"]):
         decl_at = f"/decls/{decl_idx}"
         if not isinstance(decl, dict) or "param" not in decl:
             continue
+        pname = decl["param"]
         src = _param_source(decl)
         if src is None:
-            if "value" in decl or "versions" in decl or "source" not in decl:
-                refuse(decl_at, "inline parameter is not lowered")
-            else:
+            if ("value" in decl or "versions" in decl) and "source" not in decl and "per" not in decl:
+                if pname in local_params or pname in inline_param_names:
+                    refuse(decl_at, f"parameter {pname!r} is declared twice")
+                    continue
+                inline_param_names.add(pname)
+                inline_params.append((decl_at, decl))
+            elif "source" in decl:
                 refuse(f"{decl_at}/source", "parameter source needs kind, slot and nameSlot")
+            else:
+                refuse(decl_at, "inline parameter is not lowered")
             continue
-        pname = decl["param"]
-        if pname in local_params:
+        if pname in local_params or pname in inline_param_names:
             refuse(decl_at, f"parameter {pname!r} is declared twice")
             continue
         local_params.add(pname)
@@ -686,7 +745,7 @@ def lower_module(
             else:
                 doc["as_of"] = {"valid_at": decl["asOf"], "known_at": decl["known"]}
             continue
-        found = _subject_of_decl(decl)
+        found = _subject_of_decl(decl, form)
         if found is None:
             continue
         kind_name, derived_list = found
@@ -706,7 +765,7 @@ def lower_module(
             continue
 
         assert own_subject is not None and root_subject is not None
-        subject_rules = rules_by_subject.get(own_subject, frozenset())
+        subject_rules = rules_by_subject.get(own_subject, frozenset()) | inline_param_names
 
         for dv_idx, dv in derived_list:
             dv_at = f"{decl_at}/derived/{dv_idx}"
@@ -719,6 +778,8 @@ def lower_module(
                 unit = dv["unit"]
             elif dv.get("type") in pack.units:
                 unit = dv["type"]
+            elif dv.get("type") in DIMENSIONLESS_TYPES:
+                unit = "1"
             else:
                 refuse(dv_at, f"{rule_name}: unit is required unless the declared type names a unit the pack declares")
                 continue
@@ -817,6 +878,67 @@ def lower_module(
                     "known_from": known_from,
                     "definitions": lowered_defs,
                 })
+
+    if inline_params and own_subject is not None and subject_cls is not None and root_subject is not None:
+        param_rules: list[dict] = []
+        for param_at, decl in inline_params:
+            pname = decl["param"]
+            ptype = decl.get("type")
+            if ptype in pack.units:
+                punit = ptype
+            elif ptype in DIMENSIONLESS_TYPES:
+                punit = "1"
+            else:
+                refuse(param_at, f"{pname}: unit is required unless the declared type names a unit the pack declares")
+                continue
+            if "versions" in decl:
+                pversions = [
+                    (
+                        f"{param_at}/versions/{vi}",
+                        str(ver["version"]),
+                        ver["valid"][0] if ver.get("valid") else DEFAULT_VALID_FROM,
+                        ver["valid"][1] if ver.get("valid") and len(ver["valid"]) > 1 else DEFAULT_VALID_UNTIL,
+                        ver.get("known") or DEFAULT_KNOWN_FROM,
+                        ver["value"],
+                    )
+                    for vi, ver in enumerate(decl["versions"])
+                ]
+            else:
+                pversions = [
+                    (
+                        param_at,
+                        DEFAULT_VERSION,
+                        DEFAULT_VALID_FROM,
+                        DEFAULT_VALID_UNTIL,
+                        DEFAULT_KNOWN_FROM,
+                        decl["value"],
+                    )
+                ]
+            for ver_at, v_str, valid_from, valid_until, known_from, raw_val in pversions:
+                val = lower_expression(
+                    raw_val, f"{ver_at}/value", pack, subject_cls, own_subject, root_subject,
+                    pname, inline_param_names, in_scope_params, refuse,
+                    where_prefix=where, line_map=line_map, bare_leaves=bare_leaves,
+                )
+                if val is None:
+                    continue
+                if punit in pack.units and set(val) == {"integer"}:
+                    val = {**val, "unit": punit}
+                param_rules.append({
+                    "id": f"{pname}@{v_str}",
+                    "rule": pname,
+                    "version": v_str,
+                    "output": f"{own_subject}.{pname}",
+                    "unit": punit,
+                    "valid_from": valid_from,
+                    "valid_until": valid_until,
+                    "known_from": known_from,
+                    "definitions": [{"name": pname, "when": {"boolean": True}, "value": val}],
+                })
+        doc["rules"] = param_rules + doc["rules"]
+    elif inline_params and not errors:
+        for param_at, decl in inline_params:
+            refuse(param_at, f"{decl['param']}: inline parameter requires a calculated subject kind in this module")
 
     if errors:
         raise CompileError("\n".join(d.message for d in errors), errors)

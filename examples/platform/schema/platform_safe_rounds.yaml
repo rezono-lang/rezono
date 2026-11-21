@@ -1,6 +1,6 @@
 id: https://rezono.org/examples/platform-core/safe-rounds
 name: platform_safe_rounds
-description: Dataset-to-copy binding and offline fence interval evidence for isolated management dataset restoration.
+description: Startup goal target inventory, dataset-to-copy binding, and offline fence interval evidence for safe platform rounds.
 in_language: en
 imports: [linkml:types]
 default_range: string
@@ -8,6 +8,15 @@ annotations:
   layer: facts
 
 classes:
+  PlatformStartupTarget:
+    description: Declares a platform startup goal target, its readiness completion step and token, and its required steps and tokens.
+    attributes:
+      id: {identifier: true}
+      target: {required: true}
+      completion_step: {required: true}
+      completion_token: {required: true}
+      required_step: {multivalued: true, required: true}
+      required_token: {multivalued: true, required: true}
   RestoreDatasetBinding:
     description: Binds a named management dataset to the exact captured backup copy for a restore trial.
     attributes:

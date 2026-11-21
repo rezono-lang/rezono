@@ -4,12 +4,13 @@ A test replaces (part of) a calc/*.yaml file with a hand-written module form and
 with the one the existing file gives (decisions/language-calculations.md, Lowering to the calculation model).
 The module text holds only its header, so the form is lowered as written, without the reader."""
 
+from contextlib import ExitStack
 from pathlib import Path
 import json
-import shutil
 
 import yaml
 
+from model_parity import legacy_file_bytes, legacy_helpers
 from rezono_compiler import emit, pack, rezono_module
 
 
@@ -19,7 +20,7 @@ SUBSIDY = "examples/subsidy"
 
 def imported_example(example: str) -> str:
     """The one example pack that `example` imports, as a path from the repository root."""
-    meta = yaml.safe_load((ROOT / example / "pack.yaml").read_bytes())
+    meta = yaml.safe_load(legacy_file_bytes(f"{example}/pack.yaml"))
     [path] = [(ROOT / example / entry["path"]).resolve() for entry in meta["imports"]
               if (ROOT / example / entry["path"]).resolve().parent == (ROOT / "examples").resolve()]
     return path.relative_to(ROOT.resolve()).as_posix()
@@ -49,16 +50,21 @@ def strip_award(scheme_dir: Path) -> None:
 
 
 def examples(root: Path) -> Path:
-    """The two subsidy examples and the standard packs, at their own relative places under `root`."""
-    shutil.copytree(ROOT / "packs", root / "packs")
-    for example in (SCHEME, SUBSIDY):
-        shutil.copytree(ROOT / example, root / example)
+    """The two subsidy examples and the standard packs in legacy form, at their own relative places."""
+    legacy_helpers().materialize_legacy_packs(root, ("packs", SCHEME, SUBSIDY), prefer_live=True)
     return root
+
+
+def read_pack(pack_dir: Path):
+    """Read an archived calculation example pack with its sibling legacy standard packs admitted."""
+    with ExitStack() as stack:
+        legacy_helpers().admit_legacy_std_packs(stack, pack_dir.parents[1])
+        return pack.read(pack_dir)
 
 
 def calc_ir(pack_dir: Path) -> dict:
     """The bound calculation program, ir/calc.json, and the other calculation files of the publication."""
-    files = emit.compile_pack(pack.read(pack_dir))
+    files = emit.compile_pack(read_pack(pack_dir))
     return {name: (json.loads(text) if name.endswith(".json") else text)
             for name, text in files.items() if "calc" in name}
 

@@ -9,6 +9,7 @@ outcomes across every scenario state, and verifies every reference to calc/award
 
 from __future__ import annotations
 
+from contextlib import ExitStack
 import json
 import shutil
 from pathlib import Path
@@ -17,7 +18,8 @@ import pytest
 import yaml
 
 from calcsupport import run_both
-from rezono_compiler import calc, calc_sql, emit, modules, pack, scenarios
+from candidate_pack import legacy_helpers
+from rezono_compiler import batch, calc, calc_sql, emit, modules, pack, rules as ir, scenarios
 
 
 HERE = Path(__file__).resolve().parent
@@ -57,19 +59,31 @@ def golden_calc_text(results: dict[str, dict]) -> str:
 
 
 def compile_legacy_oracle(tmp_path: Path) -> dict[str, str]:
-    """Compile an isolated copy of examples/subsidy-scheme using the frozen legacy calc/award.yaml."""
+    """Compile an isolated copy of legacy examples/subsidy-scheme using the frozen legacy calc/award.yaml."""
     root = tmp_path / "legacy-oracle"
-    shutil.copytree(REPO / "packs" / "std-decision", root / "packs" / "std-decision",
-                    ignore=shutil.ignore_patterns("candidate"))
+    helpers = legacy_helpers()
+    helpers.materialize_legacy_packs(root, ("packs/std-decision", "examples/subsidy-scheme"), prefer_live=True)
     scheme = root / "examples" / "subsidy-scheme"
-    shutil.copytree(SCHEME, scheme, ignore=shutil.ignore_patterns("candidate", "rezono"))
+    shutil.rmtree(scheme / "rezono", ignore_errors=True)
     (scheme / "calc").mkdir(exist_ok=True)
     shutil.copy2(ORACLE, scheme / "calc" / "award.yaml")
     meta_path = scheme / "pack.yaml"
     meta = yaml.safe_load(meta_path.read_bytes())
     meta.pop("rezono", None)
     meta_path.write_text(yaml.safe_dump(meta, sort_keys=False), encoding="utf-8")
-    return emit.compile_pack(pack.read(scheme))
+    with ExitStack() as stack:
+        helpers.admit_legacy_std_packs(stack, root)
+        return emit.compile_pack(pack.read(scheme))
+
+
+def compile_archived_rezono_0_award(tmp_path: Path) -> dict[str, str]:
+    """Compile the archived rezono 0 examples/subsidy-scheme pack (with rezono/award.rezono)."""
+    root = tmp_path / "archived-rezono-0"
+    helpers = legacy_helpers()
+    helpers.materialize_legacy_packs(root, ("packs/std-decision", "examples/subsidy-scheme"), prefer_live=True)
+    with ExitStack() as stack:
+        helpers.admit_legacy_std_packs(stack, root)
+        return emit.compile_pack(pack.read(root / "examples" / "subsidy-scheme"))
 
 
 def test_subsidy_scheme_award_in_rezono(tmp_path):
@@ -108,7 +122,7 @@ def test_subsidy_scheme_award_in_rezono(tmp_path):
 
     stale_refs = [
         rel for rel in UPDATED_REFERENCES
-        if "calc/award.yaml" in (REPO / rel).read_text(encoding="utf-8")
+        if (REPO / rel).is_file() and "calc/award.yaml" in (REPO / rel).read_text(encoding="utf-8")
     ]
     if stale_refs:
         problems.append(f"stale references to calc/award.yaml in: {stale_refs}")
@@ -131,28 +145,76 @@ def test_subsidy_scheme_award_in_rezono(tmp_path):
         raise MissingSubsidyAwardInRezono(f"compiling examples/subsidy-scheme failed: {error}") from error
 
     legacy_files = compile_legacy_oracle(tmp_path)
-    if live_files["ir/calc.json"] != legacy_files["ir/calc.json"]:
+    helpers = legacy_helpers()
+    if helpers.pack_is_rezono_1(SCHEME):
+        assert "ir/calc.json" not in live_files, (
+            "native rezono 1 examples/subsidy-scheme must lower award to ir/rules.json, not ir/calc.json"
+        )
+        calc_files = compile_archived_rezono_0_award(tmp_path)
+    else:
+        assert "ir/calc.json" in live_files, "rezono 0 examples/subsidy-scheme must emit ir/calc.json"
+        calc_files = live_files
+    if calc_files["ir/calc.json"] != legacy_files["ir/calc.json"]:
         raise MissingSubsidyAwardInRezono("ir/calc.json from rezono/award.rezono differs from legacy calc/award.yaml")
-    if live_files["engine/calc.sql"] != legacy_files["engine/calc.sql"]:
+    if calc_files["engine/calc.sql"] != legacy_files["engine/calc.sql"]:
         raise MissingSubsidyAwardInRezono("engine/calc.sql from rezono/award.rezono differs from legacy calc/award.yaml")
 
     # End-to-end subsidy evaluation across every scenario state matches expected/calc/*.json byte-for-byte.
     model = pack.read(SUBSIDY)
-    program = calc.build(model, model.calc)
-    evaluation_rows = {table: [tuple(row.values()) for row in rows] for table, rows in calc_sql.rows(program).items()}
     expected_dir = SUBSIDY / "expected" / "calc"
     expected_files = sorted(expected_dir.glob("*.json"))
     seen_labels: list[str] = []
-    for label, rows in scenarios.states(model, SUBSIDY):
-        seen_labels.append(label)
-        got, exact = run_both(model, program, model.calc, rows | evaluation_rows)
-        if got != exact:
-            raise MissingSubsidyAwardInRezono(f"{label}: DuckDB and exact Python calculation results disagree")
-        want = expected_dir / f"{label}.json"
-        if not want.is_file():
-            raise MissingSubsidyAwardInRezono(f"missing expected calc file: {want.relative_to(REPO)}")
-        if golden_calc_text(got) != want.read_text(encoding="utf-8"):
-            raise MissingSubsidyAwardInRezono(f"{label}: calculation output differs from {want.relative_to(REPO)}")
+    if not helpers.pack_is_rezono_1(SUBSIDY):
+        assert model.calc, "rezono 0 examples/subsidy must carry a calculation program"
+        program = calc.build(model, model.calc)
+        evaluation_rows = {table: [tuple(row.values()) for row in rows] for table, rows in calc_sql.rows(program).items()}
+        for label, rows in scenarios.states(model, SUBSIDY):
+            seen_labels.append(label)
+            got, exact = run_both(model, program, model.calc, rows | evaluation_rows)
+            if got != exact:
+                raise MissingSubsidyAwardInRezono(f"{label}: DuckDB and exact Python calculation results disagree")
+            want = expected_dir / f"{label}.json"
+            if not want.is_file():
+                raise MissingSubsidyAwardInRezono(f"missing expected calc file: {want.relative_to(REPO)}")
+            if golden_calc_text(got) != want.read_text(encoding="utf-8"):
+                raise MissingSubsidyAwardInRezono(f"{label}: calculation output differs from {want.relative_to(REPO)}")
+    else:
+        assert not model.calc, "native rezono 1 examples/subsidy must lower calculations to ir/rules.json, not model.calc"
+        prog = ir.load(model.rules)
+        calc_rules = (
+            "income_threshold",
+            "income_limit",
+            "cost_share",
+            "advice_allowance",
+            "entitlement",
+            "award",
+            "payment_difference",
+        )
+        for name in calc_rules:
+            rel_id = f"application_{name}"
+            rel = prog.relations.get(rel_id)
+            assert rel is not None and rel.role == "functional", (
+                f"native rezono 1 examples/subsidy must declare {rel_id!r} with role == 'functional'"
+            )
+        for label, rows in scenarios.states(model, SUBSIDY):
+            seen_labels.append(label)
+            want = expected_dir / f"{label}.json"
+            if not want.is_file():
+                raise MissingSubsidyAwardInRezono(f"missing expected calc file: {want.relative_to(REPO)}")
+            con, _, _ = batch.run(model, prog, rows)
+            try:
+                derived = batch.read(con, prog, [f"application_{name}" for name in calc_rules])
+            finally:
+                con.close()
+            got = {
+                name: {
+                    str(row[0]): (str(row[1]), str(row[3]) if str(row[1]) == "known" else None)
+                    for row in derived.get(f"application_{name}", ())
+                }
+                for name in calc_rules
+            }
+            if golden_calc_text(got) != want.read_text(encoding="utf-8"):
+                raise MissingSubsidyAwardInRezono(f"{label}: calculation output differs from {want.relative_to(REPO)}")
     if [path.stem for path in expected_files] != seen_labels:
         raise MissingSubsidyAwardInRezono(
             f"expected/calc labels {[path.stem for path in expected_files]} != evaluated {seen_labels}"

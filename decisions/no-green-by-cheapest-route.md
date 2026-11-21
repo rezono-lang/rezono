@@ -49,7 +49,7 @@ Three shortcut metrics are governed by monotonically shrinking budgets instantia
   - `count_duplicate_source_blocks(root: Path) -> dict[str, int]`
   - `count_rezono_pack_dl_files(root: Path) -> tuple[dict[str, int], dict[str, int]]`
   - `evaluate_shortcut_budget(budget_name: str, base_ceilings: dict[str, int], head_ceilings: dict[str, int], base_observed: dict[str, int], head_observed: dict[str, int]) -> dict[str, set[tuple[str, str]]]` — builds `BudgetEntry` and `BudgetReading` rows and derives `budget_raised`, `budget_exceeded`, `budget_ratchet_violation` and `budget_slack` strictly through `packs/std-budget` (no Python decision fallback, failing closed if `packs/std-budget` cannot evaluate).
-  - `check_shortcut_budget(budget_name: str, root: Path, base: str | None = None) -> list[str]` — counts the working tree (and the `base` tree when provided), evaluates through `evaluate_shortcut_budget`, and returns blocking finding strings (empty when clean).
+  - `check_shortcut_budget(budget_name: str, root: Path, base: str) -> list[str]` — requires a non-empty git revision `base` (failing closed with `TypeError`/`ValueError` when omitted or blank; CLI `--base` is likewise required and fails closed when absent or empty), counts both the `base` tree and the working tree, evaluates through `evaluate_shortcut_budget`, and returns blocking finding strings (empty when clean).
 
 ## 3. Pre-queue reading review
 

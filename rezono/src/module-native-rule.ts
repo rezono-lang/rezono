@@ -56,6 +56,7 @@ function readNativeRule(line: Logical, build: Build): NativeRuleDecl {
 			continue;
 		}
 		decl.means = read.means as string;
+		build.placeMember(decl, 'means', build.spans.get(read));
 		if (read.source !== undefined) {
 			if (decl.source !== undefined) build.refuse(child, 'one `@` source');
 			else decl.source = read.source as string;
@@ -171,14 +172,14 @@ export const nativeRule = {
 				...(src.numChildren ? { source: src.child(0).decl() as string } : {}),
 			};
 		},
-		RuleMeansLine(_means, sentence, src) {
+		RuleMeansLine(meansKw, sentence, src) {
 			const means = sentence.decl();
 			if (typeof means !== 'string') refused(sentence, 'R000', ['a JSON string']);
-			return {
+			return named(meansKw, {
 				line: 'ruleMeans',
 				means,
 				...(src.numChildren ? { source: src.child(0).decl() as string } : {}),
-			};
+			});
 		},
 		RuleOption_extend: name => named(name, { extend: true }),
 		RuleOption_invariant_intermediate(invariant, _intermediate, _within, relation) {

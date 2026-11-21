@@ -4,7 +4,7 @@ default_language: en
 imports:
   - {name: std-access, path: ../../packs/std-access, sha256: 8e004b9bd062be365acfb3db30d9bb26fe393c3b979bd77e8d69fc60aae111e6}
   - {name: std-decision, path: ../../packs/std-decision, sha256: 98e8f4243a571ee7e45de9de136df0098adfd462087761ea3209b91c25c256cb}
-  - {name: std-time, path: ../../packs/std-time, sha256: bb2863a03792228005fa6784ed1022c07ac82139cdbf0ff7914cd273b3e046a7}
+  - {name: std-time, path: ../../packs/std-time, sha256: 8086365e4aecf05bada7b2eb7571242dd26fbbf2b84c767a7c221bcf6c436f6d}
   - {name: std-explain, path: ../../packs/std-explain, sha256: 72e2897cd9baaa4962cf2235f83a332262b4da1e6d34e82d5f64d8335e27be0b}
   # The scheme's definition, fact-free: its kinds, rules, calculation, labels and messages.
   - {name: subsidy-scheme, path: ../subsidy-scheme, sha256: 23075cbe754680f63c8fe57308fb04f505f1c253c5d60810ba4d420a939e25b4}

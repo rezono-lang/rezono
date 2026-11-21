@@ -2,3 +2,7 @@ platform_order_stage:
   - {id: request, precedes: [review]}
   - {id: review, precedes: [apply]}
   - {id: apply}
+platform_startup_target:
+  - {id: platform-startup, target: platform, completion_step: expose-entry, completion_token: lb/listener, required_step: [protect-entry, expose-entry], required_token: [lb/network-policy, lb/router-policy, restore-bad/network-probe]}
+loop_expectation:
+  - {id: platform/managed-scope, value: empty}
