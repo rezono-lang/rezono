@@ -71,7 +71,7 @@ def derived(tmp, records, evidence=None):
     reader's snapshot gives them: {"key": [text, ...]}, sorted by key."""
     build = tmp / "build"
     shutil.copytree(ROOT / "build", build)
-    for pack in ("std-loop", "std-order", "std-decision", "std-access"):
+    for pack in ("std-loop", "std-order", "std-decision", "std-access", "std-review"):
         shutil.copytree(ROOT / "packs" / pack, tmp / "packs" / pack)
     (build / "facts").mkdir(exist_ok=True)
     (build / "facts" / "input.yaml").write_text(yaml.safe_dump(records), encoding="utf-8")
