@@ -40,6 +40,7 @@ examples/platform/messages/*.mf2 pack-definition
 examples/projects/messages/*.mf2 pack-definition
 examples/subsidy/messages/*.mf2 pack-definition
 examples/subsidy-scheme/messages/*.mf2 pack-definition
+examples/zorgtoeslag-slice/messages/*.mf2 pack-definition
 examples/*/rules/*.dl pack-definition
 examples/*/calc/*.yaml pack-definition
 examples/*/sweeps.yaml pack-definition
