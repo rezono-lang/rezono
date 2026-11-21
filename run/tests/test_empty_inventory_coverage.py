@@ -5,11 +5,11 @@ and decisions/run-price-enforcement.md ("Cleanup"), an empty server listing (`b"
 `coverage="complete"` and `unfiltered=True` fabricated in Python. Feeding the exact same empty provider
 response twice into `run/packs/cleanup`:
 - With fresh, provable, account-wide completeness evidence (`rezono_checker.evidence.Evidence`) bound to
-  the unfiltered request (`ovh_inventory.request()`), account scope, and measurement timestamp strictly
-  after the delete dispatch -> an absence conclusion for the listing is allowed.
-- With unknown/missing/mismatched account scope, missing or stale measurement timestamp, or absent
-  completeness evidence -> absence is refused and yields an explicit `unknown` reason, never falsely
-  claiming absent or cleaned.
+  the unfiltered request (`ovh_inventory.request()`), account scope, and an RFC 3339 UTC measurement
+  timestamp strictly after the freshness cutoff -> an absence conclusion for the listing is allowed.
+- With unknown/missing/mismatched account scope, missing or stale measurement timestamp, filtered
+  request, or absent completeness evidence -> absence is refused and yields an explicit `unknown`
+  reason, never falsely claiming absent or cleaned.
 """
 
 from __future__ import annotations
@@ -26,9 +26,12 @@ from offline_cases import PLAN_HASH, RUN, implementation
 DELIVERED = ["srv-2.example.org", "srv-1.example.org"]
 EMPTY_LISTING = b"[]"
 EXPECTED_REQUEST = ("GET", "/dedicated/server")
+FILTERED_REQUEST = ("GET", "/dedicated/server?tag=run-one")
 ACCOUNT_SCOPE = "account-one"
 DISPATCHED_US = 100
-FRESH_OBSERVED_US = 200
+FRESH_AFTER_AT = "2032-05-04T12:00:00Z"
+FRESH_OBSERVED_AT = "2032-05-04T12:00:01Z"
+STALE_BEFORE_AT = "2032-05-04T11:59:59Z"
 LISTING_ID = "listing-1"
 
 
@@ -46,27 +49,40 @@ def _listing_evidence(
     *,
     request_pair: tuple[str, str],
     account_scope: str | None,
-    observed_us: int | None,
-    listing_bytes: bytes,
+    observed_at: str | None,
+    fresh_after_at: str = FRESH_AFTER_AT,
+    listing_bytes: bytes = EMPTY_LISTING,
 ):
-    """Build a verified completeness receipt (`decisions/admission-transport.md`) for an empty listing."""
+    """Build a verified completeness receipt (`decisions/admission-transport.md`) for an empty listing.
+
+    Member key parts:
+    `["listing", listing_id, account_scope, method, path, observed_at, fresh_after_at]`
+    where `observed_at` and `fresh_after_at` are RFC 3339 UTC instants (or `""` when missing),
+    allowing `run/packs/cleanup` to compare them directly with `utc_instant(obs) > utc_instant(cutoff)`.
+    """
     from rezono_checker.evidence import Evidence
 
     services = json.loads(listing_bytes.decode("utf-8"))
-    source = {"kind": "query", "name": "ovh-dedicated-server-list", "position": f"{label}/cut-{observed_us}"}
+    source = {
+        "kind": "query",
+        "name": "ovh-dedicated-server-list",
+        "position": f"{label}/cut-{observed_at or 'missing'}",
+    }
     cut: dict[str, object] = {"frontier": {"source_id": source["name"], "position": source["position"]}}
-    if observed_us is not None:
-        cut["observed_us"] = observed_us
+    if observed_at is not None:
+        cut["observed_at"] = observed_at
+    cut["fresh_after_at"] = fresh_after_at
     definition = _archived(store, f"observations/retained/{label}-query.json", {
         "method": request_pair[0],
         "path": request_pair[1],
-        "unfiltered": True,
+        "unfiltered": request_pair == EXPECTED_REQUEST,
         "account_wide": True,
         "body_sha256": sha256(listing_bytes).hexdigest(),
     })
     bindings = [
         {"name": "method", "type": "string", "value": request_pair[0]},
         {"name": "path", "type": "string", "value": request_pair[1]},
+        {"name": "fresh_after_at", "type": "datetime", "value": fresh_after_at},
     ]
     if account_scope is not None:
         bindings.append({"name": "account_scope", "type": "string", "value": account_scope})
@@ -85,7 +101,8 @@ def _listing_evidence(
         "" if account_scope is None else account_scope,
         request_pair[0],
         request_pair[1],
-        "" if observed_us is None else str(observed_us),
+        "" if observed_at is None else observed_at,
+        fresh_after_at,
     ]
     inventory = [member_key]
     rows = [
@@ -216,9 +233,10 @@ def _listing_unknown_reasons(derived: dict[str, set[tuple[str, ...]]]) -> set[st
         "M4: decisions/admission-transport.md: Stop fabricating coverage='complete' and unfiltered=True "
         "in run/ovh_inventory.py:remaining() when reading an empty response, and require verified "
         "completeness coverage (decisions/scoped-completeness.md, decisions/run-price-enforcement.md) "
-        "bound to the unfiltered request, account scope, and fresh measurement timestamp before "
-        "run/packs/cleanup allows an absence conclusion for a listing; unknown/mismatched scope, "
-        "missing/stale timestamp, or absent evidence must refuse absence and derive an explicit unknown reason."
+        "bound to the unfiltered request, account scope, and fresh RFC 3339 UTC measurement timestamp "
+        "strictly after the freshness cutoff before run/packs/cleanup allows an absence conclusion for "
+        "a listing; unknown/mismatched scope, missing/stale timestamp, filtered request, or absent "
+        "evidence must refuse absence and derive an explicit unknown reason."
     ),
 )
 def test_empty_provider_inventory_requires_proven_coverage(monkeypatch, tmp_path):
@@ -257,14 +275,15 @@ def test_empty_provider_inventory_requires_proven_coverage(monkeypatch, tmp_path
     )
 
     # 3. Feed the exact same empty provider response b"[]" twice through run/packs/cleanup:
-    #    (a) Fresh, provable, account-wide coverage bound to request, account scope, and measurement timestamp.
+    #    (a) Fresh, provable, account-wide coverage bound to request, account scope, and RFC 3339 UTC timestamp.
     store = FileStore(tmp_path / "store")
     valid_evidence = _listing_evidence(
         store,
         "fresh-account-wide",
         request_pair=EXPECTED_REQUEST,
         account_scope=ACCOUNT_SCOPE,
-        observed_us=FRESH_OBSERVED_US,
+        observed_at=FRESH_OBSERVED_AT,
+        fresh_after_at=FRESH_AFTER_AT,
         listing_bytes=EMPTY_LISTING,
     )
     admitted = admit(valid_evidence)
@@ -281,9 +300,9 @@ def test_empty_provider_inventory_requires_proven_coverage(monkeypatch, tmp_path
     assert not _listing_unknown_reasons(fresh_derived), fresh_derived
     assert fresh_derived.get("still_listed", set()) == set()
 
-    #    (b) Exact same empty bytes b"[]" with unknown/mismatched scope, missing/stale timestamp, or absent
-    #        completeness evidence (even when plain listing flags claim complete/unfiltered) -> MUST NOT
-    #        conclude absence/cleaned and MUST yield an explicit unknown reason.
+    #    (b) Exact same empty bytes b"[]" with unknown/mismatched scope, missing/stale timestamp, filtered
+    #        request, or absent completeness evidence (even when plain listing flags claim complete/unfiltered)
+    #        -> MUST NOT conclude absence/cleaned and MUST yield an explicit unknown reason.
     unproven_cases = [
         (
             "unknown-scope",
@@ -292,8 +311,7 @@ def test_empty_provider_inventory_requires_proven_coverage(monkeypatch, tmp_path
                 "unknown-scope",
                 request_pair=EXPECTED_REQUEST,
                 account_scope=None,
-                observed_us=FRESH_OBSERVED_US,
-                listing_bytes=EMPTY_LISTING,
+                observed_at=FRESH_OBSERVED_AT,
             ),
             False,
         ),
@@ -304,8 +322,7 @@ def test_empty_provider_inventory_requires_proven_coverage(monkeypatch, tmp_path
                 "mismatched-scope",
                 request_pair=EXPECTED_REQUEST,
                 account_scope="account-other",
-                observed_us=FRESH_OBSERVED_US,
-                listing_bytes=EMPTY_LISTING,
+                observed_at=FRESH_OBSERVED_AT,
             ),
             False,
         ),
@@ -316,32 +333,40 @@ def test_empty_provider_inventory_requires_proven_coverage(monkeypatch, tmp_path
                 "missing-timestamp",
                 request_pair=EXPECTED_REQUEST,
                 account_scope=ACCOUNT_SCOPE,
-                observed_us=None,
-                listing_bytes=EMPTY_LISTING,
+                observed_at=None,
             ),
             False,
         ),
         (
-            "stale-before-dispatch",
+            "stale-before-cutoff",
             _listing_evidence(
                 store,
                 "stale-before",
                 request_pair=EXPECTED_REQUEST,
                 account_scope=ACCOUNT_SCOPE,
-                observed_us=DISPATCHED_US - 1,
-                listing_bytes=EMPTY_LISTING,
+                observed_at=STALE_BEFORE_AT,
             ),
             False,
         ),
         (
-            "stale-at-dispatch",
+            "stale-at-cutoff",
             _listing_evidence(
                 store,
                 "stale-at",
                 request_pair=EXPECTED_REQUEST,
                 account_scope=ACCOUNT_SCOPE,
-                observed_us=DISPATCHED_US,
-                listing_bytes=EMPTY_LISTING,
+                observed_at=FRESH_AFTER_AT,
+            ),
+            False,
+        ),
+        (
+            "filtered-request",
+            _listing_evidence(
+                store,
+                "filtered-request",
+                request_pair=FILTERED_REQUEST,
+                account_scope=ACCOUNT_SCOPE,
+                observed_at=FRESH_OBSERVED_AT,
             ),
             False,
         ),
