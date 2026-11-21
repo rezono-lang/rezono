@@ -1494,6 +1494,10 @@ class Lowering:
         """The literals that read a slot path from a variable, its value term and whether it is optional.
         Every hop is a single-valued slot; a path that mixes optional and required hops is not lowered yet. A value
         is not read from an open slot, where a missing value is unknown; a Bool set may read one and is then open."""
+        literals, term, optional, _ = self._path_with_type(at, path, target)
+        return literals, term, optional
+
+    def _path_with_type(self, at: str, path: list, target: tuple | None = None) -> tuple[list[tuple], tuple, bool, tuple]:
         path = self._resolve_path(path)
         head = path[0]
         if head not in self.env:
@@ -1518,7 +1522,7 @@ class Lowering:
             term, typ = value, self.slot_type(slot)
         if len(optional) > 1:
             self.site.refuse(at, "a path with optional and required hops is not lowered yet")
-        return literals, term, optional == {True}
+        return literals, term, optional == {True}, typ
 
     # -- predicates of a set (Bool) -------------------------------------------------------------------------------
 
@@ -1536,16 +1540,58 @@ class Lowering:
         return [self.premise(at, node)]
 
     def operand(self, at: str, node: dict) -> tuple[list[tuple], tuple]:
+        items, term, _ = self._operand_typed(at, node)
+        return items, term
+
+    def _operand_typed(self, at: str, node: dict) -> tuple[list[tuple], tuple, str]:
         if set(node) == {"lit"}:
-            return [], self.literal(at, node["lit"])
+            term = self.literal(at, node["lit"])
+            return [], term, term[2]
         if set(node) == {"path"} and node["path"]:
-            literals, term, _ = self.path(at, node["path"])
-            return literals, term
-        self.site.refuse(at, "an operand is a variable, a slot path or a literal here")
+            raw_path = node["path"]
+            if len(raw_path) == 1 and raw_path[0] in self.env:
+                return [], ("var", raw_path[0]), ir_type(self.pack, self.env[raw_path[0]])
+            is_it_slot = (self.sig.binder == "it" and raw_path[0] != "it"
+                          and self.slot(at, self.env["it"][1], raw_path[0]) is not None)
+            if len(raw_path) == 1 and not is_it_slot and (enum_term := self._enum_literal(raw_path[0])) is not None:
+                return [], enum_term, "string"
+            literals, term, _, typ = self._path_with_type(at, raw_path)
+            return literals, term, ir_type(self.pack, typ)
+        if set(node) == {"neg"}:
+            inner = node["neg"]
+            if isinstance(inner, dict) and set(inner) == {"lit"}:
+                term = self.literal(f"{at}/neg", inner["lit"])
+                if term[2] != "integer":
+                    self.site.refuse(at, "unary `-` requires an integer", "R003")
+                return [], ("const", str(-int(term[1])), "integer"), "integer"
+            items, term, typ = self._operand_typed(f"{at}/neg", inner)
+            if typ != "integer":
+                self.site.refuse(at, "unary `-` requires an integer", "R003")
+            res = self.fresh()
+            return items + [("arith", res, "sub", ("const", "0", "integer"), term)], ("var", res), "integer"
+        if set(node) == {"arith"} and isinstance(node["arith"], list) and len(node["arith"]) == 3:
+            op, left, right = node["arith"]
+            if op not in ARITH:
+                self.site.refuse(at, f"arithmetic operator {op!r} is not lowered")
+            ll, tl, typ_l = self._operand_typed(f"{at}/arith/1", left)
+            lr, tr, typ_r = self._operand_typed(f"{at}/arith/2", right)
+            if typ_l != "integer" or typ_r != "integer":
+                self.site.refuse(at, f"arithmetic `{op}` requires integer operands", "R003")
+            if op == "/" and (tr[0] != "const" or tr[2] != "integer" or int(tr[1]) == 0):
+                self.site.refuse(f"{at}/arith/2", "division requires a non-zero integer constant divisor")
+            res = self.fresh()
+            return ll + lr + [("arith", res, ARITH[op], tl, tr)], ("var", res), "integer"
+        if set(node) == {"agg"} and isinstance(node["agg"], list) and node["agg"][:1] == ["count"]:
+            return self._count_operand(at, node["agg"])
+        self.site.refuse(at, "an operand is a variable, a slot path, arithmetic, a count, or a literal here")
 
     def literal(self, at: str, token: object) -> tuple:
         if isinstance(token, str) and re.fullmatch(r"-?[0-9]+", token.replace("_", "")):
-            return "const", str(int(token.replace("_", ""))), "integer"
+            value = int(token.replace("_", ""))
+            if abs(value) > rules.BOUND:
+                self.site.refuse(at, f"integer constant {value} exceeds symmetric 64-bit bound (+/-{rules.BOUND})",
+                                 "R012")
+            return "const", str(value), "integer"
         if isinstance(token, str) and token.startswith('"'):
             value = json.loads(token)
             if isinstance(value, str) and value != "_" and not value.startswith("?"):
@@ -1571,8 +1617,12 @@ class Lowering:
                     if name in self.env and other_path is not None and len(other_path) > 1 and other_path[0] in self.env:
                         literals, _, _ = self.path(f"{at}/cmp/{3 - side}", other_path, target=("var", name))
                         return literals
-            left_literals, left_term = self.operand(f"{at}/cmp/1", left)
-            right_literals, right_term = self.operand(f"{at}/cmp/2", right)
+            left_literals, left_term, left_typ = self._operand_typed(f"{at}/cmp/1", left)
+            right_literals, right_term, right_typ = self._operand_typed(f"{at}/cmp/2", right)
+            if left_typ != right_typ:
+                self.site.refuse(at, f"cannot compare {left_typ} with {right_typ}", "R003")
+            if op not in ("=", "!=") and left_typ != "integer":
+                self.site.refuse(at, f"order comparison `{op}` requires integers", "R003")
             return left_literals + right_literals + [("cmp", COMPARE[op], left_term, right_term)]
         if set(node) == {"call"}:
             return [self.call(at, node["call"], True)]
@@ -1713,40 +1763,31 @@ class Lowering:
                             "false": [read, ("cmp", NEGATED[op], value, outer)], "missing": slot})
         return out
 
-    def undecided(self, member: Member, atoms: list[dict], rows: str, missing_projection=None) -> None:
+    def undecided(self, member: Member, atoms: list[dict], rows: str, missing_projection=None, *,
+                  keys: list[tuple] | None = None, key_cols: list[tuple[str, str]] | None = None) -> None:
         """Rules for the rows of `rows` (key..., row..., state, reason) whose membership is undecided: a missing
         required slot of the predicate where no other conjunct is false, or a missing projected slot."""
         missing = [atom["missing"] for atom in atoms if atom["missing"] is not None]
-        keys = self.key_terms()
-        present: dict[str, str] = {}
-
-        def has(slot) -> str:
-            if slot.table not in present:
-                name = self.helper(f"has_{slot.name}")
-                self.declare(name, [("element", ir_type(self.pack, ("kind", member.kind)))])
-                value = ("var", self.fresh())
-                self.rule(name, [member.terms[0]], [self.lit(member.kind, [member.terms[0]]),
-                                                    self.lit(slot.table, [member.terms[0], value])])
-                present[slot.table] = name
-            return present[slot.table]
-
+        keys = self.key_terms() if keys is None else keys
         if missing:
-            false = self.helper("false")
-            self.declare(false, self.row_columns(member, state=False))
+            false = self.next_helper("false")
+            self.declare(false, self.row_columns(member, state=False, key_cols=key_cols))
             for atom in atoms:
                 self.rule(false, keys + member.terms, self.domain() + [member.literal] + atom["false"])
             for slot in {slot.table: slot for slot in missing}.values():
                 self.rule(rows, keys + member.terms + [UNKNOWN, NO_VALUE],
-                          self.domain() + [member.literal, self.lit(has(slot), [member.terms[0]], False),
+                          self.domain() + [member.literal,
+                                           self.lit(self._has_slot(member.kind, slot), [member.terms[0]], False),
                                            self.lit(false, keys + member.terms, False)])
         if missing_projection is not None:
             true = [literal for atom in atoms for literal in atom["true"]]
             self.rule(rows, keys + member.terms + [UNKNOWN, NO_VALUE],
                       self.domain() + [member.literal] + true
-                      + [self.lit(has(missing_projection), [member.terms[0]], False)])
+                      + [self.lit(self._has_slot(member.kind, missing_projection), [member.terms[0]], False)])
 
-    def row_columns(self, member: Member, state: bool = True) -> list[tuple[str, str]]:
-        columns = [(self.sig.key_column or name, ir_type(self.pack, typ)) for name, typ in self.sig.key]
+    def row_columns(self, member: Member, state: bool = True,
+                    key_cols: list[tuple[str, str]] | None = None) -> list[tuple[str, str]]:
+        columns = list(self._key_cols if key_cols is None else key_cols)
         if member.kind is not None:
             columns.append(("element", ir_type(self.pack, ("kind", member.kind))))
         else:
@@ -1756,13 +1797,55 @@ class Lowering:
             columns += [("state", "string"), ("reason", "string")]
         return columns
 
-    def count(self, at: str, agg: list) -> None:
+    def _count_member(self, at: str, agg: list) -> tuple[Member, list[dict]]:
         if len(agg) not in (2, 3):
             self.site.refuse(at, "a binder on `.count(...)` is not lowered yet")
         member = self.collection(f"{at}/agg/1", agg[1])
         if len(agg) == 3:
             member.pred = member.pred + self._conjuncts(f"{at}/agg/2", agg[2])
-        atoms = self.atoms(member)
+        return member, self.atoms(member)
+
+    def _count_operand(self, at: str, agg: list) -> tuple[list[tuple], tuple, str]:
+        """Lower `.count(...)` in a Bool derivation, suppressing undecided rows so unknown never reads as 0."""
+        member, atoms = self._count_member(at, agg)
+        count_keys = [(name, typ) for name, typ in self.sig.key if typ[0] == "kind"]
+        count_key_names = {name for name, _ in count_keys}
+        for atom in atoms:
+            for item in atom["true"]:
+                if item[0] == "cmp":
+                    for term in (item[2], item[3]):
+                        if term[0] == "var" and term[1] in self.env and term[1] not in count_key_names:
+                            self.site.refuse(at, f"{term[1]} in a count predicate must be a kind parameter here")
+        keys = [("var", name) for name, _ in count_keys]
+        key_cols = [(self.sig.key_column or name, ir_type(self.pack, typ)) for name, typ in count_keys]
+        rows = self.next_helper("cnt_rows")
+        self.declare(rows, self.row_columns(member, state=False, key_cols=key_cols))
+        self.rule(rows, keys + member.terms,
+                  self.domain() + [member.literal] + [literal for atom in atoms for literal in atom["true"]])
+        items: list[tuple] = []
+        if any(atom["missing"] is not None for atom in atoms):
+            und_rows = self.next_helper("cnt_und_rows")
+            self.declare(und_rows, self.row_columns(member, state=True, key_cols=key_cols))
+            self.undecided(member, atoms, und_rows, keys=keys, key_cols=key_cols)
+            if keys:
+                und_keys = self.next_helper("cnt_und")
+                self.declare(und_keys, key_cols)
+                row_vars = [("var", self.fresh("r")) for _ in member.terms]
+                self.rule(und_keys, keys,
+                          self.domain() + [self.lit(und_rows, keys + row_vars
+                                                    + [("var", self.fresh("st")), ("var", self.fresh("rsn"))])])
+                items.append(self.lit(und_keys, keys, False))
+            else:
+                und_total = self.fresh("u")
+                items.append(("agg", und_total, "count", None,
+                              (und_rows, [("wild",)] * (len(member.terms) + 2), self.line)))
+                items.append(("cmp", "eq", ("var", und_total), ("const", "0", "integer")))
+        total = self.fresh("n")
+        items.append(("agg", total, "count", None, (rows, keys + [("wild",)] * len(member.terms), self.line)))
+        return items, ("var", total), "integer"
+
+    def count(self, at: str, agg: list) -> None:
+        member, atoms = self._count_member(at, agg)
         rows = self.helper("rows")
         self.declare(rows, self.row_columns(member))
         keys = self.key_terms()
