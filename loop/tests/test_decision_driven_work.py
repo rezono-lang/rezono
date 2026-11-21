@@ -450,18 +450,6 @@ def test_build_pack_derives_decision_open_untested_done_and_keeps_missing_scan_u
         assert isinstance(labels.get(relation), str) and labels[relation].strip(), f"missing label for {relation}"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingDecisionWorkReader,
-    reason=(
-        "extra: decisions/decision-driven-work.md: section 2 and section 3. Add loop/build_decision_work.py "
-        "with read_decision_work(*, run, manifest, rows, headless_decisions=(), known_decisions=()) and "
-        "prioritize_headless_decisions(root, budget_paths, red_tests) so the coordinator turns "
-        "build_decision_open/build_decision_open_test into worker tasks and build_decision_untested into "
-        "planner tasks with the decision -> test reason chain, keeps headless and unscanned decisions unknown "
-        "(never done), and orders loop/decision-head-budget.json by citation priority."
-    ),
-)
 def test_coordinator_reader_surfaces_open_and_untested_decisions_with_reason_chain(tmp_path):
     if find_spec("loop.build_decision_work") is None:
         raise MissingDecisionWorkReader("loop/build_decision_work.py does not exist")
