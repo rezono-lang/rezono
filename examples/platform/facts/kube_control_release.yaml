@@ -1,0 +1,4 @@
+release:
+  - {id: kube-control-1.32.13, product: kube-control, stable: 'yes', version: 1.32.13, series: '1.32'}
+pin:
+  - {id: pin-cp, service: cp, release: kube-control-1.32.13}

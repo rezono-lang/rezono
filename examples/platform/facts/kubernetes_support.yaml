@@ -1,8 +1,5 @@
-product:
-  - id: kubernetes
-
 series_support_reference:
-  - id: kubernetes-1.32-register
-    product: kubernetes
+  - id: kube-control-1.32-register
+    product: kube-control
     series: '1.32'
     support_end: '2026-02-28'

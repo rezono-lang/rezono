@@ -20,7 +20,7 @@ ORACLE = Path(__file__).with_name("product-evidence.json")
 def _published_support():
     evidence = json.loads(ORACLE.read_text(encoding="utf-8"))["kubernetes"]
     fields = ['series', 'latestPatch', 'end', 'url', 'sha256']
-    return ("kubernetes", *(evidence[k] for k in fields))
+    return ("kube-control", *(evidence[k] for k in fields))
 
 
 def _slots(relation, record, support):
@@ -93,7 +93,7 @@ class MissingSupportDrift(AssertionError):
 
 
 DRIFT = "series_support_end_drift"
-REFERENCE = "kubernetes-1.32-register"
+REFERENCE = "kube-control-1.32-register"
 
 
 def test_register_difference_is_support_drift():

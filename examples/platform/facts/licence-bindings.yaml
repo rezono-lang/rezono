@@ -1,6 +1,7 @@
 licence_release_binding:
   - {id: bind-distribution-3.0.0, selected_release: distribution-3.0.0, notice: distribution-3.0.0, basis: exact-scenario-release}
   - {id: bind-keycloak-26, selected_release: keycloak-26, notice: keycloak-26.0.0, basis: exact-scenario-release}
+  - {id: bind-kube-control-1.32.13, selected_release: kube-control-1.32.13, notice: kube-control-1.32.13, basis: exact-scenario-release}
   - {id: bind-postgresql-16, selected_release: postgresql-16, notice: postgresql-16.0, basis: example-of-selected-series}
   - {id: bind-postgresql-17, selected_release: postgresql-17, notice: postgresql-17.0, basis: example-of-selected-series}
 product_licence_gap:

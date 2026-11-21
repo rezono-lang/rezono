@@ -1,0 +1,36 @@
+records:
+  - of: {kind: product_release_source, id: distribution-3.0.0-release-source}
+    kind: tool
+    name: Vendor release inspection
+    revision: 3.0.0
+    position: L562
+    url: 'https://github.com/distribution/distribution/releases/tag/v3.0.0'
+    fragment_sha256: 74aeef12d9e15ca04e6255f576aa5781cf26b2ffdfa333a55e468330ee367d4a
+  - of: {kind: product_release_source, id: keycloak-25.0.0-release-source}
+    kind: tool
+    name: Vendor release inspection
+    revision: 25.0.0
+    position: L33
+    url: 'https://www.keycloak.org/2024/06/keycloak-2500-released'
+    fragment_sha256: d59598e630dfa5336b7b0e1aeea765c22a133bc05d19155322e1612818028379
+  - of: {kind: product_release_source, id: kube-control-1.32.13-release-source}
+    kind: tool
+    name: Vendor release inspection
+    revision: 1.32.13
+    position: L559
+    url: 'https://github.com/kubernetes/kubernetes/releases/tag/v1.32.13'
+    fragment_sha256: 2e22d7eb5de267e5b9875750d01b7f01ebc59655a812ef5e59bbfd326b375743
+  - of: {kind: product_release_source, id: postgresql-16.0-release-source}
+    kind: tool
+    name: Vendor release inspection
+    revision: '16.0'
+    position: L189
+    url: 'https://www.postgresql.org/about/news/postgresql-16-released-2715/'
+    fragment_sha256: 02c859bb9681b1484d34b9a147250aec01f2b2e1c0658e0da58c2fad58bbb4fa
+  - of: {kind: product_release_source, id: postgresql-17.0-release-source}
+    kind: tool
+    name: Vendor release inspection
+    revision: '17.0'
+    position: L189
+    url: 'https://www.postgresql.org/about/news/postgresql-17-released-2936/'
+    fragment_sha256: 7f93a2bb02299d87545c745840054288e3178fad9486e08754d9db793d9fe882

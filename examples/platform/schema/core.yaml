@@ -69,7 +69,7 @@ classes:
     attributes:
       id: {identifier: true}
       product: {range: Product, required: true}
-      released_on_day: {range: integer, required: true}
+      released_on_day: {range: integer}
       stable: {range: YesNo, required: true}
       version: {description: Exact version selected by the scenario when known.}
       series: {description: Release series selected by the scenario when known.}

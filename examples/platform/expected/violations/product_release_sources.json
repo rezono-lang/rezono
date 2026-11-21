@@ -1,0 +1,9 @@
+{
+  "product_release_source__product__reference": [
+    ["distribution-3.0.0-release-source", "registry"],
+    ["keycloak-25.0.0-release-source", "keycloak"],
+    ["kube-control-1.32.13-release-source", "kube-control"],
+    ["postgresql-16.0-release-source", "postgresql"],
+    ["postgresql-17.0-release-source", "postgresql"]
+  ]
+}

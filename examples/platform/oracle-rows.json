@@ -2731,6 +2731,10 @@
  ],
  "runs": [
   [
+   "cp",
+   "kube-control-1.32.13"
+  ],
+  [
    "db-git",
    "postgresql-16"
   ],

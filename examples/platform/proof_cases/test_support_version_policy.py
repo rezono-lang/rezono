@@ -47,6 +47,12 @@ def records():
                      "series": "1.9"},
                     {"id": "kp-2.0.0", "product": "kp", "released_on_day": 2, "stable": "yes", "version": "2.0.0",
                      "series": "2.0"}],
+        "product_release_source": [
+            {"id": "kp-1.9.3-release-source", "product": "kp", "version": "1.9.3", "published": "2025-01-01",
+             "source_url": "https://vendor.example.org/releases/1.9.3", "source_sha256": format(193, "064x")},
+            {"id": "kp-2.0.0-release-source", "product": "kp", "version": "2.0.0", "published": "2025-06-01",
+             "source_url": "https://vendor.example.org/releases/2.0.0", "source_sha256": format(200, "064x")},
+        ],
         "pin": [{"id": "pin-svc", "service": "svc", "release": "kp-1.9.3"},
                 {"id": "pin-svc-new", "service": "svc-new", "release": "kp-2.0.0"}],
         "axis": [{"id": "support-days"}],

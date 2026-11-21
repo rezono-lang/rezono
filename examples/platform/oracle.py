@@ -1,9 +1,9 @@
 """An independent recomputation of the trial pack's derived relations.
 
-Plain Python sets and no engine: it reads facts/core.yaml, facts/port_decision.yaml,
-and facts/*_transport_source.yaml and applies the rules of rules/core.dl by hand,
-one function per relation. It prints the number of rows per relation and, with
---write, stores the rows in oracle-rows.json.
+Plain Python sets and no engine: it reads facts/core.yaml, facts/kube_control_release.yaml,
+facts/port_decision.yaml, and facts/*_transport_source.yaml and applies the rules of
+rules/core.dl by hand, one function per relation. It prints the number of rows per relation
+and, with --write, stores the rows in oracle-rows.json.
 
     python oracle.py [--write]
 """
@@ -19,6 +19,9 @@ from firewall_oracle import firewall_expectations
 
 HERE = Path(__file__).parent
 FACTS = yaml.safe_load((HERE / "facts" / "core.yaml").read_text())
+KUBE_CONTROL_RELEASE = yaml.safe_load((HERE / "facts" / "kube_control_release.yaml").read_text())
+for _kind in ("release", "pin"):
+    FACTS.setdefault(_kind, []).extend(KUBE_CONTROL_RELEASE.get(_kind, []))
 PORT_DECISIONS = yaml.safe_load((HERE / "facts" / "port_decision.yaml").read_text()) or {}
 
 
@@ -63,7 +66,9 @@ artifacts = FACTS.get("artifact", [])
 role_of = dict(service_role)
 
 stable_release = {
-    (r["id"], r["product"], r["released_on_day"]) for r in releases if r.get("stable") == "yes"
+    (r["id"], r["product"], r["released_on_day"])
+    for r in releases
+    if r.get("stable") == "yes" and "released_on_day" in r
 }
 newest_day = {}
 for _, product, day in stable_release:
@@ -78,7 +83,7 @@ runs |= {
     if p == product and d == newest_day[product]
 }
 release_product = {r["id"]: r["product"] for r in releases}
-release_day = {r["id"]: r["released_on_day"] for r in releases}
+release_day = {r["id"]: r["released_on_day"] for r in releases if "released_on_day" in r}
 behind_newest = {
     (s, r)
     for s, r in runs

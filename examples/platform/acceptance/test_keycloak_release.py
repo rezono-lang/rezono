@@ -14,6 +14,34 @@ EXPECTED_RELEASE = (
     "https://www.keycloak.org/2024/10/keycloak-2600-released",
     "d5550883927968586033693bd391179dd441d4fd852ad8c55d535c0b8b593b82",
 )
+EXPECTED_PUBLISHED_RELEASES = {
+    EXPECTED_RELEASE,
+    (
+        "registry", "3.0.0", "2025-04-03",
+        "https://github.com/distribution/distribution/releases/tag/v3.0.0",
+        "2a8bc8447a673a573acfbef6f218f55febcb1426e67c93f12d1e75f07947959a",
+    ),
+    (
+        "keycloak", "25.0.0", "2024-06-10",
+        "https://www.keycloak.org/2024/06/keycloak-2500-released",
+        "54639201171157fe32cc276c624b6cc4cc241485f812428eb9277cc3191cd8b6",
+    ),
+    (
+        "kube-control", "1.32.13", "2026-02-26",
+        "https://github.com/kubernetes/kubernetes/releases/tag/v1.32.13",
+        "e04584d66fcb657bed3287cf97083af5f56d1858cf401de39f0963fb36d5c993",
+    ),
+    (
+        "postgresql", "16.0", "2023-09-14",
+        "https://www.postgresql.org/about/news/postgresql-16-released-2715/",
+        "7609c74c6444be49a3074256075f7234325453b00d124ef232551bc49ba80141",
+    ),
+    (
+        "postgresql", "17.0", "2024-09-26",
+        "https://www.postgresql.org/about/news/postgresql-17-released-2936/",
+        "2afaab77ea65506ff142d67934f59afd43fb499d77397166352b285c2e21bb73",
+    ),
+}
 SOURCE = "keycloak-26.0.0-release-source"
 REFERENCE = "keycloak-26.0.0-register"
 
@@ -31,7 +59,7 @@ def _outcomes(program, rows):
 
 
 def test_keycloak_release():
-    check_relation("published_release", [EXPECTED_RELEASE])
+    check_relation("published_release", sorted(EXPECTED_PUBLISHED_RELEASES))
 
 
 def test_observation_slots_alone_do_not_publish_a_release():
@@ -88,7 +116,7 @@ def test_published_release_requires_every_independent_ground():
 def test_register_date_is_only_used_for_drift():
     model, program, (state,) = states(ROOT)
     assert state.derived["product_release_date_drift"] == set()
-    published = {EXPECTED_RELEASE}
+    published = EXPECTED_PUBLISHED_RELEASES
     assert state.derived["published_release"] == published
 
     for missing in ("product_release_reference", "product_release_reference__published", "product_release_source"):

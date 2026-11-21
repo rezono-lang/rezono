@@ -1,0 +1,31 @@
+product_release_source:
+  - id: distribution-3.0.0-release-source
+    product: registry
+    version: 3.0.0
+    published: '2025-04-03'
+    source_url: 'https://github.com/distribution/distribution/releases/tag/v3.0.0'
+    source_sha256: 2a8bc8447a673a573acfbef6f218f55febcb1426e67c93f12d1e75f07947959a
+  - id: keycloak-25.0.0-release-source
+    product: keycloak
+    version: 25.0.0
+    published: '2024-06-10'
+    source_url: 'https://www.keycloak.org/2024/06/keycloak-2500-released'
+    source_sha256: 54639201171157fe32cc276c624b6cc4cc241485f812428eb9277cc3191cd8b6
+  - id: kube-control-1.32.13-release-source
+    product: kube-control
+    version: 1.32.13
+    published: '2026-02-26'
+    source_url: 'https://github.com/kubernetes/kubernetes/releases/tag/v1.32.13'
+    source_sha256: e04584d66fcb657bed3287cf97083af5f56d1858cf401de39f0963fb36d5c993
+  - id: postgresql-16.0-release-source
+    product: postgresql
+    version: '16.0'
+    published: '2023-09-14'
+    source_url: 'https://www.postgresql.org/about/news/postgresql-16-released-2715/'
+    source_sha256: 7609c74c6444be49a3074256075f7234325453b00d124ef232551bc49ba80141
+  - id: postgresql-17.0-release-source
+    product: postgresql
+    version: '17.0'
+    published: '2024-09-26'
+    source_url: 'https://www.postgresql.org/about/news/postgresql-17-released-2936/'
+    source_sha256: 2afaab77ea65506ff142d67934f59afd43fb499d77397166352b285c2e21bb73

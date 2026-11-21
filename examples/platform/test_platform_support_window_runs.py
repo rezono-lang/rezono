@@ -48,10 +48,9 @@ def _query(prog, day: str, horizon: int) -> dict[str, list[tuple]]:
 
 
 @pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "M2: decisions/platform-facts-not-conclusions.md, section 6. support_window_result reads runs(s, r) and the "
+    "M2: decisions/platform-facts-not-conclusions.md: section 6. support_window_result reads runs(s, r) and the "
     "release's version, series and product instead of supported_service_release. Keep the retired fact file: a "
-    "planner removes it. Waits for the planner's sources steps of sections 4 and 6 (the release "
-    "kube-control-1.32.13 pinned for cp, and kube-control as the one product id of the support register)."))
+    "planner removes it."))
 def test_support_window_reads_the_release_the_service_runs():
     source = json.loads((PLATFORM / "acceptance/product-evidence.json").read_text(encoding="utf-8"))["kubernetes"]
     end = date.fromisoformat(source["end"])
