@@ -313,6 +313,7 @@ SHARED_READERS = {
     "viewer/messages/": ("compiler", "examples", "tests/slip"),
     "tests/conformance/": ("checker", "compiler", "edge/publisher", "rezono"),
     "packs/": PACK_READERS,
+    "rezono/package.json": ("loop",),
     "examples/": PACK_READERS,
     "examples/**/expected/**": ("contracts",),
     "edge/plugins/*/plugin.yaml": ("contracts",),
@@ -325,7 +326,7 @@ SHARED_READERS = {
     # Directories of one component that another component's tests read as data.
     # rezono/test/test_message_catalogue.py reads the compiler's sources for the codes they report.
     "compiler/rezono_compiler/": ("rezono",),
-    "run/packs/": ("compiler",),
+    "run/packs/": ("compiler", "loop"),
     "contracts/fixtures/": ("edge/publisher", "examples"),
     # compiler/tests/test_domain_free.py scans the readers' sources and tests for domain words.
     "edge/gate/": ("compiler",),
