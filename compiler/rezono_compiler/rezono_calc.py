@@ -75,11 +75,11 @@ def _subject_of_decl(decl: object, form: dict | None = None) -> tuple[str, list[
 
 
 def has_calculation(form: dict) -> bool:
-    """Whether a module form carries an `as of` line, a row-backed parameter, or any non-table derived value."""
+    """Whether a module form carries an `as of` line, a row-backed parameter, or any non-table derived value.
+    rezono 1 modules lower all derivations to rezono.rules/2 (rezono_derived.py), never rezono.calc/1."""
     if form.get("format") not in (
         rezono_module.IDENTIFIER_FORMAT,
         *rezono_module.NATIVE_FORMATS,
-        rezono_module.REZONO_1_FORMAT,
     ):
         return False
     for decl in form["module"]["decls"]:
