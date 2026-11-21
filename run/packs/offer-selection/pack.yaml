@@ -2,6 +2,7 @@ name: offer-selection
 version: 0.1.0
 default_language: en
 imports:
-  - {name: std-decision, path: ../../../packs/std-decision, sha256: 2fd4cc60cc4f1c7dca42da2f5368a08a992de39df7cd7db205b9118dd1b8fe5a}
+  - {name: std-decision, path: ../../../packs/std-decision, sha256: 4a0207fd27a016c932844705df813adc1037c7258ef819ae57e1642862e04a31}
+  - {name: std-explain, path: ../../../packs/std-explain, sha256: 72e2897cd9baaa4962cf2235f83a332262b4da1e6d34e82d5f64d8335e27be0b}
 sweeps:
   - {name: amber_period_price, kind: offer, key: amber, slot: period_price_minor}

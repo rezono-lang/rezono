@@ -12,6 +12,10 @@ offer: offer
 offer.product: product
 offer.function: function
 offer.port: port
+port_decision: port decision
+port_decision.product: product
+port_decision.function: function
+port_decision.port: port
 demand: demand
 demand.product: product
 demand.function: function
@@ -130,3 +134,18 @@ platform_safe_frontier: platform safe frontier
 platform_safe_blocker: platform safe blocker
 platform_startup_goal: platform startup goal
 platform_restore_goal: platform restore goal
+offered_cores: offered cores
+offered_cores.cores: cores
+pool_cores: pool cores
+pool_cores.cores: cores
+outbound_approval: outbound approval
+outbound_approval.connection: connection
+landing_sighting: landing sighting
+landing_sighting.request: request
+request_outcome: request outcome
+landed_request: landed request
+free_cores: free cores
+capacity_exploration: capacity exploration
+capacity_exploration.pool: pool
+capacity_exploration.request: request
+capacity_exploration.values: candidate values

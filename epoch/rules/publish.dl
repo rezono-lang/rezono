@@ -1,0 +1,142 @@
+// Role-scoped publication permission, complete-only epoch permission, and effect permissions
+// (decisions/loop-engine-epoch.md, sections 3.3, 3.5 and 5).
+// publish_allowed never reads complete-only rows (EpochPackFacts, EpochSource, EpochCheckDetail)
+// or another role's EpochRoleForm / EpochRoleCheck.
+
+.decl epoch_step_tool(run: symbol, step: symbol, tool_record: symbol)
+.decl epoch_pinned_engine(run: symbol, pin: symbol)
+.decl epoch_compiled_definition(run: symbol, definition: symbol)
+.decl epoch_role_planned_form(run: symbol, role: symbol, form: symbol)
+.decl epoch_role_check_green(run: symbol, role: symbol, check: symbol, record: symbol)
+.decl epoch_run_refused(run: symbol)
+.decl publish_allowed(run: symbol, epoch: number, role: symbol, reason: symbol)
+.decl epoch_role_allowed(run: symbol, role_name: symbol)
+.decl epoch_role_not_allowed(run: symbol)
+.decl epoch_has_allowed_role(run: symbol)
+.decl epoch_all_roles_allowed(run: symbol)
+.decl epoch_allowed(run: symbol, epoch: number, reason: symbol)
+
+epoch_step_tool(run, step, tool_record) :-
+    epoch_tool__run(tool_record, run),
+    epoch_tool__step(tool_record, step),
+    epoch_tool__tool(tool_record, _),
+    epoch_tool__version(tool_record, _),
+    epoch_tool__sha256(tool_record, _).
+
+epoch_pinned_engine(run, pin) :-
+    epoch_engine_pin__run(pin, run),
+    epoch_engine_pin__version(pin, _),
+    epoch_engine_pin__wheel_sha256(pin, _),
+    epoch_engine_pin__commit(pin, _).
+
+epoch_compiled_definition(run, definition) :-
+    epoch_definition__run(definition, run),
+    epoch_definition__definition_sha256(definition, _),
+    epoch_definition__compiler_sha256(definition, _).
+
+epoch_role_planned_form(run, role, form) :-
+    epoch_role_form__run(form, run),
+    epoch_role_form__role(form, role),
+    epoch_role_form__snapshots_sha256(form, _),
+    epoch_role_form__sources_sha256(form, _),
+    epoch_role_form__objects_sha256(form, _).
+
+epoch_role_check_green(run, role, check, record) :-
+    epoch_role_check__run(record, run),
+    epoch_role_check__step(record, "check"),
+    epoch_role_check__role(record, role),
+    epoch_role_check__check(record, check),
+    epoch_role_check__outcome(record, "green"),
+    epoch_role_check__violations(record, 0),
+    epoch_role_check__source(record, source),
+    source != "".
+
+// Any recorded or derived refusal in the run blocks publication.
+epoch_run_refused(run) :-
+    refusal(run, _, _).
+
+// A role's publication witness cites every gate step completion, every step tool, the engine pin,
+// the compiled definition, the role's planned form (as reason), and the role's green proofs and access checks.
+publish_allowed(run, epoch, role_name, form) :-
+    active(run),
+    epoch_run__epoch(run, epoch),
+    epoch_role__run(role_id, run),
+    epoch_role__name(role_id, role_name),
+    done(run, "compile", _),
+    done(run, "evaluate-duckdb", _),
+    done(run, "evaluate-feldera", _),
+    done(run, "compare-engines", _),
+    done(run, "check", _),
+    epoch_step_tool(run, "compile", _),
+    epoch_step_tool(run, "evaluate-duckdb", _),
+    epoch_step_tool(run, "evaluate-feldera", _),
+    epoch_step_tool(run, "compare-engines", _),
+    epoch_step_tool(run, "check", _),
+    epoch_pinned_engine(run, _),
+    epoch_compiled_definition(run, _),
+    epoch_role_planned_form(run, role_id, form),
+    epoch_role_check_green(run, role_id, "rezono:proofs", _),
+    epoch_role_check_green(run, role_id, "rezono:access", _),
+    !epoch_run_refused(run).
+
+// Every filtered role of the run is allowed (and at least one role exists).
+epoch_role_allowed(run, role_name) :-
+    publish_allowed(run, _, role_name, _).
+
+epoch_role_not_allowed(run) :-
+    epoch_role__run(role_id, run),
+    epoch_role__name(role_id, role_name),
+    !epoch_role_allowed(run, role_name).
+
+epoch_has_allowed_role(run) :-
+    publish_allowed(run, _, _, _).
+
+epoch_all_roles_allowed(run) :-
+    epoch_has_allowed_role(run),
+    !epoch_role_not_allowed(run).
+
+// Complete-only counterpart: cites EpochPackFacts and every EpochSource alongside all-roles permission.
+epoch_allowed(run, epoch, source) :-
+    active(run),
+    epoch_run__epoch(run, epoch),
+    epoch_all_roles_allowed(run),
+    epoch_pack_facts__run(facts, run),
+    epoch_pack_facts__pack_sha256(facts, _),
+    epoch_source__run(source, run),
+    epoch_source__source(source, _),
+    epoch_source__position(source, _).
+
+// write-forms is permitted only when every role of the run is in publish_allowed.
+effect_permitted(run, "write-forms", plan, reason) :-
+    loop_effect_plan__run(plan, run),
+    loop_effect_plan__step(plan, "write-forms"),
+    loop_effect_plan__reason(plan, reason),
+    epoch_all_roles_allowed(run).
+
+// Per-role sign and distribute steps are permitted when publish_allowed holds for their role.
+effect_permitted(run, step, plan, reason) :-
+    loop_effect_plan__run(plan, run),
+    loop_effect_plan__step(plan, step),
+    loop_effect_plan__reason(plan, reason),
+    epoch_role_step__run(role_step, run),
+    epoch_role_step__step(role_step, step),
+    epoch_role_step__role(role_step, role_id),
+    epoch_role_step__stage(role_step, "sign"),
+    epoch_role__run(role_id, run),
+    epoch_role__name(role_id, role_name),
+    publish_allowed(run, _, role_name, _).
+
+effect_permitted(run, step, plan, reason) :-
+    loop_effect_plan__run(plan, run),
+    loop_effect_plan__step(plan, step),
+    loop_effect_plan__reason(plan, reason),
+    epoch_role_step__run(role_step, run),
+    epoch_role_step__step(role_step, step),
+    epoch_role_step__role(role_step, role_id),
+    epoch_role_step__stage(role_step, "distribute"),
+    epoch_role__run(role_id, run),
+    epoch_role__name(role_id, role_name),
+    publish_allowed(run, _, role_name, _).
+
+.output publish_allowed
+.output epoch_allowed

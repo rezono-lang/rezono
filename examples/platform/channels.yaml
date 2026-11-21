@@ -11,6 +11,8 @@ kinds:
   shape: rect
 - kind: offer
   shape: rect
+- kind: port_decision
+  shape: rect
 - kind: demand
   shape: rect
 - kind: service
@@ -37,6 +39,10 @@ arrows:
 - arrow: offer.product
   dash: none
 - arrow: offer.function
+  dash: none
+- arrow: port_decision.product
+  dash: none
+- arrow: port_decision.function
   dash: none
 - arrow: demand.product
   dash: none

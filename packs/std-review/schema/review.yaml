@@ -20,6 +20,10 @@ enums:
       require: {}
       mark: {}
       none: {}
+  EvidenceOutcome:
+    permissible_values:
+      passed: {}
+      failed: {}
 classes:
   Change:
     attributes:
@@ -72,3 +76,17 @@ classes:
       id: {identifier: true}
       kind: {required: true}
       policy: {range: Policy, required: true}
+  EvidenceRequirement:
+    attributes:
+      id: {identifier: true}
+      change: {range: Change, required: true}
+      evidence_kind: {required: true}
+      commit_sha: {required: true}
+  EvidenceAttestation:
+    attributes:
+      id: {identifier: true}
+      change: {range: Change, required: true}
+      evidence_kind: {required: true}
+      commit_sha: {required: true}
+      outcome: {range: EvidenceOutcome, required: true}
+      source: {required: true}

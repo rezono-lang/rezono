@@ -73,3 +73,6 @@ build_claim_held(run, claim, "lease-policy-unknown") :- build_claim_at_cut(run, 
 build_claim_held(run, claim, "pull-request-open") :- build_claim_pull_open(run, claim).
 build_claim_held(run, claim, "pull-request-unknown") :- build_claim_at_cut(run, claim, _, _),
     !build_claim_pull_open(run, claim), !build_claim_pull_none(run, claim).
+
+.output build_claim_release_plan
+.output build_claim_held

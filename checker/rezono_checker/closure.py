@@ -31,10 +31,13 @@ from .rules import Calculation
 
 def covered(rules, read=()) -> set:
     """The derived relations the pass covers: those a rule negates or aggregates over, those the rule IR marks as
-    an invariant or an outcome (the checker reads their absence itself: an invariant is empty, an outcome gives one
-    state), those in `read` (what the calculation reads, where a missing row is false or unknown), and every
+    an invariant, an outcome or a functional derivation (together with every functional domain and candidate/guard
+    input), those in `read` (what the calculation reads, where a missing row is false or unknown), and every
     derived relation a rule of a covered relation reads."""
-    todo = set(read) | set(getattr(rules, "invariants", ())) | set(getattr(rules, "outcomes", ()))
+    functionals = getattr(rules, "functionals", {})
+    todo = set(read) | set(getattr(rules, "invariants", ())) | set(getattr(rules, "outcomes", ())) | set(functionals)
+    for func in functionals.values():
+        todo.add(func.domain)
     for rule in rules.values():
         todo |= {b.atom.relation for b in rule.body if b.polarity != "positive"}
         todo |= {a.atom.relation for a in rule.aggregates}
@@ -46,11 +49,14 @@ def dependencies(rules, relations) -> set:
     by_head = {}
     for rule in rules.values():
         by_head.setdefault(rule.head.relation, []).append(rule)
+    functionals = getattr(rules, "functionals", {})
     out, todo = set(), sorted(set(relations) & by_head.keys())
     while todo:
         relation = todo.pop()
         if relation not in out:
             out.add(relation)
+            if relation in functionals and functionals[relation].domain in by_head:
+                todo.append(functionals[relation].domain)
             for rule in by_head[relation]:
                 todo.extend(item.atom.relation for item in (*rule.body, *rule.aggregates)
                             if item.atom.relation in by_head)
@@ -71,9 +77,10 @@ def check(rules, rows, read=(), *, domains=None) -> list:
         return ordered[relation]
 
     scope = covered(rules, read) if domains is None else dependencies(rules, domains)
+    functionals = getattr(rules, "functionals", {})
     findings = []
     for rule in sorted(rules.values(), key=lambda r: r.id):
-        if rule.head.relation not in scope:
+        if rule.head.relation not in scope or rule.head.relation in functionals:
             continue
         variables, found = instances(rule, table)
         head = _subst(rule.head.terms, variables)
@@ -269,10 +276,11 @@ def _aggregate(current, spec, table, rule):
     members = sorted((m for m in table(spec.atom.relation) if len(m[0]) == len(terms)), key=member)
     out = []
     for run, group_rows in _merge(sorted(found, key=group), group, members, member):
-        if spec.function == "count":
+        if spec.function == "count" and (spec.format == "rezono.rules/1"
+                                         or (spec.over is None and getattr(spec, "state_key", None) is None)):
             result = f"known:{len(group_rows)}"
         else:
-            result = _fold(spec.function, cells(spec, group_rows))
+            result = _fold(spec.function, cells(spec, group_rows), spec.format)
         if result == "invalid":
             continue
         if rule.bare_values:
@@ -282,6 +290,167 @@ def _aggregate(current, spec, table, rule):
             result = result.removeprefix("known:")
         out.extend(_bind(variables, run, spec.var, lambda row: result))
     return _bound(variables, spec.var), out
+
+
+STATE_PRIORITY = {"known": 0, "not_applicable": 1, "unknown": 2, "invalid": 3}
+
+
+def _worse_state(a: str, b: str) -> str:
+    return a if STATE_PRIORITY[a] >= STATE_PRIORITY[b] else b
+
+
+def functional_instances(rule, table):
+    """Every firing substitution of a functional rule, tracking propagated non-known aggregate states
+    (`invalid > unknown > not_applicable > known`) instead of dropping non-known aggregate results.
+
+    Returns `(variables, [(row_values, row_state), ...])`, where a variable bound by a non-known
+    aggregate (or an assignment derived from one) carries `None` in `row_values`."""
+    current = ((), [((), "known")])
+    todo = [b.atom for b in rule.body if b.polarity == "positive"]
+    steps = [(_variables(b.atom.terms), _absent_st, b.atom) for b in rule.body if b.polarity != "positive"]
+    steps += [(_variables((c.left, c.right)), _condition_st, c) for c in rule.conditions]
+    steps += [(_variables(t for t in a.atom.terms if t != "_"), _aggregate_st, a) for a in rule.aggregates]
+    steps += [(_variables((c.left, c.right)), _assignment_st, c) for c in rule.assignments]
+    while True:
+        bound = set(current[0])
+        ready = next((s for s in steps if s[0] <= bound), None)
+        if ready is not None:
+            steps.remove(ready)
+            _, apply, what = ready
+            current = apply(current, what, table, rule)
+        elif todo:
+            atom = next((a for a in todo if bound & set(a.terms)), todo[0])
+            todo.remove(atom)
+            current = _join_st(current, _scan(atom, table(atom.relation), rule.calc_input_type(atom.relation)))
+        else:
+            break
+    unbound = sorted(rule.variables - set(current[0]))
+    if unbound:
+        raise ValueError(f"{rule.id}: {', '.join(unbound)} is not bound by a positive premise, an aggregate or an "
+                         "assignment, so the rule's instances cannot be enumerated")
+    return current
+
+
+def _join_st(left, right):
+    (left_vars, left_rows), (right_vars, right_rows) = left, right
+    shared = [v for v in right_vars if v in left_vars]
+    left_idx = [left_vars.index(v) for v in shared]
+    left_key = lambda item: tuple(item[0][i] for i in left_idx)
+    right_key = _key([right_vars.index(v) for v in shared])
+    new_right = [i for i, v in enumerate(right_vars) if v not in left_vars]
+    rest = _key(new_right)
+    concrete, non_concrete = [], []
+    for item in left_rows:
+        if any(item[0][i] is None for i in left_idx):
+            non_concrete.append(item)
+        else:
+            concrete.append(item)
+    out = []
+    for run, matches in _merge(sorted(concrete, key=left_key), left_key, sorted(right_rows, key=right_key), right_key):
+        tails = [rest(m) for m in matches]
+        out.extend((vals + tail, st) for vals, st in run for tail in tails)
+    null_tail = (None,) * len(new_right)
+    out.extend((vals + null_tail, st) for vals, st in non_concrete)
+    return left_vars + tuple(v for v in right_vars if v not in left_vars), out
+
+
+def _absent_st(current, atom, table, rule):
+    variables, found = current
+    key = _subst(atom.terms, variables)
+    concrete, non_concrete = [], []
+    for item in found:
+        if any(v is None for v in key(item[0])):
+            non_concrete.append(item)
+        else:
+            concrete.append(item)
+    item_key = lambda item: key(item[0])
+    out = [item for run, present in _merge(sorted(concrete, key=item_key), item_key, table(atom.relation), itemgetter(0))
+           if not present for item in run]
+    out.extend(non_concrete)
+    return variables, out
+
+
+def _condition_st(current, c, table, rule):
+    variables, found = current
+    left, right = _subst((c.left,), variables), _subst((c.right,), variables)
+    out = []
+    for vals, st in found:
+        a, b = left(vals)[0], right(vals)[0]
+        if a is None or b is None or _holds(c.op, a, b, c.compare_as):
+            out.append((vals, st))
+    return variables, out
+
+
+def _aggregate_st(current, spec, table, rule):
+    variables, found = current
+    terms = spec.atom.terms
+    fixed = [i for i, t in enumerate(terms) if t != "_"]
+    group, member = _subst([terms[i] for i in fixed], variables), lambda m: tuple(m[0][i] for i in fixed)
+    members = sorted((m for m in table(spec.atom.relation) if len(m[0]) == len(terms)), key=member)
+    idx = variables.index(spec.var) if spec.var in variables else None
+    concrete, non_concrete = [], []
+    for item in found:
+        if any(v is None for v in group(item[0])):
+            non_concrete.append(item)
+        else:
+            concrete.append(item)
+    item_group = lambda item: group(item[0])
+    out = []
+    for run, group_rows in _merge(sorted(concrete, key=item_group), item_group, members, member):
+        if spec.function == "count" and (spec.format == "rezono.rules/1"
+                                         or (spec.over is None and getattr(spec, "state_key", None) is None)):
+            result = f"known:{len(group_rows)}"
+        else:
+            result = _fold(spec.function, cells(spec, group_rows), spec.format)
+        if result.startswith("known:"):
+            raw = result.removeprefix("known:")
+            if rule.bare_values and not _fits(raw):
+                continue
+            bound_val = raw if rule.bare_values else result
+            for vals, st in run:
+                if spec.var is None:
+                    out.append((vals, st))
+                elif idx is not None:
+                    if vals[idx] is None or vals[idx] == bound_val:
+                        out.append((vals, st))
+                else:
+                    out.append(((*vals, bound_val), st))
+        else:
+            if result == "not_applicable" and not group_rows and getattr(spec, "state_key", None) is None:
+                continue
+            prop = result if result in STATE_PRIORITY else "invalid"
+            for vals, st in run:
+                new_st = _worse_state(st, prop)
+                if spec.var is None or idx is not None:
+                    out.append((vals, new_st))
+                else:
+                    out.append(((*vals, None), new_st))
+    for vals, st in non_concrete:
+        if spec.var is None or idx is not None:
+            out.append((vals, st))
+        else:
+            out.append(((*vals, None), st))
+    return _bound(variables, spec.var), out
+
+
+def _assignment_st(current, c, table, rule):
+    variables, found = current
+    left, right = _subst((c.left,), variables), _subst((c.right,), variables)
+    idx = variables.index(c.var) if c.var in variables else None
+    out = []
+    for vals, st in found:
+        a, b = left(vals)[0], right(vals)[0]
+        if a is None or b is None:
+            out.append((vals, st) if idx is not None else ((*vals, None), st))
+            continue
+        got = _arith(c.op, a, b)
+        if got is None or not all(_fits(v) for v in (a, b, got)):
+            continue
+        if idx is None:
+            out.append(((*vals, got), st))
+        elif vals[idx] is None or vals[idx] == got:
+            out.append((vals, st))
+    return _bound(variables, c.var), out
 
 
 def _assignment(current, c, table, rule):

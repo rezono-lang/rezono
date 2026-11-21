@@ -22,23 +22,58 @@ UNCHANGED = ("dns", "dns", "53")
 def inputs():
     model = pack.read(PLATFORM)
     prog = rules.load(model.rules)
-    source = facts.load(model, PLATFORM / "facts/core.yaml")
-    # Two independent joins from the public pack. Only one offer changes its port.
+    source = {
+        **facts.load(model, PLATFORM / "facts/core.yaml"),
+        **facts.load(model, PLATFORM / "facts/port_decision.yaml"),
+    }
+    # Two independent joins from the public pack. Both Offer.port and PortDecision.port change so the
+    # test holds before and after provides switches from Offer.port to PortDecision.
     selected = {
         "service__product": [("lb", "loadbalancer"), ("dns", "coredns")],
         "offer__product": [("o-lb", "loadbalancer"), ("o-dns", "coredns")],
         "offer__function": [("o-lb", "ingress"), ("o-dns", "dns")],
         "offer__port": [("o-lb", 443), ("o-dns", 53)],
+        "port_decision__product": [("pd-lb-ingress", "loadbalancer"), ("pd-dns", "coredns")],
+        "port_decision__function": [("pd-lb-ingress", "ingress"), ("pd-dns", "dns")],
+        "port_decision__port": [("pd-lb-ingress", 443), ("pd-dns", 53)],
     }
     for table, rows in selected.items():
         assert set(rows) <= set(source[table]), table
-    after = {**selected, "offer__port": [("o-lb", 8443), ("o-dns", 53)]}
+    after = {
+        **selected,
+        "offer__port": [("o-lb", 8443), ("o-dns", 53)],
+        "port_decision__port": [("pd-lb-ingress", 8443), ("pd-dns", 53)],
+    }
     return model, prog, selected, after
+
+
+def provides_relations(prog):
+    """Derived relations that `provides` depends on, in order, ending with `provides`."""
+    derived = set(prog.derived())
+    needed, pending = {"provides"}, ["provides"]
+    while pending:
+        for dep in prog.deps(pending.pop()):
+            if dep in derived and dep not in needed:
+                needed.add(dep)
+                pending.append(dep)
+    return [name for name in prog.derived() if name in needed]
+
+
+def used_base(prog, relations):
+    return {dep for name in relations for dep in prog.deps(name)
+            if dep in prog.relations and prog.relations[dep].role == "base"}
+
+
+def proving_witnesses(witnesses, expected):
+    proving = {rid: bindings for rid, bindings in witnesses.items() if bindings}
+    assert len(proving) == 1, f"expected one provides rule to prove {expected}, got {sorted(proving)}"
+    return proving
 
 
 def verified(prog, checker_rules, label, inputs, result, witnesses, expected):
     assert result == expected
-    rows = {name: [tuple(map(str, row)) for row in values] for name, values in inputs.items()}
+    rows = {name: [tuple(map(str, row)) for row in values]
+            for name, values in inputs.items() if name in prog.relations}
     rows["provides"] = result
     explainer = explain.Explainer(prog, rows, witnesses)
     assert {tuple(json.loads(w["conclusion"]["key"])) for w in explainer.chosen()} == expected
@@ -54,12 +89,12 @@ def verified(prog, checker_rules, label, inputs, result, witnesses, expected):
 
 
 def batch_result(model, prog, checker_rules, label, rows, expected):
-    rule, = prog.rules_for("provides")
+    provide_rules = prog.rules_for("provides")
     conn, _, _ = batch.run(model, prog, rows)
     with closing(conn):
         result = batch.read(conn, prog, ["provides"])["provides"]
-        witnesses = batch.witnesses(conn, prog, [rule.id])
-    return verified(prog, checker_rules, label, rows, result, witnesses, expected)
+        witnesses = batch.witnesses(conn, prog, [rule.id for rule in provide_rules])
+    return verified(prog, checker_rules, label, rows, result, proving_witnesses(witnesses, expected), expected)
 
 
 def test_platform_batch_proves_replacement_and_retains_other_service():
@@ -74,24 +109,35 @@ def test_platform_batch_proves_replacement_and_retains_other_service():
 def test_platform_incremental_delta_and_witnesses_match_batch():
     model, prog, before, after = inputs()
     checker_rules = load_rules(model.rules)
-    rule, = prog.rules_for("provides")
+    relations = provides_relations(prog)
+    base = used_base(prog, relations)
+    provide_rules = prog.rules_for("provides")
     pipeline = "rezono-platform-delta-" + uuid4().hex
-    sql = rules_sql.feldera(prog, relations=["provides"], witnesses=True)
-    update = {"offer__port": [{"delete": {"id": "o-lb", "v": 443}}, {"insert": {"id": "o-lb", "v": 8443}}]}
+    sql = rules_sql.feldera(prog, relations=relations, witnesses=True)
+    before_ingress = facts.ingress(model, {table: rows for table, rows in before.items() if table in base})
+    update = {table: changes for table, changes in {
+        "offer__port": [{"delete": {"id": "o-lb", "v": 443}}, {"insert": {"id": "o-lb", "v": 8443}}],
+        "port_decision__port": [{"delete": {"id": "pd-lb-ingress", "v": 443}}, {"insert": {"id": "pd-lb-ingress", "v": 8443}}],
+    }.items() if table in base}
+    assert update, "neither offer__port nor port_decision__port feeds provides"
     feldera.deploy(pipeline, sql, profile="unoptimized", workers=2)
     try:
         observed = []
         for label, rows, changes, expected in [
-            ("m-1", before, facts.ingress(model, before), {OLD, UNCHANGED}),
+            ("m-1", before, before_ingress, {OLD, UNCHANGED}),
             ("m-2", after, update, {NEW, UNCHANGED}),
         ]:
             feldera.processed(pipeline, feldera.push(pipeline, changes))
             current = {tuple(str(row[c.name]) for c in prog.relations["provides"].key)
                        for row in feldera.query(pipeline, 'SELECT * FROM "provides"')}
-            bindings = [tuple(str(row[c]) for c in rules_sql.witness_columns(rule))
-                        for row in feldera.query(pipeline, f'SELECT * FROM "{rule.witness_relation}"')]
+            witnesses = {
+                rule.id: [tuple(str(row[c]) for c in rules_sql.witness_columns(rule))
+                          for row in feldera.query(pipeline, f'SELECT * FROM "{rule.witness_relation}"')]
+                for rule in provide_rules
+            }
             with feldera.comparing():
-                observed.append(verified(prog, checker_rules, label, rows, current, {rule.id: bindings}, expected))
+                observed.append(verified(prog, checker_rules, label, rows, current,
+                                         proving_witnesses(witnesses, expected), expected))
                 assert current == batch_result(model, prog, checker_rules, label, rows, expected)
         with feldera.comparing():
             assert (observed[1] - observed[0], observed[0] - observed[1]) == ({NEW}, {OLD})

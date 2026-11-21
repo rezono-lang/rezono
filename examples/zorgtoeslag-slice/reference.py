@@ -1,22 +1,24 @@
 """Independent Python reference for the healthcare allowance slice
-(decisions/language-healthcare-allowance-slice.md, decisions/healthcare-allowance-three-sources.md).
+(decisions/language-healthcare-allowance-slice.md, decisions/healthcare-allowance-three-sources.md,
+decisions/no-green-by-cheapest-route.md).
 
 `allowance(facts, claimant, as_of, known)` gives the monthly allowance of one claimant in whole cents, or the
 pair `(state, reason)` of an allowance that is not known. It is evaluated on `as_of` with the versions known
 on `known`.
 
-Supports both:
-- the single-source first slice (`facts.rezono`, kind `Household` with `ann..kim`), and
-- the three-source slice (`facts/` with `Persoon`, `civil.Adres`, `civil.Partner`, `civil.Ouder`,
+Reads Rezono fact files (`.rezono`) with native ISO dates only (no integer `YYYYMMDD` / `*_day` day numbers
+and no YAML fact shortcuts):
+- transitional single-source first slice (`facts.rezono`, kind `Household` with `ann..kim`), paired with its
+  strict red retirement test in `examples/test_zorgtoeslag_three_sources.py`, and
+- three-source slice (`facts/` `.rezono` files with `Persoon`, `civil.Adres`, `civil.Partner`, `civil.Ouder`,
   `tax.Inkomen`, `tax.Partner`, `insurer.Polis`), deriving `toeslagpartner`, `insured`, and `joint_income`
   independently from the three sources while never reading `tax.Partner` as a benefit-partner fact.
 
-It shares no code with the compiler or the reader. It reads fact files with its own parser, and states the
-statutory parameter versions itself from the decision. Money is exact: whole cents and fractions, with one
-rounding, the monthly allowance down to whole euros. Standard library only.
+It shares no code with the compiler or the reader. It reads `.rezono` fact files with its own parser, and
+states the statutory parameter versions itself from the decision. Money is exact: whole cents and fractions,
+with one rounding, the monthly allowance down to whole euros. Standard library only.
 """
 import datetime
-import json
 import pathlib
 import re
 import shutil
@@ -32,11 +34,6 @@ OVERLAP = ("invalid", "versions_overlap")
 
 def day(text):
     return datetime.date.fromisoformat(text)
-
-
-def day_int(value):
-    s = f"{int(value):08d}"
-    return datetime.date(int(s[:4]), int(s[4:6]), int(s[6:8]))
 
 
 # The parameter versions of the decision, in cents: (valid from, valid until or None, known, value).
@@ -68,8 +65,7 @@ VERSION = re.compile(
     r"^fact\s+([\w.]+)\s+([\w-]+)\s*,\s*valid\s+(\d{4}-\d{2}-\d{2})\.\.(?:<(\d{4}-\d{2}-\d{2}))?"
     r"\s*,\s*known\s+(\d{4}-\d{2}-\d{2})\s*$"
 )
-ASSIGN = re.compile(r"^\s+(\w+)\s*=\s*(\S+)\s*$")
-ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+ASSIGN = re.compile(r"^\s+(\w+)\s*=\s*(.+?)\s*$")
 
 
 def scalar(text):
@@ -89,121 +85,6 @@ def scalar(text):
 
 def strip(line):
     return line.split("--", 1)[0].rstrip()
-
-
-def _yaml_scalar(text):
-    text = text.strip()
-    if text in ("true", "false"):
-        return text == "true"
-    if text in ("null", "~", ""):
-        return None
-    if (text.startswith('"') and text.endswith('"')) or (text.startswith("'") and text.endswith("'")):
-        return text[1:-1]
-    if re.fullmatch(r"-?\d+", text):
-        return int(text)
-    return text
-
-
-def _strip_yaml_comment(line):
-    in_single = False
-    in_double = False
-    for idx, ch in enumerate(line):
-        if ch == "'" and not in_double:
-            in_single = not in_single
-        elif ch == '"' and not in_single:
-            in_double = not in_double
-        elif ch == "#" and not in_single and not in_double:
-            if idx == 0 or line[idx - 1].isspace():
-                return line[:idx].rstrip()
-    return line.rstrip()
-
-
-def _parse_flow_mapping(text):
-    text = text.strip()
-    if text.startswith("{") and text.endswith("}"):
-        try:
-            return json.loads(text)
-        except json.JSONDecodeError:
-            pass
-        inner = text[1:-1].strip()
-        if not inner:
-            return {}
-        out = {}
-        parts = []
-        buf = []
-        in_single = False
-        in_double = False
-        for ch in inner:
-            if ch == "'" and not in_double:
-                in_single = not in_single
-            elif ch == '"' and not in_single:
-                in_double = not in_double
-            if ch == "," and not in_single and not in_double:
-                parts.append("".join(buf))
-                buf = []
-            else:
-                buf.append(ch)
-        if buf:
-            parts.append("".join(buf))
-        for item in parts:
-            key, sep, val = item.partition(":")
-            if not sep:
-                raise ValueError(f"facts: malformed YAML entry: {text}")
-            out[key.strip().strip("\"'")] = _yaml_scalar(val)
-        return out
-    raise ValueError(f"facts: unsupported YAML row: {text}")
-
-
-def _read_yaml_sections(path):
-    """Read a YAML fact file into `{section: [record_dict, ...]}` using only the standard library.
-
-    Supports JSON-per-line rows (`- {"id": ...}`), flow mappings (`- {id: ...}`), and plain block mappings.
-    """
-    sections = {}
-    section = None
-    current = None
-    lines = pathlib.Path(path).read_text(encoding="utf-8").splitlines()
-    for raw in lines:
-        line = _strip_yaml_comment(raw)
-        if not line.strip():
-            continue
-        indent = len(line) - len(line.lstrip(" "))
-        stripped = line.strip()
-        if indent == 0 and ":" in stripped and not stripped.startswith("-"):
-            key, _, rest = stripped.partition(":")
-            section = key.strip().strip("\"'")
-            sections.setdefault(section, [])
-            current = None
-            rest = rest.strip()
-            if rest == "[]":
-                continue
-            if rest.startswith("[") and rest.endswith("]"):
-                try:
-                    items = json.loads(rest)
-                except json.JSONDecodeError:
-                    items = [_parse_flow_mapping(rest[1:-1])] if rest[1:-1].strip() else []
-                sections[section].extend(items)
-            continue
-        if section is None:
-            continue
-        if stripped.startswith("-"):
-            rest = stripped[1:].strip()
-            if rest.startswith("{"):
-                current = _parse_flow_mapping(rest)
-                sections[section].append(current)
-            elif rest:
-                key, sep, val = rest.partition(":")
-                if not sep:
-                    raise ValueError(f"facts: unsupported YAML list item: {raw}")
-                current = {key.strip().strip("\"'"): _yaml_scalar(val)}
-                sections[section].append(current)
-            else:
-                current = {}
-                sections[section].append(current)
-        elif current is not None and ":" in stripped:
-            key, _, val = stripped.partition(":")
-            current[key.strip().strip("\"'")] = _yaml_scalar(val)
-    return sections
 
 
 def read_facts(path):
@@ -268,34 +149,35 @@ def strict(*values):
 
 
 def as_date(value):
-    return value if isinstance(value, datetime.date) else day(str(value))
+    if isinstance(value, datetime.date) and not isinstance(value, datetime.datetime):
+        return value
+    if isinstance(value, str):
+        return day(value)
+    raise ValueError(f"expected ISO date, not {value!r}")
 
 
 def _row_window(row):
-    """Return `(valid_from, valid_until_or_None, known_from)` for a three-source fact row."""
-    if "valid_from" in row and row["valid_from"] is not None:
+    """Return `(valid_from, valid_until_or_None, known_from)` using native ISO dates only."""
+    day_keys = sorted(k for k in row if str(k).endswith("_day"))
+    if day_keys:
+        raise ValueError(f"integer day-number slots are forbidden in zorgtoeslag-slice facts: {day_keys}")
+
+    if row.get("valid_from") is not None:
         start = as_date(row["valid_from"])
-    elif "valid_from_day" in row and row["valid_from_day"] is not None:
-        start = day_int(row["valid_from_day"])
     else:
         start = datetime.date.min
 
-    if "valid_until" in row and row["valid_until"] is not None:
+    if row.get("valid_until") is not None:
         until = as_date(row["valid_until"])
         if until >= datetime.date(9999, 12, 31):
             until = None
-    elif "valid_until_day" in row and row["valid_until_day"] is not None:
-        raw_until = int(row["valid_until_day"])
-        until = None if raw_until >= 99991231 else day_int(raw_until)
     else:
         until = None
 
-    if "known_from" in row and row["known_from"] is not None:
+    if row.get("known_from") is not None:
         known = as_date(row["known_from"])
-    elif "known" in row and row["known"] is not None:
+    elif row.get("known") is not None:
         known = as_date(row["known"])
-    elif "known_from_day" in row and row["known_from_day"] is not None:
-        known = day_int(row["known_from_day"])
     else:
         known = datetime.date.min
 
@@ -320,8 +202,6 @@ def _classify_section(section_name, file_stem=""):
         return "inkomen"
     if key == "polis" or key.endswith(("_polis", ".polis")):
         return "polis"
-    if key in ("evaluation_day", "evaluation_date"):
-        return "evaluation_day"
     if key == "household":
         return "household"
     return None
@@ -330,20 +210,23 @@ def _classify_section(section_name, file_stem=""):
 def _fact_files_in(source):
     path = pathlib.Path(source)
     if path.is_file():
+        if path.suffix != ".rezono":
+            raise ValueError(f"zorgtoeslag-slice facts must be .rezono files, not {path.name}")
         return [path]
     if path.is_dir():
-        return [
+        yaml_facts = [
             p
             for p in sorted(path.rglob("*"))
-            if p.is_file()
-            and p.suffix in {".yaml", ".yml", ".rezono"}
-            and not p.name.endswith(".sources.yaml")
+            if p.is_file() and p.suffix in {".yaml", ".yml"} and not p.name.endswith(".sources.yaml")
         ]
+        if yaml_facts:
+            raise ValueError(f"YAML fact files are forbidden in zorgtoeslag-slice: {[p.name for p in yaml_facts]}")
+        return [p for p in sorted(path.rglob("*.rezono")) if p.is_file()]
     raise FileNotFoundError(f"facts source does not exist: {path}")
 
 
 def read_three_source_facts(facts_source):
-    """Read three-source fact rows from a directory or file into canonical source buckets."""
+    """Read three-source `.rezono` fact rows from a directory or file into canonical source buckets."""
     data = {
         "persoon": {},
         "adres": [],
@@ -352,58 +235,48 @@ def read_three_source_facts(facts_source):
         "inkomen": [],
         "tax_partner": [],
         "polis": [],
-        "evaluation_day": [],
     }
     for path in _fact_files_in(facts_source):
-        if path.suffix in {".yaml", ".yml"}:
-            sections = _read_yaml_sections(path)
-            for sec_name, rows in sections.items():
-                bucket = _classify_section(sec_name, path.stem)
-                if bucket is None or bucket == "household":
-                    continue
-                if bucket == "persoon":
-                    for row in rows:
-                        data["persoon"][str(row["id"])] = dict(row)
-                else:
-                    for row in rows:
-                        data[bucket].append(dict(row))
-        elif path.suffix == ".rezono":
-            tables, versions = read_facts(path)
-            for kind, by_id in tables.items():
-                bucket = _classify_section(kind, path.stem)
-                if bucket is None or bucket == "household":
-                    continue
-                if bucket == "persoon":
-                    for ident, attrs in by_id.items():
-                        data["persoon"][str(ident)] = {"id": str(ident), **attrs}
-                else:
-                    for ident, attrs in by_id.items():
-                        data[bucket].append({"id": str(ident), **attrs})
-            # Group dated Rezono rows per (kind, id, valid, known) into rows.
-            grouped = {}
-            for kind, ident, slot, start, until, known, val in versions:
-                bucket = _classify_section(kind, path.stem)
-                if bucket is None or bucket == "household":
-                    continue
-                gkey = (bucket, str(ident), start, until, known)
-                base = tables.get(kind, {}).get(ident, {})
-                entry = grouped.setdefault(
-                    gkey,
-                    {
-                        "id": str(ident),
-                        **base,
-                        "valid_from": start,
-                        "valid_until": until,
-                        "known_from": known,
-                    },
-                )
-                entry[slot] = val
-            for (bucket, _, _, _, _), entry in grouped.items():
-                data[bucket].append(entry)
+        tables, versions = read_facts(path)
+        for kind, by_id in tables.items():
+            bucket = _classify_section(kind, path.stem)
+            if bucket is None or bucket == "household":
+                continue
+            if bucket == "persoon":
+                for ident, attrs in by_id.items():
+                    data["persoon"][str(ident)] = {"id": str(ident), **attrs}
+            else:
+                for ident, attrs in by_id.items():
+                    data[bucket].append({"id": str(ident), **attrs})
+        # Group dated Rezono rows per (kind, id, valid, known) into rows.
+        grouped = {}
+        for kind, ident, slot, start, until, known, val in versions:
+            bucket = _classify_section(kind, path.stem)
+            if bucket is None or bucket == "household":
+                continue
+            gkey = (bucket, str(ident), start, until, known)
+            base = tables.get(kind, {}).get(ident, {})
+            entry = grouped.setdefault(
+                gkey,
+                {
+                    "id": str(ident),
+                    **base,
+                    "valid_from": start,
+                    "valid_until": until,
+                    "known_from": known,
+                },
+            )
+            entry[slot] = val
+        for (bucket, _, _, _, _), entry in grouped.items():
+            data[bucket].append(entry)
     return data
 
 
 def _is_legacy_household_source(facts_source):
+    """Transitional detector for the pre-expansion single-source `facts.rezono` (`Household`).
+
+    Paired with `examples/test_zorgtoeslag_three_sources.py::test_retire_legacy_single_source_household_branch_in_zorgtoeslag_slice`.
+    """
     path = pathlib.Path(facts_source)
     if not path.is_file() or path.suffix != ".rezono":
         return False
@@ -614,9 +487,9 @@ def allowance(facts, household, as_of, known):
 
 
 def merge_tax_partner_into_civil(facts_dir, dest_dir):
-    """Counterexample helper: copy three-source facts to `dest_dir` and silently merge every
-    `tax.Partner` row into `civil.Partner` (without `echtscheidingsverzoek`, as a bare-name
-    merge across sources would do). Never mutates `facts_dir`."""
+    """Counterexample helper: copy three-source `.rezono` facts to `dest_dir` and silently merge every
+    `tax.Partner` row into `civil.Partner` (without `echtscheidingsverzoek`, as a bare-name merge across
+    sources would do) as native `.rezono` facts. Never mutates `facts_dir`."""
     src = pathlib.Path(facts_dir)
     dst = pathlib.Path(dest_dir)
     if dst.exists():
@@ -628,51 +501,37 @@ def merge_tax_partner_into_civil(facts_dir, dest_dir):
         shutil.copy2(src, dst / src.name)
 
     data = read_three_source_facts(dst)
-    merged_rows = []
+    lines = ["rezono 1", "pack zorgtoeslag-slice", ""]
     for idx, row in enumerate(data["tax_partner"], start=1):
-        entry = {
-            "id": f"merged-tax-partner-{idx}",
-            "persoon_a": str(row["persoon_a"]),
-            "persoon_b": str(row["persoon_b"]),
-            "soort": "huwelijk",
-            "echtscheidingsverzoek": False,
-        }
-        for key in ("valid_from", "valid_until", "known_from", "valid_from_day", "valid_until_day", "known_from_day"):
-            if key in row and row[key] is not None:
-                entry[key] = row[key]
-        merged_rows.append(entry)
+        ident = f"merged-tax-partner-{idx}"
+        start, until, kf = _row_window(row)
+        start_s = "1970-01-01" if start == datetime.date.min else start.isoformat()
+        kf_s = "1970-01-01" if kf == datetime.date.min else kf.isoformat()
+        span = f"{start_s}..<{until.isoformat()}" if until is not None else f"{start_s}.."
+        lines.append(f"fact civil.Partner {ident}, valid {span}, known {kf_s}")
+        lines.append(f"  persoon_a = {row['persoon_a']}")
+        lines.append(f"  persoon_b = {row['persoon_b']}")
+        lines.append("  soort = huwelijk")
+        lines.append("  echtscheidingsverzoek = false")
+        lines.append("")
 
-    lines = ["zorgtoeslag_civil_civil_partner:"]
-    for entry in merged_rows:
-        lines.append(f"  - {json.dumps(entry, sort_keys=True)}")
-    (dst / "merged_civil_partner.yaml").write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
+    (dst / "merged_civil_partner.rezono").write_text("\n".join(lines), encoding="utf-8", newline="\n")
     return dst
-
-
-def _evaluation_dates_of(data):
-    for row in data.get("evaluation_day") or ():
-        if "as_of" in row and "known" in row:
-            return as_date(row["as_of"]), as_date(row["known"])
-        if "as_of_day" in row and "known_day" in row:
-            return day_int(row["as_of_day"]), day_int(row["known_day"])
-        if "valid_at" in row and "known_at" in row:
-            return as_date(row["valid_at"]), as_date(row["known_at"])
-        if "valid_day" in row and "known_day" in row:
-            return day_int(row["valid_day"]), day_int(row["known_day"])
-    return day("2026-02-01"), day("2026-02-10")
 
 
 def states():
     """Yield `(state_label, three_source_data)` for `examples/test_rules.py`."""
     facts_dir = HERE / "facts"
-    files = sorted(f for f in facts_dir.glob("*.yaml") if not f.name.endswith(".sources.yaml"))
+    if not facts_dir.is_dir():
+        return
+    files = sorted(facts_dir.glob("*.rezono"))
     if not files:
         return
     data = read_three_source_facts(facts_dir)
     yield f"0-{files[0].stem}", data
     scenarios_dir = HERE / "scenarios"
     if scenarios_dir.is_dir():
-        for sc in sorted(scenarios_dir.glob("*.yaml")):
+        for sc in sorted(scenarios_dir.glob("*.rezono")):
             extra = read_three_source_facts(sc)
             merged = {
                 key: (data[key] | extra[key] if isinstance(data[key], dict) else data[key] + extra[key])
@@ -682,9 +541,9 @@ def states():
             yield sc.stem, data
 
 
-def rules(data):
+def rules(data, as_of=datetime.date(2026, 2, 1), known=datetime.date(2026, 2, 10)):
     """Independent derived rule relations (`toeslagpartner`, `joint_income`) for `examples/test_rules.py`."""
-    as_of, known = _evaluation_dates_of(data)
+    as_of, known = as_date(as_of), as_date(known)
     persons = _all_persons(data)
     tp = [(a, b) for a in persons for b in persons if a != b and _toeslagpartner_in(data, a, b, as_of, known)]
     ji = []

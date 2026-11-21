@@ -1,0 +1,4 @@
+# Signs of std-budget (contracts/view.yaml): a shape per kind.
+kinds:
+  - {kind: budget_entry, shape: rect}
+  - {kind: budget_reading, shape: rect}

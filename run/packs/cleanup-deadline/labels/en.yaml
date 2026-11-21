@@ -3,10 +3,3 @@ attempt.state: Attempt state
 attempt.deadline_us: Cleanup deadline in microseconds
 attempt.watermark_us: Observation watermark in microseconds
 overdue: Cleanup overdue
-cleanup_attempt_state: Cleanup attempt state
-cleanup_attempt_state.planned: Planned
-cleanup_attempt_state.applying: Applying
-cleanup_attempt_state.unknown: Unknown
-cleanup_attempt_state.applied: Applied
-cleanup_attempt_state.failed: Failed
-cleanup_attempt_state.cleaned: Cleaned

@@ -1,6 +1,6 @@
 """The healthcare allowance slice: the constructs its module uses, and its published allowance
 against the independent oracle reference.py (decisions/language-healthcare-allowance-slice.md,
-decisions/healthcare-allowance-three-sources.md)."""
+decisions/healthcare-allowance-three-sources.md, decisions/no-green-by-cheapest-route.md)."""
 
 import ast
 import datetime
@@ -44,6 +44,7 @@ LEFT_OUT = {
 }
 COMMENTS = re.compile(r"--[^\n]*")
 INLINE_PARAM_VERSION = re.compile(r"^\s+version\b.*\bvalid\b.*\bknown\b", re.MULTILINE)
+DAY_NUMBER_SLOT_RE = re.compile(r"^\s+([a-z][a-z0-9_]*_day|day)\s*:\s*Int\b", re.MULTILINE)
 
 
 class MissingSlicePublication(AssertionError):
@@ -74,6 +75,27 @@ def _claimant(case, three_sources):
     return str(case["household"])
 
 
+def _assert_no_day_number_slots_in_slice_tree():
+    """Forbid `*_day` or integer `day` slots in examples/zorgtoeslag-slice/ and its four source packs."""
+    hits = []
+    for path in sorted(SLICE.rglob("*.rezono")):
+        text = COMMENTS.sub("", path.read_text(encoding="utf-8"))
+        for match in DAY_NUMBER_SLOT_RE.finditer(text):
+            hits.append(f"{path.relative_to(ROOT).as_posix()}: {match.group(1)}")
+        for match in re.finditer(r"^\s+([a-z][a-z0-9_]*_day)\s*:", text, re.MULTILINE):
+            entry = f"{path.relative_to(ROOT).as_posix()}: {match.group(1)}"
+            if entry not in hits:
+                hits.append(entry)
+    for path in sorted(SLICE.rglob("schema/*.yaml")):
+        doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        for cls_name, cls_body in (doc.get("classes") or {}).items():
+            for slot_name, slot_body in ((cls_body or {}).get("attributes") or {}).items():
+                rng = str((slot_body or {}).get("range") or "")
+                if slot_name.endswith("_day") or (slot_name == "day" and rng == "integer"):
+                    hits.append(f"{path.relative_to(ROOT).as_posix()}: {cls_name}.{slot_name} ({rng})")
+    assert not hits, f"integer day-number slots are forbidden in zorgtoeslag-slice and its sources: {hits}"
+
+
 def load_oracle():
     assert ORACLE.is_file(), f"{ORACLE.relative_to(ROOT).as_posix()} does not exist"
     spec = importlib.util.spec_from_file_location("zorgtoeslag_slice_reference", ORACLE)
@@ -95,6 +117,30 @@ def imported_modules(path):
             elif node.module:
                 names.add(node.module.partition(".")[0])
     return names
+
+
+def _remove_dated_rezono_block(lines: list[str], target_id: str, target_known: str) -> tuple[list[str], bool]:
+    """Remove a dated Rezono fact block for `target_id` with `known <target_known>` (ISO date)."""
+    out: list[str] = []
+    removed = False
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        stripped = line.split("--", 1)[0].strip()
+        if stripped.startswith("fact ") and f"known {target_known}" in stripped:
+            block = [line]
+            j = i + 1
+            while j < len(lines) and (lines[j].startswith(" ") or lines[j].startswith("\t")):
+                block.append(lines[j])
+                j += 1
+            block_text = "\n".join(block)
+            if target_id in block_text:
+                removed = True
+                i = j
+                continue
+        out.append(line)
+        i += 1
+    return out, removed
 
 
 def checked_oracle(tmp_path):
@@ -122,39 +168,21 @@ def checked_oracle(tmp_path):
         edited.write_text("".join(lines[:at] + lines[at + 2:]), encoding="utf-8", newline="\n")
         assert oracle.allowance(edited, "gus", datetime.date(2026, 1, 1), datetime.date(2026, 5, 1)) == 13600
     else:
+        yaml_facts = [
+            p for p in sorted(facts_source.rglob("*"))
+            if p.is_file() and p.suffix in {".yaml", ".yml"} and not p.name.endswith(".sources.yaml")
+        ]
+        assert not yaml_facts, f"YAML fact files are forbidden in zorgtoeslag-slice: {[p.name for p in yaml_facts]}"
         edited_dir = tmp_path / "edited-facts"
         shutil.copytree(facts_source, edited_dir)
         removed = False
-        for path in sorted(edited_dir.rglob("*.yaml")):
-            if path.name.endswith(".sources.yaml"):
-                continue
-            doc = yaml.safe_load(path.read_text(encoding="utf-8"))
-            if not isinstance(doc, dict):
-                continue
-            changed = False
-            for key, rows in list(doc.items()):
-                if not isinstance(rows, list) or "inkomen" not in key.lower():
-                    continue
-                kept = [
-                    r for r in rows
-                    if not (
-                        isinstance(r, dict)
-                        and str(r.get("persoon")) == "p-gus"
-                        and str(r.get("known_from", r.get("known_from_day", ""))).replace("-", "") == "20260415"
-                    )
-                ]
-                if len(kept) != len(rows):
-                    doc[key] = kept
-                    changed = True
-                    removed = True
-            if changed:
-                lines = []
-                for sec, rows in doc.items():
-                    lines.append(f"{sec}:")
-                    for row in rows:
-                        lines.append(f"  - {json.dumps(row, default=str)}")
-                path.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
-        assert removed, "could not locate p-gus corrected 2026-04-15 income row in facts/"
+        for path in sorted(edited_dir.rglob("*.rezono")):
+            lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+            kept, did_remove = _remove_dated_rezono_block(lines, "p-gus", "2026-04-15")
+            if did_remove:
+                path.write_text("".join(kept), encoding="utf-8", newline="\n")
+                removed = True
+        assert removed, "could not locate p-gus corrected 2026-04-15 income block in .rezono facts"
         assert oracle.allowance(edited_dir, "p-gus", datetime.date(2026, 1, 1), datetime.date(2026, 5, 1)) == 13600
     return oracle
 
@@ -223,26 +251,47 @@ def read_form(path, tmp_path):
 def test_slice_module_uses_only_the_first_slice(tmp_path):
     if not MODULE.is_file():
         raise MissingSliceModule(f"{MODULE.relative_to(ROOT).as_posix()} does not exist")
+    assert not list(SLICE.rglob("*.dl")), "examples/zorgtoeslag-slice must use Rezono, never .dl rules"
+    _assert_no_day_number_slots_in_slice_tree()
+
     form = read_form(MODULE, tmp_path)
     assert form["module"]["pack"] == "zorgtoeslag-slice"
     text = COMMENTS.sub("", MODULE.read_text(encoding="utf-8"))
     used = authored_features(MODULE)
 
+    # Inline parameter versions with valid/known stay mandatory in both the first slice and the three-source slice.
+    assert INLINE_PARAM_VERSION.search(text), "no inline parameter version with valid and known per year"
+    assert not [name for name, pattern in LEFT_OUT.items() if pattern.search(text)]
+    assert len(re.findall(r"^\s*unless\b", text, re.MULTILINE)) == 2
+
     if not PACK.is_file():
         assert read_form(SLICE / "facts.rezono", tmp_path)["module"]["pack"] == "zorgtoeslag-slice"
         assert used <= SLICE_FEATURES, f"outside the first slice: {sorted(used - SLICE_FEATURES)}"
         assert REQUIRED_FEATURES <= used, f"the slice needs: {sorted(REQUIRED_FEATURES - used)}"
-        assert not [name for name, pattern in LEFT_OUT.items() if pattern.search(text)]
-        assert INLINE_PARAM_VERSION.search(text), "no parameter version per year"
-        assert len(re.findall(r"^\s*unless\b", text, re.MULTILINE)) == 2
     else:
         # In-place expansion to three sources (decisions/healthcare-allowance-three-sources.md §1).
-        assert (SLICE / "facts").is_dir() or (SLICE / "facts.rezono").is_file(), "no facts found for zorgtoeslag-slice"
+        facts_dir = SLICE / "facts"
+        rezono_facts = sorted(facts_dir.rglob("*.rezono")) if facts_dir.is_dir() else []
+        assert rezono_facts or (SLICE / "facts.rezono").is_file(), "no .rezono facts found for zorgtoeslag-slice"
+        yaml_facts = [
+            p for p in (sorted(facts_dir.rglob("*")) if facts_dir.is_dir() else [])
+            if p.is_file() and p.suffix in {".yaml", ".yml"} and not p.name.endswith(".sources.yaml")
+        ]
+        assert not yaml_facts, f"YAML fact files are forbidden in zorgtoeslag-slice: {[p.name for p in yaml_facts]}"
         assert used <= THREE_SOURCE_SLICE_FEATURES, (
             f"outside the three-source slice: {sorted(used - THREE_SOURCE_SLICE_FEATURES)}"
         )
         assert REQUIRED_THREE_SOURCE_FEATURES <= used, (
             f"the three-source slice needs: {sorted(REQUIRED_THREE_SOURCE_FEATURES - used)}"
         )
-        assert not [name for name, pattern in LEFT_OUT.items() if pattern.search(text)]
-        assert len(re.findall(r"^\s*unless\b", text, re.MULTILINE)) == 2
+        slice_module_features = set().union(
+            *(
+                authored_features(p)
+                for p in sorted(SLICE.rglob("*.rezono"))
+                if "facts" not in p.relative_to(SLICE).parts
+            )
+        )
+        assert REQUIRED_FEATURES <= slice_module_features, (
+            f"the three-source slice modules must retain units and all required features: "
+            f"{sorted(REQUIRED_FEATURES - slice_module_features)}"
+        )

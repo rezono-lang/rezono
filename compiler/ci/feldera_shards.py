@@ -15,6 +15,7 @@ GENERATED = "compiler/tests/test_rules_properties.py::test_feldera_runs_generate
 ORDERED_SCALARS = "compiler/tests/test_ordered_rule_scalars_engines.py::test_feldera_orders_typed_values"
 INTERFACE = f"{INCREMENTAL}[platform/tenant-capacity/interface]"
 BOOLEAN = "compiler/tests/test_boolean_rule_inputs.py::test_native_boolean_rule_inputs"
+RECORDED_DATES = "compiler/tests/test_recorded_dates.py::test_independent_date_equality"
 SHARDS = {
     "library": (f"{EXAMPLE}[library]",),
     "projects": (f"{EXAMPLE}[projects]",),
@@ -24,11 +25,11 @@ SHARDS = {
     "subsidy": (f"{INCREMENTAL}[subsidy]",),
     "compiler-calc": (f"{CALC}[full]", f"{CALC}[choice]"),
     "compiler-bound": ("compiler/tests/test_bound.py::test_the_check_view_on_feldera_holds_the_rows_past_the_bound",
-                       BOOLEAN),
+                       BOOLEAN, RECORDED_DATES),
     "compiler-rules": (f"{GENERATED}[0]", f"{GENERATED}[1]", ORDERED_SCALARS),
 }
 EXPECTED = {node for group in SHARDS.values() for node in group}
-ORIGINAL = EXPECTED - {INTERFACE, BOOLEAN, ORDERED_SCALARS}
+ORIGINAL = EXPECTED - {INTERFACE, BOOLEAN, ORDERED_SCALARS, RECORDED_DATES}
 
 
 def collection(path: Path) -> list[str]:

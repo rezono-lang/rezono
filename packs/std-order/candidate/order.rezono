@@ -31,10 +31,19 @@ rules order
   | // Rules of std-order, in the Datalog subset, so Soufflé is the oracle.
   | // The base relations are the theory's tables: ordered__precedes(a, b) and ordered__rank(a, n).
   | 
-  | // before: the transitive closure of precedes.
+  | // The order a domain's own rules state: a comes directly before b. A declaration alone denotes the empty set.
+  | // @extend
+  | .decl stated_precedes(a: symbol, b: symbol)
+  | 
+  | // direct_before: either an ordered__precedes edge or a domain-stated edge.
+  | .decl direct_before(a: symbol, b: symbol)
+  | direct_before(a, b) :- ordered__precedes(a, b).
+  | direct_before(a, b) :- stated_precedes(a, b).
+  | 
+  | // before: the transitive closure of direct_before.
   | .decl before(a: symbol, b: symbol)
-  | before(a, b) :- ordered__precedes(a, b).
-  | before(a, c) :- before(a, b), ordered__precedes(b, c).
+  | before(a, b) :- direct_before(a, b).
+  | before(a, c) :- direct_before(a, b), before(b, c).
   | 
   | // comparable: two elements of which one comes before the other, in either direction.
   | .decl comparable(a: symbol, b: symbol)

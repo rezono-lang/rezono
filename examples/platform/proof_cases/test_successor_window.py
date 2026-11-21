@@ -59,7 +59,7 @@ def test_successor_on_the_first_day_without_support():
                           {"id": f"path-{p}", "consumer": f"{p}-sink", "provider": f"{p}-client", "mode": "run"}])
         day = date(2026, 3, 1) + timedelta(days=19)
         records = {"decision": decisions, "reference_date": [{"id": "handoff", "title": day.isoformat(),
-                   "day": int(day.strftime("%Y%m%d"))}], "axis": [{"id": "days"}],
+                   "date": day.isoformat(), "day": int(day.strftime("%Y%m%d"))}], "axis": [{"id": "days"}],
                    "reference_point": [{"id": "handoff", "on_axis": "days", "position": 20, "horizon": 0}],
                    "platform_support_period": periods, "product_stance": stances, "product_successor": successors,
                    "service_product_use": uses, "service_need": needs}
@@ -94,7 +94,8 @@ def test_successor_impact_follows_every_running_step():
     needs.append({"id": "run-quill-audit", "consumer": "quill-audit", "provider": "quill-admin", "mode": "run"})
     day = date(2026, 3, 1) + timedelta(days=19)
     records = {"decision": [decision("phase-quill")],
-               "reference_date": [{"id": "handoff", "title": day.isoformat(), "day": int(day.strftime("%Y%m%d"))}],
+               "reference_date": [{"id": "handoff", "title": day.isoformat(), "date": day.isoformat(),
+                                   "day": int(day.strftime("%Y%m%d"))}],
                "axis": [{"id": "days"}],
                "reference_point": [{"id": "handoff", "on_axis": "days", "position": 20, "horizon": 0}],
                "platform_support_period": [{"id": "old-quill", "on_axis": "days", "start": 7, "end": 20}],

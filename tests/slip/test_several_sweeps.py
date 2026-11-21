@@ -30,16 +30,6 @@ def published(tmp_path):
         raise MissingSeveralSweeps(f"{type(error).__name__}: {error}"[:400]) from error
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=(MissingSeveralSweeps, AssertionError),
-    reason=(
-        "extra: decisions/viewer-slip.md: Waits for compiler/tests/test_sweeps.py--test_a_pack_has_up_to_four_sweeps. Then publish the variants of "
-        "every sweep (edge/publisher/rezono_publisher/sweep.py), list every sweep whose cell the role reads in the "
-        "local reader (edge/gate/src/sweep.ts), and answer sweep by its name, as decisions/viewer-slip.md, "
-        "section Several sweeps, says. Expectation: tests/fixtures/slip with a second sweep, grid by hand."
-    ),
-)
 def test_several_sweeps(tmp_path):
     store, manifest, done = published(tmp_path)
     variants = {vid for vid, _ in done}
@@ -58,16 +48,6 @@ def test_several_sweeps(tmp_path):
         assert [c["value"] for c in answer["body"]["series"]] == VALUES
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=(MissingSeveralSweeps, AssertionError),
-    reason=(
-        "extra: decisions/viewer-slip.md: Waits for tests/slip/test_several_sweeps.py--test_several_sweeps. Then let :sweep <name> in "
-        "tools/repl/src/session.ts take any sweep the reader lists, and :sweep without a name only when it lists "
-        "one, as decisions/viewer-slip.md, section Several sweeps, says. Expectation: the grid of the second "
-        "sweep of tests/fixtures/slip, by hand."
-    ),
-)
 def test_several_sweeps_in_the_repl(tmp_path):
     store, _, _ = published(tmp_path)
     run = subprocess.run([node(), str(ROOT / "tools" / "repl" / "src" / "main.ts"), "--store", store.as_posix(),

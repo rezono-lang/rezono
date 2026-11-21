@@ -1,0 +1,1424 @@
+id: https://rezono.org/contracts/checker-refusal
+name: rezono_checker_refusal
+title: Checker refusals
+description: >-
+  Register of every refusal code emitted by the checker, with its named arguments and reader
+  scope (decisions/checker-refusal-register.md). Sentences in English and Dutch live in
+  checker/rezono_checker/messages/en.json and nl.json.
+prefixes:
+  linkml: https://w3id.org/linkml/
+  rezono: https://rezono.org/contracts/
+default_prefix: rezono
+default_range: string
+imports:
+  - linkml:types
+
+enums:
+  RefusalCode:
+    description: Every refusal code emitted by the checker, with allowed argument names and scope.
+    permissible_values:
+      admitted_row_missing:
+        description: An admitted row expected from the evidence is absent from the snapshot.
+        annotations:
+          arguments: relation key
+          scope: epoch
+      aggregate_binding:
+        description: The witness binds an aggregate variable to a value different from the recomputed aggregate.
+        annotations:
+          arguments: variable
+          scope: epoch
+      aggregate_mismatch:
+        description: An aggregate premise in a witness does not match the recomputed group or result.
+        annotations:
+          arguments: relation key
+          scope: epoch
+      ambiguous_observation:
+        description: Multiple observations match the same transition slot unambiguously.
+        annotations:
+          arguments: ""
+          scope: epoch
+      arithmetic_overflow:
+        description: An arithmetic operation or aggregate overflows the exact integer bounds.
+        annotations:
+          arguments: relation variable
+          scope: epoch
+      asset_cells_unreadable:
+        description: "The image cells referenced by the role's snapshots cannot be read or bound."
+        annotations:
+          arguments: file
+          scope: role
+      assignment_mismatch:
+        description: A rule assignment binds a variable to a value that does not match its expression.
+        annotations:
+          arguments: variable
+          scope: epoch
+      authority_conflict:
+        description: Trusted authority contexts disagree for the same scope and cut.
+        annotations:
+          arguments: ""
+          scope: epoch
+      authority_content_mismatch:
+        description: The trusted authority contents do not match the trusted inventory.
+        annotations:
+          arguments: ""
+          scope: epoch
+      authority_malformed:
+        description: A trusted authority context entry is malformed.
+        annotations:
+          arguments: ""
+          scope: epoch
+      bound_reached:
+        description: Closure checking reached the derivation bound before completing all rule instances.
+        annotations:
+          arguments: relation rule bound count key bindings
+          scope: epoch
+      calc_invalid:
+        description: A calculation witness failed verification.
+        annotations:
+          arguments: witness relation key
+          scope: epoch
+      calc_leaf:
+        description: A leaf step of a calculation witness does not match its snapshot or parameter row.
+        annotations:
+          arguments: path kind
+          scope: epoch
+      calc_node:
+        description: A step node of a calculation witness does not match the compiled calculation IR.
+        annotations:
+          arguments: path kind
+          scope: epoch
+      calc_not_visible:
+        description: "A role's published calculation row or witness is not visible to that role."
+        annotations:
+          arguments: relation key count
+          scope: epoch
+      calc_path:
+        description: The evaluation step paths in a calculation witness are missing, duplicated, or out of order.
+        annotations:
+          arguments: path
+          scope: epoch
+      calc_premise:
+        description: A calculation witness premise does not match the evaluated dependencies.
+        annotations:
+          arguments: relation key
+          scope: epoch
+      calc_reads:
+        description: "The relations listed in a calculation witness's reads differ from the evaluated reads."
+        annotations:
+          arguments: relation
+          scope: epoch
+      calc_result:
+        description: A calculation witness conclusion does not match the recomputed result or published row.
+        annotations:
+          arguments: relation key rule
+          scope: epoch
+      calc_row_duplicate:
+        description: A calculation view snapshot contains more than one row for the same subject.
+        annotations:
+          arguments: relation key
+          scope: epoch
+      calc_row_missing:
+        description: A calculation view snapshot is missing a row for a subject element.
+        annotations:
+          arguments: relation key
+          scope: epoch
+      calc_step:
+        description: A calculation step value is non-canonical or disagrees with recomputation.
+        annotations:
+          arguments: path kind
+          scope: epoch
+      calc_version:
+        description: The version chosen by a calculation witness does not match the evaluation dates.
+        annotations:
+          arguments: rule value
+          scope: epoch
+      calc_visible_missing:
+        description: "A visible calculation row or witness is missing from the role's publication."
+        annotations:
+          arguments: relation key count
+          scope: epoch
+      certificate_effect_mismatch:
+        description: "The transition certificate effects do not match the round's claimed step effects."
+        annotations:
+          arguments: ""
+          scope: epoch
+      certificate_invalid:
+        description: The transition certificate attached to a round failed verification.
+        annotations:
+          arguments: ""
+          scope: epoch
+      check_metadata_mismatch:
+        description: The check metadata table does not match the compiled schema bundle.
+        annotations:
+          arguments: relation
+          scope: epoch
+      choice_mismatch:
+        description: The witnesses published for a role do not match the chosen proofs.
+        annotations:
+          arguments: count
+          scope: epoch
+      claim_malformed:
+        description: A round claim is missing required fields or has an invalid shape.
+        annotations:
+          arguments: ""
+          scope: epoch
+      conclusion_missing:
+        description: "A witness's conclusion row is absent from the relation's snapshot."
+        annotations:
+          arguments: relation key
+          scope: epoch
+      condition_false:
+        description: "A rule guard condition evaluates to false under the witness's bindings."
+        annotations:
+          arguments: ""
+          scope: epoch
+      conflicting_delta:
+        description: A transition delta contains conflicting operations for the same row.
+        annotations:
+          arguments: ""
+          scope: epoch
+      cut_mismatch:
+        description: "An observation's cut does not match the transition's declared cut."
+        annotations:
+          arguments: ""
+          scope: epoch
+      cycle:
+        description: The proof graph contains a cyclic derivation.
+        annotations:
+          arguments: ""
+          scope: epoch
+      definition_mismatch:
+        description: The transition definition hash or structure does not match the expected definition.
+        annotations:
+          arguments: ""
+          scope: epoch
+      delta_old_row_missing:
+        description: A transition delta removes or replaces a row that is not present in the old snapshot.
+        annotations:
+          arguments: ""
+          scope: epoch
+      delta_row_already_present:
+        description: A transition delta adds a row that is already present in the old snapshot.
+        annotations:
+          arguments: ""
+          scope: epoch
+      delta_variant_mismatch:
+        description: A transition delta does not match the expected transition variant.
+        annotations:
+          arguments: ""
+          scope: epoch
+      derivable_missing:
+        description: "A row derivable by the role is missing from the role's snapshot."
+        annotations:
+          arguments: relation key
+          scope: epoch
+      duplicate_binding:
+        description: A witness binds the same variable more than once.
+        annotations:
+          arguments: variable
+          scope: epoch
+      duplicate_snapshot_row:
+        description: A transition snapshot contains duplicate rows with the same key.
+        annotations:
+          arguments: ""
+          scope: epoch
+      duplicate_witness:
+        description: More than one witness claims to derive the same conclusion row.
+        annotations:
+          arguments: witness relation key
+          scope: epoch
+      evidence_mismatch:
+        description: Access or read-full evidence does not match what the rules and snapshots derive.
+        annotations:
+          arguments: relation key
+          scope: epoch
+      evidence_refused:
+        description: Admitted transition or completeness evidence was refused.
+        annotations:
+          arguments: ""
+          scope: epoch
+      expected_old_mismatch:
+        description: "A transition delta's expected old value does not match the old snapshot."
+        annotations:
+          arguments: ""
+          scope: epoch
+      full_mismatch:
+        description: The relations claimed as read in full for a role do not match the derived full set.
+        annotations:
+          arguments: relation
+          scope: epoch
+      full_not_readable:
+        description: A relation marked as read in full is not readable by the role.
+        annotations:
+          arguments: relation
+          scope: epoch
+      functional_invalid:
+        description: A functional relation derivation has an invalid state or inconsistent candidates.
+        annotations:
+          arguments: relation key
+          scope: epoch
+      gap_index_duplicate:
+        description: The same relation and bound-column index pattern is listed more than once.
+        annotations:
+          arguments: relation bound
+          scope: role
+      gap_index_empty_relation:
+        description: A gap index is published for a relation the role has no rows of.
+        annotations:
+          arguments: relation bound
+          scope: role
+      gap_index_missing:
+        description: A required gap index for a relation and bound columns is absent.
+        annotations:
+          arguments: relation bound
+          scope: role
+      gap_index_not_inverse:
+        description: A two-column index on column 1 must reference the inverse tree instead of a separate tree.
+        annotations:
+          arguments: relation bound
+          scope: role
+      gap_index_rows_mismatch:
+        description: "A gap index tree's rows do not match the snapshot ordered by its bound columns first."
+        annotations:
+          arguments: tree relation
+          scope: role
+      gap_index_unexpected:
+        description: A gap index is published that the gap plan does not need.
+        annotations:
+          arguments: relation bound
+          scope: role
+      gap_plan_indexes_mismatch:
+        description: "A gap plan's declared indexes do not match the non-prefix lookups of its schedules."
+        annotations:
+          arguments: count size
+          scope: role
+      head_mismatch:
+        description: "A witness's conclusion does not match the instantiated head of its rule."
+        annotations:
+          arguments: relation key
+          scope: epoch
+      hidden_without_witness:
+        description: A conclusion listed in hidden has no witness in the proof.
+        annotations:
+          arguments: relation key
+          scope: epoch
+      invalid_value:
+        description: An aggregate or rule cell holds an invalid or non-canonical value.
+        annotations:
+          arguments: relation key
+          scope: epoch
+      invariant_inventory_mismatch:
+        description: The invariant relations reported in a transition do not match the declared inventory.
+        annotations:
+          arguments: ""
+          scope: epoch
+      invariant_violated:
+        description: An invariant relation is non-empty in the epoch snapshot.
+        annotations:
+          arguments: relation key
+          scope: epoch
+      inverse_root_missing:
+        description: A non-empty two-column relation is missing its inverse tree root.
+        annotations:
+          arguments: relation
+          scope: role
+      inverse_rows_mismatch:
+        description: "An inverse tree's rows do not match the role's snapshot ordered by reversed key."
+        annotations:
+          arguments: relation
+          scope: role
+      inverse_tree_unexpected:
+        description: An inverse tree is published for a relation without two-column rows.
+        annotations:
+          arguments: relation
+          scope: role
+      islands_layout_invalid_json:
+        description: An island Map layout file is not valid strict JSON.
+        annotations:
+          arguments: file
+          scope: role
+      islands_layout_not_object:
+        description: An island Map layout file does not decode to a JSON object.
+        annotations:
+          arguments: file
+          scope: role
+      islands_level_invalid_json:
+        description: An island level file is not valid strict JSON.
+        annotations:
+          arguments: key
+          scope: role
+      islands_level_mismatch:
+        description: "An island level file's contents disagree with what the role's rows give."
+        annotations:
+          arguments: key
+          scope: role
+      islands_level_missing:
+        description: An expected island level file is absent.
+        annotations:
+          arguments: key
+          scope: role
+      islands_level_unexpected:
+        description: "A published island level does not exist in the role's island plan."
+        annotations:
+          arguments: key
+          scope: role
+      islands_map_elements_mismatch:
+        description: An island Map draws a different set of elements than the island holds.
+        annotations:
+          arguments: file count size
+          scope: role
+      islands_map_missing:
+        description: A Map sheet required by the island plan is missing.
+        annotations:
+          arguments: file
+          scope: role
+      islands_map_stub_lines_mismatch:
+        description: An island Map draws a different set of stub lines than its cross-island lines.
+        annotations:
+          arguments: file count size
+          scope: role
+      islands_map_stubs_mismatch:
+        description: "An island Map's stubs do not match its lines to and from other islands."
+        annotations:
+          arguments: file
+          scope: role
+      islands_map_unexpected:
+        description: "A published Map sheet belongs to no island in the role's island plan."
+        annotations:
+          arguments: file
+          scope: role
+      malformed_bundle:
+        description: The compiled schema bundle could not be parsed or has an invalid shape.
+        annotations:
+          arguments: ""
+          scope: epoch
+      malformed_check_metadata:
+        description: The check metadata table or schema bundle reference is malformed.
+        annotations:
+          arguments: relation
+          scope: epoch
+      malformed_cut:
+        description: A transition cut identifier is malformed.
+        annotations:
+          arguments: ""
+          scope: epoch
+      malformed_definition:
+        description: A transition definition is malformed.
+        annotations:
+          arguments: ""
+          scope: epoch
+      malformed_delta:
+        description: A transition delta entry is malformed.
+        annotations:
+          arguments: ""
+          scope: epoch
+      malformed_effect_identity:
+        description: A transition effect identity is malformed.
+        annotations:
+          arguments: ""
+          scope: epoch
+      malformed_expected_old:
+        description: "A transition delta's expected old field is malformed."
+        annotations:
+          arguments: ""
+          scope: epoch
+      malformed_invariant_inventory:
+        description: "A transition's invariant evidence inventory is malformed."
+        annotations:
+          arguments: ""
+          scope: epoch
+      malformed_observation:
+        description: A transition observation record is malformed.
+        annotations:
+          arguments: ""
+          scope: epoch
+      malformed_row_key:
+        description: A row key in a transition snapshot or delta is malformed.
+        annotations:
+          arguments: ""
+          scope: epoch
+      malformed_snapshot:
+        description: A snapshot file could not be parsed or contains malformed rows.
+        annotations:
+          arguments: relation key
+          scope: epoch
+      malformed_state_projection_metadata:
+        description: The state projection metadata file is malformed.
+        annotations:
+          arguments: ""
+          scope: epoch
+      malformed_transition_evidence:
+        description: The transition evidence structure is malformed.
+        annotations:
+          arguments: ""
+          scope: epoch
+      malformed_witness:
+        description: A witness in the proof is missing required fields or has an invalid shape.
+        annotations:
+          arguments: witness
+          scope: epoch
+      manifest_check_red:
+        description: A check recorded in the manifest did not pass.
+        annotations:
+          arguments: ""
+          scope: epoch
+      manifest_mismatch:
+        description: The manifest identifier does not match the proof or transition.
+        annotations:
+          arguments: ""
+          scope: epoch
+      matrix_cell_direction_invalid:
+        description: A Matrix cell line does not run from a row head to a column head.
+        annotations:
+          arguments: key
+          scope: role
+      matrix_cell_end_kind_mismatch:
+        description: "A Matrix cell line ends at a node whose element is not of the binding's allowed kinds."
+        annotations:
+          arguments: key value fields
+          scope: role
+      matrix_cell_source_mismatch:
+        description: "A Matrix cell line does not match the Matrix binding's sign and columns."
+        annotations:
+          arguments: key relation fields
+          scope: role
+      missing_scope_coverage:
+        description: The transition does not cover all required observation scopes.
+        annotations:
+          arguments: ""
+          scope: epoch
+      missing_state_projection_metadata:
+        description: Required state projection metadata is missing from the manifest or storage.
+        annotations:
+          arguments: ""
+          scope: epoch
+      negative_premise_present:
+        description: A negative premise row is present in the snapshot.
+        annotations:
+          arguments: relation key
+          scope: epoch
+      nest_container_known_as_apart:
+        description: A Nest part stands apart as unknown when the role reads its container.
+        annotations:
+          arguments: key value
+          scope: role
+      nest_container_mismatch:
+        description: "A Nest part's shown container disagrees with the role's row of the level's arrow."
+        annotations:
+          arguments: key value relation bindings
+          scope: role
+      nest_container_unreadable:
+        description: A Nest part whose container is unknown is shown inside a container.
+        annotations:
+          arguments: key value
+          scope: role
+      nest_level_duplicate_id:
+        description: Two readable elements of the same Nest level share one identifier.
+        annotations:
+          arguments: key value kind
+          scope: role
+      nest_root_has_container:
+        description: A top-level Nest element is shown inside a container.
+        annotations:
+          arguments: key value
+          scope: role
+      nest_states_mismatch:
+        description: "A Nest part's shown perspective states do not match the role's rows."
+        annotations:
+          arguments: key value
+          scope: role
+      no_columns:
+        description: A relation has no column metadata in the bundle for projection.
+        annotations:
+          arguments: relation
+          scope: epoch
+      nonzero_or_missing_invariant_evidence:
+        description: An invariant relation is missing evidence or has non-zero violations in a transition.
+        annotations:
+          arguments: ""
+          scope: epoch
+      not_derivable:
+        description: "A role's snapshot contains a derived row that is not derivable by the role."
+        annotations:
+          arguments: relation key
+          scope: epoch
+      not_readable:
+        description: "A role's snapshot contains a row that the role is not permitted to read."
+        annotations:
+          arguments: relation key
+          scope: epoch
+      observation_hash_mismatch:
+        description: "An observation's content hash does not match its pinned hash."
+        annotations:
+          arguments: ""
+          scope: epoch
+      observation_inventory_mismatch:
+        description: The observations provided do not match the expected observation inventory.
+        annotations:
+          arguments: ""
+          scope: epoch
+      observation_scope_mismatch:
+        description: "An observation's scope does not match the transition scope."
+        annotations:
+          arguments: ""
+          scope: epoch
+      outcome_state:
+        description: A derived outcome row has an invalid state or inconsistent state encoding.
+        annotations:
+          arguments: relation key
+          scope: epoch
+      outcome_total:
+        description: An outcome relation violates totality by missing or duplicating a domain entry.
+        annotations:
+          arguments: relation key
+          scope: epoch
+      outside_full_scope:
+        description: "A witness uses a relation outside the checker's complete snapshot scope."
+        annotations:
+          arguments: witness relation
+          scope: epoch
+      page_invalid_json:
+        description: "A role's page index is not valid strict JSON."
+        annotations:
+          arguments: ""
+          scope: role
+      page_kind_count_mismatch:
+        description: "A kind's count on the page index differs from the number of readable elements of that kind."
+        annotations:
+          arguments: kind count size
+          scope: role
+      page_name_unreadable:
+        description: A page index entry shows a name not backed by rows the role reads.
+        annotations:
+          arguments: kind key value
+          scope: role
+      page_not_object:
+        description: "A role's page index does not decode to a JSON object."
+        annotations:
+          arguments: ""
+          scope: role
+      page_row_unreadable:
+        description: A page index lists an element that is not a row the role reads at that kind.
+        annotations:
+          arguments: kind key
+          scope: role
+      piece_bounds_mismatch:
+        description: "A child piece's first and last keys do not match the bounds declared in its parent."
+        annotations:
+          arguments: path
+          scope: role
+      piece_child_shape_invalid:
+        description: A child entry in an internal page piece does not match the contracted child fields and types.
+        annotations:
+          arguments: path fields
+          scope: role
+      piece_children_invalid:
+        description: "An internal page piece's children field is not a list within the fanout limit."
+        annotations:
+          arguments: path limit
+          scope: role
+      piece_duplicate_json_key:
+        description: A tree piece contains a JSON object with a duplicate key.
+        annotations:
+          arguments: path
+          scope: role
+      piece_hash_mismatch:
+        description: "A tree piece's bytes do not match the sha256 digest named by its parent."
+        annotations:
+          arguments: path
+          scope: role
+      piece_header_mismatch:
+        description: "A tree piece's header does not match the format, tree, relation, or level expected by its parent."
+        annotations:
+          arguments: path value level tree relation
+          scope: role
+      piece_invalid_json:
+        description: A tree piece is not valid UTF-8 RFC 8259 JSON.
+        annotations:
+          arguments: path
+          scope: role
+      piece_leaf_fields_invalid:
+        description: A leaf tree piece does not have exactly its contracted fields.
+        annotations:
+          arguments: path fields
+          scope: role
+      piece_missing:
+        description: A tree piece named by a root or parent page is absent.
+        annotations:
+          arguments: path
+          scope: role
+      piece_nonstandard_json_constant:
+        description: A tree piece contains a non-standard JSON constant such as NaN or Infinity.
+        annotations:
+          arguments: path value
+          scope: role
+      piece_page_fields_invalid:
+        description: An internal page piece does not have exactly its contracted fields.
+        annotations:
+          arguments: path fields
+          scope: role
+      piece_rows_invalid:
+        description: "A leaf piece's rows field is not a non-empty list."
+        annotations:
+          arguments: path
+          scope: role
+      piece_too_large:
+        description: A tree piece exceeds the maximum allowed byte size.
+        annotations:
+          arguments: path size limit
+          scope: role
+      piece_unreached:
+        description: A published piece file is not reached from any checked tree root.
+        annotations:
+          arguments: path
+          scope: role
+      premise_mismatch:
+        description: The premises listed in a witness do not match the instantiated body of its rule.
+        annotations:
+          arguments: relation key
+          scope: epoch
+      premise_missing:
+        description: A positive premise row is absent from the snapshot.
+        annotations:
+          arguments: relation key
+          scope: epoch
+      proof_fanout_invalid:
+        description: "The requested page fanout is outside the checker's bounds."
+        annotations:
+          arguments: limit bound
+          scope: role
+      proof_functional_key_malformed:
+        description: A functional conclusion key in a witness does not have the required arity and string parts.
+        annotations:
+          arguments: rule
+          scope: role
+      proof_piece_limit_invalid:
+        description: "The requested piece byte limit is outside the checker's bounds."
+        annotations:
+          arguments: limit bound
+          scope: role
+      proof_rows_mismatch:
+        description: "A proof tree's rows do not match the role's recomputed proof graph."
+        annotations:
+          arguments: tree relation
+          scope: role
+      proof_steps_invalid:
+        description: The proof steps could not be reconstructed from the rules and witnesses.
+        annotations:
+          arguments: ""
+          scope: role
+      proof_tree_missing:
+        description: A proof tree expected for a relation is absent from the published roots.
+        annotations:
+          arguments: tree relation
+          scope: role
+      proof_tree_unexpected:
+        description: "A proof tree is published for a relation that has no rows in the role's proof graph."
+        annotations:
+          arguments: tree relation
+          scope: role
+      proof_unbound_domain_variable:
+        description: "A functional rule's domain key variable is not bound in the witness."
+        annotations:
+          arguments: rule
+          scope: role
+      proof_unbound_variable:
+        description: A rule variable in a witness has no binding when rebuilding proof steps.
+        annotations:
+          arguments: variable rule
+          scope: role
+      readable_missing:
+        description: "A row the role may read is missing from the role's snapshot."
+        annotations:
+          arguments: relation key
+          scope: epoch
+      receipt_content_mismatch:
+        description: "A completeness receipt's member hashes do not match the submitted contents."
+        annotations:
+          arguments: ""
+          scope: epoch
+      receipt_cut_mismatch:
+        description: "No trusted authority context matches the completeness receipt's cut."
+        annotations:
+          arguments: ""
+          scope: epoch
+      receipt_id_mismatch:
+        description: "A completeness receipt's identifier does not match its content hash."
+        annotations:
+          arguments: ""
+          scope: epoch
+      receipt_inventory_mismatch:
+        description: A completeness receipt does not cover the expected trusted inventory.
+        annotations:
+          arguments: ""
+          scope: epoch
+      receipt_issuer_unauthorized:
+        description: The issuer of a completeness receipt is not authorized for the scope.
+        annotations:
+          arguments: ""
+          scope: epoch
+      receipt_malformed:
+        description: A completeness receipt is missing required fields or has extra fields.
+        annotations:
+          arguments: ""
+          scope: epoch
+      receipt_member_mismatch:
+        description: The members submitted with a completeness receipt do not match the expected inventory.
+        annotations:
+          arguments: ""
+          scope: epoch
+      receipt_not_admitted:
+        description: A completeness receipt row is present in the snapshot without verified admission.
+        annotations:
+          arguments: relation key
+          scope: epoch
+      receipt_scope_unauthorized:
+        description: "No trusted authority context authorizes the completeness receipt's source and scope."
+        annotations:
+          arguments: ""
+          scope: epoch
+      receipt_unverified:
+        description: A completeness receipt could not be verified.
+        annotations:
+          arguments: index
+          scope: epoch
+      receipts_malformed:
+        description: The completeness_receipts field is not a list.
+        annotations:
+          arguments: ""
+          scope: epoch
+      root_not_derived:
+        description: "The proof's root conclusion has no witness deriving it."
+        annotations:
+          arguments: relation key
+          scope: epoch
+      round_batch_invalid:
+        description: The batch named by a round claim is invalid for the round domain.
+        annotations:
+          arguments: ""
+          scope: epoch
+      round_boundary_missing:
+        description: A required boundary step is missing from the round claim.
+        annotations:
+          arguments: ""
+          scope: epoch
+      round_context_ambiguous:
+        description: "Multiple trusted round contexts match the claim's run and cut."
+        annotations:
+          arguments: ""
+          scope: epoch
+      round_context_malformed:
+        description: A trusted round context is malformed.
+        annotations:
+          arguments: ""
+          scope: epoch
+      round_context_missing:
+        description: "No trusted round context matches the claim's run and cut."
+        annotations:
+          arguments: ""
+          scope: epoch
+      round_domain_malformed:
+        description: A round domain specification is malformed.
+        annotations:
+          arguments: ""
+          scope: epoch
+      round_preceded:
+        description: A higher-priority alternative batch precedes the claimed round batch.
+        annotations:
+          arguments: ""
+          scope: epoch
+      round_subset_duplicate:
+        description: A round claim lists a duplicate subset.
+        annotations:
+          arguments: position
+          scope: epoch
+      round_unverified:
+        description: A round claim in the evidence could not be verified.
+        annotations:
+          arguments: index
+          scope: epoch
+      rows_count_mismatch:
+        description: "A row tree root's count does not match the number of rows in the role's snapshot."
+        annotations:
+          arguments: relation count
+          scope: role
+      rows_empty_root_invalid:
+        description: "An empty relation's row tree root is not exactly a count of zero."
+        annotations:
+          arguments: relation
+          scope: role
+      rows_root_missing:
+        description: "A relation in the role's snapshots has no row tree root."
+        annotations:
+          arguments: relation
+          scope: role
+      rows_snapshot_mismatch:
+        description: "A row tree's rows do not match the role's snapshot in UTF-8 key order."
+        annotations:
+          arguments: relation
+          scope: role
+      rows_tree_unexpected:
+        description: A row tree root is published for a relation the role has no snapshot of.
+        annotations:
+          arguments: relation
+          scope: role
+      seal_bad_date:
+        description: A seal relation row has a malformed date.
+        annotations:
+          arguments: relation key
+          scope: epoch
+      seal_mismatch:
+        description: A seal hash does not match the recomputed canonical hash.
+        annotations:
+          arguments: relation key
+          scope: epoch
+      snapshot_hash_mismatch:
+        description: "A snapshot's bytes do not match its pinned sha256 hash."
+        annotations:
+          arguments: relation
+          scope: epoch
+      snapshot_inventory_mismatch:
+        description: The transition snapshots do not match the expected snapshot inventory.
+        annotations:
+          arguments: ""
+          scope: epoch
+      snapshot_missing:
+        description: A required snapshot is missing from the manifest or storage.
+        annotations:
+          arguments: relation
+          scope: epoch
+      source_set_hash:
+        description: "A role's published source file does not match its manifest hash."
+        annotations:
+          arguments: role
+          scope: epoch
+      source_set_missing:
+        description: A role is missing its source set entry in the manifest.
+        annotations:
+          arguments: role
+          scope: epoch
+      source_set_role:
+        description: A source set entry in the manifest names an unknown role.
+        annotations:
+          arguments: ""
+          scope: epoch
+      source_set_shape:
+        description: A source set entry in the manifest has an invalid shape.
+        annotations:
+          arguments: ""
+          scope: epoch
+      source_set_twice:
+        description: "A role is listed more than once in the manifest's source sets."
+        annotations:
+          arguments: role
+          scope: epoch
+      sources_duplicate_row:
+        description: Two source entries refer to the same row in one relation.
+        annotations:
+          arguments: relation
+          scope: role
+      sources_entry_row_invalid:
+        description: A source entry lacks a valid row reference with a key of text parts.
+        annotations:
+          arguments: ""
+          scope: role
+      sources_rows_mismatch:
+        description: "A sources tree's rows do not match the role's source entries."
+        annotations:
+          arguments: relation
+          scope: role
+      sources_tree_missing:
+        description: A relation with source entries has no published sources tree.
+        annotations:
+          arguments: relation
+          scope: role
+      sources_tree_unexpected:
+        description: A sources tree is published for a relation the role has no source entries for.
+        annotations:
+          arguments: relation
+          scope: role
+      sources_unreadable:
+        description: "A role's source entries or schema bundle could not be parsed."
+        annotations:
+          arguments: ""
+          scope: role
+      state_projection_evidence_mismatch:
+        description: A state projection snapshot disagrees with its source relation.
+        annotations:
+          arguments: relation
+          scope: epoch
+      state_projection_incomplete:
+        description: A state projection snapshot is missing expected projected rows.
+        annotations:
+          arguments: relation
+          scope: epoch
+      state_projection_metadata_hash_mismatch:
+        description: The state projection metadata bytes do not match their manifest sha256 hash.
+        annotations:
+          arguments: ""
+          scope: epoch
+      state_projection_snapshot_missing:
+        description: A state projection snapshot is missing from the epoch.
+        annotations:
+          arguments: relation
+          scope: epoch
+      state_projection_source_unverifiable:
+        description: The source relation of a state projection cannot be verified.
+        annotations:
+          arguments: relation
+          scope: epoch
+      status_reader_incomplete:
+        description: A status reader role does not read all required relations in full.
+        annotations:
+          arguments: role
+          scope: epoch
+      status_reader_not_reader:
+        description: A role listed as a status reader is not a declared reader of the variant.
+        annotations:
+          arguments: role
+          scope: epoch
+      stratum_violation:
+        description: "A negative premise references a relation at or above the rule's stratum."
+        annotations:
+          arguments: relation key
+          scope: epoch
+      timeline_cell_not_judgement:
+        description: "A Timeline row displays a cell other than the Timeline's bound judgement."
+        annotations:
+          arguments: key value
+          scope: role
+      timeline_date_known_as_unknown:
+        description: A Timeline row shows a date as unknown when the role reads a row for it.
+        annotations:
+          arguments: key relation bindings
+          scope: role
+      timeline_date_missing:
+        description: A Timeline row omits a date attribute that the role reads.
+        annotations:
+          arguments: key relation bindings
+          scope: role
+      timeline_date_none_as_unknown:
+        description: A Timeline row shows an optional closed fully-read date as unknown instead of omitting it.
+        annotations:
+          arguments: key relation
+          scope: role
+      timeline_date_shape_invalid:
+        description: A Timeline date entry is neither a valid known date nor an unknown entry.
+        annotations:
+          arguments: key relation value
+          scope: role
+      timeline_date_unknown_omitted:
+        description: A Timeline row omits a date whose absence is unknown and must be shown as unknown.
+        annotations:
+          arguments: key relation
+          scope: role
+      timeline_date_unreadable:
+        description: A Timeline row shows a known date value when the role reads no row for it.
+        annotations:
+          arguments: key relation value
+          scope: role
+      timeline_date_value_mismatch:
+        description: A Timeline row shows a known date value different from what the role reads.
+        annotations:
+          arguments: key relation value bindings
+          scope: role
+      timeline_dates_order_invalid:
+        description: "A Timeline row's dates are not a list of the binding's dates each once in order."
+        annotations:
+          arguments: key fields
+          scope: role
+      tree_levels_exceeded:
+        description: "A tree root declares more levels than the checker's maximum depth."
+        annotations:
+          arguments: tree level limit
+          scope: role
+      tree_root_invalid:
+        description: A tree root entry does not have exactly the contracted fields or has a non-positive level count.
+        annotations:
+          arguments: tree fields
+          scope: role
+      unbound_variable:
+        description: A variable required by a rule is not bound in the witness.
+        annotations:
+          arguments: variable
+          scope: epoch
+      underived_row:
+        description: "A rule instance derives a row that is missing from the head relation's snapshot."
+        annotations:
+          arguments: relation key rule bindings
+          scope: epoch
+      unknown_rule:
+        description: A witness names a rule that is not present in the rules IR.
+        annotations:
+          arguments: rule
+          scope: role
+      unknown_variable:
+        description: A witness binds a variable that does not appear in its rule.
+        annotations:
+          arguments: variable
+          scope: epoch
+      unproven_premise:
+        description: A derived premise row has no witness in the proof.
+        annotations:
+          arguments: witness relation key
+          scope: epoch
+      unproven_row:
+        description: A derived relation row in the snapshot has no witness in the proof.
+        annotations:
+          arguments: relation key
+          scope: epoch
+      unreachable_witness:
+        description: A witness in the proof is not reachable from the proof root.
+        annotations:
+          arguments: witness relation key
+          scope: epoch
+      unsupported_snapshot_relation:
+        description: A transition references a snapshot relation that is not supported.
+        annotations:
+          arguments: ""
+          scope: epoch
+      view_cluster_count_mismatch:
+        description: "A cluster's node count or statuses disagree with the layout."
+        annotations:
+          arguments: file level position count value size
+          scope: role
+      view_cluster_guide_mismatch:
+        description: "A cluster's first or last guide element does not match the layout."
+        annotations:
+          arguments: file position value field key
+          scope: role
+      view_cluster_guide_missing:
+        description: A non-empty cluster omits its first or last guide element.
+        annotations:
+          arguments: file position field key
+          scope: role
+      view_cluster_guide_name_unreadable:
+        description: A cluster guide element carries a name not backed by rows the role reads.
+        annotations:
+          arguments: file position key value
+          scope: role
+      view_group_name_unreadable:
+        description: A group box shows a name not backed by rows the role reads.
+        annotations:
+          arguments: file key value
+          scope: role
+      view_group_shape_invalid:
+        description: "A tile's group entry is not a well-formed box."
+        annotations:
+          arguments: file path value
+          scope: role
+      view_group_unreadable:
+        description: "A tile's group box is not an element the role reads at its most specific kind."
+        annotations:
+          arguments: file key
+          scope: role
+      view_group_unused:
+        description: A tile shows a group box that no readable node belongs to.
+        annotations:
+          arguments: file key
+          scope: role
+      view_lane_name_unreadable:
+        description: A lane band shows a name not backed by rows the role reads.
+        annotations:
+          arguments: file key value
+          scope: role
+      view_lane_shape_invalid:
+        description: "A tile's lane entry is not a well-formed band."
+        annotations:
+          arguments: file path value
+          scope: role
+      view_lane_unused:
+        description: A tile shows a lane band that no readable node stands in.
+        annotations:
+          arguments: file key
+          scope: role
+      view_layout_invalid_json:
+        description: "A sheet's layout file is not valid strict JSON."
+        annotations:
+          arguments: file
+          scope: role
+      view_layout_not_object:
+        description: "A sheet's layout file does not decode to a JSON object."
+        annotations:
+          arguments: file
+          scope: role
+      view_layout_of_invalid:
+        description: "A layout's of mapping references a non-node or a placeholder."
+        annotations:
+          arguments: file
+          scope: role
+      view_layout_of_non_matrix:
+        description: A non-Matrix layout uses the of mapping to alias nodes to elements.
+        annotations:
+          arguments: file
+          scope: role
+      view_line_end_mismatch:
+        description: An unknown or screened line does not terminate at its own placeholder end.
+        annotations:
+          arguments: key kind
+          scope: role
+      view_line_endpoint_missing:
+        description: A layout line references a source or target node absent from the layout.
+        annotations:
+          arguments: file key
+          scope: role
+      view_line_from_stub_invalid:
+        description: An incoming line from a stub is improperly named, targets a placeholder, or uses another arrow.
+        annotations:
+          arguments: key
+          scope: role
+      view_line_from_stub_unreadable:
+        description: An incoming line from a stub does not end at any arrow row the role reads.
+        annotations:
+          arguments: key
+          scope: role
+      view_line_mapped_invalid:
+        description: A line between mapped nodes is not named by its ends and sign or carries disallowed fields.
+        annotations:
+          arguments: key
+          scope: role
+      view_line_missing_columns:
+        description: A relation line between mapped elements omits its columns field.
+        annotations:
+          arguments: key
+          scope: role
+      view_line_name_invalid:
+        description: "A line's identifier does not match its source and arrow."
+        annotations:
+          arguments: key
+          scope: role
+      view_line_placeholder_quantity:
+        description: A line ending at a stub, unknown end, or screened end carries a quantity or width.
+        annotations:
+          arguments: key
+          scope: role
+      view_line_quantity_mismatch:
+        description: "A line's quantity is not the sum of the rows the role reads in the way it counts them."
+        annotations:
+          arguments: key value
+          scope: role
+      view_line_row_count_mismatch:
+        description: "A line's row count does not match the number of rows the role reads."
+        annotations:
+          arguments: key count bindings
+          scope: role
+      view_line_shape_invalid:
+        description: A line in a tile does not have the required ends, arrow, and route fields.
+        annotations:
+          arguments: key fields
+          scope: role
+      view_line_to_stub_invalid:
+        description: An outgoing line to a stub is improperly named or ends at a stub of another arrow.
+        annotations:
+          arguments: key
+          scope: role
+      view_line_to_stub_unreadable:
+        description: An outgoing line to a stub does not hang from any arrow row the role reads.
+        annotations:
+          arguments: key
+          scope: role
+      view_line_unreadable:
+        description: A line in a tile is not backed by any row the role reads.
+        annotations:
+          arguments: key
+          scope: role
+      view_line_width_invalid:
+        description: A line specifies a width without a quantity or a non-positive width.
+        annotations:
+          arguments: key
+          scope: role
+      view_matrix_head_invalid:
+        description: A Matrix layout node is not a valid head for an element of its axis kind.
+        annotations:
+          arguments: file key field
+          scope: role
+      view_matrix_line_not_cell:
+        description: A Matrix layout line does not run from a row head to a column head.
+        annotations:
+          arguments: file key
+          scope: role
+      view_matrix_unbound:
+        description: A matrix sheet has no matching Matrix binding in the compiled bundle.
+        annotations:
+          arguments: file
+          scope: role
+      view_nest_has_lines:
+        description: A Nest layout contains lines, which a Nest may not hold.
+        annotations:
+          arguments: file count
+          scope: role
+      view_nest_part_missing:
+        description: A Nest layout omits a part that the role reads.
+        annotations:
+          arguments: file key
+          scope: role
+      view_nest_part_unexpected:
+        description: A Nest layout includes a node that is not a part of this Nest.
+        annotations:
+          arguments: file key
+          scope: role
+      view_nest_unbound:
+        description: A nest sheet has no valid Nest binding in the compiled bundle.
+        annotations:
+          arguments: file
+          scope: role
+      view_node_cell_unreadable:
+        description: A node in a tile displays a cell that is not backed by a row the role reads.
+        annotations:
+          arguments: key value
+          scope: role
+      view_node_extra_fields:
+        description: A node in a tile contains fields outside the node contract.
+        annotations:
+          arguments: key fields
+          scope: role
+      view_node_group_unreadable:
+        description: A node in a tile carries a group cell not backed by a row the role reads.
+        annotations:
+          arguments: file key value
+          scope: role
+      view_node_image_unreadable:
+        description: A node in a tile displays an image that is not a bound cell the role reads.
+        annotations:
+          arguments: key
+          scope: role
+      view_node_lane_unreadable:
+        description: A node in a tile carries a lane cell not backed by a row the role reads.
+        annotations:
+          arguments: file key value
+          scope: role
+      view_node_name_unreadable:
+        description: A node in a tile displays a name not backed by rows the role reads.
+        annotations:
+          arguments: key value
+          scope: role
+      view_node_not_drawn:
+        description: A layout node is not drawn in the leaf tile containing its centre.
+        annotations:
+          arguments: file key
+          scope: role
+      view_node_not_most_specific:
+        description: A layout draws an element at a supertype instead of its most specific readable kind.
+        annotations:
+          arguments: file key
+          scope: role
+      view_node_status_invalid:
+        description: A readable element node in a tile does not have status valid.
+        annotations:
+          arguments: key value
+          scope: role
+      view_node_unexpected_stub:
+        description: A non-stub node in a tile carries a stub payload.
+        annotations:
+          arguments: key
+          scope: role
+      view_node_unreadable:
+        description: A layout includes a node that is not backed by any row the role reads.
+        annotations:
+          arguments: file key
+          scope: role
+      view_root_count_mismatch:
+        description: A single-tile root does not draw the same number of nodes as the layout.
+        annotations:
+          arguments: file count size
+          scope: role
+      view_screened_end_invalid:
+        description: A screened-end placeholder node carries disallowed fields or an invalid status.
+        annotations:
+          arguments: key
+          scope: role
+      view_screened_line_unreadable:
+        description: A screened line does not hang from any row the role reads.
+        annotations:
+          arguments: key
+          scope: role
+      view_sheet_kind_unknown:
+        description: "A sheet's kind prefix is not recognized by the checker."
+        annotations:
+          arguments: file
+          scope: role
+      view_stub_mismatch:
+        description: A stub node in a tile does not match what the island levels specify.
+        annotations:
+          arguments: key value bindings
+          scope: role
+      view_stub_unexpected:
+        description: A layout includes a stub that the island levels do not produce.
+        annotations:
+          arguments: file key
+          scope: role
+      view_tile_hash_mismatch:
+        description: "A tile's bytes do not match the sha256 digest named by its parent cluster."
+        annotations:
+          arguments: file path
+          scope: role
+      view_tile_identity_mismatch:
+        description: "A tile's sheet, level, or coordinates disagree with its path."
+        annotations:
+          arguments: file path
+          scope: role
+      view_tile_invalid_json:
+        description: A tile file is not valid strict JSON.
+        annotations:
+          arguments: file path
+          scope: role
+      view_tile_line_layout_mismatch:
+        description: A tile shows a line differently from the sheet layout.
+        annotations:
+          arguments: file path key
+          scope: role
+      view_tile_missing:
+        description: A tile referenced from the root or a parent cluster is absent.
+        annotations:
+          arguments: file path
+          scope: role
+      view_tile_node_layout_mismatch:
+        description: A tile places or sizes a node differently from the sheet layout.
+        annotations:
+          arguments: file path key
+          scope: role
+      view_tile_node_of_mismatch:
+        description: A tile maps a node to a different element than the sheet layout.
+        annotations:
+          arguments: file path key
+          scope: role
+      view_tile_non_leaf_content:
+        description: A tile above the last pyramid level contains nodes or lines.
+        annotations:
+          arguments: file path
+          scope: role
+      view_tile_not_object:
+        description: A tile file does not decode to a JSON object.
+        annotations:
+          arguments: file path
+          scope: role
+      view_tiles_unreached:
+        description: Published tiles exist that are not reached from the sheet root tile.
+        annotations:
+          arguments: file path
+          scope: role
+      view_timeline_has_lines:
+        description: A Timeline layout contains lines, which a Timeline may not hold.
+        annotations:
+          arguments: file count
+          scope: role
+      view_timeline_row_missing:
+        description: A Timeline layout omits a readable element of its row kind.
+        annotations:
+          arguments: file key
+          scope: role
+      view_timeline_row_unexpected:
+        description: A Timeline layout includes a node that is not a readable element of the row kind.
+        annotations:
+          arguments: file key kind
+          scope: role
+      view_timeline_unbound:
+        description: A timeline sheet has no valid Timeline binding in the compiled bundle.
+        annotations:
+          arguments: file
+          scope: role
+      view_unknown_end_invalid:
+        description: An unknown-end placeholder node is not shown with status unknown and no extra data.
+        annotations:
+          arguments: key
+          scope: role

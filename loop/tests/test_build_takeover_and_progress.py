@@ -1,5 +1,6 @@
-"""Immediate build-pack cutover with pinned engine, Python fallback, milestone progress and release-1 completion."""
+"""Immediate build-pack cutover with pinned engine, fail-closed safe mode, milestone progress and release-1 completion."""
 from importlib.util import find_spec
+import inspect
 import json
 from pathlib import Path
 import re
@@ -32,11 +33,11 @@ class MissingPinnedEngineRunner(AssertionError):
 
 
 class MissingBuildCutover(AssertionError):
-    """The immediate build-pack cutover selector with Python fallback is not implemented yet."""
+    """The immediate build-pack cutover selector with fail-closed safe mode is not implemented yet."""
 
 
 class MissingCoordinatorReader(AssertionError):
-    """The thin coordinator reader for published build relations is not implemented yet."""
+    """The thin coordinator reader for published build relations with fail-closed safe mode is not implemented yet."""
 
 
 class MissingProgressRelations(AssertionError):
@@ -96,17 +97,6 @@ def _progress_base(tmp_path):
     return records
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingPinnedEngineRunner,
-    reason=(
-        "extra: decisions/build-reconciliation.md: Pinned-engine invariant. Add build/engine-pin.yaml pinning an "
-        "earlier main commit SHA (`engine_sha`) and loop/build_pinned_runner.py with read_engine_pin(path) and "
-        "validate_engine_pin(*, root, engine_sha, candidate_sha, main_ref='refs/remotes/origin/main'). Validate "
-        "that build/engine-pin.yaml holds a 40-lowercase-hex commit SHA, reject candidate_sha == engine_sha and "
-        "any commit not an ancestor of main_ref, and accept an earlier commit on main."
-    ),
-)
 def test_pinned_engine_runner_enforces_earlier_main_commit(tmp_path):
     pin_file = ROOT / "build" / "engine-pin.yaml"
     if not pin_file.is_file():
@@ -168,105 +158,68 @@ def test_pinned_engine_runner_enforces_earlier_main_commit(tmp_path):
         read_engine_pin(broken)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingBuildCutover,
-    reason=(
-        "extra: decisions/build-reconciliation.md: Immediate cutover and Python fallback. Add "
-        "loop/build_cutover.py with select_suites(*, run, manifest, rows, engine_error, universe, "
-        "python_fallback, python_audit=None). Use the published build_selected_job and build_full_selection rows "
-        "immediately when the checker verifies the publication green without calling python_fallback; record any "
-        "python_audit discrepancy as a non-blocking finding while keeping the pack result; invoke python_fallback "
-        "only when the publication is missing, checker-rejected, or the engine failed."
-    ),
-)
-def test_ci_selection_cutover_uses_verified_pack_and_falls_back_only_on_missing_or_rejected():
+def test_ci_selection_cutover_uses_verified_pack_and_fails_closed_to_safe_mode():
     if find_spec("loop.build_cutover") is None:
         raise MissingBuildCutover("loop/build_cutover.py is missing")
     from loop.build_cutover import select_suites
 
-    fallback_calls = []
-
-    def must_not_call():
-        fallback_calls.append("called")
-        raise AssertionError("python_fallback must not be called when the pack publication is verified green")
+    assert find_spec("loop.build_transition_choice") is None
+    assert not (ROOT / "loop" / "build_transition_choice.py").exists()
+    assert "python_fallback" not in inspect.signature(select_suites).parameters
 
     selected_rows = {
         "build_selected_job": _rows(("current", "beta", "change"), ("current", "alpha", "change")),
         "build_full_selection": [],
     }
     direct = select_suites(
-        run="current", manifest=GREEN, rows=selected_rows, engine_error=None,
-        universe=UNIVERSE, python_fallback=must_not_call,
+        run="current", manifest=GREEN, rows=selected_rows, engine_error=None, universe=UNIVERSE,
     )
     assert direct == {
         "run": "current",
         "source": "pack",
-        "fallback_reason": None,
+        "safe_mode": False,
+        "safe_mode_reason": None,
         "use": ["alpha", "beta"],
-        "blocked": False,
         "findings": [],
     }
-    assert fallback_calls == []
 
-    # Verified pack full-selection row still uses pack without calling Python fallback.
+    # Verified pack full-selection row selects the full universe directly from the pack.
     full_rows = {
         "build_selected_job": selected_rows["build_selected_job"],
         "build_full_selection": _rows(("current", "unmapped.txt")),
     }
     full = select_suites(
-        run="current", manifest=GREEN, rows=full_rows, engine_error=None,
-        universe=UNIVERSE, python_fallback=must_not_call,
+        run="current", manifest=GREEN, rows=full_rows, engine_error=None, universe=UNIVERSE,
     )
-    assert full["source"] == "pack" and full["use"] == sorted(UNIVERSE) and full["blocked"] is False
-
-    # Discrepancy against optional python_audit is recorded as a non-blocking finding; pack result still stands.
-    audited = select_suites(
-        run="current", manifest=GREEN, rows=selected_rows, engine_error=None,
-        universe=UNIVERSE, python_fallback=must_not_call,
-        python_audit=lambda: frozenset({"alpha", "gamma"}),
-    )
-    assert audited == {
+    assert full == {
         "run": "current",
         "source": "pack",
-        "fallback_reason": None,
-        "use": ["alpha", "beta"],
-        "blocked": False,
-        "findings": [{
-            "kind": "discrepancy",
-            "run": "current",
-            "surface": "ci_selection",
-            "only_pack": ["beta"],
-            "only_python": ["gamma"],
-        }],
+        "safe_mode": False,
+        "safe_mode_reason": None,
+        "use": sorted(UNIVERSE),
+        "findings": [],
     }
 
-    # Missing, checker-rejected, or engine-failed publications invoke python_fallback.
+    # Missing, checker-rejected, or engine-failed publications enter fail-closed safe mode:
+    # every suite in the universe runs (unknown never leads to less checking, never a Python subset).
     for label, manifest, rows, err, expected_reason in (
         ("missing", None, None, None, "missing-publication"),
         ("rejected", RED_PROOF, selected_rows, None, "invalid-publication"),
+        ("empty-checks", {"checks": []}, selected_rows, None, "invalid-publication"),
         ("missing-rel", GREEN, {"build_selected_job": selected_rows["build_selected_job"]}, None, "invalid-publication"),
         ("engine-err", GREEN, selected_rows, "compile failed", "engine-failure"),
     ):
-        calls = []
-
-        def run_fallback(tag=label, log=calls):
-            log.append(tag)
-            return frozenset({"viewer"})
-
         outcome = select_suites(
-            run="current", manifest=manifest, rows=rows, engine_error=err,
-            universe=UNIVERSE, python_fallback=run_fallback,
+            run="current", manifest=manifest, rows=rows, engine_error=err, universe=UNIVERSE,
         )
-        assert calls == [label], label
         assert outcome == {
             "run": "current",
-            "source": "python_fallback",
-            "fallback_reason": expected_reason,
-            "use": ["viewer"],
-            "blocked": False,
+            "source": "safe_mode",
+            "safe_mode": True,
+            "safe_mode_reason": expected_reason,
+            "use": sorted(UNIVERSE),
             "findings": [{
-                "kind": "fallback",
+                "kind": "safe_mode",
                 "run": "current",
                 "surface": "ci_selection",
                 "reason": expected_reason,
@@ -277,30 +230,23 @@ def test_ci_selection_cutover_uses_verified_pack_and_falls_back_only_on_missing_
         select_suites(
             run="current", manifest=GREEN,
             rows={"build_selected_job": _rows(("other", "alpha", "change")), "build_full_selection": []},
-            engine_error=None, universe=UNIVERSE, python_fallback=must_not_call,
+            engine_error=None, universe=UNIVERSE,
         )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingCoordinatorReader,
-    reason=(
-        "extra: decisions/build-reconciliation.md: Coordinator reader. Add loop/build_coordinator_reader.py with "
-        "read_coordinator_state(*, run, manifest, rows, engine_error, python_fallback, python_audit=None) and "
-        "export build_claim_release_plan, build_claim_held, build_claim_released, build_claim_release_discarded "
-        "and build_claim_release_pending in build/rules/claims.dl and build/rules/claim_release.dl. Read ready, "
-        "waiting, stuck tasks and claim-release rows directly from the checker-verified publication without "
-        "invoking python_fallback; record python_audit discrepancies as non-blocking findings; invoke "
-        "python_fallback only when the publication is absent, checker-rejected, or the engine failed."
-    ),
-)
-def test_coordinator_reader_uses_published_relations_with_python_fallback_only_when_unavailable():
+def test_coordinator_reader_uses_published_relations_and_fails_closed_to_safe_mode():
     if find_spec("loop.build_coordinator_reader") is None:
         raise MissingCoordinatorReader("loop/build_coordinator_reader.py is missing")
     from loop.build_coordinator_reader import read_coordinator_state
 
-    def must_not_call():
-        raise AssertionError("python_fallback must not be called when the coordinator publication is verified green")
+    assert "python_fallback" not in inspect.signature(read_coordinator_state).parameters
+
+    claims_rules = (ROOT / "build" / "rules" / "claims.dl").read_text(encoding="utf-8")
+    release_rules = (ROOT / "build" / "rules" / "claim_release.dl").read_text(encoding="utf-8")
+    for rel in ("build_claim_release_plan", "build_claim_held"):
+        assert re.search(rf"(?m)^\.output\s+{rel}\b", claims_rules), f"build/rules/claims.dl must export {rel}"
+    for rel in ("build_claim_released", "build_claim_release_discarded", "build_claim_release_pending"):
+        assert re.search(rf"(?m)^\.output\s+{rel}\b", release_rules), f"build/rules/claim_release.dl must export {rel}"
 
     gen = "a" * 40
     published_rows = {
@@ -311,13 +257,14 @@ def test_coordinator_reader_uses_published_relations_with_python_fallback_only_w
         "build_claim_held": _rows(("current", "task/active", "lease-active")),
     }
     state = read_coordinator_state(
-        run="current", manifest=GREEN, rows=published_rows, engine_error=None, python_fallback=must_not_call,
+        run="current", manifest=GREEN, rows=published_rows, engine_error=None,
     )
     assert state == {
         "run": "current",
         "source": "pack",
-        "fallback_reason": None,
-        "blocked": False,
+        "safe_mode": False,
+        "safe_mode_reason": None,
+        "assign_new_tasks": True,
         "ready": [{"task": "task-core", "reason": "ready"}, {"task": "task-lang", "reason": "ready"}],
         "waiting": [{"task": "task-wait", "token": "tok-1", "reason": "prereq"}],
         "stuck": [{"task": "task-stuck", "reason": "terminal-refusal"}],
@@ -326,73 +273,45 @@ def test_coordinator_reader_uses_published_relations_with_python_fallback_only_w
         "findings": [],
     }
 
-    # Discrepancy with python_audit is non-blocking and keeps the verified pack rows.
-    audited = read_coordinator_state(
-        run="current", manifest=GREEN, rows=published_rows, engine_error=None, python_fallback=must_not_call,
-        python_audit=lambda: {
-            "ready": [{"task": "task-core", "reason": "ready"}],
-            "waiting": [{"task": "task-wait", "token": "tok-1", "reason": "prereq"}],
-            "stuck": [{"task": "task-stuck", "reason": "terminal-refusal"}],
-            "claim_release_plan": [],
-            "claim_held": [{"claim": "task/active", "reason": "lease-active"}],
-        },
-    )
-    assert audited["source"] == "pack" and audited["blocked"] is False
-    assert audited["ready"] == state["ready"]
-    assert audited["claim_release_plan"] == state["claim_release_plan"]
-    assert any(f["kind"] == "discrepancy" and f["surface"] == "coordinator" for f in audited["findings"])
-
-    # Absent, checker-rejected, or engine-failed publications fall back to Python.
-    fallback_payload = {
-        "ready": [{"task": "task-fallback", "reason": "red-list"}],
-        "waiting": [],
-        "stuck": [],
-        "claim_release_plan": [],
-        "claim_held": [],
-    }
-    for manifest, rows, err, expected_reason in (
-        (None, None, None, "missing-publication"),
-        (RED_PROOF, published_rows, None, "invalid-publication"),
-        (GREEN, {"build_task_ready": published_rows["build_task_ready"]}, None, "invalid-publication"),
-        (GREEN, published_rows, "engine crashed", "engine-failure"),
+    # Absent, checker-rejected, or engine-failed publications enter fail-closed safe mode:
+    # claims stay intact (never released), zero new tasks are assigned, and a finding is emitted.
+    for label, manifest, rows, err, expected_reason in (
+        ("missing", None, None, None, "missing-publication"),
+        ("rejected", RED_PROOF, published_rows, None, "invalid-publication"),
+        ("empty-checks", {"checks": []}, published_rows, None, "invalid-publication"),
+        ("missing-rel", GREEN, {"build_task_ready": published_rows["build_task_ready"]}, None, "invalid-publication"),
+        ("engine-err", GREEN, published_rows, "engine crashed", "engine-failure"),
     ):
-        called = []
-
-        def run_fallback(log=called):
-            log.append(True)
-            return fallback_payload
-
         out = read_coordinator_state(
-            run="current", manifest=manifest, rows=rows, engine_error=err, python_fallback=run_fallback,
+            run="current", manifest=manifest, rows=rows, engine_error=err,
         )
-        assert called == [True], expected_reason
-        assert out["source"] == "python_fallback"
-        assert out["fallback_reason"] == expected_reason
-        assert out["blocked"] is False
-        assert out["ready"] == fallback_payload["ready"]
-        assert any(f["kind"] == "fallback" and f["reason"] == expected_reason for f in out["findings"])
+        assert out == {
+            "run": "current",
+            "source": "safe_mode",
+            "safe_mode": True,
+            "safe_mode_reason": expected_reason,
+            "assign_new_tasks": False,
+            "ready": [],
+            "waiting": [],
+            "stuck": [],
+            "claim_release_plan": [],
+            "claim_held": [],
+            "findings": [{
+                "kind": "safe_mode",
+                "run": "current",
+                "surface": "coordinator",
+                "reason": expected_reason,
+            }],
+        }, label
 
     with pytest.raises(ValueError):
         read_coordinator_state(
             run="current", manifest=GREEN,
             rows=dict(published_rows, build_task_ready=_rows(("other", "task-x", "ready"))),
-            engine_error=None, python_fallback=must_not_call,
+            engine_error=None,
         )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingProgressRelations,
-    reason=(
-        "extra: decisions/build-reconciliation.md: Milestone progress and release-1 completion. Declare "
-        "BuildMilestone, BuildProgressScan, BuildRedTest and BuildGreenTransition in build/schema/progress.yaml "
-        "(with labels in build/labels/en.yaml and channels in build/channels.yaml) and derive "
-        "build_milestone_progress(run, milestone, green_count, red_count) and release_1_done(run, scan) in "
-        "build/rules/progress.dl. Count distinct turned-green and still-red tests per milestone (M1, M2, M3, M4, "
-        "extra, later) at a verified cut with proofs; derive release_1_done iff all four M1-M4 milestones exist "
-        "and zero red tests carry M1-M4 (red extra/later tests do not block it)."
-    ),
-)
 def test_build_pack_derives_milestone_progress_and_release_1_done_with_proofs(tmp_path):
     required = {"BuildMilestone", "BuildProgressScan", "BuildRedTest", "BuildGreenTransition"}
     if not required <= _declared_kinds():
@@ -475,22 +394,6 @@ def test_build_pack_derives_milestone_progress_and_release_1_done_with_proofs(tm
     assert stale_rows["reader"]["release_1_done"] == []
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingOffboardAndRolePublication,
-    reason=(
-        "extra: decisions/build-reconciliation.md: Off-board release-1 work and role publication. Waits for "
-        "loop/tests/test_build_takeover_and_progress.py--"
-        "test_build_pack_derives_milestone_progress_and_release_1_done_with_proofs. Declare BuildOffboardWork "
-        "in build/schema/progress.yaml and derive build_offboard_work_count(run, item, completed, total, "
-        "remaining) and build_offboard_work_unknown(run, item, reason) in build/rules/progress.dl so observable "
-        "off-board release-1 work (e.g. rezono-1-migration 0 of N) gets its count and unobservable or incomplete "
-        "work gets an explicit unknown row with reason. Import packs/std-access in build/pack.yaml, declare "
-        "coordinator and owner roles in build/facts/roles.yaml, and grant may_read and may_read_full in "
-        "build/rules/access.dl so both coordinator and owner read the progress, release_1_done, off-board, task "
-        "and claim-release relations with verified proofs while an unprivileged role reads none."
-    ),
-)
 def test_build_pack_derives_offboard_work_and_publishes_for_coordinator_and_owner_roles(tmp_path):
     if "BuildOffboardWork" not in _declared_kinds():
         raise MissingOffboardAndRolePublication("build/schema lacks BuildOffboardWork")

@@ -127,17 +127,6 @@ def _expect_ir_error(doc: dict, label: str, problems: list[str], *, code: str | 
         problems.append(f"{label}: expected IRError({code or 'any'}), but ir.load succeeded")
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingFunctionalDerivationIR,
-    reason="M3: decisions/language-rezono-1.md: Implement rezono.rules/2 `role: functional` with mandatory closed "
-           "`domain`, co-located `(key..., state, reason, value)` payload, `rational` column type in rules.py/"
-           "rules_sql.py/rules_split.py/contracts/bundle.yaml, `no_value`/`multiple_values` core reason codes in "
-           "contracts/value.yaml and docs/publication/l0.md, `conflict_policy` (publish vs block), per-derivation "
-           "stratification across derived and functional relations, refusal of `may_read` AND `may_read_full` "
-           "depending on functional or calc relations, and `functional` view kind/weight in emit.py, rules_split.py, "
-           "and rules_sql.py. Read sections 2, 4, 5.2, 5.3, 5.4 and 5.8.",
-)
 def test_functional_derivation_ir_and_stratification():
     # Counter-case: rezono.rules/1 plain derived relations keep their existing IR loading and `relation` view kind.
     v1_doc = {

@@ -63,17 +63,6 @@ class MissingFourStateFold(AssertionError):
     """The checker did not load a rezono.rules/2 program, or did not fold its aggregates strictly in all four states."""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingFourStateFold,
-    reason="M3: decisions/language-rezono-1-aggregate-spelling.md: Waits for "
-           "compiler/tests/test_functional_derivation_ir.py--test_functional_derivation_ir_and_stratification "
-           "(the rezono.rules/2 IR, which checker/rezono_checker/rules.py load_rules refuses today). Then let "
-           "load_rules read rezono.rules/2 and record the program's format, and fold every aggregate under it in "
-           "check.recompute and closure.py: evaluate._fold takes the format, folds strictly without one (invalid, "
-           "then unknown, then not_applicable) and keeps docs/formal.md section 6 for rezono.rules/1. "
-           "Read section 2.",
-)
 def test_rules_2_aggregates_fold_four_states():
     try:
         rules = load_rules(program("rezono.rules/2"))

@@ -64,7 +64,7 @@ enums:
       rule: {}
 
   RuleColumnType:
-    permissible_values: {string: {}, integer: {}, boolean: {}}
+    permissible_values: {string: {}, integer: {}, rational: {}, boolean: {}, date: {}}
   ExplainMode:
     permissible_values: {materialize: {}, on_demand: {}}
   AggregateFunction:

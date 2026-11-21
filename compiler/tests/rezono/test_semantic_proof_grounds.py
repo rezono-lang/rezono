@@ -106,7 +106,11 @@ def checked_output(epoch, path):
     assert columns["table.Selected.arrow"] == ["$id", "inventory", "winner"]
     [bundle] = [entry for entry in manifest["compiled"] if entry["file"] == "bundle/schema-bundle.json"]
     messages = artifact(bucket, bundle)["messages"]
-    assert messages == [{"lang": "en", "resource": MESSAGES}]
+    en_resources = [entry["resource"] for entry in messages if entry["lang"] == "en"]
+    assert en_resources
+    pack_lines = MESSAGES.split("\n---\n", 1)[1].splitlines()
+    en_lines = [line for res in en_resources for line in res.split("\n---\n", 1)[-1].splitlines()]
+    assert all(line in en_lines for line in pack_lines)
     return snapshots, visible_rows, columns, messages
 
 

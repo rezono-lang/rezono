@@ -7,11 +7,16 @@ import { canonicalJson } from '../../../viewer/src/lib/canon.ts';
 import { ask as trace, AskError, calcSteps, memoryGraph, parseAfter, questionOf, stepsOf, type RuleDoc, type Sources, type SourcesOf } from './ask.ts';
 import { catalogueQueryScope } from './catalogue-query.ts';
 import { roleBundle } from './catalogue.ts';
+import { readPublishedVariantDifference, scenarioAnswer, type DifferenceCursor } from './difference.ts';
 import { ask as evaluate, roleSchema, type Asking } from './expr.ts';
 import { compareKey, pageByKey, type KeyRange } from './pieces.ts';
 import { rowQueryScope, type RowSelection } from './row-query.ts';
+import {
+	earlierWithdrawal, epochWithdrawal, hasSortedKey, loadWithdrawals, rangeMatchingRows, rowsWithdrawal, rowWithdrawal,
+	standingHeaders, withdrawalBody, WithdrawnError, type WithdrawalRecord
+} from './standing.ts';
 import { fileStore, StoreLimit, type Store } from './store.ts';
-import { readPublishedSweep, sweepAnswer } from './sweep.ts';
+import { completeScope, readPublishedSweep, readPublishedSweeps, readPublishedVariant, sweepAnswer, type SweepCellLocation, type SweepStart } from './sweep.ts';
 
 const LIMIT = 1000;
 const REQUEST_BYTES = 16 * 1024;
@@ -22,8 +27,11 @@ const EVALUATION_STEPS = 250_000;
 const SHA256 = /^[0-9a-f]{64}$/;
 const MAIN = /^m-[0-9]+$/;
 const SAFE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+const WITNESS_CHECK = 'rezono:proofs';
+const CHECK_STATUSES = new Set(['green', 'warning', 'red'] as const);
 const headers = { 'cache-control': 'private, no-store' };
 
+type WitnessCheckStatus = 'green' | 'warning' | 'red';
 type ObjectRef = Pick<ArchivedFile, 'uri' | 'sha256'>;
 type Keyed = { key: string[] };
 type Witnesses = { witnesses: Witness[]; calc_witnesses?: CalcWitness[]; hidden: [] };
@@ -51,8 +59,12 @@ function missing(): never {
 	throw new AskError(404, 'not found');
 }
 
-function json(value: unknown, status = 200): Response {
-	return Response.json(value, { status, headers });
+function json(value: unknown, status = 200, extra?: Record<string, string>): Response {
+	return Response.json(value, { status, headers: extra ? { ...headers, ...extra } : headers });
+}
+
+function gone(entry: WithdrawalRecord): Response {
+	return json(withdrawalBody(entry), 410, { 'x-rezono-standing': 'withdrawn' });
 }
 
 function textList(raw: string | null): string[] | undefined {
@@ -73,6 +85,20 @@ function limitOf(raw: unknown): number {
 
 function headKey(pack: string, epoch: number): string {
 	return pack + '/heads/' + (10n ** 19n - 1n - BigInt(epoch)).toString().padStart(19, '0') + '.json';
+}
+
+function witnessCheck(checks: unknown): WitnessCheckStatus | undefined {
+	if (checks === undefined) return undefined;
+	if (!Array.isArray(checks)) fault();
+	let status: WitnessCheckStatus | undefined;
+	for (const entry of checks) {
+		if (!record(entry) || typeof entry.name !== 'string') fault();
+		if (entry.name !== WITNESS_CHECK) continue;
+		if (status !== undefined || typeof entry.status !== 'string'
+			|| !CHECK_STATUSES.has(entry.status as WitnessCheckStatus)) fault();
+		status = entry.status as WitnessCheckStatus;
+	}
+	return status;
 }
 
 type QuestionBody = { text: string; limit: number; after?: string } &
@@ -140,6 +166,7 @@ function publication(store: Store, pack: string, role: string) {
 	const latest = async () => (await store.list(pack + '/heads/', { limit: 1 }))[0];
 	return {
 		latest,
+		read,
 		async current(id?: string) {
 			const epoch = id && MAIN.test(id) ? Number(id.slice(2)) : undefined;
 			if (id !== undefined && (epoch === undefined || !Number.isSafeInteger(epoch) || id !== 'm-' + epoch))
@@ -156,6 +183,7 @@ function publication(store: Store, pack: string, role: string) {
 				|| manifest.variant || manifest.proposal || !Array.isArray(manifest.snapshots) || !Array.isArray(manifest.compiled))
 				fault();
 			if (manifest.access_semantics !== 2) return undefined;
+			const witness = witnessCheck(manifest.checks);
 			const snaps = new Map<string, Snapshot>();
 			for (const entry of manifest.snapshots) {
 				if (!record(entry) || typeof entry.role !== 'string') fault();
@@ -187,7 +215,10 @@ function publication(store: Store, pack: string, role: string) {
 			};
 			const range = async (relation: string, at: KeyRange): Promise<Page> =>
 				pageByKey(await rows(relation), at);
-			return { manifest, compiled, snaps, bundle: bundle as unknown as Bundle, schema, rows, range, object, read };
+			return {
+				manifest, manifestSha256: head.sha256, witnessCheck: witness,
+				compiled, snaps, bundle: bundle as unknown as Bundle, schema, rows, range, object, read
+			};
 		}
 	};
 }
@@ -228,10 +259,12 @@ async function readableSnapshots(view: Current): Promise<Snapshot[]> {
 }
 
 function listed(view: Current) {
-	const { manifest, schema, snaps } = view;
+	const { manifest, manifestSha256, witnessCheck: witness, schema, snaps } = view;
 	return {
 		id: manifest.id, epoch: manifest.epoch, knowledge_time: manifest.knowledge_time,
 		access_semantics: 2, definition_sha256: manifest.definition_sha256,
+		manifest_sha256: manifestSha256,
+		...(witness !== undefined && { witness_check: witness }),
 		compiled: [{ file: schema.file, sha256: schema.sha256 }],
 		snapshots: [...snaps.values()].map(({ relation, role, complete, full, format }) => ({ relation, role, complete, full, format }))
 	};
@@ -267,7 +300,117 @@ function sourcesOf(view: Current, role: string): SourcesOf | undefined {
 	return async (row) => (await (index ??= load())).get(id(row));
 }
 
-async function named(view: Current, role: string, term: string, search: URLSearchParams): Promise<Answer> {
+async function rangeChecked(view: Current, withdrawals: readonly WithdrawalRecord[], relation: string, at: KeyRange): Promise<Page> {
+	const all = await view.rows(relation);
+	const withdrawn = rowsWithdrawal(withdrawals, view.manifest.id, relation, rangeMatchingRows(all, at));
+	if (withdrawn) throw new WithdrawnError(withdrawn);
+	return pageByKey(all, at);
+}
+
+async function checkSweepWithdrawals(
+	current: Current,
+	withdrawals: readonly WithdrawalRecord[],
+	cells: readonly SweepCellLocation[],
+	start?: SweepStart
+): Promise<void> {
+	if (!withdrawals.some((entry) => entry.rows.length > 0)) return;
+	let withdrawn: WithdrawalRecord | undefined;
+	for (const cell of cells) {
+		for (const relation of [cell.kind, cell.table]) {
+			const all = await current.rows(relation);
+			withdrawn = earlierWithdrawal(
+				withdrawn,
+				rowsWithdrawal(withdrawals, current.manifest.id, relation, rangeMatchingRows(all, { prefix: [cell.key] }))
+			);
+		}
+	}
+	if (start) {
+		withdrawn = earlierWithdrawal(withdrawn, rowWithdrawal(withdrawals, current.manifest.id, start.relation, start.key));
+	}
+	if (completeScope(current)) {
+		for (const relation of current.snaps.keys()) {
+			const rows = await current.rows(relation);
+			withdrawn = earlierWithdrawal(withdrawn, rowsWithdrawal(withdrawals, current.manifest.id, relation, rows));
+		}
+	}
+	if (withdrawn) throw new WithdrawnError(withdrawn);
+}
+
+async function readSweepsChecked(
+	current: Current,
+	withdrawals: readonly WithdrawalRecord[],
+	pack: string,
+	role: string
+) {
+	const published = await readPublishedSweeps(current, pack, role);
+	if (!published) return undefined;
+	await checkSweepWithdrawals(current, withdrawals, published.cells);
+	return published.listing;
+}
+
+async function readSweepChecked(
+	current: Current,
+	withdrawals: readonly WithdrawalRecord[],
+	pack: string,
+	role: string,
+	name: string,
+	start?: SweepStart
+) {
+	const published = await readPublishedSweep(current, pack, role, name, start);
+	if (!published) return undefined;
+	await checkSweepWithdrawals(current, withdrawals, [published.cell], start);
+	return published;
+}
+
+async function readVariantDifferenceChecked(
+	current: Current,
+	withdrawals: readonly WithdrawalRecord[],
+	pack: string,
+	role: string,
+	variantId: string,
+	page: { limit: number; after?: DifferenceCursor }
+) {
+	let withdrawn: WithdrawalRecord | undefined;
+	const checkedView = {
+		...current,
+		range: async (relation: string, at: KeyRange): Promise<Page> => {
+			const all = await current.rows(relation);
+			withdrawn = earlierWithdrawal(
+				withdrawn,
+				rowsWithdrawal(withdrawals, current.manifest.id, relation, rangeMatchingRows(all, at))
+			);
+			return pageByKey(all, at);
+		}
+	};
+	const variant = await readPublishedVariant(checkedView, pack, role, variantId);
+	if (!variant) return undefined;
+	const published = await readPublishedVariantDifference(checkedView, pack, role, variant, page);
+	if (!published) return undefined;
+	if (withdrawals.some((entry) => entry.rows.length > 0)) {
+		for (const relation of current.snaps.keys()) {
+			const rows = await current.rows(relation);
+			withdrawn = earlierWithdrawal(withdrawn, rowsWithdrawal(withdrawals, current.manifest.id, relation, rows));
+		}
+	}
+	if (withdrawn) throw new WithdrawnError(withdrawn);
+	return published;
+}
+
+function isManifestRoute(method: string, parts: readonly string[], search: URLSearchParams, manifestId: string): boolean {
+	const [, id, route] = parts;
+	if (parts.length === 2 && (id === 'head' || id === 'bundle')) {
+		const selected = search.get('m');
+		return selected === null || selected === manifestId;
+	}
+	if (parts.length === 3 && id === 'manifests' && route === manifestId) return true;
+	if (id !== manifestId) return false;
+	if (parts.length === 4 && (route === 'snapshots' || route === 'rows' || route === 'ask')) return true;
+	if (parts.length === 3 && route === 'rows') return true;
+	if (method === 'POST' && parts.length === 3 && route === 'ask') return true;
+	return false;
+}
+
+async function named(view: Current, withdrawals: readonly WithdrawalRecord[], role: string, term: string, search: URLSearchParams): Promise<Answer> {
 	const question = questionOf(view.bundle, term);
 	if (!question) return missing();
 	if (question.start !== 'present' || question.steps.some((step) => !step.trace))
@@ -276,6 +419,8 @@ async function named(view: Current, role: string, term: string, search: URLSearc
 	const key = textList(search.get('key'));
 	if (!relation || !key) throw new AskError(400, 'a named question needs a relation and key');
 	if (!view.snaps.has(relation) || !(await view.rows(relation)).some((row) => compareKey(row.key, key) === 0)) return missing();
+	const direct = rowWithdrawal(withdrawals, view.manifest.id, relation, key);
+	if (direct) throw new WithdrawnError(direct);
 	const ref = view.manifest.witnesses?.find((set) => set.role === role);
 	if (!ref) return missing();
 	const published = await view.object(ref as WitnessSet, 'objects') as Witnesses;
@@ -287,10 +432,23 @@ async function named(view: Current, role: string, term: string, search: URLSearc
 	const calc = published.calc_witnesses ?? [];
 	const answer = await trace(memoryGraph([...published.witnesses, ...calc], [...steps, ...calcSteps(calc)]), question,
 		view.manifest.id, { relation, key: canonicalJson(key) }, { limit: Math.min(limitOf(search.get('limit')), question.limit), after: parseAfter(search.get('after')) }, sourcesOf(view, role));
-	return answer ?? missing();
+	if (!answer) return missing();
+	if (withdrawals.some((entry) => entry.rows.length > 0)) {
+		let withdrawn: WithdrawalRecord | undefined;
+		for (const node of answer.nodes) {
+			if (!view.snaps.has(node.relation)) continue;
+			let parsed: unknown;
+			try { parsed = JSON.parse(node.key); } catch { continue; }
+			if (!keyParts(parsed)) continue;
+			if (!hasSortedKey(await view.rows(node.relation), parsed)) continue;
+			withdrawn = earlierWithdrawal(withdrawn, rowWithdrawal(withdrawals, view.manifest.id, node.relation, parsed));
+		}
+		if (withdrawn) throw new WithdrawnError(withdrawn);
+	}
+	return answer;
 }
 
-async function batch(view: Current, search: URLSearchParams) {
+async function batch(view: Current, withdrawals: readonly WithdrawalRecord[], search: URLSearchParams) {
 	const relations = [...new Set(textList(search.get('relations')) ?? [])];
 	const keys = [...new Set(textList(search.get('ids')) ?? [])];
 	const limit = limitOf(search.get('limit'));
@@ -299,14 +457,20 @@ async function batch(view: Current, search: URLSearchParams) {
 	if (search.get('order') && search.get('order') !== 'key') throw new AskError(501, 'inverse index is unavailable');
 	const rows: Record<string, Keyed[]> = Object.create(null);
 	const more: {relation: string; id: string; after: string[]}[] = [];
+	let withdrawn: WithdrawalRecord | undefined;
 	for (const relation of relations.filter((name) => view.snaps.has(name))) {
+		const all = await view.rows(relation);
 		rows[relation] = [];
 		for (const id of keys) {
-			const { rows: selected, next } = await view.range(relation, { prefix: [id], limit });
+			const matching = rangeMatchingRows(all, { prefix: [id] });
+			withdrawn = earlierWithdrawal(withdrawn, rowsWithdrawal(withdrawals, view.manifest.id, relation, matching));
+			if (withdrawn) continue;
+			const { rows: selected, next } = pageByKey(all, { prefix: [id], limit });
 			rows[relation].push(...selected);
 			if (next) more.push({ relation, id, after: next });
 		}
 	}
+	if (withdrawn) throw new WithdrawnError(withdrawn);
 	return { rows, ...(more.length && { more }) };
 }
 
@@ -335,53 +499,115 @@ export async function openLocalGate(root: string, role: string): Promise<Handle>
 			const source = publication(store, pack, role);
 			const current = await source.current();
 			if (!current) return missing();
+			const withdrawals = await loadWithdrawals(store, pack, (key) => source.read(key));
 			if (parts.length === 2 && id === 'sweeps') {
 				if (url.searchParams.get('m') !== current.manifest.id) return missing();
-				const published = await readPublishedSweep(current, pack, role);
-				if (!published || await source.latest() !== headKey(pack, current.manifest.epoch)) return missing();
-				return json(published.listing);
+				const withdrawn = epochWithdrawal(withdrawals, current.manifest.id);
+				if (withdrawn) return gone(withdrawn);
+				const listing = await readSweepsChecked(current, withdrawals, pack, role);
+				if (!listing || await source.latest() !== headKey(pack, current.manifest.epoch)) return missing();
+				return json(listing, 200, standingHeaders(pack, current.manifest.epoch, current.manifest.id, current.manifest.epoch));
 			}
 			const pin = id === 'head' || id === 'bundle' ? url.searchParams.get('m') ?? undefined
 				: id === 'manifests' ? route : id;
 			let view = current;
-			if (pin && pin !== current.manifest.id) {
+			if (pin !== undefined && pin !== current.manifest.id) {
 				const earlier = await source.current(pin);
-				if (!earlier || earlier.manifest.epoch >= current.manifest.epoch || !await stillReadable(earlier, current))
-					return missing();
+				if (!earlier || earlier.manifest.epoch >= current.manifest.epoch) return missing();
+				const withdrawn = epochWithdrawal(withdrawals, earlier.manifest.id);
+				if (withdrawn) {
+					if (!isManifestRoute(req.method, parts, url.searchParams, earlier.manifest.id)) return missing();
+					return gone(withdrawn);
+				}
+				if (!await stillReadable(earlier, current)) return missing();
 				view = earlier;
+			} else {
+				const withdrawn = epochWithdrawal(withdrawals, current.manifest.id);
+				if (withdrawn) {
+					if (!isManifestRoute(req.method, parts, url.searchParams, current.manifest.id)) return missing();
+					return gone(withdrawn);
+				}
 			}
+			const standing = standingHeaders(pack, view.manifest.epoch, current.manifest.id, current.manifest.epoch);
 			const response = await (async () => {
-				if (parts.length === 2 && id === 'head') return json(listed(view));
+				if (parts.length === 2 && id === 'head') return json(listed(view), 200, standing);
 				if (parts.length === 2 && id === 'bundle') {
 					const selected = url.searchParams.get('m');
 					return selected === null || selected === view.manifest.id
-						? json(roleBundle(view.bundle, await readableSnapshots(view))) : missing();
+						? json(roleBundle(view.bundle, await readableSnapshots(view)), 200, standing) : missing();
 				}
-				if (parts.length === 3 && id === 'manifests' && route === view.manifest.id) return json(listed(view));
+				if (parts.length === 3 && id === 'manifests' && route === view.manifest.id) return json(listed(view), 200, standing);
 				if (id !== view.manifest.id) return missing();
-				if (parts.length === 4 && route === 'snapshots') return json(await view.rows(item));
+				if (parts.length === 4 && route === 'snapshots') {
+					const rows = await view.rows(item);
+					const withdrawn = rowsWithdrawal(withdrawals, view.manifest.id, item, rows);
+					if (withdrawn) throw new WithdrawnError(withdrawn);
+					return json(rows, 200, standing);
+				}
 				if (parts.length === 4 && route === 'rows') {
 					if (url.searchParams.get('order') && url.searchParams.get('order') !== 'key')
 						throw new AskError(501, 'inverse index is unavailable');
-					return json(await view.range(item, { prefix: textList(url.searchParams.get('prefix')) ?? [],
+					return json(await rangeChecked(view, withdrawals, item, { prefix: textList(url.searchParams.get('prefix')) ?? [],
 						after: textList(url.searchParams.get('after')), limit: limitOf(url.searchParams.get('limit')),
-						starts: url.searchParams.get('starts') ?? undefined }));
+						starts: url.searchParams.get('starts') ?? undefined }), 200, standing);
 				}
-				if (parts.length === 3 && route === 'rows') return json(await batch(view, url.searchParams));
+				if (parts.length === 3 && route === 'rows') return json(await batch(view, withdrawals, url.searchParams), 200, standing);
 				if (parts.length === 4 && route === 'ask') {
 					const q = questionOf(view.bundle, item);
 					if (q?.start === 'sweep' && q.answer === 'series') {
 						const name = url.searchParams.get('sweep');
 						if (!name || view !== current) return missing();
-						const published = await readPublishedSweep(current, pack, role, name);
+						const relation = url.searchParams.get('relation');
+						const rawKey = url.searchParams.get('key');
+						let start: SweepStart | undefined;
+						if (relation !== null || rawKey !== null) {
+							if (!relation || rawKey === null) throw new AskError(400, 'a start row needs a relation and key');
+							const key = textList(rawKey);
+							if (!key || !key.length) throw new AskError(400, 'expected a JSON key array');
+							start = { relation, key };
+						}
+						const published = await readSweepChecked(current, withdrawals, pack, role, name, start);
 						if (!published || await source.latest() !== headKey(pack, current.manifest.epoch)) return missing();
-						return json(sweepAnswer(item, name, id, published.series));
+						return json(sweepAnswer(item, name, id, published.series, published.start), 200, standing);
 					}
-					return json(await named(view, role, item, url.searchParams));
+					if (q?.start === 'delta' && q.answer === 'overlay'
+						&& q.steps.length === 1 && q.steps[0]?.suppose?.delta === 'given') {
+						const variant = url.searchParams.get('variant');
+						const proposal = url.searchParams.get('proposal');
+						if (proposal !== null) {
+							if (variant !== null) throw new AskError(400, 'give one of proposal or variant');
+							throw new AskError(501, 'this named question needs a publication index');
+						}
+						if (variant === null) throw new AskError(400, 'a delta question needs a variant');
+						const limit = Math.min(limitOf(url.searchParams.get('limit')), q.limit);
+						const rawAfter = parseAfter(url.searchParams.get('after'));
+						let after: DifferenceCursor | undefined;
+						if (rawAfter) {
+							if (rawAfter.distance === 0) {
+								const key = textList(rawAfter.ref.key);
+								if (!key || !key.length) throw new AskError(400, 'expected a JSON key array');
+								after = { distance: 0, relation: rawAfter.ref.relation, key };
+							} else {
+								after = { distance: rawAfter.distance, relation: rawAfter.ref.relation };
+							}
+						}
+						if (!variant || view !== current) return missing();
+						const published = await readVariantDifferenceChecked(current, withdrawals, pack, role, variant, { limit, after });
+						if (!published || await source.latest() !== headKey(pack, current.manifest.epoch)) return missing();
+						return json(scenarioAnswer(item, id, variant, published), 200, standing);
+					}
+					return json(await named(view, withdrawals, role, item, url.searchParams), 200, standing);
 				}
 				if (req.method === 'POST' && route === 'ask') {
 					const body = await bodyOf(req);
-					const read = (relation: string, at: KeyRange) => view.range(relation, at);
+					const read = body.scope === 'row'
+						? (relation: string, at: KeyRange) => rangeChecked(view, withdrawals, relation, at)
+						: async (relation: string, at: KeyRange) => {
+							const rows = await view.rows(relation);
+							const withdrawn = rowsWithdrawal(withdrawals, view.manifest.id, relation, rows);
+							if (withdrawn) throw new WithdrawnError(withdrawn);
+							return pageByKey(rows, at);
+						};
 					const snapshots = [...view.snaps.values()];
 					const subject = body.scope === 'row'
 						? await rowQueryScope(view.bundle, snapshots, read, ROW_LIMIT, body.row, { manifest: id, role })
@@ -393,13 +619,14 @@ export async function openLocalGate(root: string, role: string): Promise<Handle>
 					const answered = await evaluate(asking);
 					if ('refused' in answered) return json({ error: 'the text does not check', diagnostics: answered.refused }, 400);
 					if ('cut' in answered) return json({ cut: answered.cut }, 422);
-					return json(answered.answer);
+					return json(answered.answer, 200, standing);
 				}
 				return missing();
 			})();
 			if (view !== current && await source.latest() !== headKey(pack, current.manifest.epoch)) return missing();
 			return response;
 		} catch (error) {
+			if (error instanceof WithdrawnError) return gone(error.withdrawal);
 			if (error instanceof StoreLimit) return json({ error: 'read budget exhausted' }, 422);
 			if (error instanceof AskError && error.status < 500) return json({ error: error.message }, error.status);
 			if (error instanceof AskError && error.status === 501) return json({ error: 'question unavailable for this publication' }, 501);

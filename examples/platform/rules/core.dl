@@ -39,6 +39,9 @@ firewall_rule(za, zb, p) :- crossing(_, _, za, zb, p).
 .decl in_zone_policy(a: symbol, b: symbol, port: number)
 in_zone_policy(a, b, p) :- flow(a, b, _, p), zone_of(a, z), zone_of(b, z).
 
+// A provider starts before whoever needs it (std-order).
+stated_precedes(b, a) :- needs(a, b, _).
+
 // A flow holds from the later step of its two ends.
 .decl flow_from_step(a: symbol, b: symbol, n: number)
 flow_from_step(a, b, n) :- needs(a, b, _), service__step(a, n), service__step(b, m), n >= m.

@@ -33,7 +33,8 @@ def decisions(replace=True):
                decision("exclusion", 8, 10), decision("review-old"), decision("review-new", 8, replaces="review-old")]
     records.extend(decision(k) for k in ("matrix", "stance", "capacity", "cost"))
     return {"decision": records, "reference_date": [
-        {"id": d, "title": d, "day": 20260400 + n} for d, n in [("before", 7), ("edge", 8), ("after", 10)]],
+        {"id": d, "title": d, "date": f"2026-04-{n:02}", "day": 20260400 + n}
+        for d, n in [("before", 7), ("edge", 8), ("after", 10)]],
         "ground": [{"id":"dep-1", "decision": "position", "rests_on":"earlier"},
                    {"id":"dep-2", "decision":"other-position", "rests_on":"timeboxed"}]}
 

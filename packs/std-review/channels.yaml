@@ -8,3 +8,5 @@ kinds:
   - {kind: role_grant, shape: pill}
   - {kind: review_phase, shape: pill}
   - {kind: review_policy, shape: pill}
+  - {kind: evidence_requirement, shape: pill}
+  - {kind: evidence_attestation, shape: rect}

@@ -24,6 +24,7 @@ import ast
 from collections import Counter, namedtuple
 import configparser
 import copy
+import datetime
 from fnmatch import fnmatchcase
 import hashlib
 import io
@@ -430,24 +431,174 @@ def strict(mark):
 
 
 MILESTONES = ("M1: ", "M2: ", "M3: ", "M4: ", "extra: ", "later: ")
+RED_DECISION_BUDGET = "loop/red-decision-budget.json"
+DECISION_CITATION = re.compile(r"decisions/([a-z0-9]+(?:-[a-z0-9]+)*)\.md(?::|\s|$)")
+DECISION_DECIDERS = frozenset({"core", "language", "platform", "loop", "k8s-admission", "run", "owner"})
+DECISION_STATES = frozenset({"proposed", "in_force", "superseded", "withdrawn"})
+DECISION_FIELDS = frozenset({"decider", "decided_on", "valid_from", "valid_until", "state", "supersedes", "subject"})
+DECISION_SLUG = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
+DECISION_DATE = re.compile(r"(\d{4})-(\d{2})-(\d{2})")
+
+
+def _reason_text(mark):
+    """The literal string reason of a red mark, or None."""
+    if not isinstance(mark, ast.Call):
+        return None
+    for kw in mark.keywords:
+        if kw.arg == "reason" and isinstance(kw.value, ast.Constant) and isinstance(kw.value.value, str):
+            return kw.value.value
+    return None
 
 
 def milestone(mark):
     """A red mark whose reason is literal text that starts with a milestone."""
-    if not isinstance(mark, ast.Call):
+    reason = _reason_text(mark)
+    return reason is not None and reason.startswith(MILESTONES)
+
+
+def decision_citation(mark):
+    """The cited `decisions/<id>.md` path immediately after a mark's milestone prefix, or None."""
+    reason = _reason_text(mark)
+    if reason is None:
+        return None
+    for prefix in MILESTONES:
+        if reason.startswith(prefix):
+            match = DECISION_CITATION.match(reason[len(prefix):])
+            return f"decisions/{match.group(1)}.md" if match else None
+    return None
+
+
+def _parse_flow_list(raw):
+    """Parse a non-empty YAML flow list `[a, b]` using only the standard library, or None."""
+    raw = raw.strip()
+    if not (raw.startswith("[") and raw.endswith("]")):
+        return None
+    inner = raw[1:-1].strip()
+    if not inner:
+        return None
+    items = []
+    for part in inner.split(","):
+        item = part.strip()
+        if not item:
+            return None
+        if len(item) >= 2 and item[0] == item[-1] and item[0] in {'"', "'"}:
+            item = item[1:-1]
+        if not item or any(ch in item for ch in "[]{}:#"):
+            return None
+        items.append(item)
+    return items
+
+
+def _parse_plain_date(raw):
+    """Parse an unquoted YAML `YYYY-MM-DD` date within schema bounds, or None."""
+    match = DECISION_DATE.fullmatch(raw.strip())
+    if not match:
+        return None
+    try:
+        day = datetime.date(int(match.group(1)), int(match.group(2)), int(match.group(3)))
+    except ValueError:
+        return None
+    return day if 1900 <= day.year <= 9999 else None
+
+
+def has_valid_decision_head(data):
+    """Whether `data` (bytes) starts with a valid YAML decision head (decisions/decision-heads.md §1)."""
+    if not isinstance(data, (bytes, bytearray)):
         return False
-    return any(kw.arg == "reason" and isinstance(kw.value, ast.Constant)
-               and isinstance(kw.value.value, str) and kw.value.value.startswith(MILESTONES)
-               for kw in mark.keywords)
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError:
+        return False
+    lines = text.splitlines()
+    if not lines or lines[0] != "---":
+        return False
+    try:
+        close = lines.index("---", 1)
+    except ValueError:
+        return False
+    if (close + 2 >= len(lines) or lines[close + 1] != ""
+            or not lines[close + 2].startswith("# ") or not lines[close + 2][2:].strip()):
+        return False
+    fields = {}
+    for line in lines[1:close]:
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        if line[0].isspace() or ":" not in line:
+            return False
+        key, _, val = line.partition(":")
+        key = key.strip()
+        if key not in DECISION_FIELDS or key in fields:
+            return False
+        fields[key] = val.strip()
+    if not {"decider", "state", "subject"} <= set(fields):
+        return False
+    state = fields["state"]
+    if state not in DECISION_STATES:
+        return False
+    decider = _parse_flow_list(fields["decider"])
+    if not decider or not set(decider) <= DECISION_DECIDERS:
+        return False
+    if not DECISION_SLUG.fullmatch(fields["subject"]):
+        return False
+    if state != "proposed" and not {"decided_on", "valid_from"} <= set(fields):
+        return False
+    days = {}
+    for name in ("decided_on", "valid_from", "valid_until"):
+        if name in fields:
+            parsed = _parse_plain_date(fields[name])
+            if parsed is None:
+                return False
+            days[name] = parsed
+    if "valid_until" in days and not ("valid_from" in days and days["valid_from"] < days["valid_until"]):
+        return False
+    if "supersedes" in fields:
+        supersedes = _parse_flow_list(fields["supersedes"])
+        if not supersedes or not all(DECISION_SLUG.fullmatch(item) for item in supersedes):
+            return False
+    return True
+
+
+def _read_red_decision_budget(blob, *, strict_format=True):
+    """Parse `loop/red-decision-budget.json` into a set of `<path>::<owner>` entries."""
+    text = blob.decode("utf-8")
+    entries = json.loads(text)
+    if not (isinstance(entries, list) and all(isinstance(item, str) for item in entries)):
+        raise ValueError("budget must be a JSON array of strings")
+    if strict_format and text != json.dumps(sorted(set(entries)), indent=2) + "\n":
+        raise ValueError("budget must be sorted, unique, 2-space indented with trailing LF")
+    return set(entries)
+
+
+def check_red_decision_budget(change):
+    """Enforce the shrink-only and canonical format invariant on `loop/red-decision-budget.json`."""
+    if change.status == "D" or change.after is None:
+        return [f"ERROR {RED_DECISION_BUDGET} cannot be removed or unreadable; shrink it to [] instead"]
+    try:
+        after = _read_red_decision_budget(change.after, strict_format=True)
+    except (UnicodeDecodeError, ValueError, TypeError):
+        return [f"ERROR {RED_DECISION_BUDGET} must be a sorted JSON array of unique strings with "
+                "2-space indentation and a single trailing LF"]
+    if change.before is None:
+        if change.status == "A":
+            return []
+        return [f"ERROR cannot read base {RED_DECISION_BUDGET}"]
+    try:
+        before = _read_red_decision_budget(change.before, strict_format=False)
+    except (UnicodeDecodeError, ValueError, TypeError):
+        return [f"ERROR base {RED_DECISION_BUDGET} is not a valid JSON array of strings"]
+    added = sorted(after - before)
+    if added:
+        return [f"ERROR {RED_DECISION_BUDGET} may only shrink; added {', '.join(map(ascii, added))}"]
+    return []
 
 
 def rank(mark):
     """The position of a red mark's milestone, or the last position for a mark without one."""
-    for kw in mark.keywords if isinstance(mark, ast.Call) else ():
-        if kw.arg == "reason" and isinstance(kw.value, ast.Constant) and isinstance(kw.value.value, str):
-            for position, prefix in enumerate(MILESTONES):
-                if kw.value.value.startswith(prefix):
-                    return position
+    reason = _reason_text(mark)
+    if reason is not None:
+        for position, prefix in enumerate(MILESTONES):
+            if reason.startswith(prefix):
+                return position
     return len(MILESTONES)
 
 
@@ -1041,21 +1192,38 @@ def table_changes(path, before, after):
     return notes
 
 
-def review(changes, planner=False, head=None, labels=(), packs=frozenset(), pins=frozenset()):
+def review(changes, planner=False, head=None, labels=(), packs=frozenset(), pins=frozenset(), head_tree=None):
     """Return (errors, notes) for a sequence of Change records.
 
     `head` and `labels` describe a pull request. Without `head`, as in the merge queue,
     labels are not read and changes to the checker or read access are not refused.
-    `packs` holds the pack roots of the reviewed revision, for an evidence completion, and
-    `pins` the paths whose change is a pin update (`pin_update`).
+    `packs` holds the pack roots of the reviewed revision, for an evidence completion,
+    `pins` the paths whose change is a pin update (`pin_update`), and `head_tree` a
+    `Tree` of the reviewed revision used to verify headed-decision citations on added or
+    edited red marks.
     """
     changes = list(changes)
     errors, notes, lifted, other, unread = [], [], [], [], []
+    decision_cache = {}
+
+    def check_decision_in_head(path):
+        if path not in decision_cache:
+            if head_tree.modes.get(path) not in REGULAR:
+                decision_cache[path] = "missing"
+            elif not has_valid_decision_head(head_tree.read(path)):
+                decision_cache[path] = "invalid"
+            else:
+                decision_cache[path] = "ok"
+        return decision_cache[path]
+
     for c in changes:
         if read_first(c.path):
             unread.append(ascii(c.path))
         if c.path == CI_WORKFLOW:
             notes.append(f"CHANGED {CI_WORKFLOW}")
+        if c.path == RED_DECISION_BUDGET:
+            errors.extend(check_red_decision_budget(c))
+            continue
         section = pytest_config(c.path) and pytest_section(c.path, c.before) != pytest_section(c.path, c.after)
         plugins = plugin_config(c.path) and pytest_plugins(c.path, c.before) != pytest_plugins(c.path, c.after)
         if not protected(c.path) and (section or plugins):
@@ -1113,12 +1281,36 @@ def review(changes, planner=False, head=None, labels=(), packs=frozenset(), pins
         new_count = Counter(owner for owner, _ in new.marks)
         if any(new_count[owner] < n for owner, n in old_count.items() if owner in new.owners):
             lifted.append(quoted)
+        exact = lambda inv: Counter((o, ast.dump(m)) for o, m in inv.marks)
+        old_exact, seen_exact = exact(old), Counter()
         for owner, mark in new.marks:
             key = (owner, mark_signature(copy.deepcopy(mark)))
             seen[key] += 1
             if seen[key] > old_marks[key] and not strict(mark):
                 errors.append(f"ERROR new or changed red mark on {ascii(c.path + '::' + owner)} "
                               "needs strict=True and must not set run=False")
+            if head_tree is not None:
+                exact_key = (owner, ast.dump(mark))
+                seen_exact[exact_key] += 1
+                if seen_exact[exact_key] > old_exact[exact_key]:
+                    cited = decision_citation(mark)
+                    if cited is None:
+                        errors.append(
+                            f"ERROR new or edited red mark on {ascii(c.path + '::' + owner)} must cite "
+                            "decisions/<id>.md immediately after its milestone prefix"
+                        )
+                    else:
+                        status = check_decision_in_head(cited)
+                        if status == "missing":
+                            errors.append(
+                                f"ERROR new or edited red mark on {ascii(c.path + '::' + owner)} cites "
+                                f"{ascii(cited)}, which does not exist as a regular file at head"
+                            )
+                        elif status == "invalid":
+                            errors.append(
+                                f"ERROR new or edited red mark on {ascii(c.path + '::' + owner)} cites "
+                                f"{ascii(cited)}, which does not carry a valid YAML decision head"
+                            )
         notes.extend(f"REMOVED {c.path}::{name}" for name in old.tests if name not in new.tests)
         if c.before is not None:
             notes.extend(table_changes(c.path, c.before, c.after))
@@ -1209,7 +1401,7 @@ def changes(base, head):
         path = raw_path.decode("utf-8", "surrogateescape")
         old_mode, new_mode, old_id, new_id, status = header.decode().lstrip(":").split()
         sides = [None, None]
-        if protected(path) or pytest_config(path) or plugin_config(path):
+        if protected(path) or pytest_config(path) or plugin_config(path) or path == RED_DECISION_BUDGET:
             # Git objects are data. Never open a path in the proposed revision.
             for i, (mode, oid) in enumerate(((old_mode, old_id), (new_mode, new_id))):
                 if mode == "100644" and int(git("cat-file", "-s", oid)) <= LIMIT:
@@ -1228,7 +1420,7 @@ def check(base, head, planner=False, labels=None):
         pr_head = git("rev-parse", "--verify", "--end-of-options", head + "^{commit}").decode().strip()
     records = list(changes(base, head))
     pins = pin_updates(records, base, head) if planner else frozenset()
-    return review(records, planner, pr_head, labels or (), pack_roots(head), pins)
+    return review(records, planner, pr_head, labels or (), pack_roots(head), pins, head_tree=Tree.at(head))
 
 
 def label_list(text):

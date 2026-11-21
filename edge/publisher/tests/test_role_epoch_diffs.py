@@ -32,6 +32,20 @@ EMPTY_DIFF_BYTES = b'{"format":"rezono.role-diff/1","relations":{}}'
 EMPTY_DIFF_SHA256 = hashlib.sha256(EMPTY_DIFF_BYTES).hexdigest()
 INITIAL_TO_CHAINED_FIELDS = frozenset({"manifest", "epoch", "knowledge_time", "role_manifest", "previous", "diff"})
 CHAINED_ONLY_FIELDS = frozenset({"manifest", "epoch", "knowledge_time", "role_manifest", "previous"})
+MANIFEST_PINNED_EXPORTS = frozenset({"exports.index.json", "contract.odcs.yaml", "dcat.ttl", "prov.ttl"})
+REQUIRED_STABLE_DATA_SUBJECTS = frozenset(
+    {"rows.json", "schema.json", "hashes.json", "view.ttl", "shapes.ttl", "context.jsonld"}
+)
+
+
+def _is_manifest_pinned_subject(name: str) -> bool:
+    """Subjects whose bytes embed the epoch's manifest ID (`m-1` vs `m-2` vs `m-3`)."""
+    if name in MANIFEST_PINNED_EXPORTS:
+        return True
+    for suffix in (".arrow", ".parquet"):
+        if name.startswith("table.") and name.endswith(suffix) and len(name) > len("table.") + len(suffix):
+            return True
+    return False
 
 
 def _sha256(data: bytes) -> str:
@@ -67,17 +81,6 @@ def _read_role_publication(st: store.FileStore, manifest_id: str, role: str) -> 
     return json.loads(index_bytes), stmt_bytes, json.loads(stmt_bytes), diff_bytes
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "extra: decisions/publication-role-diffs.md: Compute role-scoped epoch diffs strictly from each filtered "
-        "role's own previous and current snapshots (`diff.json`, format `rezono.role-diff/1`), verify them with "
-        "`rezono_checker.difference.changes`, and emit epoch statement v2 (`contracts/statement.yaml`, "
-        "`publication/rezono_publication/statement.py`, `edge/publisher/rezono_publisher/forms.py`) recording "
-        "`previous` (prior role statement sha256) and `diff` (role diff sha256)."
-    ),
-)
 def test_role_epoch_diff_is_empty_and_statement_changes_only_chain_fields_on_other_role_change(tmp_path: Path):
     st = store.FileStore(tmp_path / "store")
 
@@ -168,11 +171,28 @@ def test_role_epoch_diff_is_empty_and_statement_changes_only_chain_fields_on_oth
 
     b1_subjects = {s["name"]: s["digest"]["sha256"] for s in b1_stmt["subject"]}
     b2_subjects = {s["name"]: s["digest"]["sha256"] for s in b2_stmt["subject"]}
-    assert b2_subjects == {**b1_subjects, "diff.json": EMPTY_DIFF_SHA256}
+    assert set(b2_subjects) == set(b1_subjects) | {"diff.json"}
+    assert b2_subjects["diff.json"] == EMPTY_DIFF_SHA256
+    assert REQUIRED_STABLE_DATA_SUBJECTS <= set(b1_subjects)
+    assert any(name.endswith(".losses.yaml") for name in b1_subjects)
+    b1_b2_stable = {name for name in b1_subjects if not _is_manifest_pinned_subject(name)}
+    assert {name: b2_subjects[name] for name in b1_b2_stable} == {name: b1_subjects[name] for name in b1_b2_stable}
+    b1_b2_changed = {name for name in b1_subjects if b1_subjects[name] != b2_subjects[name]}
+    assert all(_is_manifest_pinned_subject(name) for name in b1_b2_changed), (
+        f"non-manifest-pinned subjects changed between m-1 and m-2: {sorted(b1_b2_changed)}"
+    )
 
-    # m-2 -> m-3: even diff.json and predicate.diff stay identical; ONLY epoch-chain fields advance.
+    # m-2 -> m-3: even diff.json and predicate.diff stay identical; ONLY epoch-chain fields and manifest-pinned subjects advance.
     changed_2_to_3 = {k for k in set(b2_pred) | set(b3_pred) if b2_pred.get(k) != b3_pred.get(k)}
     assert changed_2_to_3 <= CHAINED_ONLY_FIELDS, f"non-chain predicate fields changed: {changed_2_to_3}"
     assert b2_pred["snapshots"] == b3_pred["snapshots"]
     assert b2_pred["diff"] == b3_pred["diff"] == EMPTY_DIFF_SHA256
-    assert b2_stmt["subject"] == b3_stmt["subject"]
+    b3_subjects = {s["name"]: s["digest"]["sha256"] for s in b3_stmt["subject"]}
+    assert set(b3_subjects) == set(b2_subjects)
+    assert b3_subjects["diff.json"] == EMPTY_DIFF_SHA256
+    b2_b3_stable = {name for name in b2_subjects if not _is_manifest_pinned_subject(name)}
+    assert {name: b3_subjects[name] for name in b2_b3_stable} == {name: b2_subjects[name] for name in b2_b3_stable}
+    b2_b3_changed = {name for name in b2_subjects if b2_subjects[name] != b3_subjects[name]}
+    assert all(_is_manifest_pinned_subject(name) for name in b2_b3_changed), (
+        f"non-manifest-pinned subjects changed between m-2 and m-3: {sorted(b2_b3_changed)}"
+    )

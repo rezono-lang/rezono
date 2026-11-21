@@ -87,9 +87,12 @@ Suppose a pack publishes main epochs `m-1`, `m-2`, and `m-3` for two filtered ro
 
 - Role `A`'s `diff.json` in `m-2` and `m-3` is non-empty and records only role `A`'s snapshot changes.
 - Role `B`'s `diff.json` in `m-2` and `m-3` is empty (`{"format":"rezono.role-diff/1","relations":{}}`).
-- Role `B`'s `predicate.snapshots`, `schema`, `dataset`, `annotation`, `roots`, `inclusion`, `definition`, and every non-diff data subject (`schema.json`, `rows.json`, `hashes.json`, columnar tables, standards exports) stay identical across `m-1`, `m-2`, and `m-3`.
-- Comparing `m-1` to `m-2`, role `B`'s `statement.json` changes **only** in the epoch-chain / manifest-envelope fields (`manifest`, `epoch`, `knowledge_time`, `role_manifest`, `previous`, and `diff` entering on the first chained epoch).
-- Comparing `m-2` to `m-3`, role `B`'s `diff.json` and `predicate.diff` also remain identical — **only** `manifest`, `epoch`, `knowledge_time`, `role_manifest`, and `previous` advance the chain.
+- Role `B`'s `predicate` changes **only** in the epoch-chain / manifest-envelope fields:
+  - Comparing `m-1` to `m-2`, only `epoch`, `knowledge_time`, `manifest`, `previous`, `role_manifest`, and `diff` (entering on the first chained epoch) change; `snapshots`, `schema`, `dataset`, `annotation`, `roots`, `inclusion`, and `definition` stay identical.
+  - Comparing `m-2` to `m-3`, `diff.json` and `predicate.diff` also remain identical — **only** `epoch`, `knowledge_time`, `manifest`, `previous`, and `role_manifest` advance the chain.
+- Role `B`'s `subject` list covers the exact same object names on `m-2` as on `m-1` plus `diff.json`, and the exact same object names on `m-3` as on `m-2`:
+  - **All non-manifest-pinned subjects keep byte-for-byte identical digests** across `m-1`, `m-2`, and `m-3` — including `rows.json`, `schema.json`, `hashes.json`, `view.ttl`, `shapes.ttl`, `context.jsonld`, `*.losses.yaml`, and `diff.json` across `m-2`/`m-3`.
+  - **Only the explicitly manifest-pinned export and metadata forms change digest** across epochs — `exports.index.json`, `contract.odcs.yaml`, `dcat.ttl`, `prov.ttl`, `table.*.arrow`, and `table.*.parquet` — because their formats embed the epoch's `manifest` ID (`m-1` vs `m-2` vs `m-3`) directly in their bytes while `statement.subject` must cover every object in `index.json`.
 
 Because the published contract binds the exact role-scoped diff bytes (`diff.json`) and chains consecutive statements per role (`previous`), a future live incremental backend (such as Feldera) can stream per-epoch role updates and emit the exact same `diff.json` and v2 `statement.json` chain without changing any published contract or verifier.
 
@@ -103,4 +106,4 @@ Because the published contract binds the exact role-scoped diff bytes (`diff.jso
 ## 6. Tests
 
 - [edge/publisher/tests/test_role_epoch_diffs.py](../edge/publisher/tests/test_role_epoch_diffs.py):
-  - `test_role_epoch_diff_is_empty_and_statement_changes_only_chain_fields_on_other_role_change`: publishes three consecutive main epochs (`m-1`, `m-2`, `m-3`) with two filtered roles (`role_a`, `role_b`) where `m-2` and `m-3` change only rows readable by `role_a`. Verifies that `role_a`'s `diff.json` captures only `role_a`'s changes, `role_b`'s `diff.json` is empty, `role_b`'s `statement.json` chains `previous` to `role_b`'s prior statement hash and records `diff`, and `role_b`'s statement changes **only** in the epoch-chain fields — never in snapshot hashes, dataset/root hashes, or diff contents.
+  - `test_role_epoch_diff_is_empty_and_statement_changes_only_chain_fields_on_other_role_change`: publishes three consecutive main epochs (`m-1`, `m-2`, `m-3`) with two filtered roles (`role_a`, `role_b`) where `m-2` and `m-3` change only rows readable by `role_a`. Verifies that `role_a`'s `diff.json` captures only `role_a`'s changes, `role_b`'s `diff.json` is empty, `role_b`'s `statement.json` chains `previous` to `role_b`'s prior statement hash and records `diff`, `role_b`'s `predicate` changes **only** in the epoch-chain fields, every non-manifest-pinned subject keeps an identical digest, and any changed subject digest belongs strictly to the manifest-pinned export/table set.

@@ -59,16 +59,6 @@ def _witness(item_id: str) -> dict:
     }
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=(AttributeError, AssertionError, l0.L0Error),
-    reason=(
-        "extra: decisions/publication-conclusion-addresses.md: Implement conclusion_iri, pin_iri and "
-        "parse_pin in rezono_publication.rdf so a keyed derived row keeps the same canonical IRI across "
-        "epochs when its derived value changes while carrying a different epoch/hash pin, and refuse an "
-        "epoch pin without its dataset hash pin."
-    ),
-)
 def test_same_derived_row_across_two_epochs_keeps_iri_with_different_pin():
     assert l0.check_schema(SCHEMA) == l0.schema_id(SCHEMA)
     epoch_1 = _rows({"item-1": 10})
@@ -106,16 +96,6 @@ def test_same_derived_row_across_two_epochs_keeps_iri_with_different_pin():
     assert rdf.conclusion_iri(SCHEMA, "ItemScore", "a/b c") == "https://rezono.example/sample/ItemScore/a~2Fb~20c"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=(AttributeError, TypeError, AssertionError, l0.L0Error),
-    reason=(
-        "extra: decisions/publication-conclusion-addresses.md: Implement canonical_witness_iri, "
-        "resolve_iri and schema-aware witness_to_prov/prov_to_witness in rezono_publication.rdf so "
-        "RDF and PROV-O use canonical conclusion and witness IRIs and every conclusion or witness IRI "
-        "resolves back to exactly one row."
-    ),
-)
 def test_conclusion_and_witness_iris_resolve_to_one_row_and_match_rdf_and_prov():
     w1 = _witness("item-1")
     w2 = _witness("item-2")

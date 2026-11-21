@@ -2,12 +2,12 @@ name: platform-core
 version: 0.1.0
 default_language: en
 imports:
-  - {name: std-order, path: ../../packs/std-order, sha256: 4d119b21fa769b810dae065d4fc4ab5aaa1c2ada76b042052a4e4fcdd1031557}
+  - {name: std-order, path: ../../packs/std-order, sha256: 6c56982cfaa6535835b594be2fb280655795a96f0308d8e5d423c6040f923495}
   - {name: std-part, path: ../../packs/std-part, sha256: 207f4f097f68e6dade792b714754e0f279ce2c948be8adce82108a3abc18cca9}
   - {name: std-identity, path: ../../packs/std-identity, sha256: 129e5321602dea3b58ea5220103c4d313237d0dbf5e640c677b24fc98e5d265b}
   - {name: std-time, path: ../../packs/std-time, sha256: bb2863a03792228005fa6784ed1022c07ac82139cdbf0ff7914cd273b3e046a7}
   - {name: std-access, path: ../../packs/std-access, sha256: 8e004b9bd062be365acfb3db30d9bb26fe393c3b979bd77e8d69fc60aae111e6}
-  - {name: std-decision, path: ../../packs/std-decision, sha256: 2fd4cc60cc4f1c7dca42da2f5368a08a992de39df7cd7db205b9118dd1b8fe5a}
+  - {name: std-decision, path: ../../packs/std-decision, sha256: 4a0207fd27a016c932844705df813adc1037c7258ef819ae57e1642862e04a31}
   - {name: std-explain, path: ../../packs/std-explain, sha256: 72e2897cd9baaa4962cf2235f83a332262b4da1e6d34e82d5f64d8335e27be0b}
-  - {name: std-loop, path: ../../packs/std-loop, sha256: 33de1b8d32ed34217d91f22db4a7a8ebef999e1534d7b5bc8d7f79d8e6d4150f}
+  - {name: std-loop, path: ../../packs/std-loop, sha256: 85933c453fbc5cc2f39364f2a17fd0366de91eb708281ef8981b8131c06cac29}
   - {name: platform-capacity-interface, path: tenant-capacity/interface, sha256: 70f4ddbc8cebdcd40f5deb95ddb90165e964012bc04d5225998e49f65014befb}

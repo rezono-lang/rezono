@@ -1,0 +1,87 @@
+.decl build_progress_scan_candidate(run: symbol, scan: symbol)
+.decl build_progress_scan_conflict(run: symbol)
+.decl build_progress_scan_at_cut(run: symbol, scan: symbol)
+.decl build_milestone_green_test(scan: symbol, milestone: symbol, test_id: symbol)
+.decl build_milestone_red_test(scan: symbol, milestone: symbol, test_id: symbol)
+.decl build_milestone_progress(run: symbol, milestone: symbol, green_count: number, red_count: number)
+.decl build_release_1_has_red(scan: symbol)
+.decl release_1_done(run: symbol, scan: symbol)
+.decl build_offboard_entry_at_cut(run: symbol, entry: symbol, item: symbol)
+.decl build_offboard_has_source(entry: symbol)
+.decl build_offboard_has_reason(entry: symbol)
+.decl build_offboard_valid_count(run: symbol, entry: symbol, item: symbol, completed: number, total: number, remaining: number)
+.decl build_offboard_is_valid_count(entry: symbol)
+.decl build_offboard_work_count(run: symbol, item: symbol, completed: number, total: number, remaining: number)
+.decl build_offboard_work_unknown(run: symbol, item: symbol, reason: symbol)
+
+// Only a unique progress scan bound to the verified run at its cut tick counts.
+build_progress_scan_candidate(run, scan) :- build_verified_cut(run), build_run__observed_at(run, tick),
+    build_progress_scan__run(scan, run), build_progress_scan__observed_at(scan, tick),
+    build_progress_scan__source(scan, source), source != "".
+build_progress_scan_conflict(run) :- build_progress_scan_candidate(run, first),
+    build_progress_scan_candidate(run, second), first != second.
+build_progress_scan_at_cut(run, scan) :- build_progress_scan_candidate(run, scan),
+    !build_progress_scan_conflict(run).
+
+// Deduplicate green transitions and red tests by distinct test name within each scan and milestone.
+build_milestone_green_test(scan, milestone, test_id) :- build_progress_scan_at_cut(_, scan),
+    build_green_transition__scan(entry, scan), build_green_transition__milestone(entry, milestone),
+    build_green_transition__test(entry, test_id), build_green_transition__commit(entry, _),
+    build_milestone(milestone), test_id != "".
+
+build_milestone_red_test(scan, milestone, test_id) :- build_progress_scan_at_cut(_, scan),
+    build_red_test__scan(entry, scan), build_red_test__milestone(entry, milestone),
+    build_red_test__test(entry, test_id), build_milestone(milestone), test_id != "".
+
+build_milestone_progress(run, milestone, green_count, red_count) :-
+    build_progress_scan_at_cut(run, scan), build_milestone(milestone),
+    green_count = count : { build_milestone_green_test(scan, milestone, _) },
+    red_count = count : { build_milestone_red_test(scan, milestone, _) }.
+
+// Release 1 is done iff all four release-1 milestones (M1-M4) are declared and no red test carries a release-1 milestone.
+build_release_1_has_red(scan) :- build_progress_scan_at_cut(_, scan),
+    build_red_test__scan(entry, scan), build_red_test__milestone(entry, milestone),
+    build_milestone__scope(milestone, "release_1").
+
+release_1_done(run, scan) :- build_progress_scan_at_cut(run, scan),
+    build_milestone__scope("M1", "release_1"),
+    build_milestone__scope("M2", "release_1"),
+    build_milestone__scope("M3", "release_1"),
+    build_milestone__scope("M4", "release_1"),
+    !build_release_1_has_red(scan).
+
+// Off-board release-1 work items at the cut: every observed item yields either a valid count or an explicit unknown row.
+build_offboard_entry_at_cut(run, entry, item) :- build_progress_scan_at_cut(run, scan),
+    build_offboard_work__scan(entry, scan), build_offboard_work__item(entry, item), item != "".
+build_offboard_has_source(entry) :- build_offboard_work__source(entry, source), source != "".
+build_offboard_has_reason(entry) :- build_offboard_work__reason(entry, reason), reason != "".
+
+build_offboard_valid_count(run, entry, item, completed, total, remaining) :-
+    build_offboard_entry_at_cut(run, entry, item),
+    build_offboard_work__state(entry, "known"),
+    build_offboard_has_source(entry),
+    build_offboard_work__completed(entry, completed),
+    build_offboard_work__total(entry, total),
+    completed >= 0, total >= 0, completed <= total,
+    remaining = total - completed.
+build_offboard_is_valid_count(entry) :- build_offboard_valid_count(_, entry, _, _, _, _).
+
+build_offboard_work_count(run, item, completed, total, remaining) :-
+    build_offboard_valid_count(run, _, item, completed, total, remaining).
+
+build_offboard_work_unknown(run, item, reason) :- build_offboard_entry_at_cut(run, entry, item),
+    build_offboard_work__state(entry, "unknown"),
+    build_offboard_work__reason(entry, reason), reason != "".
+build_offboard_work_unknown(run, item, "unspecified-unknown-reason") :-
+    build_offboard_entry_at_cut(run, entry, item),
+    build_offboard_work__state(entry, "unknown"),
+    !build_offboard_has_reason(entry).
+build_offboard_work_unknown(run, item, "incomplete-observation") :-
+    build_offboard_entry_at_cut(run, entry, item),
+    build_offboard_work__state(entry, "known"),
+    !build_offboard_is_valid_count(entry).
+
+.output build_milestone_progress
+.output release_1_done
+.output build_offboard_work_count
+.output build_offboard_work_unknown

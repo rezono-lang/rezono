@@ -59,6 +59,9 @@ CORE_REASONS = {  # §2.3: always in scope, with the states each may label
     "no_row_applies": ("unknown",),
     "ambiguous_date": ("invalid",),
     "empty": ("not_applicable",),
+    "no_value": ("not_applicable", "unknown"),
+    "no_match": ("not_applicable", "unknown"),
+    "multiple_values": ("invalid",),
     "added_later": ("not_applicable", "unknown", "invalid"),
 }
 CORE_TYPES = {"Text", "Bool", "Integer", "Ratio", "Date", "DateTime", "Quantity", "Money", "Period", "Enum"}
@@ -476,6 +479,12 @@ def check_schema(doc: dict, *, versioned: bool = True, allow_legacy: bool = Fals
         # Its slots hang under it as `#<slot>` and its elements as `/<id>` (§3.4, §5), so it ends in neither.
         if "iri" in kind and (set("#?") & set(kind["iri"]) or kind["iri"].endswith("/")):
             _fail(name, "`iri` has no `#` or `?` and does not end in `/`")
+        if "iri" in kind and (
+            kind["iri"] == f"{base}witness"
+            or kind["iri"].startswith(f"{base}witness/")
+            or kind["iri"].startswith(f"{base}m-")
+        ):
+            _fail(name, "`iri` cannot use reserved `<base>witness` or `<base>m-` space")
         if not isinstance(kind.get("slots"), dict):
             _fail(name, "`slots` is required (maybe `{}`)")
         for slot_name, slot in kind["slots"].items():

@@ -9,12 +9,15 @@ a constant, typed by its column. Integers are decimal text everywhere, also in s
 
 from __future__ import annotations
 
+import math
 import re
 from dataclasses import dataclass, field, replace
 
 from .names import ISO_DATE, NAME
 
 FORMAT = "rezono.rules/1"
+FORMAT_V2 = "rezono.rules/2"
+FORMATS = (FORMAT, FORMAT_V2)
 FUNCTIONS = ("count", "sum", "min", "max")
 COMPARISONS = ("eq", "ne", "lt", "le", "gt", "ge")
 # A condition's declared comparison type (decisions/ordered-rule-scalars.md): both operands are text
@@ -26,17 +29,35 @@ ARITHMETIC = ("add", "sub", "mul", "div")
 # variable), in the proleptic Gregorian calendar. Only a view's reading makes it: no rule file can
 # write it, so hand-written rules still read text and whole numbers (R4).
 DAYS = "days"
-TYPES = ("string", "integer", "boolean")
+TYPES = ("string", "integer", "rational", "boolean", "date")
 BOOLEAN = {"true": True, "false": False}
 WORLDS = ("closed", "open")
+CONFLICT_POLICIES = ("publish", "block")
+EMPTY_STATES = ("unknown", "not_applicable")
+ACCESS_RELATIONS = ("may_read", "may_read_full")
 # The states of a named outcome; invalid comes from the violation views.
 STATES = ("known", "unknown", "not_applicable")
 REL_NAME = re.compile(r"^[a-z][a-z0-9]*((_|__)[a-z0-9]+)*$")  # base relations may be M1 tables `kind__slot`
 VAR = re.compile(r"^\?[a-z][a-z0-9_]*$")
 INT = re.compile(r"^(0|-?[1-9][0-9]*)$")   # canonical: no leading zeros, no "-0"
+RATIONAL = re.compile(r"^(0|-?[1-9][0-9]*)(/[1-9][0-9]*)?$")
 NAT = re.compile(r"^(0|[1-9][0-9]*)$")
 BIGINT = (-2**63, 2**63 - 1)   # the engines' integer: a constant outside it is no value on any engine
 MAX_LEVELS = 64   # a counter is unrolled into at most this many strata: each one is a join more on every engine
+
+
+def is_rational(t: str) -> bool:
+    """True if `t` is canonical exact rational text: an integer or reduced fraction `n/d` with d > 1."""
+    if not RATIONAL.match(t):
+        return False
+    num_s, sep, den_s = t.partition("/")
+    num = int(num_s)
+    if not (BIGINT[0] <= num <= BIGINT[1]):
+        return False
+    if not sep:
+        return True
+    den = int(den_s)
+    return 1 < den <= BIGINT[1] and math.gcd(abs(num), den) == 1
 
 
 class IRError(ValueError):
@@ -113,6 +134,25 @@ class Relation:
     outcome: str | None = None  # @outcome <kind>: one state and reason per element of that kind
     extend: bool = False  # consumers may add rules; without any, this relation is the empty set
     closes: str | None = None  # @closes <relation>: a row says that no row of that relation holds at its key
+    domain: str | None = None  # functional: mandatory closed finite domain relation
+    value: Column | None = None  # functional: single typed value column co-located with state and reason
+    conflict_policy: str | None = None  # functional: "publish" or "block"
+    empty_state: str | None = None  # functional: "unknown" (default) or "not_applicable"
+    empty_reason: str | None = None  # functional: reason code when zero candidates match
+
+    @property
+    def head_columns(self) -> tuple:
+        """Columns produced by a rule whose head is this relation."""
+        if self.role == "functional":
+            return self.key + (self.value,)
+        return self.key
+
+    @property
+    def row_columns(self) -> tuple:
+        """Columns exposed when another rule reads this relation."""
+        if self.role == "functional":
+            return self.key + (Column("state", "string"), Column("reason", "string"), self.value)
+        return self.key
 
 
 @dataclass(frozen=True)
@@ -209,16 +249,17 @@ class Program:
     strata: dict = field(default_factory=dict)
     seals: list = field(default_factory=list)  # the sealed kinds and the tables of the seal
     bounds: dict = field(default_factory=dict)  # relation -> Bound: a counter the translator unrolls (P6.2)
+    format: str = FORMAT
 
     def rules_for(self, relation):
         return [r for r in self.rules.values() if r.head.relation == relation]
 
     def derived(self):
-        """Derived relations in evaluation order: by stratum, then by dependency, then by name."""
+        """Derived and functional relations in evaluation order: by stratum, then by dependency, then by name."""
         order, seen = [], set()
 
         def visit(name, path=()):
-            if name in seen or self.relations[name].role != "derived":
+            if name in seen or self.relations[name].role not in ("derived", "functional"):
                 return
             for dep in sorted(self.deps(name)):
                 if dep != name and dep not in path:
@@ -235,8 +276,11 @@ class Program:
         out = set()
         for r in self.rules_for(relation):
             out |= {b.atom.relation for b in r.body} | {a.atom.relation for a in r.aggregates}
-        if self.relations[relation].outcome:  # its checks read every element of the kind
-            out.add(self.relations[relation].outcome)
+        rel = self.relations[relation]
+        if rel.outcome:  # its checks read every element of the kind
+            out.add(rel.outcome)
+        if rel.domain:  # a functional derivation always depends on its closed domain
+            out.add(rel.domain)
         return out
 
     def recursive(self, relation):
@@ -256,7 +300,7 @@ class Program:
         for n in order:
             m = self.relations[n].module
             uses[m] |= {self.relations[d].module for d in self.deps(n)
-                        if self.relations[d].role == "derived" and self.relations[d].module != m}
+                        if self.relations[d].role in ("derived", "functional") and self.relations[d].module != m}
         # strongly connected components (Tarjan), then their dependency order
         index, low, stack, on, comps = {}, {}, [], set(), []
 
@@ -298,10 +342,12 @@ class Program:
         return [m for group in self.module_groups() for m in group]
 
     def base_used(self):
-        """Base relations that some rule reads, sorted."""
+        """Base relations that some rule or functional domain reads, sorted."""
         return sorted({x.atom.relation for r in self.rules.values() for x in (*r.body, *r.aggregates)
                        if self.relations[x.atom.relation].role == "base"}
-                      | {r.outcome for r in self.relations.values() if r.outcome})
+                      | {r.outcome for r in self.relations.values() if r.outcome}
+                      | {r.domain for r in self.relations.values()
+                         if r.domain and self.relations[r.domain].role == "base"})
 
     def reaches(self, start, target):
         """True if `target` depends on `start` (directly or through other rules), or they are equal."""
@@ -316,12 +362,12 @@ class Program:
         return False
 
     def downstream(self, changed):
-        """Derived relations that can change when the relations in `changed` change."""
+        """Derived and functional relations that can change when the relations in `changed` change."""
         out, todo = set(), set(changed)
         while todo:
             n = todo.pop()
             for d in self.relations:
-                if d not in out and self.relations[d].role == "derived" and n in self.deps(d):
+                if d not in out and self.relations[d].role in ("derived", "functional") and n in self.deps(d):
                     out.add(d)
                     todo.add(d)
         return out
@@ -363,12 +409,14 @@ def _atom(doc, where):
 
 def load(doc, require_witness=True):
     """Read and check a rule program (a dict from YAML or JSON). Raises IRError."""
-    if doc.get("format") != FORMAT:
-        raise IRError("bad_format", f"format must be {FORMAT}")
+    fmt = doc.get("format")
+    if fmt not in FORMATS:
+        raise IRError("bad_format", f"format must be one of {', '.join(FORMATS)}")
     relations, declared = {}, {}
     for r in doc.get("relations", []):
         name = r["name"]
-        if not REL_NAME.match(name) or (r["role"] == "derived" and not NAME.match(name)):
+        role = r["role"]
+        if not REL_NAME.match(name) or (role in ("derived", "functional") and not NAME.match(name)):
             raise IRError("bad_name", name)
         if name in relations:
             raise IRError("duplicate_relation", name)
@@ -379,54 +427,89 @@ def load(doc, require_witness=True):
                 raise IRError("bad_column", f"{name}.{c.name}")
         if len({c.name for c in cols + vals}) != len(cols + vals):
             raise IRError("bad_column", f"{name}: duplicate column")
-        if r["role"] not in ("base", "calc", "derived"):
+        if role not in ("base", "calc", "derived", "functional"):
             raise IRError("bad_role", name)
+        if role == "functional" and fmt != FORMAT_V2:
+            raise IRError("bad_role", f"{name}: role 'functional' requires format {FORMAT_V2}")
         if not cols:
             raise IRError("no_columns", f"{name}: a relation needs at least one key column")
-        if r["role"] == "calc":
+        if role == "calc":
             subject_type = cols[0].type
             expected = (Column("subject", subject_type), Column("value", "integer"),
                         Column("state", "string"), Column("reason", "string"))
             if (not name.startswith("calc__") or "__" in name.removeprefix("calc__")
                     or cols != expected or vals or r.get("world") != "open" or r.get("module") or r.get("explain")):
                 raise IRError("bad_calc_input", f"{name}: a calculation selection has open subject, integer value, state and reason")
-        if r["role"] == "derived" and vals:
-            raise IRError("derived_values", f"{name}: a derived relation is a set; values come from calculation rules")
+        if role in ("derived", "functional") and vals:
+            raise IRError("derived_values", f"{name}: a {role} relation has no base value columns")
         invariant = r.get("invariant", False)
-        if invariant not in (True, False) or (invariant and r["role"] != "derived"):
+        if invariant not in (True, False) or (invariant and role != "derived"):
             raise IRError("bad_invariant", f"{name}: invariant is true or false, on a derived relation")
         absence = r.get("absence", False)
-        if absence not in (True, False) or (absence and r["role"] != "derived"):
+        if absence not in (True, False) or (absence and role != "derived"):
             raise IRError("bad_absence", f"{name}: absence is true or false, on a derived relation")
         if "release" in r:
             raise IRError("release_unsupported", f"{name}: release is not supported yet: a role reads a negation or an aggregate only over relations it reads in full (docs/formal.md, section 3; decisions/language-native-rules.md: delimited release stays reserved)")
         if r.get("world", "closed") not in WORLDS:
             raise IRError("bad_world", f"{name}: world is one of {WORLDS}")
         outcome = r.get("outcome")
-        if outcome is not None and (r["role"] != "derived" or len(cols) != 3 or [c.name for c in cols[1:]] != ["state", "reason"]
+        if outcome is not None and (role != "derived" or len(cols) != 3 or [c.name for c in cols[1:]] != ["state", "reason"]
                                     or any(c.type != "string" for c in cols[1:])):
             raise IRError("bad_outcome", f"{name}: an outcome is derived, with three columns: the element, "
                                          "state and reason (text)")
         extend = r.get("extend", False)
-        if type(extend) is not bool or (extend and r["role"] != "derived"):
+        if type(extend) is not bool or (extend and role != "derived"):
             raise IRError("bad_extend", f"{name}: extend is a boolean on a derived relation")
         closes = r.get("closes")
-        if closes is not None and (not isinstance(closes, str) or r["role"] != "derived" or invariant
+        if closes is not None and (not isinstance(closes, str) or role != "derived" or invariant
                                    or outcome is not None or closes == name):
             raise IRError("bad_closes", f"{name}: closes names another derived relation, on a derived relation "
                                         "that is no invariant and no outcome")
+        domain = r.get("domain")
+        raw_value = r.get("value")
+        conflict_policy = r.get("conflict_policy")
+        empty_state = r.get("empty_state")
+        empty_reason = r.get("empty_reason")
+        value_col = None
+        if role == "functional":
+            if r.get("world") == "open":
+                raise IRError("functional_open_domain", f"{name}: a functional derivation is always closed")
+            if not isinstance(domain, str) or not REL_NAME.match(domain):
+                raise IRError("bad_domain", f"{name}: a functional derivation requires a finite closed domain relation")
+            if not isinstance(raw_value, dict) or not isinstance(raw_value.get("name"), str) or not isinstance(raw_value.get("type"), str):
+                raise IRError("bad_column", f"{name}: a functional derivation requires a typed value column")
+            value_col = Column(raw_value["name"], raw_value["type"])
+            if value_col.type not in TYPES or not NAME.match(value_col.name):
+                raise IRError("bad_column", f"{name}.{value_col.name}")
+            reserved = {"state", "reason"}
+            if any(c.name in reserved for c in cols) or value_col.name in reserved or value_col.name in {c.name for c in cols}:
+                raise IRError("bad_column", f"{name}: key/value columns conflict with co-located (state, reason, value)")
+            if conflict_policy not in CONFLICT_POLICIES:
+                raise IRError("bad_conflict_policy", f"{name}: conflict_policy must be one of {CONFLICT_POLICIES}")
+            if empty_state is not None and empty_state not in EMPTY_STATES:
+                raise IRError("bad_empty_state", f"{name}: empty_state must be one of {EMPTY_STATES}")
+            if empty_reason is not None and (not isinstance(empty_reason, str) or not NAME.match(empty_reason)):
+                raise IRError("bad_empty_reason", f"{name}: empty_reason must be a snake_case reason code")
+        elif any(x is not None for x in (domain, raw_value, conflict_policy, empty_state, empty_reason)):
+            raise IRError("bad_functional_field", f"{name}: domain/value/conflict_policy are only allowed on functional relations")
         declared[name] = r.get("world")
-        relations[name] = Relation(name, r["role"], cols, vals, r.get("module"), r.get("explain"), invariant,
-                                   r.get("world") or "closed", absence, outcome, extend, closes)
+        relations[name] = Relation(name, role, cols, vals, r.get("module"), r.get("explain"), invariant,
+                                   r.get("world") or "closed", absence, outcome, extend, closes,
+                                   domain, value_col, conflict_policy, empty_state, empty_reason)
     for name, rel in relations.items():
-        if rel.closes is None:
-            continue
-        closed = relations.get(rel.closes)
-        if closed is None or closed.role != "derived":
-            raise IRError("bad_closes", f"{name}: {rel.closes} is not a derived relation")
-        if [c.type for c in closed.key[:len(rel.key)]] != [c.type for c in rel.key]:
-            raise IRError("bad_closes", f"{name}: its columns are, by position and type, a prefix of those of "
-                                        f"{rel.closes}")
+        if rel.closes is not None:
+            closed = relations.get(rel.closes)
+            if closed is None or closed.role != "derived":
+                raise IRError("bad_closes", f"{name}: {rel.closes} is not a derived relation")
+            if [c.type for c in closed.key[:len(rel.key)]] != [c.type for c in rel.key]:
+                raise IRError("bad_closes", f"{name}: its columns are, by position and type, a prefix of those of "
+                                            f"{rel.closes}")
+        if rel.role == "functional":
+            dom = relations.get(rel.domain)
+            if dom is None or dom.role not in ("base", "derived") or dom.name == name:
+                raise IRError("bad_domain", f"{name}: domain {rel.domain!r} must name a base or derived relation")
+            if [c.type for c in dom.key] != [c.type for c in rel.key]:
+                raise IRError("bad_domain", f"{name}: domain {rel.domain} key columns must match functional key exactly")
 
     rules = {}
     for d in doc.get("rules", []):
@@ -456,15 +539,35 @@ def load(doc, require_witness=True):
         if w is not None and (w.get("relation") != rule.witness_relation or tuple(w.get("variables", ())) != rule.variables):
             raise IRError("bad_witness", f"{rid}: witness is {rule.witness_relation}{list(rule.variables)}")
 
-    prog = Program(doc.get("pack", ""), relations, rules, seals=[dict(s) for s in doc.get("seals", [])])
+    prog = Program(doc.get("pack", ""), relations, rules, seals=[dict(s) for s in doc.get("seals", [])], format=fmt)
     for name, rel in relations.items():
-        if rel.role == "derived" and not rel.extend and not prog.rules_for(name):
+        if rel.role in ("derived", "functional") and not rel.extend and not prog.rules_for(name):
             raise IRError("no_rules", name)
     prog.strata = _stratify(prog)
     prog.relations = _worlds(prog, declared)
+    _check_access_boundary(prog)
     _check_outcomes(prog)
     _check_closes(prog)
     return prog
+
+
+def _check_access_boundary(prog):
+    """Neither may_read nor may_read_full may depend (directly or transitively) on a functional derivation
+    or a calculation selection (decisions/language-rezono-1.md, section 4)."""
+    calc_rels = {n for n, r in prog.relations.items() if r.role == "calc"}
+    if calc_rels:
+        after_calc = prog.downstream(calc_rels)
+        for access_rel in ACCESS_RELATIONS:
+            if access_rel in after_calc:
+                raise IRError("access_depends_on_calc",
+                              f"{access_rel} cannot depend on a calculation selection")
+    func_rels = {n for n, r in prog.relations.items() if r.role == "functional"}
+    if func_rels:
+        after_func = prog.downstream(func_rels)
+        for access_rel in ACCESS_RELATIONS:
+            if access_rel in after_func:
+                raise IRError("access_depends_on_functional",
+                              f"{access_rel} cannot depend on a functional derivation")
 
 
 def _check_closes(prog):
@@ -512,12 +615,13 @@ def _check_outcomes(prog):
 
 
 def _check_rule(rule, relations):
-    def rel(atom):
+    def rel(atom, *, is_head=False):
         r = relations.get(atom.relation)
         if r is None:
             raise IRError("unknown_relation", f"{rule.id}: {atom.relation}")
-        if len(atom.terms) != len(r.key):
-            raise IRError("arity", f"{rule.id}: {atom.relation} has {len(r.key)} key columns")
+        cols = r.head_columns if is_head else r.row_columns
+        if len(atom.terms) != len(cols):
+            raise IRError("arity", f"{rule.id}: {atom.relation} has {len(cols)} columns")
         return r
 
     def check_const(t, col):
@@ -527,15 +631,19 @@ def _check_rule(rule, relations):
             raise IRError("bad_constant", f"{rule.id}: {t!r} is not an integer")
         if col.type == "integer":
             fits(t)
+        if col.type == "rational" and not is_rational(t):
+            raise IRError("bad_constant", f"{rule.id}: {t!r} is not a canonical rational")
         if col.type == "boolean" and t not in BOOLEAN:
             raise IRError("bad_constant", f"{rule.id}: {t!r} is not a boolean")
+        if col.type == "date":
+            raise IRError("bad_constant", f"{rule.id}: {t!r} is not allowed in a date column")
 
     def fits(t):
         if not BIGINT[0] <= int(t) <= BIGINT[1]:
             raise IRError("constant_out_of_range", f"{rule.id}: {t} does not fit a BIGINT")
 
-    head = rel(rule.head)
-    if head.role != "derived":
+    head = rel(rule.head, is_head=True)
+    if head.role not in ("derived", "functional"):
         raise IRError("head_is_base", f"{rule.id}: {rule.head.relation}")
     if head.module != rule.module:
         raise IRError("module_mismatch", f"{rule.id}: {rule.head.relation} belongs to module {head.module}")
@@ -552,7 +660,7 @@ def _check_rule(rule, relations):
             raise IRError("bad_polarity", f"{rule.id}: {b.polarity}")
         if r.role == "calc" and (b.polarity != "positive" or b.atom.terms[2:] != ("known", "")):
             raise IRError("calc_not_known_positive", f"{rule.id}: read {r.name} positively with state 'known' and empty reason")
-        for t, c in zip(b.atom.terms, r.key):
+        for t, c in zip(b.atom.terms, r.row_columns):
             if t == "_":
                 raise IRError("wildcard_outside_aggregate", rule.id)
             check_const(t, c)
@@ -574,12 +682,12 @@ def _check_rule(rule, relations):
             raise IRError("bad_aggregate", f"{rule.id}: count has no 'over'")
         if a.function != "count":
             col = next((c for c in r.values if c.name == a.over), None)
-            if col is None:   # or a key column the aggregate ranges over
-                col = next((c for c, t in zip(r.key, a.atom.terms) if c.name == a.over and t == "_"), None)
+            if col is None:   # or a key/row column the aggregate ranges over
+                col = next((c for c, t in zip(r.row_columns, a.atom.terms) if c.name == a.over and t == "_"), None)
             if col is None or col.type != "integer":
                 raise IRError("bad_aggregate", f"{rule.id}: 'over' must name an integer value column of {r.name}, "
                                                "or an integer key column whose term is '_'")
-        for t, c in zip(a.atom.terms, r.key):
+        for t, c in zip(a.atom.terms, r.row_columns):
             check_const(t, c)
             if is_var(t):
                 if t not in positive:
@@ -630,26 +738,30 @@ def _check_rule(rule, relations):
         kinds = {types[t] for t in (c.left, c.right) if is_var(t)}
         if not kinds:  # two constants: typed by their own form
             kinds = {const_type(t) for t in (c.left, c.right)}
-        if c.op not in ("eq", "ne") and kinds != {"integer"}:
-            raise IRError("bad_condition", f"{rule.id}: order comparisons need integers")
+        if c.op not in ("eq", "ne") and kinds not in ({"integer"}, {"rational"}):
+            raise IRError("bad_condition", f"{rule.id}: order comparisons need integers or rationals")
         if len(kinds) > 1:
             raise IRError("type_mismatch", f"{rule.id}: {c.left} and {c.right} have different types")
         for t in (c.left, c.right):
             if not is_var(t) and kinds == {"boolean"} and t not in BOOLEAN:
                 raise IRError("bad_constant", f"{rule.id}: {t!r} is compared with a boolean")
+            if not is_var(t) and kinds == {"date"}:
+                raise IRError("bad_constant", f"{rule.id}: {t!r} is compared with a date")
             if not is_var(t) and kinds == {"integer"} and not INT.match(t):
                 raise IRError("bad_constant", f"{rule.id}: {t!r} is compared with an integer")
             if not is_var(t) and kinds == {"integer"}:
                 fits(t)
+            if not is_var(t) and kinds == {"rational"} and not is_rational(t):
+                raise IRError("bad_constant", f"{rule.id}: {t!r} is compared with a rational")
     for b in rule.body:
         if b.polarity == "negative":
-            for t, c in zip(b.atom.terms, relations[b.atom.relation].key):
+            for t, c in zip(b.atom.terms, relations[b.atom.relation].row_columns):
                 if is_var(t):
                     if t not in positive:
                         raise IRError("unsafe_variable", f"{rule.id}: {t} in a negation is not bound by a positive literal")
                     if types[t] != c.type:
                         raise IRError("type_mismatch", f"{rule.id}: {t} is {types[t]}, {b.atom.relation}.{c.name} is {c.type}")
-    for t, c in zip(rule.head.terms, head.key):
+    for t, c in zip(rule.head.terms, head.head_columns):
         if t == "_":
             raise IRError("wildcard_outside_aggregate", rule.id)
         check_const(t, c)
@@ -661,36 +773,83 @@ def _check_rule(rule, relations):
 
 
 def _stratify(prog):
-    """Least strata: positive edges >=, negative and aggregate edges >. Declared strata must agree.
+    """Least strata: positive edges >=, negative, aggregate, and functional-head/domain edges >.
+    Declared strata must agree (exact least strata in rezono.rules/1; valid consistent stratification
+    in rezono.rules/2).
 
-    A cycle through negation or aggregation has no solution: the rule program is not stratified.
+    A cycle through negation, aggregation, or a functional derivation has no solution: not stratified.
     """
     strata = {n: 0 for n in prog.relations}
     limit = len(prog.relations)   # a stratified program never needs more strata than relations
     changed = True
-    while changed:                # until a fixpoint; a cycle through negation grows without bound
+    while changed:                # until a fixpoint; a cycle through negation/functional grows without bound
         changed = False
+        for n, rel in prog.relations.items():
+            if rel.role == "functional":
+                need = max(strata[rel.domain] + 1, 1)
+                if strata[n] < need:
+                    strata[n] = need
+                    changed = True
+                    if need > limit:
+                        raise IRError("not_stratified", f"{n}: cycle through functional derivation")
         for r in prog.rules.values():
             h = r.head.relation
-            need = max([strata[b.atom.relation] + (b.polarity == "negative") for b in r.body]
-                       + [strata[a.atom.relation] + 1 for a in r.aggregates] + [1])
+            is_func = prog.relations[h].role == "functional"
+            need = max(
+                [strata[b.atom.relation] + (1 if is_func or b.polarity == "negative" else 0) for b in r.body]
+                + [strata[a.atom.relation] + 1 for a in r.aggregates]
+                + ([strata[prog.relations[h].domain] + 1] if is_func else [])
+                + [1]
+            )
             if strata[h] < need:
                 strata[h] = need
                 changed = True
                 if need > limit:
-                    raise IRError("not_stratified", f"{h}: negation or aggregation through recursion")
+                    raise IRError("not_stratified", f"{h}: negation, aggregation, or functional derivation through recursion")
     for r in prog.rules.values():
         if r.assignments and any(prog.reaches(r.head.relation, b.atom.relation) for b in r.body):
             prog.bounds[r.head.relation] = _bound(prog, r)
-        if r.stratum != strata[r.head.relation]:
-            raise IRError("wrong_stratum", f"{r.id}: stratum {r.stratum}, derived {strata[r.head.relation]}")
+    if prog.format == FORMAT:
+        for r in prog.rules.values():
+            if r.stratum != strata[r.head.relation]:
+                raise IRError("wrong_stratum", f"{r.id}: stratum {r.stratum}, derived {strata[r.head.relation]}")
+            for b in r.body:
+                if b.stratum != strata[b.atom.relation]:
+                    raise IRError("wrong_stratum", f"{r.id}: {b.atom.relation} is in stratum {strata[b.atom.relation]}")
+            for a in r.aggregates:
+                if a.stratum != strata[a.atom.relation]:
+                    raise IRError("wrong_stratum", f"{r.id}: {a.atom.relation} is in stratum {strata[a.atom.relation]}")
+        return strata
+
+    # rezono.rules/2: allow any valid per-derivation stratification consistent with all dependency edges.
+    declared = {n: 0 for n, rel in prog.relations.items() if rel.role in ("base", "calc")}
+    for r in prog.rules.values():
+        h = r.head.relation
+        if h in declared and declared[h] != r.stratum:
+            raise IRError("wrong_stratum", f"{r.id}: stratum {r.stratum} disagrees with {declared[h]} for {h}")
+        declared[h] = r.stratum
+    for n in prog.relations:
+        declared.setdefault(n, strata[n])
+    for n, rel in prog.relations.items():
+        if rel.role == "functional" and declared[n] <= declared[rel.domain]:
+            raise IRError("wrong_stratum", f"{n}: functional stratum {declared[n]} must exceed domain {rel.domain} ({declared[rel.domain]})")
+    for r in prog.rules.values():
+        h = r.head.relation
+        is_func = prog.relations[h].role == "functional"
+        if r.stratum < strata[h]:
+            raise IRError("wrong_stratum", f"{r.id}: stratum {r.stratum}, minimum {strata[h]}")
         for b in r.body:
-            if b.stratum != strata[b.atom.relation]:
-                raise IRError("wrong_stratum", f"{r.id}: {b.atom.relation} is in stratum {strata[b.atom.relation]}")
+            if b.stratum != declared[b.atom.relation]:
+                raise IRError("wrong_stratum", f"{r.id}: {b.atom.relation} is in stratum {declared[b.atom.relation]}")
+            min_h = declared[b.atom.relation] + (1 if is_func or b.polarity == "negative" else 0)
+            if r.stratum < min_h:
+                raise IRError("wrong_stratum", f"{r.id}: stratum {r.stratum} too low for {b.atom.relation} ({declared[b.atom.relation]})")
         for a in r.aggregates:
-            if a.stratum != strata[a.atom.relation]:
-                raise IRError("wrong_stratum", f"{r.id}: {a.atom.relation} is in stratum {strata[a.atom.relation]}")
-    return strata
+            if a.stratum != declared[a.atom.relation]:
+                raise IRError("wrong_stratum", f"{r.id}: {a.atom.relation} is in stratum {declared[a.atom.relation]}")
+            if r.stratum <= declared[a.atom.relation]:
+                raise IRError("wrong_stratum", f"{r.id}: stratum {r.stratum} must exceed aggregate {a.atom.relation} ({declared[a.atom.relation]})")
+    return declared
 
 
 def upper(condition, var):
@@ -752,13 +911,13 @@ def _worlds(prog, declared):
     @absence relation must negate an open relation, aggregate over one, or read another @absence relation.
     A declared world of a derived relation must agree."""
     rels = prog.relations
-    opened = {n for n, r in rels.items() if r.role != "derived" and r.world == "open"}
+    opened = {n for n, r in rels.items() if r.role not in ("derived", "functional") and r.world == "open"}
     changed = True
     while changed:
         changed = False
         for r in prog.rules.values():
             h = r.head.relation
-            if h in opened or rels[h].absence:
+            if h in opened or rels[h].absence or rels[h].role == "functional":
                 continue
             reads = [b.atom.relation for b in r.body if b.polarity == "positive"]
             if any(x in opened for x in reads):
@@ -785,6 +944,9 @@ def _worlds(prog, declared):
         if rel.role == "derived" and declared.get(n) not in (None, w):
             raise IRError("bad_world", f"{n}: declared {declared[n]}, but its rules make it {w}")
         out[n] = replace(rel, world=w)
+    for n, rel in out.items():
+        if rel.role == "functional" and out[rel.domain].world != "closed":
+            raise IRError("functional_open_domain", f"{n}: functional domain {rel.domain} must have world 'closed'")
     return out
 
 
@@ -815,6 +977,14 @@ def to_doc(prog):
             d["extend"] = True
         if r.closes:
             d["closes"] = r.closes
+        if r.role == "functional":
+            d["domain"] = r.domain
+            d["value"] = {"name": r.value.name, "type": r.value.type}
+            d["conflict_policy"] = r.conflict_policy
+            if r.empty_state is not None:
+                d["empty_state"] = r.empty_state
+            if r.empty_reason is not None:
+                d["empty_reason"] = r.empty_reason
         d["world"] = r.world
         rels.append(d)
     rules = []
@@ -833,7 +1003,8 @@ def to_doc(prog):
         d["witness"] = {"relation": r.witness_relation, "variables": list(r.variables)}
         d["origin"] = {"file": r.origin[0], "line": str(r.origin[1])}
         rules.append(d)
-    doc = {"format": FORMAT, "pack": prog.pack, "relations": rels, "rules": rules}
+    fmt = FORMAT_V2 if prog.format == FORMAT_V2 or any(r.role == "functional" for r in prog.relations.values()) else FORMAT
+    doc = {"format": fmt, "pack": prog.pack, "relations": rels, "rules": rules}
     if prog.seals:
         doc["seals"] = prog.seals
     return doc
@@ -852,11 +1023,23 @@ def with_strata(doc):
     strata = {n: 0 for n in relations}
     for _ in range(len(relations) + 2):   # enough for a stratified program; load() rejects the rest
         changed = False
+        for n, rel in relations.items():
+            if rel.get("role") == "functional" and rel.get("domain") in strata:
+                need = max(strata[rel["domain"]] + 1, 1)
+                if strata[n] < need:
+                    strata[n] = need
+                    changed = True
         for r in doc["rules"]:
-            need = max([strata[b["relation"]] + (b["polarity"] == "negative") for b in r.get("body", [])]
-                       + [strata[a["relation"]] + 1 for a in r.get("aggregates", [])] + [1])
-            if strata[r["head"]["relation"]] < need:
-                strata[r["head"]["relation"]] = need
+            h = r["head"]["relation"]
+            is_func = relations[h].get("role") == "functional"
+            need = max(
+                [strata[b["relation"]] + (1 if is_func or b["polarity"] == "negative" else 0) for b in r.get("body", [])]
+                + [strata[a["relation"]] + 1 for a in r.get("aggregates", [])]
+                + ([strata[relations[h]["domain"]] + 1] if is_func and relations[h].get("domain") in strata else [])
+                + [1]
+            )
+            if strata[h] < need:
+                strata[h] = need
                 changed = True
         if not changed:
             break

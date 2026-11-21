@@ -124,9 +124,9 @@ decision:
      decided_on: "2026-05-20", valid_from: "2026-07-01", valid_from_day: 20260701,
      valid_until: "2026-09-01", valid_until_day: 20260901, state: in_force}
 reference_date:
-  - {id: "2025-01-01", title: 1 January 2025, day: 20250101}
-  - {id: "2026-08-01", title: 1 August 2026, day: 20260801}
-  - {id: "2026-11-10", title: 10 November 2026, day: 20261110}
+  - {id: "2025-01-01", title: 1 January 2025, date: "2025-01-01", day: 20250101}
+  - {id: "2026-08-01", title: 1 August 2026, date: "2026-08-01", day: 20260801}
+  - {id: "2026-11-10", title: 10 November 2026, date: "2026-11-10", day: 20261110}
 ```
 
 | Reference date | In force | Why |
