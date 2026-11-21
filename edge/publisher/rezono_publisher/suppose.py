@@ -20,6 +20,7 @@ import argparse
 import dataclasses
 import datetime
 import json
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -93,41 +94,167 @@ def _check_no_observations(bundle: dict | None, delta: dict) -> None:
             cur = kinds[cur].get("parent")
 
 
-def _unset_totality_checks(bundle: dict | None, delta: dict) -> set[str]:
-    """Totality check views for required slots explicitly unset by `delta`.
+_INT_KEY = re.compile(r"^-?(0|[1-9][0-9]*)$")
+
+
+def _key_text(key, id_type: str | None) -> str | None:
+    """Canonical text of a delta key, matching `batch.text` and `writer.scalar`."""
+    if isinstance(key, bool):
+        return ("true" if key else "false") if id_type in (None, "boolean") else None
+    if isinstance(key, int):
+        return str(key) if id_type in (None, "integer") else None
+    if isinstance(key, datetime.datetime):
+        return None
+    if isinstance(key, datetime.date):
+        return key.isoformat() if id_type in (None, "date") else None
+    if isinstance(key, str):
+        if id_type == "integer":
+            return str(int(key)) if _INT_KEY.fullmatch(key) else None
+        if id_type == "boolean":
+            return None
+        return key
+    return None
+
+
+def _unset_totality_checks(bundle: dict | None, delta: dict) -> dict[str, set[str]]:
+    """Per totality check view, the exact keys whose required slot was explicitly unset by `delta`.
 
     In `contracts/delta.yaml`, `unset` on a required slot makes that slot unknown (never zero).
-    Under a local assumption, the totality violation on that explicitly unset slot is recorded as
-    a warning so the assumption can be published and its checked unknown values answered, while
-    every other red check still blocks.
+    Under a local assumption, a red totality check is recorded as a warning only when every
+    violating key in that check was explicitly unset by `delta`, while any other violating key
+    (such as an `insert` missing a required slot or a pre-existing violation) still blocks.
     """
     if not isinstance(bundle, dict):
-        return set()
-    parents = {
-        k["id"]: k.get("parent")
+        return {}
+    kinds = {
+        k["id"]: k
         for k in bundle.get("kinds", [])
         if isinstance(k, dict) and isinstance(k.get("id"), str)
     }
-    totality_views = {
-        c["view"]
-        for c in bundle.get("checks", [])
-        if isinstance(c, dict) and c.get("check") == "totality" and isinstance(c.get("view"), str)
-    }
-    out: set[str] = set()
-    for ch in delta.get("changes", []):
-        if ch.get("op") != "unset":
+    totality_views: set[str] = set()
+    views_by_kind: dict[str, list[str]] = {}
+    for c in bundle.get("checks", []):
+        if not isinstance(c, dict) or c.get("check") != "totality":
             continue
-        cur, slot = ch.get("kind"), ch.get("slot")
-        if not isinstance(cur, str) or not isinstance(slot, str):
-            continue
+        view, kind, slot = c.get("view"), c.get("kind"), c.get("subject")
+        if (
+            isinstance(view, str)
+            and isinstance(kind, str)
+            and isinstance(slot, str)
+            and view == f"{kind}__{slot}__totality"
+        ):
+            totality_views.add(view)
+            views_by_kind.setdefault(kind, []).append(view)
+
+    def ancestors(kind: str) -> list[str]:
+        chain: list[str] = []
+        cur: str | None = kind
         seen: set[str] = set()
-        while isinstance(cur, str) and cur in parents and cur not in seen:
+        while isinstance(cur, str) and cur in kinds and cur not in seen:
             seen.add(cur)
-            view = f"{cur}__{slot}__totality"
-            if view in totality_views:
-                out.add(view)
-            cur = parents[cur]
+            chain.append(cur)
+            parent = kinds[cur].get("parent")
+            cur = parent if isinstance(parent, str) else None
+        return chain
+
+    out: dict[str, set[str]] = {}
+    for ch in delta.get("changes", []):
+        if not isinstance(ch, dict):
+            continue
+        op, kind = ch.get("op"), ch.get("kind")
+        if not isinstance(op, str) or not isinstance(kind, str) or kind not in kinds:
+            continue
+        key_txt = _key_text(ch.get("key"), kinds[kind].get("id_type"))
+        if key_txt is None:
+            continue
+        chain = ancestors(kind)
+        if op == "unset":
+            slot = ch.get("slot")
+            if not isinstance(slot, str):
+                continue
+            for cur in chain:
+                view = f"{cur}__{slot}__totality"
+                if view in totality_views:
+                    out.setdefault(view, set()).add(key_txt)
+        elif op == "set":
+            slot = ch.get("slot")
+            if not isinstance(slot, str):
+                continue
+            for cur in chain:
+                view = f"{cur}__{slot}__totality"
+                if view in out:
+                    out[view].discard(key_txt)
+        elif op in ("delete", "insert"):
+            for cur in chain:
+                for view in views_by_kind.get(cur, ()):
+                    if view in out:
+                        out[view].discard(key_txt)
+    return {view: keys for view, keys in out.items() if keys}
+
+
+def _totality_tables(bundle: dict | None) -> dict[str, tuple[str, str]]:
+    """Map each totality check view `<kind>__<slot>__totality` to `(kind_table, slot_table)`."""
+    if not isinstance(bundle, dict):
+        return {}
+    kind_tables = {
+        k["id"]: k["table"]
+        for k in bundle.get("kinds", [])
+        if isinstance(k, dict) and isinstance(k.get("id"), str) and isinstance(k.get("table"), str)
+    }
+    slot_tables: dict[tuple[str, str], str] = {}
+    for section in ("arrows", "attributes"):
+        for s in bundle.get(section, []):
+            if (
+                isinstance(s, dict)
+                and isinstance(s.get("kind"), str)
+                and isinstance(s.get("name"), str)
+                and isinstance(s.get("table"), str)
+            ):
+                slot_tables[(s["kind"], s["name"])] = s["table"]
+    out: dict[str, tuple[str, str]] = {}
+    for c in bundle.get("checks", []):
+        if not isinstance(c, dict) or c.get("check") != "totality":
+            continue
+        view, kind, slot = c.get("view"), c.get("kind"), c.get("subject")
+        if not (isinstance(view, str) and isinstance(kind, str) and isinstance(slot, str)):
+            continue
+        if view != f"{kind}__{slot}__totality":
+            continue
+        kind_table = kind_tables.get(kind)
+        slot_table = slot_tables.get((kind, slot))
+        if kind_table is not None and slot_table is not None:
+            out[view] = (kind_table, slot_table)
     return out
+
+
+def _may_downgrade_totality(
+    check: dict,
+    rows: dict,
+    tables: dict[str, tuple[str, str]],
+    unset_totality: dict[str, set[str]],
+) -> bool:
+    """True iff `check` is a red totality check whose violating keys were all explicitly unset."""
+    if check.get("status") != "red":
+        return False
+    view = check.get("name")
+    unset_keys = unset_totality.get(view) if isinstance(view, str) else None
+    if not unset_keys:
+        return False
+    violations = check.get("violations")
+    if not isinstance(violations, int) or isinstance(violations, bool) or violations <= 0:
+        return False
+    if violations > len(unset_keys):
+        return False
+    pair = tables.get(view)
+    if pair is None:
+        return False
+    kind_table, slot_table = pair
+    if kind_table not in rows or slot_table not in rows:
+        return False
+    present = {r[0] for r in rows[kind_table] if r}
+    valued = {r[0] for r in rows[slot_table] if r}
+    violating = present - valued
+    return len(violating) == violations and violating <= unset_keys
 
 
 def _columns_map(bundle: dict | None, rules_doc: dict | None) -> dict[str, tuple[str, ...]]:
@@ -409,10 +536,13 @@ def suppose(pack_dir, store, base_manifest: str, role: str, delta: dict) -> dict
             )
             unset_totality = _unset_totality_checks(bundle, delta)
             if unset_totality:
+                totality_tables = _totality_tables(bundle)
                 e = dataclasses.replace(
                     e,
                     checks=[
-                        (c | {"status": "warning"}) if c["status"] == "red" and c["name"] in unset_totality else c
+                        (c | {"status": "warning"})
+                        if _may_downgrade_totality(c, e.rows, totality_tables, unset_totality)
+                        else c
                         for c in e.checks
                     ],
                 )
