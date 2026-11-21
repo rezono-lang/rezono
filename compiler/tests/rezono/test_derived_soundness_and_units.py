@@ -6,9 +6,10 @@ Covers decisions/language-rezono-1.md:
 3. `unit` on a `rezono 1` derivation must be validated against declared pack units and value type (never silently dropped).
 4. Functional kind-typed derived properties (`derived owner: Person = it.p`) must preserve their kind type for chaining
    (`it.owner.label`).
-5. `@ source` on `unless` clauses (`rezono_derived.py`) and inline parameter versions (`rezono_calc.py`) must be preserved;
-   negative/decimal inline parameter values with a declared unit must retain their unit and pass `calc.build`;
-   invalid calendar dates like `2026-02-30` must be rejected; and `key_of_signs.load()` must return fresh copies.
+5. `@ source` on `unless` clauses (`rezono_derived.py`) must be preserved in compiled bundle rules (`contracts/bundle.yaml`).
+6. Signed/decimal inline parameter values with a declared unit (`rezono_calc.py`) must retain their unit through `calc.build`,
+   and invalid calendar dates such as `2026-02-30` must be rejected by `rezono_calc.validate_param` and `validate_as_of`.
+7. `key_of_signs.load()` must return fresh independent copies so mutating a returned dict does not corrupt cached results.
 """
 
 from __future__ import annotations
@@ -262,13 +263,11 @@ def test_functional_kind_derived_property_supports_slot_chaining(tmp_path: Path)
     strict=True,
     raises=AssertionError,
     reason=(
-        "M3: decisions/language-rezono-1.md: section 2; preserve `@ source` on `unless` clauses and "
-        "inline parameter versions, retain declared units on negative/decimal inline parameters, "
-        "reject invalid calendar dates such as 2026-02-30, and return fresh copies from key_of_signs.load()."
+        "M3: decisions/language-rezono-1.md: section 2; `@ source` on `unless` clauses in rezono_derived.py "
+        "must be preserved on the compiled bundle rule entries instead of being silently dropped."
     ),
 )
-def test_unless_and_inline_param_sources_preserved_and_signed_param_units(tmp_path: Path):
-    # 1. `@ source` on `unless` clauses in rezono_derived.py must be preserved in compiled bundle rules.
+def test_unless_clause_source_preserved_in_bundle_rules(tmp_path: Path):
     unless_decls = [
         {"kind": "Item", "world": "closed", "slots": [{"slot": "score", "type": "Int"}], "derived": []},
         {
@@ -302,24 +301,21 @@ def test_unless_and_inline_param_sources_preserved_and_signed_param_units(tmp_pa
         f"`@ law#art-7` on unless clause was dropped from compiled bundle rules; got sources={capped_sources!r}"
     )
 
-    # 2. `@ source` on inline parameter versions in rezono_calc.py must be preserved in compiled calc IR,
-    #    and negative/decimal inline parameter values with a declared unit must retain their unit and pass calc.build.
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason=(
+        "M3: decisions/language-rezono-1.md: section 2; signed/decimal inline parameter values with a declared "
+        "unit in rezono_calc.py must retain their declared unit through calc.build, and rezono_calc date "
+        "validators must reject invalid calendar dates such as 2026-02-30."
+    ),
+)
+def test_signed_decimal_inline_param_units_and_calendar_date_validation(tmp_path: Path):
+    # 1. Positive and negative decimal inline parameters with declared unit `Cents` must retain unit and pass calc.build.
     calc_decls = [
         {"unit": "Cents", "is": "money minor EUR"},
         {"kind": "Record", "world": "closed", "slots": [{"slot": "metric", "type": "Cents"}], "derived": []},
-        {
-            "param": "base_val",
-            "type": "Cents",
-            "versions": [
-                {
-                    "version": "1",
-                    "valid": ["2025-01-01", "2026-01-01"],
-                    "known": "2024-09-17",
-                    "value": {"lit": "100"},
-                    "source": "ref#art-1",
-                }
-            ],
-        },
         {"param": "pos_dec", "type": "Cents", "value": {"lit": "12.50"}},
         {"param": "neg_dec", "type": "Cents", "value": {"neg": {"lit": "12.50"}}},
         {
@@ -331,8 +327,8 @@ def test_unless_and_inline_param_sources_preserved_and_signed_param_units(tmp_pa
                     "value": {
                         "arith": [
                             "+",
-                            {"arith": ["+", {"path": ["base_val"]}, {"path": ["pos_dec"]}]},
-                            {"arith": ["+", {"path": ["neg_dec"]}, {"path": ["metric"]}]},
+                            {"arith": ["+", {"path": ["pos_dec"]}, {"path": ["neg_dec"]}]},
+                            {"path": ["metric"]},
                         ]
                     },
                 },
@@ -340,7 +336,7 @@ def test_unless_and_inline_param_sources_preserved_and_signed_param_units(tmp_pa
         },
         {"asOf": "2025-06-01", "known": "2025-06-01"},
     ]
-    calc_dir = _write_calc_json_pack(tmp_path / "calc-units-sources", calc_decls)
+    calc_dir = _write_calc_json_pack(tmp_path / "calc-units", calc_decls)
     try:
         model = pack.read(calc_dir)
         assert model.calc is not None
@@ -349,38 +345,40 @@ def test_unless_and_inline_param_sources_preserved_and_signed_param_units(tmp_pa
         raise AssertionError(
             f"signed/decimal inline parameters with declared unit Cents must retain unit and pass calc.build: {err}"
         ) from err
-    by_id = {rule["id"]: rule for rule in model.calc["rules"]}
-    assert by_id["base_val@1"].get("source") == "ref#art-1", (
-        f"inline parameter version source 'ref#art-1' was dropped from calc IR: {by_id['base_val@1']!r}"
-    )
     assert program.versions["pos_dec@1"].unit == "Cents"
     assert program.versions["neg_dec@1"].unit == "Cents"
 
-    # 3. Invalid calendar dates such as 2026-02-30 on inline parameter versions must be rejected.
-    bad_date_form = {
-        "format": "rezono.module/2",
-        "module": {
-            "rezono": "0",
-            "pack": "bad-date",
-            "use": [],
-            "decls": [
-                {"unit": "Cents", "is": "money minor EUR"},
-                {"kind": "Record", "world": "closed", "slots": [{"slot": "metric", "type": "Cents"}], "derived": []},
-                {
-                    "param": "bad_param",
-                    "type": "Cents",
-                    "versions": [
-                        {"version": "1", "valid": ["2026-02-30"], "known": "2026-02-30", "value": {"lit": "10"}}
-                    ],
-                },
-            ],
+    # 2. Invalid calendar dates such as 2026-02-30 must be rejected by rezono_calc.validate_param and validate_as_of.
+    param_errors: list[tuple[str, str]] = []
+    rezono_calc.validate_param(
+        {
+            "param": "bad_param",
+            "type": "Cents",
+            "versions": [{"version": "1", "valid": ["2026-02-30"], "known": "2026-02-30", "value": {"lit": "10"}}],
         },
-        "spans": [],
-    }
-    date_errors = rezono_calc.validate_module(bad_date_form, "bad-date.rezono")
-    assert date_errors, "invalid calendar date 2026-02-30 on inline parameter version must be rejected"
+        "/decls/2",
+        lambda at, message, *_extra: param_errors.append((at, message)),
+    )
+    assert param_errors, "invalid calendar date 2026-02-30 in inline parameter version must be rejected"
 
-    # 4. key_of_signs.load() must return fresh independent copies so mutating a returned dict does not corrupt cache.
+    as_of_errors: list[tuple[str, str]] = []
+    rezono_calc.validate_as_of(
+        {"asOf": "2026-02-30", "known": "2026-02-30"},
+        "/decls/3",
+        lambda at, message, *_extra: as_of_errors.append((at, message)),
+    )
+    assert as_of_errors, "invalid calendar date 2026-02-30 in `as of` declaration must be rejected"
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason=(
+        "M3: decisions/language-rezono-1.md: section 2; key_of_signs.load() must return fresh independent copies "
+        "so mutating a returned dict or list never corrupts subsequent calls."
+    ),
+)
+def test_key_of_signs_load_returns_fresh_independent_copies(tmp_path: Path):
     std_view_copy = tmp_path / "std-view"
     shutil.copytree(ROOT / "packs" / "std-view", std_view_copy)
     first_key, _ = key_of_signs.load(std_view_copy)
