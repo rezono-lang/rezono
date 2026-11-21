@@ -125,11 +125,6 @@ def _declared_in_pack_sources(pack_dir: Path, names: set[str]) -> set[str]:
     return {name for name in names if re.search(rf"\b{re.escape(name)}\b", sources)}
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="extra: decisions/tooling-does-not-decide.md: Form 2 commit-pinned evidence in packs/std-review",
-)
 def test_commit_pinned_evidence_shared_form():
     """Form 2: packs/std-review derives evidence_current, evidence_stale and evidence_missing per commit SHA."""
     from rezono_compiler import pack, rules
