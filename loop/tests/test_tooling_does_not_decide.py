@@ -255,7 +255,7 @@ def test_single_effect_watchdog_shared_form():
 @pytest.mark.xfail(
     strict=True,
     raises=AssertionError,
-    reason="extra: decisions/tooling-does-not-decide.md: Form 5 who-may-change-what in packs/std-review + std-access",
+    reason="extra: decisions/tooling-does-not-decide.md: Form 5 who-may-change-what in packs/std-review + std-access. Waits for compiler/tests/test_std_decision_dates.py::test_std_decision_rules_read_dates (and packs/std-review native date migration per decisions/standard-packs-everywhere.md section 1.4 step 5, since loop/shortcut-budget.json caps day_number_fields for packs/std-review at 3).",
 )
 def test_who_may_change_what_shared_form(tmp_path):
     """Form 5: packs/std-review + packs/std-access derive change_member_unauthorized and change_authorized."""
@@ -318,10 +318,10 @@ def test_who_may_change_what_shared_form(tmp_path):
             {"id": "c-gpl", "author": "bot-p", "content_sha256": h, "support_sha256": h},
         ],
         "change_proposal": [
-            {"id": "p-ok", "change": "c-ok", "role": "worker", "day": 20261120},
-            {"id": "p-denied", "change": "c-denied", "role": "worker", "day": 20261120},
-            {"id": "p-planner", "change": "c-planner", "role": "planner", "day": 20261120},
-            {"id": "p-gpl", "change": "c-gpl", "role": "planner", "day": 20261120},
+            {"id": "p-ok", "change": "c-ok", "role": "worker", "day": "2026-11-20"},
+            {"id": "p-denied", "change": "c-denied", "role": "worker", "day": "2026-11-20"},
+            {"id": "p-planner", "change": "c-planner", "role": "planner", "day": "2026-11-20"},
+            {"id": "p-gpl", "change": "c-gpl", "role": "planner", "day": "2026-11-20"},
         ],
         "change_member": [
             {"id": "m-ok", "change": "c-ok", "kind": "source", "element": "src.py"},
