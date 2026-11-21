@@ -24,6 +24,13 @@ def check_relation(name, expected):
     assert state.derived[name] == {tuple(str(value) for value in row) for row in expected}
 
 
+def reads_offer_port(name):
+    from rules_support import states
+
+    _, prog, _ = states(ROOT)
+    return "offer__port" in prog.deps(name)
+
+
 def portal_template(name):
     path = ROOT / "portal" / (name + ".py")
     assert path.is_file(), f"Missing public rendering module: {name}"
