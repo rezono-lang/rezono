@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from hashlib import sha256
 import json
 from pathlib import Path
+import subprocess
 import sys
 from tempfile import TemporaryDirectory
 from time import monotonic, sleep, time_ns
@@ -560,9 +561,20 @@ class ManagementFence:
             self.watch = watch_factory(cluster, MGMT_NAMESPACE)
         elif hasattr(cluster, "start_pod_watch"):
             self.watch = cluster.start_pod_watch(MGMT_NAMESPACE)
+        elif hasattr(cluster, "namespaced"):
+            self.watch = subprocess.Popen(
+                [*cluster.namespaced(MGMT_NAMESPACE, "get", "pods", "--watch", "--output-watch-events", "-o", "json"),
+                 "--request-timeout=0"],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            )
+            sleep(2)
+            if self.watch.poll() is not None:
+                raise RuntimeError(f"The management fence watch ended at once: {self.watch.stderr.read()}")
         else:
             self.watch = None
         self.state = self.read_state()
+        if self.watch is not None and (self.state["replicas"] != 0 or self.state["ready_endpoints"]):
+            raise RuntimeError(f"The management plane is not stopped under the fence: {self.state}")
 
     def read_state(self) -> dict[str, Any]:
         deployment = self.cluster.read("get", "deployment", MGMT_DEPLOYMENT, namespace=MGMT_NAMESPACE)
@@ -860,7 +872,8 @@ def main() -> None:
         binding = cluster.make_event("backup", "management-dataset-bound", **binding_fields)
         events.append(binding)
 
-        fence = ManagementFence(cluster, f"management-fence-{run_key}")
+        watch_factory = None if hasattr(cluster, "start_pod_watch") else (lambda _cluster, _ns: None)
+        fence = ManagementFence(cluster, f"management-fence-{run_key}", watch_factory=watch_factory)
         stack_fence = fence
         hold = cluster.make_event(
             "backup",
