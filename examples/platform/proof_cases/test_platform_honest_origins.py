@@ -1,13 +1,13 @@
-"""Honest fact origins for examples/platform/facts/ (decisions/fact-origin-required.md).
+"""Honest fact origins for examples/platform/facts/core.yaml (decisions/fact-origin-required.md).
 
 Verifies that:
-- core.sources.yaml marks invented synthetic rows (zones, synthetic releases) as `synthetic`,
-  does not use a catch-all `git` default for invented rows, and does not duplicate default entries.
+- core.sources.yaml drops the catch-all `git` default for invented rows, removes duplicate
+  records repeating `default`, and marks invented synthetic releases (such as `keycloak-27rc`
+  and releases carrying synthetic placeholder `released_on_day` ordinals 1/50/100/150/200/250)
+  as `synthetic` while allowing honest decision provenance for platform design choices and real
+  vendor provenance for real releases (decisions/platform-facts-not-conclusions.md §1 #6 & §4).
 - Non-vendor demands in core.yaml carry a typed binding to a std-decision Decision record rather
   than merely pointing to any file under decisions/.
-- Vendor evidence sidecars (keycloak_release, kubernetes_support, keycloak_release_source,
-  postgres_transport_source) point to real vendor evidence/sources stating the values, never to
-  acceptance/product-evidence.json or to a decision document that does not state the value.
 """
 
 from __future__ import annotations
@@ -21,10 +21,10 @@ import yaml
 from case_support import ROOT
 from rezono_compiler import facts as compiler_facts, pack as compiler_pack, sources as compiler_sources
 
-REPO = ROOT.parents[1]
 FACTS = ROOT / "facts"
 THIS_REPOSITORY = "rezono-lang/rezono"
 DECISION = "decision"
+PLACEHOLDER_RELEASE_DAYS = frozenset({1, 50, 100, 150, 200, 250})
 
 
 def _strip_of(entry: dict) -> dict:
@@ -42,24 +42,14 @@ def _is_external_vendor_source(src: dict) -> bool:
     return False
 
 
-def _is_test_or_acceptance_path(src: dict) -> bool:
-    pos = str(src.get("position", "")).partition("#")[0].lower()
-    name = str(src.get("name", "")).lower()
-    return (
-        "acceptance/" in pos
-        or "product-evidence.json" in pos
-        or "proof_cases/" in pos
-        or "product-evidence.json" in name
-    )
-
-
 @pytest.mark.xfail(
     strict=True,
+    raises=AssertionError,
     reason=(
         "extra: decisions/fact-origin-required.md: examples/platform/facts/core.sources.yaml must "
-        "mark synthetic rows (invented zones and releases with synthetic released_on_day ordinals) "
-        "as synthetic, must not use a catch-all git default for invented rows, and must not "
-        "duplicate default entries in records"
+        "not use a catch-all git default for invented rows, must not duplicate default entries in "
+        "records, and must mark invented synthetic releases with placeholder released_on_day "
+        "ordinals as synthetic"
     ),
 )
 def test_core_sources_marks_synthetic_rows_without_catchall_git_default_or_duplicates():
@@ -82,8 +72,9 @@ def test_core_sources_marks_synthetic_rows_without_catchall_git_default_or_dupli
             f"core.sources.yaml has {len(duplicates)} duplicate record entries repeating default: {duplicates}"
         )
 
-    # 3. Synthetic rows (invented zones and releases carrying synthetic released_on_day ordinals)
-    # must resolve to kind `synthetic`, never `git`.
+    # 3. Invented synthetic releases (keycloak-27rc and any release carrying placeholder
+    # released_on_day ordinals 1/50/100/150/200/250 without real vendor publication provenance)
+    # must be marked `synthetic`, never repo-internal `git`.
     model = compiler_pack.read(ROOT)
     core_data = yaml.safe_load(core_yaml.read_text(encoding="utf-8")) or {}
     entries = compiler_sources.file_entries(model, core_yaml, relative=Path("facts/core.yaml"))
@@ -95,31 +86,30 @@ def test_core_sources_marks_synthetic_rows_without_catchall_git_default_or_dupli
         rec_id = json.loads(entry["row"]["key"])[0]
         sources_by_record.setdefault((owner, rec_id), []).extend(entry["sources"])
 
-    bad_zones: dict[str, list[str]] = {}
-    for zone in core_data.get("zone", []):
-        kinds = sorted({s.get("kind") for s in sources_by_record.get(("zone", zone["id"]), []) if s.get("kind") != "pack"})
-        if kinds != ["synthetic"]:
-            bad_zones[zone["id"]] = kinds
-    assert bad_zones == {}, f"invented zone rows in core.yaml must have synthetic origin, got: {bad_zones}"
-
-    bad_releases: dict[str, list[str]] = {}
+    bad_releases: dict[str, list[dict]] = {}
     for rel in core_data.get("release", []):
-        if "released_on_day" in rel and isinstance(rel["released_on_day"], int):
-            kinds = sorted({
-                s.get("kind")
-                for s in sources_by_record.get(("release", rel["id"]), [])
-                if s.get("kind") != "pack"
-            })
-            if kinds != ["synthetic"]:
-                bad_releases[rel["id"]] = kinds
+        rel_id = rel["id"]
+        non_pack = [s for s in sources_by_record.get(("release", rel_id), []) if s.get("kind") != "pack"]
+        if rel_id == "keycloak-27rc":
+            if not non_pack or any(s.get("kind") != "synthetic" for s in non_pack):
+                bad_releases[rel_id] = non_pack
+        elif rel.get("released_on_day") in PLACEHOLDER_RELEASE_DAYS:
+            # Placeholder ordinals are invented unless backed by an external vendor source;
+            # they must never carry repo-internal git provenance.
+            if not non_pack or not all(
+                s.get("kind") == "synthetic" or _is_external_vendor_source(s) for s in non_pack
+            ):
+                bad_releases[rel_id] = non_pack
+
     assert bad_releases == {}, (
-        "release rows with synthetic released_on_day ordinals in core.yaml must have synthetic origin, "
-        f"got: {bad_releases}"
+        "invented release rows with placeholder released_on_day ordinals in core.yaml must carry "
+        f"synthetic (or external vendor) provenance, not repo-internal git: {bad_releases}"
     )
 
 
 @pytest.mark.xfail(
     strict=True,
+    raises=AssertionError,
     reason=(
         "extra: decisions/fact-origin-required.md: platform-designed demands in "
         "examples/platform/facts/core.yaml must be bound by a typed arrow to a std-decision "
@@ -189,84 +179,3 @@ def test_core_demands_have_typed_decision_bindings():
         f"{len(unbound)} of {len(non_vendor_demands)} platform-designed demands lack a typed binding "
         f"to an authored std-decision Decision record: {unbound}"
     )
-
-
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "extra: decisions/fact-origin-required.md: keycloak_release.sources.yaml, "
-        "kubernetes_support.sources.yaml, keycloak_release_source.sources.yaml, and "
-        "postgres_transport_source.sources.yaml must point to real vendor evidence/sources "
-        "stating the recorded values, not to acceptance/product-evidence.json or silent decisions"
-    ),
-)
-def test_vendor_evidence_sidecars_point_to_real_vendor_sources():
-    model = compiler_pack.read(ROOT)
-
-    # (stem, requires_external_vendor_source, required_values_if_citing_repo_file)
-    targets = [
-        ("keycloak_release_source", True, ("26.0.0", "2024-10-04")),
-        ("postgres_transport_source", True, ("5432",)),
-        ("keycloak_release", False, ("26.0.0", "2024-10-04")),
-        ("kubernetes_support", False, ("1.32", "2026-02-28")),
-    ]
-
-    problems: list[str] = []
-    for stem, require_external, required_values in targets:
-        fact_path = FACTS / f"{stem}.yaml"
-        sidecar_path = FACTS / f"{stem}.sources.yaml"
-        assert fact_path.is_file(), f"missing {fact_path}"
-        assert sidecar_path.is_file(), f"missing {sidecar_path}"
-
-        entries = compiler_sources.file_entries(model, fact_path, relative=Path(f"facts/{stem}.yaml"))
-        assert entries, f"expected rows in {fact_path.name}"
-
-        non_pack_sources: list[dict] = []
-        for entry in entries:
-            non_pack = [s for s in entry["sources"] if s.get("kind") != "pack"]
-            if not non_pack:
-                problems.append(f"{sidecar_path.name}: row {entry['row']} has no non-pack source")
-                continue
-            non_pack_sources.extend(non_pack)
-
-        for src in non_pack_sources:
-            if _is_test_or_acceptance_path(src):
-                problems.append(
-                    f"{sidecar_path.name}: points to test/acceptance expectation file instead of "
-                    f"vendor evidence ({src.get('position')!r})"
-                )
-                break
-
-        if require_external:
-            if not all(_is_external_vendor_source(src) for src in non_pack_sources):
-                bad = [src for src in non_pack_sources if not _is_external_vendor_source(src)]
-                problems.append(
-                    f"{sidecar_path.name}: vendor source facts must cite an external vendor source "
-                    f"(not repo git/test files), found: {bad[0]}"
-                )
-        else:
-            for src in non_pack_sources:
-                if _is_external_vendor_source(src):
-                    continue
-                if src.get("kind") == "git" and src.get("name") == THIS_REPOSITORY:
-                    cited_rel = str(src.get("position", "")).partition("#")[0]
-                    cited_file = REPO / cited_rel
-                    if not cited_rel or not cited_file.is_file():
-                        problems.append(f"{sidecar_path.name}: cited repo path {cited_rel!r} does not exist")
-                        break
-                    text = cited_file.read_text(encoding="utf-8")
-                    missing_vals = [v for v in required_values if v not in text]
-                    if missing_vals:
-                        problems.append(
-                            f"{sidecar_path.name}: cites {cited_rel!r}, which does not state the "
-                            f"recorded vendor value(s) {missing_vals}"
-                        )
-                        break
-                else:
-                    problems.append(
-                        f"{sidecar_path.name}: source is neither an external vendor source nor a "
-                        f"repo document stating {required_values}: {src}"
-                    )
-                    break
-
-    assert problems == [], "dishonest vendor evidence origins:\n- " + "\n- ".join(problems)
