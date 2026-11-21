@@ -33,7 +33,7 @@ derived_refusal(run, "write-forms", record) :-
     epoch_check__step(record, step),
     epoch_check__outcome(record, "green"),
     epoch_check__violations(record, violations),
-    violations > 0.
+    violations != 0.
 
 // A role-scoped check refuses write-forms once its step is done when red, unknown, or green with violations.
 derived_refusal(run, "write-forms", record) :-
@@ -52,7 +52,7 @@ derived_refusal(run, "write-forms", record) :-
     epoch_role_check__step(record, step),
     epoch_role_check__outcome(record, "green"),
     epoch_role_check__violations(record, violations),
-    violations > 0.
+    violations != 0.
 
 // Unknown is not green: a required check with no recorded verdict refuses once its step is done.
 epoch_has_run_check(run, step, check) :-
