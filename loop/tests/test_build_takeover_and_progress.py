@@ -97,17 +97,6 @@ def _progress_base(tmp_path):
     return records
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingPinnedEngineRunner,
-    reason=(
-        "extra: decisions/build-reconciliation.md: Pinned-engine invariant. Add build/engine-pin.yaml pinning an "
-        "earlier main commit SHA (`engine_sha`) and loop/build_pinned_runner.py with read_engine_pin(path) and "
-        "validate_engine_pin(*, root, engine_sha, candidate_sha, main_ref='refs/remotes/origin/main'). Validate "
-        "that build/engine-pin.yaml holds a 40-lowercase-hex commit SHA, reject candidate_sha == engine_sha and "
-        "any commit not an ancestor of main_ref, and accept an earlier commit on main."
-    ),
-)
 def test_pinned_engine_runner_enforces_earlier_main_commit(tmp_path):
     pin_file = ROOT / "build" / "engine-pin.yaml"
     if not pin_file.is_file():
@@ -169,22 +158,6 @@ def test_pinned_engine_runner_enforces_earlier_main_commit(tmp_path):
         read_engine_pin(broken)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingBuildCutover,
-    reason=(
-        "extra: decisions/build-reconciliation.md: Immediate cutover and fail-closed safe mode. Add "
-        "loop/build_cutover.py with select_suites(*, run, manifest, rows, engine_error, universe) and no "
-        "python_fallback parameter (loop/build_transition_choice.py is retired). When the checker verifies the "
-        "publication green (rezono:proofs and rezono:schema green and build_selected_job and build_full_selection "
-        "present), return source='pack', safe_mode=False, safe_mode_reason=None, findings=[], and the sorted "
-        "suites from build_selected_job (or sorted(universe) when build_full_selection is non-empty). When the "
-        "publication is absent, checker-rejected, missing a required relation, or engine_error is set, enter "
-        "fail-closed safe mode: source='safe_mode', safe_mode=True, safe_mode_reason in "
-        "('missing-publication', 'invalid-publication', 'engine-failure'), use=sorted(universe) (every suite, "
-        "never a Python fallback subset), and a structured safe_mode finding."
-    ),
-)
 def test_ci_selection_cutover_uses_verified_pack_and_fails_closed_to_safe_mode():
     if find_spec("loop.build_cutover") is None:
         raise MissingBuildCutover("loop/build_cutover.py is missing")
@@ -261,22 +234,6 @@ def test_ci_selection_cutover_uses_verified_pack_and_fails_closed_to_safe_mode()
         )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingCoordinatorReader,
-    reason=(
-        "extra: decisions/build-reconciliation.md: Coordinator reader and fail-closed safe mode. Add "
-        "loop/build_coordinator_reader.py with read_coordinator_state(*, run, manifest, rows, engine_error) "
-        "and no python_fallback parameter, and export build_claim_release_plan, build_claim_held, "
-        "build_claim_released, build_claim_release_discarded and build_claim_release_pending in "
-        "build/rules/claims.dl and build/rules/claim_release.dl. Read ready, waiting, stuck tasks and "
-        "claim-release rows directly from the checker-verified publication with source='pack', safe_mode=False, "
-        "safe_mode_reason=None and assign_new_tasks=True. When the publication is absent, checker-rejected, "
-        "missing a required relation, or engine_error is set, enter fail-closed safe mode: source='safe_mode', "
-        "safe_mode=True, assign_new_tasks=False, empty ready/waiting/stuck/claim_release_plan/claim_held "
-        "(claims stay intact, zero new tasks assigned), and emit a structured safe_mode finding."
-    ),
-)
 def test_coordinator_reader_uses_published_relations_and_fails_closed_to_safe_mode():
     if find_spec("loop.build_coordinator_reader") is None:
         raise MissingCoordinatorReader("loop/build_coordinator_reader.py is missing")
