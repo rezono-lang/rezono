@@ -34,7 +34,7 @@ from operator import itemgetter
 import re
 
 from .canon import encode_key, strict_json_loads, value_text
-from .closure import instances as rule_instances
+from .closure import functional_instances
 from .evaluate import cells
 from .rules import load_rules
 from .snapshots import read_rows, rows_of
@@ -69,12 +69,19 @@ def steps(rules_doc: dict, witnesses: list[dict], rows: dict) -> set[tuple]:
     def candidates(rule, func):
         if rule.id not in func_cache:
             by_key: dict[tuple, list[dict[str, str]]] = {}
-            variables, found = rule_instances(rule, table)
-            for row in found:
-                inst_theta = dict(zip(variables, row))
-                dom_key = tuple(inst_theta[t] if t.startswith("?") else t for t in rule.head.terms[:func.key_arity])
-                by_key.setdefault(dom_key, []).append(inst_theta)
-            func_cache[rule.id] = by_key
+            by_key_state: dict[tuple, list[tuple[dict[str, str], str]]] = {}
+            variables, found = functional_instances(rule, table)
+            for row, row_state in found:
+                inst_theta = {v: x for v, x in zip(variables, row) if x is not None}
+                key_terms = rule.head.terms[:func.key_arity]
+                if any(t.startswith("?") and t not in inst_theta for t in key_terms):
+                    continue
+                dom_key = tuple(inst_theta[t] if t.startswith("?") else t for t in key_terms)
+                if row_state == "known":
+                    by_key.setdefault(dom_key, []).append(inst_theta)
+                else:
+                    by_key_state.setdefault(dom_key, []).append((inst_theta, row_state))
+            func_cache[rule.id] = (by_key, by_key_state)
         return func_cache[rule.id]
 
     out = set()
@@ -115,37 +122,48 @@ def steps(rules_doc: dict, witnesses: list[dict], rows: dict) -> set[tuple]:
                     if b_vars <= set(theta) and subst(b.atom) == dom_key:
                         out.add((*c, b.atom.relation, dom_key_enc, b.polarity, i))
             val_term = rule.head.terms[func.key_arity]
+            known_by_key, state_by_key = candidates(rule, func)
             if state == "invalid":
                 step_rules = [
-                    (r_item, candidates(r_item, func).get(dom_key, ()))
+                    (r_item, [
+                        *candidates(r_item, func)[0].get(dom_key, ()),
+                        *(t for t, st in candidates(r_item, func)[1].get(dom_key, ()) if st == "invalid"),
+                    ])
                     for r_item in sorted(rules.values(), key=lambda x: x.id)
                     if r_item.head.relation == func.name
                 ]
-                agg_insts = candidates(rule, func).get(dom_key, ())
+                agg_insts = [
+                    *known_by_key.get(dom_key, ()),
+                    *(t for t, st in state_by_key.get(dom_key, ()) if st == "invalid"),
+                ]
             elif state == "known":
                 matching = [
-                    inst_theta for inst_theta in candidates(rule, func).get(dom_key, ())
+                    inst_theta for inst_theta in known_by_key.get(dom_key, ())
                     if (inst_theta[val_term] if val_term.startswith("?") else val_term) == val
                 ]
                 step_rules = [(rule, matching)]
                 agg_insts = matching
             else:
-                step_rules = []
-                agg_insts = ()
+                state_matching = [t for t, st in state_by_key.get(dom_key, ()) if st == state]
+                step_rules = [(rule, state_matching)]
+                agg_insts = state_matching
             for r_item, r_insts in step_rules:
                 for inst_theta in r_insts:
                     for i, b in enumerate(r_item.body):
-                        out.add((*c, b.atom.relation, encode_key(subst(b.atom, inst_theta)), b.polarity, i))
+                        if {t for t in b.atom.terms if t.startswith("?")} <= set(inst_theta):
+                            out.add((*c, b.atom.relation, encode_key(subst(b.atom, inst_theta)), b.polarity, i))
         else:
             for i, b in enumerate(rule.body):
                 out.add((*c, b.atom.relation, encode_key(subst(b.atom)), b.polarity, i))
         for i, spec in enumerate(rule.aggregates):
             if func is None:
                 envs = [theta]
+            elif agg_insts:
+                envs = [inst for inst in agg_insts if all(inst.get(k) == v for k, v in theta.items())]
             elif {t for t in spec.atom.terms if t.startswith("?")} <= set(theta):
                 envs = [theta]
             else:
-                envs = agg_insts
+                envs = ()
             for env in envs:
                 fixed = [(pos, v) for pos, (t, v) in enumerate(zip(spec.atom.terms, subst(spec.atom, env))) if t != "_"]
                 at = (spec.atom.relation, len(spec.atom.terms), tuple(pos for pos, _ in fixed))
@@ -157,7 +175,8 @@ def steps(rules_doc: dict, witnesses: list[dict], rows: dict) -> set[tuple]:
                     groups[at] = index
                 members = groups[at].get(tuple(v for _, v in fixed), ())
                 given = ([()] * len(members)
-                         if spec.function == "count" and (spec.format == "rezono.rules/1" or spec.over is None)
+                         if spec.function == "count" and (spec.format == "rezono.rules/1"
+                                                          or (spec.over is None and getattr(spec, "state_key", None) is None))
                          else [(value_text(v),) for v in cells(spec, [(parts, values) for _, parts, values in members])])
                 out |= {(*c, spec.atom.relation, k, "contributes", i, *v) for (k, _, _), v in zip(members, given)}
     return out

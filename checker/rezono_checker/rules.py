@@ -247,10 +247,19 @@ def _over_key(a: dict, keys: dict) -> int | None:
     return None
 
 
-def _state_key(a: dict, functionals: dict[str, FunctionalSpec]) -> int | None:
+def _state_key(a: dict, functionals: dict[str, FunctionalSpec],
+               relations: dict[str, dict] | None = None,
+               fmt: str = "rezono.rules/1") -> int | None:
     func = functionals.get(a["relation"])
-    if func is not None and a.get("over") == func.value_name:
-        return func.key_arity
+    if func is not None:
+        pos = func.key_arity
+        return pos if pos < len(a["terms"]) and a["terms"][pos] == "_" else None
+    if fmt == "rezono.rules/2" and relations is not None:
+        rel = relations.get(a["relation"])
+        if rel is not None and rel.get("role") == "derived":
+            for pos, col in enumerate(rel.get("key", ())):
+                if col.get("name") == "state" and col.get("type") == "string":
+                    return pos if pos < len(a["terms"]) and a["terms"][pos] == "_" else None
     return None
 
 
@@ -392,6 +401,7 @@ def load_rules(doc: dict) -> dict:
     if ir:
         _closes(doc, rules.invariants)
     keys = {}
+    relations_by_name = {r["name"]: r for r in relations}
     for r in relations:
         col_names = [c["name"] for c in r.get("key", [])]
         if r.get("role") == "functional" and r["name"] in rules.functionals:
@@ -405,7 +415,8 @@ def load_rules(doc: dict) -> dict:
             body=tuple(BodyAtom(_atom(b), b["polarity"], int(b["stratum"])) for b in r.get("body", [])),
             aggregates=tuple(
                 AggregateSpec(_atom(a), a["function"], a.get("over"), a.get("as"), int(a["stratum"]),
-                              _over_key(a, keys), effective_format, _state_key(a, rules.functionals))
+                              _over_key(a, keys), effective_format,
+                              _state_key(a, rules.functionals, relations_by_name, effective_format))
                 for a in r.get("aggregates", [])
             ),
             conditions=tuple(Calculation(c["op"], c["left"], c["right"], compare_as=c.get("compare_as"))
