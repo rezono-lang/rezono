@@ -305,6 +305,25 @@ witness_entries = [entry for entry in manifest.get("witnesses", []) if entry.get
 if not witness_entries or not role_snaps:
     checker_valid = False
 
+role_snap_bytes: dict[str, bytes] = {}
+for entry in role_snaps:
+    rel = entry.get("relation")
+    if not isinstance(rel, str) or not rel or rel in role_snap_bytes:
+        raise ValueError(f"invalid or duplicate snapshot relation: {rel!r}")
+    raw = read_archive_uri(entry["uri"])
+    if hashlib.sha256(raw).hexdigest() != entry["sha256"]:
+        raise ValueError(f"snapshot digest mismatch for {rel}")
+    role_snap_bytes[rel] = raw
+
+complete_snaps = None
+all_instances = None
+checker_access = None
+if role_mode != "complete":
+    from rezono_checker import access as checker_access
+    _assert_all_rezono_modules_pinned()
+    complete_rows, all_instances = publish.frozen(epoch)
+    complete_snaps = {rel: publish.snapshot(rs) for rel, rs in complete_rows.items()}
+
 for entry in witness_entries:
     raw = read_archive_uri(entry["uri"])
     if hashlib.sha256(raw).hexdigest() != entry["sha256"]:
@@ -327,7 +346,22 @@ for entry in witness_entries:
             evidence=handoff.get("evidence"),
         )
     else:
-        role_full = frozenset(entry["relation"] for entry in role_snaps if entry.get("full") is True)
+        claimed_full = frozenset(snap["relation"] for snap in role_snaps if snap.get("full") is True)
+        verified_full, role_findings = checker_access.check_role(
+            role_name,
+            complete_snaps,
+            role_snap_bytes,
+            claimed_full,
+            bundle_doc,
+            rules_doc,
+            calc_doc,
+            all_instances,
+            epoch.calc_witnesses,
+            calc_witnesses,
+            proof_doc["witnesses"],
+        )
+        if any(f.get("severity", "error") == "error" for f in role_findings):
+            checker_valid = False
         role_manifest = {**manifest, "snapshots": [{**snap, "complete": True} for snap in role_snaps]}
         report = rezono_checker.check_epoch(
             proof_doc["witnesses"],
@@ -335,7 +369,7 @@ for entry in witness_entries:
             rules_obj,
             read_archive_uri,
             derived=derived,
-            full=role_full,
+            full=verified_full,
             seals=(),
             calc_witnesses=calc_witnesses,
             calc_ir=calc_doc,
@@ -344,11 +378,8 @@ for entry in witness_entries:
         checker_valid = False
 
 rows: dict[str, list[dict]] = {}
-for entry in role_snaps:
-    raw = read_archive_uri(entry["uri"])
-    if hashlib.sha256(raw).hexdigest() != entry["sha256"]:
-        raise ValueError(f"snapshot digest mismatch for {entry['relation']}")
-    rows[entry["relation"]] = json.loads(raw)
+for rel, raw in role_snap_bytes.items():
+    rows[rel] = json.loads(raw)
 
 # Verify after the entire compile/publish/check execution that zero non-pinned rezono* modules loaded.
 _assert_all_rezono_modules_pinned()
@@ -381,6 +412,376 @@ if not any(c.get("name") == "rezono:schema" for c in checks):
 verified_manifest = {**manifest, "checks": checks}
 result_path.write_text(
     json.dumps({"manifest": verified_manifest, "rows": rows}, sort_keys=True),
+    encoding="utf-8",
+)
+"""
+
+_PINNED_VERIFY_SCRIPT = r"""
+import hashlib
+import importlib
+import json
+import re
+import sys
+from pathlib import Path
+
+pinned_root = Path(sys.argv[1]).resolve()
+candidate_root = Path(sys.argv[2]).resolve()
+payload_path = Path(sys.argv[3]).resolve()
+result_path = Path(sys.argv[4]).resolve()
+
+def _is_under_candidate(raw_path: str) -> bool:
+    if not raw_path or raw_path == ".":
+        return True
+    try:
+        resolved = Path(raw_path).resolve()
+    except OSError:
+        return False
+    return resolved == candidate_root or resolved.is_relative_to(candidate_root)
+
+sys.path[:] = [entry for entry in sys.path if not _is_under_candidate(entry)]
+sys.meta_path[:] = [
+    finder for finder in sys.meta_path
+    if "editable" not in type(finder).__name__.lower()
+    and "editable" not in getattr(type(finder), "__module__", "").lower()
+]
+
+pinned_sys_paths = [str(pinned_root / "_pinned_meta")] + [
+    str(pinned_root / rel)
+    for rel in (
+        "canon",
+        "compiler",
+        "checker",
+        "edge/publisher",
+        "admission",
+        "publication",
+        "contracts/python",
+    )
+    if (pinned_root / rel).is_dir()
+]
+sys.path[:0] = pinned_sys_paths
+importlib.invalidate_caches()
+
+def _assert_all_rezono_modules_pinned() -> None:
+    for name, module in list(sys.modules.items()):
+        if not (name == "rezono" or name.startswith("rezono_") or name.startswith("rezono.")):
+            continue
+        if module is None:
+            continue
+        origin = getattr(module, "__file__", None)
+        if origin:
+            if not Path(origin).resolve().is_relative_to(pinned_root):
+                raise RuntimeError(f"refusing non-pinned module {name} loaded from {origin!r}")
+            continue
+        paths = getattr(module, "__path__", None)
+        if paths:
+            for item in paths:
+                if not Path(item).resolve().is_relative_to(pinned_root):
+                    raise RuntimeError(f"refusing non-pinned namespace {name} with path {item!r}")
+            continue
+        raise RuntimeError(f"refusing rezono module {name} without pinned file or path")
+
+import rezono_checker
+from rezono_checker.evidence import Evidence
+from rezono_checker.rules import derived_relations, load_rules, load_seals
+from rezono_compiler import emit as compiler_emit
+from rezono_compiler import pack as compiler_pack
+
+_assert_all_rezono_modules_pinned()
+
+_SHA64 = re.compile(r"^[0-9a-f]{64}$")
+EMPTY_RULES = '{"format":"rezono.rules/1","relations":[],"rules":[]}\n'
+
+payload = json.loads(payload_path.read_text(encoding="utf-8"))
+build_dir = pinned_root / "build"
+if not (build_dir / "pack.yaml").is_file():
+    raise FileNotFoundError("pinned checkout is missing build/pack.yaml")
+
+model = compiler_pack.read(build_dir)
+compiled = compiler_emit.compile_pack(model)
+rules_doc = json.loads(compiled.get("ir/rules.json") or EMPTY_RULES)
+rules_obj = load_rules(rules_doc)
+derived = derived_relations(rules_doc, rules_obj)
+seals = load_seals(rules_doc)
+bundle_doc = json.loads(compiled["bundle/schema-bundle.json"])
+calc_doc = json.loads(compiled["ir/calc.json"]) if compiled.get("ir/calc.json") else None
+
+manifest_path = Path(payload["manifest_path"]).resolve()
+archive_root = Path(payload["archive_dir"]).resolve()
+role_name = payload.get("role", "reader")
+role_mode = payload.get("role_mode", "complete")
+evidence_dir_raw = payload.get("evidence_dir")
+
+def _resolve_blob(uri: object) -> Path:
+    if not isinstance(uri, str) or not uri:
+        raise ValueError(f"invalid archive URI: {uri!r}")
+    if "://" in uri:
+        rest = uri.split("://", 1)[1]
+        if "/" not in rest:
+            raise ValueError(f"invalid archive URI: {uri!r}")
+        rel = rest.split("/", 1)[1]
+    else:
+        rel = uri
+    if not rel or rel.startswith("/") or "\\" in rel or ".." in Path(rel).parts:
+        raise ValueError(f"unsafe archive path: {uri!r}")
+    blob = (archive_root / rel).resolve()
+    if not blob.is_relative_to(archive_root) or not blob.is_file():
+        raise FileNotFoundError(f"archive blob missing: {uri!r}")
+    return blob
+
+def read_archive_uri(uri: str) -> bytes:
+    return _resolve_blob(uri).read_bytes()
+
+handoff_evidence = None
+if evidence_dir_raw:
+    evidence_dir = Path(evidence_dir_raw).resolve()
+    context_key = "observations/retained/context.json"
+    context_file = evidence_dir / "context.json"
+    if context_file.is_file():
+        ctx_bytes = context_file.read_bytes()
+        ctx_uri = f"s3://rezono/{context_key}"
+        extra_blobs = {ctx_uri: ctx_bytes}
+    else:
+        ctx_uri = f"s3://rezono/{context_key}"
+        ctx_bytes = read_archive_uri(ctx_uri)
+        extra_blobs = {}
+    context_ref = {
+        "file": context_key,
+        "uri": ctx_uri,
+        "sha256": hashlib.sha256(ctx_bytes).hexdigest(),
+    }
+    index_key = "observations/submitted/index.json"
+    index_file = evidence_dir / "index.json"
+    candidates_ref = None
+    if index_file.is_file():
+        idx_bytes = index_file.read_bytes()
+        idx_uri = f"s3://rezono/{index_key}"
+        extra_blobs[idx_uri] = idx_bytes
+        candidates_ref = {
+            "file": index_key,
+            "uri": idx_uri,
+            "sha256": hashlib.sha256(idx_bytes).hexdigest(),
+        }
+    else:
+        try:
+            idx_uri = f"s3://rezono/{index_key}"
+            idx_bytes = read_archive_uri(idx_uri)
+        except (OSError, ValueError):
+            idx_bytes = None
+        if idx_bytes is not None:
+            candidates_ref = {
+                "file": index_key,
+                "uri": idx_uri,
+                "sha256": hashlib.sha256(idx_bytes).hexdigest(),
+            }
+
+    def _read_with_evidence(uri: str) -> bytes:
+        if uri in extra_blobs:
+            return extra_blobs[uri]
+        return read_archive_uri(uri)
+
+    handoff_evidence = Evidence(
+        context=context_ref,
+        candidates=candidates_ref,
+        read_bytes=_read_with_evidence,
+    )
+    archive_reader = _read_with_evidence
+else:
+    archive_reader = read_archive_uri
+
+def _read_role_snaps(snaps: list[dict]) -> dict[str, bytes] | None:
+    out: dict[str, bytes] = {}
+    for entry in snaps:
+        if not isinstance(entry, dict):
+            return None
+        rel = entry.get("relation")
+        expected = entry.get("sha256")
+        if not isinstance(rel, str) or not rel or rel in out:
+            return None
+        if not isinstance(expected, str) or not _SHA64.fullmatch(expected):
+            return None
+        if entry.get("format") not in ("json", "jsonl"):
+            return None
+        try:
+            raw = archive_reader(entry.get("uri"))
+        except (OSError, ValueError):
+            return None
+        if hashlib.sha256(raw).hexdigest() != expected:
+            return None
+        out[rel] = raw
+    return out
+
+def _read_witness_docs(entries: list[dict]) -> list[dict] | None:
+    docs: list[dict] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            return None
+        expected = entry.get("sha256")
+        if not isinstance(expected, str) or not _SHA64.fullmatch(expected):
+            return None
+        try:
+            raw = archive_reader(entry.get("uri"))
+            if hashlib.sha256(raw).hexdigest() != expected:
+                return None
+            doc = json.loads(raw)
+        except (OSError, ValueError, json.JSONDecodeError):
+            return None
+        if not isinstance(doc, dict) or not isinstance(doc.get("witnesses"), list):
+            return None
+        docs.append(doc)
+    return docs
+
+manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+checker_valid = isinstance(manifest, dict) and isinstance(manifest.get("id"), str) and bool(manifest["id"])
+snapshots = manifest.get("snapshots") if checker_valid else None
+witnesses = manifest.get("witnesses") if checker_valid else None
+if not isinstance(snapshots, list) or not isinstance(witnesses, list):
+    checker_valid = False
+
+role_snaps = [e for e in (snapshots or []) if isinstance(e, dict) and e.get("role") == role_name]
+role_witness_entries = [e for e in (witnesses or []) if isinstance(e, dict) and e.get("role") == role_name]
+if not role_snaps or not role_witness_entries:
+    checker_valid = False
+
+role_snap_bytes = _read_role_snaps(role_snaps) if checker_valid else None
+role_witness_docs = _read_witness_docs(role_witness_entries) if checker_valid else None
+if role_snap_bytes is None or role_witness_docs is None:
+    checker_valid = False
+
+if checker_valid:
+    if role_mode == "complete":
+        if not all(snap.get("complete") is True for snap in role_snaps):
+            checker_valid = False
+        else:
+            role_manifest = {**manifest, "snapshots": role_snaps}
+            for proof_doc in role_witness_docs:
+                calc_witnesses = proof_doc.get("calc_witnesses", ())
+                try:
+                    report = rezono_checker.check_epoch(
+                        proof_doc["witnesses"],
+                        role_manifest,
+                        rules_obj,
+                        archive_reader,
+                        derived=derived,
+                        full=None,
+                        seals=seals,
+                        calc_witnesses=calc_witnesses,
+                        calc_ir=calc_doc,
+                        evidence=handoff_evidence,
+                    )
+                except (KeyError, TypeError, ValueError):
+                    checker_valid = False
+                    break
+                if not report.get("valid") or any(f.get("severity") == "error" for f in report.get("findings", [])):
+                    checker_valid = False
+                    break
+    elif role_mode == "may_read":
+        # Independently verify filtered role access via checker_access.check_role against a verified complete role.
+        complete_roles = sorted({
+            e.get("role") for e in snapshots
+            if isinstance(e, dict) and e.get("complete") is True and isinstance(e.get("role"), str)
+        })
+        verified_complete = None
+        for cand_role in complete_roles:
+            cand_snaps = [e for e in snapshots if isinstance(e, dict) and e.get("role") == cand_role]
+            cand_wits = [e for e in witnesses if isinstance(e, dict) and e.get("role") == cand_role]
+            if not cand_snaps or not cand_wits or not all(s.get("complete") is True for s in cand_snaps):
+                continue
+            cand_snap_bytes = _read_role_snaps(cand_snaps)
+            cand_wit_docs = _read_witness_docs(cand_wits)
+            if cand_snap_bytes is None or cand_wit_docs is None:
+                continue
+            cand_manifest = {**manifest, "snapshots": cand_snaps}
+            cand_ok = True
+            for cdoc in cand_wit_docs:
+                try:
+                    creport = rezono_checker.check_epoch(
+                        cdoc["witnesses"],
+                        cand_manifest,
+                        rules_obj,
+                        archive_reader,
+                        derived=derived,
+                        full=None,
+                        seals=seals,
+                        calc_witnesses=cdoc.get("calc_witnesses", ()),
+                        calc_ir=calc_doc,
+                        evidence=handoff_evidence,
+                    )
+                except (KeyError, TypeError, ValueError):
+                    cand_ok = False
+                    break
+                if not creport.get("valid") or any(f.get("severity") == "error" for f in creport.get("findings", [])):
+                    cand_ok = False
+                    break
+            if cand_ok:
+                all_wits = [w for cdoc in cand_wit_docs for w in cdoc["witnesses"]]
+                all_calcs = [cw for cdoc in cand_wit_docs for cw in cdoc.get("calc_witnesses", ())]
+                verified_complete = (cand_snap_bytes, all_wits, all_calcs)
+                break
+        if verified_complete is None:
+            checker_valid = False
+        else:
+            from rezono_checker import access as checker_access
+            _assert_all_rezono_modules_pinned()
+            complete_snap_bytes, complete_wits, complete_calcs = verified_complete
+            claimed_full = frozenset(snap["relation"] for snap in role_snaps if snap.get("full") is True)
+            role_manifest = {**manifest, "snapshots": [{**snap, "complete": True} for snap in role_snaps]}
+            for proof_doc in role_witness_docs:
+                calc_witnesses = proof_doc.get("calc_witnesses", ())
+                try:
+                    verified_full, role_findings = checker_access.check_role(
+                        role_name,
+                        complete_snap_bytes,
+                        role_snap_bytes,
+                        claimed_full,
+                        bundle_doc,
+                        rules_doc,
+                        calc_doc,
+                        complete_wits,
+                        complete_calcs,
+                        calc_witnesses,
+                        proof_doc["witnesses"],
+                    )
+                except (KeyError, TypeError, ValueError):
+                    checker_valid = False
+                    break
+                if any(f.get("severity", "error") == "error" for f in role_findings):
+                    checker_valid = False
+                    break
+                try:
+                    report = rezono_checker.check_epoch(
+                        proof_doc["witnesses"],
+                        role_manifest,
+                        rules_obj,
+                        archive_reader,
+                        derived=derived,
+                        full=verified_full,
+                        seals=(),
+                        calc_witnesses=calc_witnesses,
+                        calc_ir=calc_doc,
+                    )
+                except (KeyError, TypeError, ValueError):
+                    checker_valid = False
+                    break
+                if not report.get("valid") or any(f.get("severity") == "error" for f in report.get("findings", [])):
+                    checker_valid = False
+                    break
+    else:
+        checker_valid = False
+
+_assert_all_rezono_modules_pinned()
+
+rows: dict[str, list[dict]] = {}
+if checker_valid and role_snap_bytes is not None:
+    for rel, raw in role_snap_bytes.items():
+        decoded = json.loads(raw)
+        if not isinstance(decoded, list):
+            checker_valid = False
+            rows = {}
+            break
+        rows[rel] = decoded
+
+result_path.write_text(
+    json.dumps({"valid": checker_valid, "rows": rows if checker_valid else {}}, sort_keys=True),
     encoding="utf-8",
 )
 """
@@ -467,16 +868,47 @@ def _extract_pinned_engine(root: Path, engine_sha: str, target_dir: Path) -> Non
     _write_pinned_metadata(target_dir)
 
 
+_ALLOWED_BUILD_EVENTS = frozenset({
+    "pull_request",
+    "merge_group",
+    "push",
+    "schedule",
+    "workflow_dispatch",
+})
+_PKG_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*")
+
+
 def _format_utc(timestamp: int) -> str:
     return dt.datetime.fromtimestamp(timestamp, tz=dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def _resolve_engine_sha(*, root: Path, pin_path: Path | None, pin_sha: str | None) -> str:
-    """Resolve the pinned engine SHA from an explicit SHA override or ``build/engine-pin.yaml``."""
-    if pin_sha is not None:
-        if not isinstance(pin_sha, str) or not _SHA40.fullmatch(pin_sha):
-            raise ValueError(f"pin_sha must be a 40-lowercase-hex commit SHA, got {pin_sha!r}")
-        return pin_sha
+def _parse_event_time(value: int | str | None) -> int:
+    """Parse an explicit source event timestamp (Unix seconds or ISO-8601 UTC string)."""
+    if isinstance(value, bool) or value is None:
+        raise ValueError("explicit event_time is required")
+    if isinstance(value, int):
+        if value < 0:
+            raise ValueError(f"event_time must be non-negative, got {value!r}")
+        return value
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("explicit event_time is required")
+        if stripped.isdigit():
+            return int(stripped)
+        iso = stripped[:-1] + "+00:00" if stripped.endswith("Z") else stripped
+        parsed = dt.datetime.fromisoformat(iso)
+        if parsed.tzinfo is None:
+            raise ValueError(f"ISO event_time must include timezone offset or 'Z', got {value!r}")
+        ts = int(parsed.timestamp())
+        if ts < 0:
+            raise ValueError(f"event_time must be non-negative, got {value!r}")
+        return ts
+    raise ValueError(f"event_time must be an integer Unix timestamp or ISO-8601 UTC string, got {value!r}")
+
+
+def _resolve_engine_sha(*, root: Path, pin_path: Path | None) -> str:
+    """Resolve the pinned engine SHA strictly from ``build/engine-pin.yaml`` (or explicit pin file)."""
     resolved_pin = pin_path if pin_path is not None else root / ENGINE_PIN_REL
     return read_engine_pin(resolved_pin)
 
@@ -488,7 +920,6 @@ def run_pinned_build_pack(
     sources_sidecar: Mapping[str, Any] | None,
     knowledge_time: str,
     pin_path: Path | None = None,
-    pin_sha: str | None = None,
     candidate_sha: str | None = None,
     main_ref: str = DEFAULT_MAIN_REF,
     role: str = "reader",
@@ -504,7 +935,7 @@ def run_pinned_build_pack(
     """
     engine_sha: str | None = None
     try:
-        engine_sha = _resolve_engine_sha(root=root, pin_path=pin_path, pin_sha=pin_sha)
+        engine_sha = _resolve_engine_sha(root=root, pin_path=pin_path)
         candidate = candidate_sha or _git_text(root, "rev-parse", "HEAD")
         validate_engine_pin(
             root=root,
@@ -570,6 +1001,89 @@ def run_pinned_build_pack(
         return engine_sha, None, None, f"pinned engine execution failed: {exc}"
 
 
+def _verify_publication_on_pinned_engine(
+    *,
+    root: Path,
+    manifest_path: Path,
+    archive_dir: Path,
+    role: str,
+    role_mode: str,
+    pin_path: Path | None = None,
+    candidate_sha: str | None = None,
+    main_ref: str = DEFAULT_MAIN_REF,
+    evidence_dir: Path | None = None,
+    timeout_seconds: int = PINNED_TIMEOUT_SECONDS,
+) -> tuple[bool, dict[str, list[dict[str, Any]]] | None, str | None]:
+    """Verify an existing archive publication via ``rezono_checker`` from the pinned engine.
+
+    Returns ``(checker_valid, rows, engine_error)``. Any pin or pinned subprocess failure
+    returns ``(False, None, engine_error)``; any rejected publication returns ``(False, {}, None)``.
+    """
+    try:
+        engine_sha = _resolve_engine_sha(root=root, pin_path=pin_path)
+        candidate = candidate_sha or _git_text(root, "rev-parse", "HEAD")
+        validate_engine_pin(
+            root=root,
+            engine_sha=engine_sha,
+            candidate_sha=candidate,
+            main_ref=main_ref,
+        )
+    except (OSError, ValueError, subprocess.CalledProcessError) as exc:
+        return False, None, f"engine pin validation failed: {exc}"
+
+    try:
+        with tempfile.TemporaryDirectory(prefix="rezono-pinned-verify-") as tmp:
+            work = Path(tmp)
+            pinned_root = work / "engine"
+            pinned_root.mkdir()
+            _extract_pinned_engine(root, engine_sha, pinned_root)
+
+            payload_path = work / "payload.json"
+            result_path = work / "result.json"
+            payload: dict[str, Any] = {
+                "manifest_path": str(manifest_path.resolve()),
+                "archive_dir": str(archive_dir.resolve()),
+                "role": role,
+                "role_mode": role_mode,
+            }
+            if evidence_dir is not None:
+                payload["evidence_dir"] = str(evidence_dir.resolve())
+            payload_path.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
+
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    "-E",
+                    "-P",
+                    "-c",
+                    _PINNED_VERIFY_SCRIPT,
+                    str(pinned_root),
+                    str(root.resolve()),
+                    str(payload_path),
+                    str(result_path),
+                ],
+                cwd=pinned_root,
+                env=_scrubbed_env(),
+                capture_output=True,
+                text=True,
+                timeout=timeout_seconds,
+                check=False,
+            )
+            if proc.returncode != 0 or not result_path.is_file():
+                detail = (proc.stderr or proc.stdout or f"exit {proc.returncode}").strip()
+                first_line = detail.splitlines()[-1] if detail else f"exit {proc.returncode}"
+                return False, None, f"pinned publication verification failed: {first_line}"
+
+            output = json.loads(result_path.read_text(encoding="utf-8"))
+            valid = output.get("valid") is True
+            rows = output.get("rows")
+            if not isinstance(rows, dict):
+                return False, None, "pinned verifier returned malformed payload"
+            return valid, rows if valid else {}, None
+    except (OSError, ValueError, subprocess.SubprocessError, tarfile.TarError, json.JSONDecodeError) as exc:
+        return False, None, f"pinned publication verification failed: {exc}"
+
+
 def _resolve_git_range(
     root: Path,
     *,
@@ -578,12 +1092,11 @@ def _resolve_git_range(
     before_sha: str,
     merge_group_base: str,
     merge_group_head: str,
-) -> tuple[str, str, str, list[str], int]:
-    """Return ``(build_event, base_sha, head_sha, changed_paths, observed_at)``."""
+) -> tuple[str, str, str, list[str]]:
+    """Return ``(build_event, base_sha, head_sha, changed_paths)`` without fabricating ranges or event kinds."""
     head_sha = _git_text(root, "rev-parse", "HEAD")
     if not _SHA40.fullmatch(head_sha):
         raise ValueError(f"HEAD is not a 40-hex commit SHA: {head_sha!r}")
-    observed_at = int(_git_text(root, "show", "-s", "--format=%ct", head_sha))
 
     if event_name == "merge_group":
         if not (_SHA40.fullmatch(merge_group_base) and _SHA40.fullmatch(merge_group_head)):
@@ -598,29 +1111,213 @@ def _resolve_git_range(
         )
         base_sha = merge_group_base
         build_event = "merge_group"
-    elif event_name == "pull_request" and base_ref:
+    elif event_name == "pull_request":
+        if not isinstance(base_ref, str) or not base_ref.strip():
+            raise ValueError("pull_request event requires non-empty base_ref")
         bases = _git_text(root, "merge-base", "--all", f"origin/{base_ref}", head_sha).split()
         if len(bases) != 1 or not _SHA40.fullmatch(bases[0]):
             raise ValueError(f"ambiguous merge-base for pull request against origin/{base_ref}")
         base_sha = bases[0]
         build_event = "pull_request"
-    else:
-        build_event = "merge_group"
-        if _SHA40.fullmatch(before_sha) and before_sha != _ZERO_SHA:
-            base_sha = before_sha
-        else:
-            parent_probe = subprocess.run(
-                ["git", "rev-parse", "--verify", "HEAD^"],
-                cwd=root,
-                capture_output=True,
-                text=True,
-                check=False,
+    elif event_name in ("push", "schedule", "workflow_dispatch"):
+        if not (_SHA40.fullmatch(before_sha) and before_sha != _ZERO_SHA):
+            raise ValueError(
+                f"{event_name} event requires a valid non-zero 40-hex before_sha, got {before_sha!r}"
             )
-            base_sha = parent_probe.stdout.strip() if parent_probe.returncode == 0 else head_sha
+        subprocess.run(
+            ["git", "rev-parse", "--verify", f"{before_sha}^{{commit}}"],
+            cwd=root,
+            check=True,
+            capture_output=True,
+        )
+        base_sha = before_sha
+        build_event = event_name
+    else:
+        raise ValueError(f"unsupported or missing event_name: {event_name!r}")
 
     raw_paths = _git(root, "diff", "--no-renames", "--name-only", "-z", base_sha, head_sha, "--")
     changed_paths = [os.fsdecode(item) for item in raw_paths.split(b"\0") if item]
-    return build_event, base_sha, head_sha, changed_paths, observed_at
+    return build_event, base_sha, head_sha, changed_paths
+
+
+def _normalize_pkg_name(name: str) -> str:
+    return re.sub(r"[-_.]+", "-", name).lower()
+
+
+def _regular_git_blob(root: Path, revision: str, rel_path: str) -> tuple[str, bytes] | None:
+    """Return ``(blob_sha, raw_bytes)`` if ``rel_path`` is a regular file blob at ``revision``."""
+    probe = subprocess.run(
+        ["git", "ls-tree", "-z", revision, "--", rel_path],
+        cwd=root,
+        capture_output=True,
+        check=False,
+    )
+    if probe.returncode != 0 or not probe.stdout:
+        return None
+    entry = probe.stdout.split(b"\0", 1)[0]
+    if b"\t" not in entry:
+        return None
+    meta = entry.split(b"\t", 1)[0].decode("utf-8", errors="strict").split()
+    if len(meta) != 3 or meta[1] != "blob" or meta[0] not in ("100644", "100755"):
+        return None
+    blob_sha = meta[2]
+    if not _SHA40.fullmatch(blob_sha):
+        return None
+    raw = _git(root, "cat-file", "blob", blob_sha)
+    return blob_sha, raw
+
+
+def _capture_endpoint_manifests(
+    root: Path,
+    *,
+    base_sha: str,
+    head_sha: str,
+    components: Sequence[Component],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Read regular manifest blobs from ``base_sha`` and ``head_sha`` and record declared local dependencies."""
+    manifests: list[dict[str, Any]] = []
+    dependencies: list[dict[str, Any]] = []
+    known_folders = {comp.folder for comp in components}
+
+    for end_label, revision in (("base", base_sha), ("head", head_sha)):
+        py_pkg_to_folder: dict[str, str] = {}
+        node_pkg_to_folder: dict[str, str] = {}
+        endpoint_entries: list[tuple[str, Component, str, str, dict[str, Any]]] = []
+
+        for comp in components:
+            py_rel = f"{comp.folder}/pyproject.toml"
+            py_blob = _regular_git_blob(root, revision, py_rel)
+            if py_blob is not None:
+                blob_sha, raw = py_blob
+                manifest_id = f"{end_label}-{comp.folder}"
+                manifests.append({
+                    "id": manifest_id,
+                    "component": comp.folder,
+                    "path": py_rel,
+                    "revision": revision,
+                    "blob": blob_sha,
+                })
+                try:
+                    doc = tomllib.loads(raw.decode("utf-8"))
+                except (UnicodeDecodeError, tomllib.TOMLDecodeError):
+                    doc = {}
+                project = doc.get("project") if isinstance(doc, dict) else None
+                if isinstance(project, dict):
+                    pkg_name = project.get("name")
+                    if isinstance(pkg_name, str) and pkg_name:
+                        py_pkg_to_folder[_normalize_pkg_name(pkg_name)] = comp.folder
+                    endpoint_entries.append(("python", comp, manifest_id, py_rel, project))
+
+            node_rel = f"{comp.folder}/package.json"
+            node_blob = _regular_git_blob(root, revision, node_rel)
+            if node_blob is not None:
+                blob_sha, raw = node_blob
+                manifest_id = f"{end_label}-{comp.folder}-node" if py_blob is not None else f"{end_label}-{comp.folder}"
+                manifests.append({
+                    "id": manifest_id,
+                    "component": comp.folder,
+                    "path": node_rel,
+                    "revision": revision,
+                    "blob": blob_sha,
+                })
+                try:
+                    doc = json.loads(raw.decode("utf-8"))
+                except (UnicodeDecodeError, json.JSONDecodeError):
+                    doc = {}
+                if isinstance(doc, dict):
+                    pkg_name = doc.get("name")
+                    if isinstance(pkg_name, str) and pkg_name:
+                        node_pkg_to_folder[pkg_name] = comp.folder
+                    endpoint_entries.append(("node", comp, manifest_id, node_rel, doc))
+
+        seen_edges: set[tuple[str, str, str]] = set()
+        for kind, comp, manifest_id, rel, doc in endpoint_entries:
+            dep_folders: set[str] = set()
+            if kind == "python":
+                raw_reqs: list[object] = []
+                if isinstance(doc.get("dependencies"), list):
+                    raw_reqs.extend(doc["dependencies"])
+                opt = doc.get("optional-dependencies")
+                if isinstance(opt, dict):
+                    for items in opt.values():
+                        if isinstance(items, list):
+                            raw_reqs.extend(items)
+                for req in raw_reqs:
+                    if not isinstance(req, str):
+                        continue
+                    match = _PKG_NAME_RE.match(req.strip())
+                    if not match:
+                        continue
+                    target = py_pkg_to_folder.get(_normalize_pkg_name(match.group(0)))
+                    if target and target != comp.folder and target in known_folders:
+                        dep_folders.add(target)
+            else:
+                for section in ("dependencies", "devDependencies", "peerDependencies"):
+                    mapping = doc.get(section)
+                    if not isinstance(mapping, dict):
+                        continue
+                    for dep_name in mapping:
+                        if not isinstance(dep_name, str):
+                            continue
+                        target = node_pkg_to_folder.get(dep_name)
+                        if target and target != comp.folder and target in known_folders:
+                            dep_folders.add(target)
+
+            for dep_folder in sorted(dep_folders):
+                key = (manifest_id, dep_folder, comp.folder)
+                if key in seen_edges:
+                    continue
+                seen_edges.add(key)
+                dependencies.append({
+                    "id": f"dep-{manifest_id}-{dep_folder}-to-{comp.folder}",
+                    "dependency": dep_folder,
+                    "consumer": comp.folder,
+                    "kind": "manifest",
+                    "manifest": manifest_id,
+                    "source": rel,
+                })
+
+    return manifests, dependencies
+
+
+def _read_submitted_receipt_id(evidence_dir: Path | None) -> str | None:
+    """Read a unique submitted completeness receipt ID from ``evidence_dir``, if present and digest-valid."""
+    if evidence_dir is None:
+        return None
+    root_dir = evidence_dir.resolve()
+    archive_root = (root_dir / "archive").resolve()
+    index_file = root_dir / "index.json"
+    if not index_file.is_file():
+        index_file = archive_root / "observations" / "submitted" / "index.json"
+    if not index_file.is_file():
+        return None
+    try:
+        index_doc = json.loads(index_file.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(index_doc, dict):
+        return None
+    receipts = index_doc.get("completeness_receipts")
+    if not isinstance(receipts, list) or len(receipts) != 1:
+        return None
+    ref = receipts[0]
+    if not isinstance(ref, dict):
+        return None
+    expected_sha = ref.get("sha256")
+    if not isinstance(expected_sha, str) or not _SHA64.fullmatch(expected_sha):
+        return None
+    blob_path = _resolve_archive_blob(archive_root, ref.get("uri") or ref.get("file"))
+    if blob_path is None:
+        return None
+    try:
+        raw = blob_path.read_bytes()
+        if hashlib.sha256(raw).hexdigest() != expected_sha:
+            return None
+        receipt_doc = json.loads(raw)
+    except (OSError, json.JSONDecodeError):
+        return None
+    receipt_id = receipt_doc.get("id") if isinstance(receipt_doc, dict) else None
+    return receipt_id if isinstance(receipt_id, str) and receipt_id else None
 
 
 def capture_ci_records(
@@ -635,17 +1332,56 @@ def capture_ci_records(
     components: Sequence[Component],
     changed_paths: Sequence[str],
     repository_name: str = "rezono-lang/rezono",
+    evidence_dir: Path | None = None,
 ) -> tuple[dict[str, list[dict[str, Any]]], dict[str, Any]]:
     """Build typed ``build/`` observation records and honest ``tool`` provenance sidecar."""
+    if build_event not in _ALLOWED_BUILD_EVENTS:
+        raise ValueError(f"unsupported build_event: {build_event!r}")
+    if isinstance(observed_at, bool) or not isinstance(observed_at, int) or observed_at < 0:
+        raise ValueError(f"observed_at must be a non-negative integer timestamp, got {observed_at!r}")
+
+    sorted_by_specificity = sorted(components, key=lambda c: (-len(c.folder), c.folder))
+    build_paths: list[dict[str, Any]] = []
+    build_path_readers: list[dict[str, Any]] = []
+    for idx, raw_path in enumerate(changed_paths, start=1):
+        path_id = f"path-{idx}"
+        owner = next(
+            (comp for comp in sorted_by_specificity if raw_path == comp.folder or raw_path.startswith(comp.folder + "/")),
+            None,
+        )
+        if owner is not None:
+            build_paths.append({"id": path_id, "run": run_id, "path": raw_path, "coverage": "mapped"})
+            build_path_readers.append({
+                "id": f"reader-{path_id}-{owner.folder}",
+                "path": path_id,
+                "component": owner.folder,
+                "kind": "transitive",
+                "source": owner.folder,
+            })
+        else:
+            build_paths.append({"id": path_id, "run": run_id, "path": raw_path, "coverage": "unknown"})
+
+    build_manifests, build_dependencies = _capture_endpoint_manifests(
+        root,
+        base_sha=base_sha,
+        head_sha=head_sha,
+        components=components,
+    )
+
+    build_run_row: dict[str, Any] = {
+        "id": run_id,
+        "event": build_event,
+        "base_sha": base_sha,
+        "head_sha": head_sha,
+        "engine_sha": engine_sha,
+        "observed_at": observed_at,
+    }
+    receipt_id = _read_submitted_receipt_id(evidence_dir)
+    if receipt_id is not None:
+        build_run_row["receipt"] = receipt_id
+
     records: dict[str, list[dict[str, Any]]] = {
-        "build_run": [{
-            "id": run_id,
-            "event": build_event,
-            "base_sha": base_sha,
-            "head_sha": head_sha,
-            "engine_sha": engine_sha,
-            "observed_at": observed_at,
-        }],
+        "build_run": [build_run_row],
         "build_component": [
             {"id": comp.folder, "run": run_id, "kind": comp.kind, "folder": comp.folder}
             for comp in components
@@ -655,11 +1391,17 @@ def capture_ci_records(
             for comp in components
             for idx, rel in enumerate(_test_files(root, comp.folder), start=1)
         ],
-        "build_path": [
-            {"id": f"path-{idx}", "run": run_id, "path": path, "coverage": "unknown"}
-            for idx, path in enumerate(changed_paths, start=1)
-        ],
+        "build_path": build_paths,
     }
+    if build_path_readers:
+        records["build_path_reader"] = build_path_readers
+    if build_manifests:
+        records["build_manifest"] = build_manifests
+    if build_dependencies:
+        records["build_dependency"] = build_dependencies
+    if receipt_id is not None:
+        records["loop_sweep_receipt"] = [{"id": receipt_id, "run": run_id, "event_time": observed_at}]
+
     sources_sidecar = {
         "default": {
             "kind": "tool",
@@ -734,8 +1476,8 @@ def discover_ci_matrix(
     before_sha: str = "",
     merge_group_base: str = "",
     merge_group_head: str = "",
+    event_time: int | str | None = None,
     pin_path: Path | None = None,
-    pin_sha: str | None = None,
     main_ref: str = DEFAULT_MAIN_REF,
     records_override: Mapping[str, Any] | None = None,
     sources_sidecar_override: Mapping[str, Any] | None = None,
@@ -753,14 +1495,21 @@ def discover_ci_matrix(
     engine_error: str | None = None
 
     try:
-        engine_sha = _resolve_engine_sha(root=root, pin_path=pin_path, pin_sha=pin_sha)
+        engine_sha = _resolve_engine_sha(root=root, pin_path=pin_path)
         if records_override is not None:
             head_sha = _git_text(root, "rev-parse", "HEAD")
-            observed_at = int(_git_text(root, "show", "-s", "--format=%ct", head_sha))
+            if event_time is not None:
+                observed_at = _parse_event_time(event_time)
+            else:
+                runs = records_override.get("build_run")
+                if not isinstance(runs, list) or not runs or not isinstance(runs[0], Mapping):
+                    raise ValueError("explicit event_time or records_override.build_run[0].observed_at is required")
+                observed_at = _parse_event_time(runs[0].get("observed_at"))
             records: Mapping[str, Any] = records_override
             sources_sidecar: Mapping[str, Any] | None = sources_sidecar_override
         else:
-            build_event, base_sha, head_sha, changed_paths, observed_at = _resolve_git_range(
+            observed_at = _parse_event_time(event_time)
+            build_event, base_sha, head_sha, changed_paths = _resolve_git_range(
                 root,
                 event_name=event_name,
                 base_ref=base_ref,
@@ -779,6 +1528,7 @@ def discover_ci_matrix(
                 components=components,
                 changed_paths=changed_paths,
                 repository_name=repository_name,
+                evidence_dir=evidence_dir,
             )
     except (OSError, ValueError, subprocess.CalledProcessError) as exc:
         engine_error = f"observation capture failed: {exc}"
@@ -789,7 +1539,6 @@ def discover_ci_matrix(
             sources_sidecar=sources_sidecar,
             knowledge_time=_format_utc(observed_at),
             pin_path=pin_path,
-            pin_sha=pin_sha,
             candidate_sha=head_sha,
             main_ref=main_ref,
             evidence_dir=evidence_dir,
@@ -822,12 +1571,20 @@ def _resolve_archive_blob(root_dir: Path, uri: object) -> Path | None:
         rel = rest.split("/", 1)[1]
     else:
         rel = uri
-    if not rel or rel.startswith("/") or "\\" in rel:
+    if not rel or rel.startswith("/") or "\\" in rel or ".." in Path(rel).parts:
         return None
     blob_path = (root_dir / rel).resolve()
     if not blob_path.is_relative_to(root_dir) or not blob_path.is_file():
         return None
     return blob_path
+
+
+def _rejected_manifest(manifest: Mapping[str, Any] | None) -> dict[str, Any]:
+    """Mark a publication manifest rejected so downstream readers enter ``invalid-publication`` safe mode."""
+    base = dict(manifest) if isinstance(manifest, Mapping) else {}
+    existing = [dict(c) for c in base.get("checks", []) if isinstance(c, Mapping)]
+    existing.append({"name": "rezono:proofs", "status": "red", "violations": 1})
+    return {**base, "checks": existing}
 
 
 def _load_publication_files(
@@ -837,70 +1594,88 @@ def _load_publication_files(
     archive_dir: Path | None,
     role: str,
 ) -> tuple[dict[str, Any] | None, dict[str, list[dict[str, Any]]] | None, str | None]:
-    """Read a published manifest and digest-verified snapshot rows from disk, failing closed."""
+    """Read a published manifest and digest-verified archive snapshots & witnesses, failing closed.
+
+    Unverified raw ``--rows`` files are never trusted: they fail closed into ``invalid-publication``
+    safe mode. Archive publications require at least one snapshot and at least one digest-verified
+    witness entry for ``role`` before independent verification via ``rezono_checker``.
+    """
     if manifest_path is None:
         return None, None, None
     try:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         if not isinstance(manifest, dict):
-            return None, None, "manifest file is not a JSON object"
+            return _rejected_manifest(None), {}, None
         if rows_path is not None:
-            raw_rows = json.loads(rows_path.read_text(encoding="utf-8"))
-            if not isinstance(raw_rows, dict):
-                return manifest, None, "rows file is not a JSON object"
-            return manifest, raw_rows, None
+            # Never trust raw unverified --rows JSON without archive digests, witnesses, and rezono_checker.
+            return _rejected_manifest(manifest), {}, None
         if archive_dir is None:
             return manifest, None, None
 
+        if not isinstance(manifest.get("id"), str) or not manifest["id"]:
+            return _rejected_manifest(manifest), {}, None
+
         snapshots = manifest.get("snapshots")
         if not isinstance(snapshots, list):
-            return manifest, None, "manifest snapshots field is not a list"
+            return _rejected_manifest(manifest), {}, None
 
         root_dir = archive_dir.resolve()
         rows: dict[str, list[dict[str, Any]]] = {}
         for entry in snapshots:
             if not isinstance(entry, dict):
-                return manifest, None, "malformed snapshot entry in manifest"
+                return _rejected_manifest(manifest), {}, None
             if entry.get("role") != role:
                 continue
             relation = entry.get("relation")
             expected_sha = entry.get("sha256")
-            if not isinstance(relation, str) or not relation:
-                return manifest, None, "snapshot entry missing relation name"
+            if not isinstance(relation, str) or not relation or relation in rows:
+                return _rejected_manifest(manifest), {}, None
             if not isinstance(expected_sha, str) or not _SHA64.fullmatch(expected_sha):
-                return manifest, None, f"snapshot entry has invalid sha256: {relation}"
+                return _rejected_manifest(manifest), {}, None
             blob_path = _resolve_archive_blob(root_dir, entry.get("uri"))
             if blob_path is None:
-                return manifest, None, f"snapshot missing from archive: {relation}"
+                return _rejected_manifest(manifest), {}, None
             raw = blob_path.read_bytes()
             if hashlib.sha256(raw).hexdigest() != expected_sha:
-                return manifest, None, f"snapshot digest mismatch: {relation}"
+                return _rejected_manifest(manifest), {}, None
             decoded = json.loads(raw)
             if not isinstance(decoded, list):
-                return manifest, None, f"snapshot payload is not a list: {relation}"
+                return _rejected_manifest(manifest), {}, None
             rows[relation] = decoded
 
+        if not rows:
+            return _rejected_manifest(manifest), {}, None
+
         witnesses = manifest.get("witnesses")
-        if witnesses is not None:
-            if not isinstance(witnesses, list):
-                return manifest, None, "manifest witnesses field is not a list"
-            for entry in witnesses:
-                if not isinstance(entry, dict):
-                    return manifest, None, "malformed witness entry in manifest"
-                if entry.get("role") != role:
-                    continue
-                expected_sha = entry.get("sha256")
-                if not isinstance(expected_sha, str) or not _SHA64.fullmatch(expected_sha):
-                    return manifest, None, "witness entry has invalid sha256"
-                blob_path = _resolve_archive_blob(root_dir, entry.get("uri"))
-                if blob_path is None:
-                    return manifest, None, "witness file missing from archive"
-                if hashlib.sha256(blob_path.read_bytes()).hexdigest() != expected_sha:
-                    return manifest, None, "witness digest mismatch"
+        if not isinstance(witnesses, list):
+            return _rejected_manifest(manifest), {}, None
+
+        role_witness_count = 0
+        for entry in witnesses:
+            if not isinstance(entry, dict):
+                return _rejected_manifest(manifest), {}, None
+            if entry.get("role") != role:
+                continue
+            expected_sha = entry.get("sha256")
+            if not isinstance(expected_sha, str) or not _SHA64.fullmatch(expected_sha):
+                return _rejected_manifest(manifest), {}, None
+            blob_path = _resolve_archive_blob(root_dir, entry.get("uri"))
+            if blob_path is None:
+                return _rejected_manifest(manifest), {}, None
+            raw = blob_path.read_bytes()
+            if hashlib.sha256(raw).hexdigest() != expected_sha:
+                return _rejected_manifest(manifest), {}, None
+            proof_doc = json.loads(raw)
+            if not isinstance(proof_doc, dict) or not isinstance(proof_doc.get("witnesses"), list):
+                return _rejected_manifest(manifest), {}, None
+            role_witness_count += 1
+
+        if role_witness_count == 0:
+            return _rejected_manifest(manifest), {}, None
 
         return manifest, rows, None
-    except (OSError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError) as exc:
-        return None, None, f"publication read failed: {exc}"
+    except (OSError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError):
+        return _rejected_manifest(None), {}, None
 
 
 def _load_optional_sources_sidecar(
@@ -931,19 +1706,20 @@ def evaluate_coordinator_state(
     records_path: Path | None = None,
     sources_path: Path | None = None,
     pin_path: Path | None = None,
-    pin_sha: str | None = None,
     main_ref: str = DEFAULT_MAIN_REF,
     role: str = "reader",
     role_mode: str = "complete",
-    knowledge_time: str = "2027-01-15T08:00:00Z",
+    knowledge_time: str | None = None,
     evidence_dir: Path | None = None,
 ) -> dict[str, Any]:
-    """Read coordinator task and claim-release state from a verified build publication."""
+    """Read coordinator task and claim-release state from a checker-verified build publication."""
     manifest: dict[str, Any] | None = None
     rows: dict[str, list[dict[str, Any]]] | None = None
     engine_error: str | None = None
 
     if records_path is not None:
+        if not isinstance(knowledge_time, str) or not knowledge_time.strip():
+            raise ValueError("explicit knowledge_time is required when evaluating coordinator records")
         try:
             records = yaml.safe_load(records_path.read_text(encoding="utf-8"))
             if not isinstance(records, Mapping):
@@ -959,7 +1735,6 @@ def evaluate_coordinator_state(
                 sources_sidecar=sources_sidecar,
                 knowledge_time=knowledge_time,
                 pin_path=pin_path,
-                pin_sha=pin_sha,
                 candidate_sha=head_sha,
                 main_ref=main_ref,
                 role=role,
@@ -973,6 +1748,26 @@ def evaluate_coordinator_state(
             archive_dir=archive_dir,
             role=role,
         )
+        if engine_error is None and archive_dir is not None and rows_path is None and rows:
+            checker_valid, verified_rows, verify_error = _verify_publication_on_pinned_engine(
+                root=root,
+                manifest_path=manifest_path,
+                archive_dir=archive_dir,
+                role=role,
+                role_mode=role_mode,
+                pin_path=pin_path,
+                main_ref=main_ref,
+                evidence_dir=evidence_dir,
+            )
+            if verify_error is not None:
+                manifest = None
+                rows = None
+                engine_error = verify_error
+            elif not checker_valid or verified_rows is None:
+                manifest = _rejected_manifest(manifest)
+                rows = {}
+            else:
+                rows = verified_rows
 
     return read_coordinator_state(
         run=run_id,
@@ -1027,13 +1822,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     matrix_p.add_argument("--root", type=Path, default=None)
     matrix_p.add_argument("--run", dest="run_id", default=DEFAULT_RUN_ID)
     matrix_p.add_argument("--pin", "--pin-file", dest="pin", type=Path, default=None)
-    matrix_p.add_argument("--pin-sha", default=None)
     matrix_p.add_argument("--main-ref", default=DEFAULT_MAIN_REF)
     matrix_p.add_argument("--event", default=os.environ.get("GITHUB_EVENT_NAME", ""))
     matrix_p.add_argument("--base-ref", default=os.environ.get("GITHUB_BASE_REF", ""))
     matrix_p.add_argument("--before", default=os.environ.get("GITHUB_EVENT_BEFORE", ""))
     matrix_p.add_argument("--merge-group-base", default=os.environ.get("MERGE_GROUP_BASE_SHA", ""))
     matrix_p.add_argument("--merge-group-head", default=os.environ.get("MERGE_GROUP_HEAD_SHA", ""))
+    matrix_p.add_argument("--event-time", default=os.environ.get("GITHUB_EVENT_TIME", ""))
     matrix_p.add_argument("--evidence-dir", type=Path, default=None)
     matrix_p.add_argument("--json", dest="as_json", action="store_true")
 
@@ -1046,11 +1841,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     coord_p.add_argument("--records", type=Path, default=None)
     coord_p.add_argument("--sources", type=Path, default=None)
     coord_p.add_argument("--pin", "--pin-file", dest="pin", type=Path, default=None)
-    coord_p.add_argument("--pin-sha", default=None)
     coord_p.add_argument("--main-ref", default=DEFAULT_MAIN_REF)
     coord_p.add_argument("--role", default="reader")
     coord_p.add_argument("--role-mode", default="complete")
-    coord_p.add_argument("--knowledge-time", default="2027-01-15T08:00:00Z")
+    coord_p.add_argument("--knowledge-time", default=None)
     coord_p.add_argument("--evidence-dir", type=Path, default=None)
     coord_p.add_argument("--fail-on-safe-mode", action="store_true")
 
@@ -1067,8 +1861,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             before_sha=args.before,
             merge_group_base=args.merge_group_base,
             merge_group_head=args.merge_group_head,
+            event_time=args.event_time or None,
             pin_path=args.pin,
-            pin_sha=args.pin_sha,
             main_ref=args.main_ref,
             evidence_dir=args.evidence_dir,
             repository_name=repo_name,
@@ -1091,6 +1885,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     if args.cmd == "coordinator-state":
+        if args.records is not None and not (isinstance(args.knowledge_time, str) and args.knowledge_time.strip()):
+            parser.error("--knowledge-time is required when --records is provided")
         state = evaluate_coordinator_state(
             root=resolved_root,
             run_id=args.run_id,
@@ -1100,7 +1896,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             records_path=args.records,
             sources_path=args.sources,
             pin_path=args.pin,
-            pin_sha=args.pin_sha,
             main_ref=args.main_ref,
             role=args.role,
             role_mode=args.role_mode,

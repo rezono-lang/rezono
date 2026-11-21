@@ -16,6 +16,9 @@ enums:
     permissible_values:
       pull_request:
       merge_group:
+      push:
+      schedule:
+      workflow_dispatch:
   SuiteKind:
     permissible_values:
       python:
