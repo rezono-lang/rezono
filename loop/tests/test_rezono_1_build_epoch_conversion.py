@@ -322,7 +322,9 @@ def test_legacy_build_and_epoch_archive_integrity():
         "Waits for compiler/tests/rezono/test_lower_rezono_1_derived.py--test_lower_rezono_1_derived, "
         "examples/test_calculation_engine_parity.py--test_feldera_calculations_match_duckdb_and_checker, "
         "examples/test_rule_witness_engine_parity.py--test_feldera_rule_witnesses_match_batch, "
-        "and examples/test_rezono_1_pack_conversion.py--test_standard_packs_convert_to_rezono_1."
+        "examples/test_rezono_1_pack_conversion.py--test_std_access_converts_to_rezono_1, "
+        "--test_std_decision_converts_to_rezono_1, "
+        "and --test_std_loop_converts_to_rezono_1 (the standard packs build/ and epoch/ import)."
     ),
 )
 def test_build_and_epoch_packs_convert_to_rezono_1(tmp_path: Path):

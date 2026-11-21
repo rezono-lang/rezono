@@ -156,7 +156,10 @@ def test_legacy_run_packs_archive_integrity():
         "Waits for compiler/tests/rezono/test_lower_rezono_1_derived.py--test_lower_rezono_1_derived, "
         "examples/test_calculation_engine_parity.py--test_feldera_calculations_match_duckdb_and_checker, "
         "examples/test_rule_witness_engine_parity.py--test_feldera_rule_witnesses_match_batch, "
-        "and examples/test_rezono_1_pack_conversion.py--test_standard_packs_convert_to_rezono_1."
+        "examples/test_rezono_1_pack_conversion.py--test_std_access_converts_to_rezono_1, "
+        "--test_std_decision_converts_to_rezono_1, --test_std_loop_converts_to_rezono_1, "
+        "--test_std_part_converts_to_rezono_1, "
+        "and --test_std_time_converts_to_rezono_1 (the standard packs run/packs/* import)."
     ),
 )
 def test_run_packs_convert_to_rezono_1(tmp_path: Path):
