@@ -11,6 +11,20 @@ complete_router_sweep(sweep, run, router, table) :-
     router_sweep__table(sweep, table),
     router_sweep__complete(sweep, complete),
     complete = TRUE.
+complete_router_sweep(sweep, run, router, table) :-
+    router_sweep__run(sweep, run),
+    router_sweep__router(sweep, router),
+    router_sweep__table(sweep, table),
+    router_table_read__sweep(tbl, sweep),
+    router_table_read__family(tbl, "ip"),
+    router_table_read__table(tbl, table),
+    router_chain_read__sweep(chn, sweep),
+    router_chain_read__family(chn, "ip"),
+    router_chain_read__table(chn, table),
+    router_chain_read__chain(chn, "forward"),
+    router_chain_read__chain_type(chn, "filter"),
+    router_chain_read__hook(chn, "forward"),
+    router_chain_read__policy(chn, "drop").
 
 .decl has_complete_router_sweep(run: symbol, router: symbol, table: symbol)
 has_complete_router_sweep(run, router, table) :-
@@ -63,5 +77,19 @@ managed_router_drift("extra", seen, sweep) :-
     scoped_router_seen(seen, run, router, table, source, destination, protocol, first_port, last_port),
     !router_desired_tuple(run, router, table, source, destination, protocol, first_port, last_port).
 
+.decl managed_router_desired(desired: symbol, run: symbol, router: symbol, table: symbol, source: symbol, destination: symbol, protocol: symbol, first_port: number, last_port: number)
+managed_router_desired(desired, run, router, table, source, destination, protocol, first_port, last_port) :-
+    managed_router_scope(_, run, router, table),
+    scoped_router_desired(desired, run, router, table, source, destination, protocol, first_port, last_port).
+
+may_read("operator", "router_seen", seen) :-
+    router_seen(seen).
+
+may_read_full("operator", "router_seen") :-
+    managed_router_scope(_, run, router, table),
+    complete_router_sweep(_, run, router, table).
+
+.output managed_router_desired
+.output complete_router_sweep
 .output managed_router_drift
 .output managed_router_unknown
