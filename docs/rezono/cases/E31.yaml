@@ -1,5 +1,5 @@
 id: E31
-status: pending
+status: settled
 mode: parse
 source: 'ask h: Host, p: Plan where fits(h, p)'
 expect:
@@ -10,7 +10,7 @@ expect:
       text: ', p: Plan'
       start: 11
       end: 20
-note: Multi-binder ask is planned under decisions/ask-query-boundaries.md (previously reserved with R015).
+note: Several binders are reserved.
 sources:
 - rezono/src/print.ts
 - rezono/src/parse.ts

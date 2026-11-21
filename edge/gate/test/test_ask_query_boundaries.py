@@ -3,15 +3,14 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
-import re
 import subprocess
 
 import pytest
 
 PROBE = Path(__file__).with_name("ask-query-boundaries-probe.mts")
-SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 
 class MissingGroupedAggregates(AssertionError):
@@ -24,6 +23,12 @@ class MissingCrossPackJoin(AssertionError):
 
 class MissingLocalAskRule(AssertionError):
     """Read-only bounded local derivations defined during `ask` with witnesses and refusals are not served."""
+
+
+def _canonical_sha256(value: object) -> str:
+    """SHA-256 of canonical JSON (RFC 8785 for nested string arrays)."""
+    encoded = json.dumps(value, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
 
 
 def _run_probe(mode: str) -> dict:
@@ -117,14 +122,39 @@ def _premise_rows(witness: dict) -> set[tuple[str, tuple[str, ...]]]:
     return out
 
 
+def _all_row_keys(body: dict) -> set[tuple[str, ...]]:
+    """Every canonical key tuple appearing in nodes, witnesses (conclusions and premises), and steps."""
+    keys: set[tuple[str, ...]] = set()
+    for node in body.get("nodes") or []:
+        if isinstance(node, dict) and (parsed := _parse_key(node.get("key"))) is not None:
+            keys.add(parsed)
+    for w in body.get("witnesses") or []:
+        if not isinstance(w, dict):
+            continue
+        concl = w.get("conclusion")
+        if isinstance(concl, dict) and (parsed := _parse_key(concl.get("key"))) is not None:
+            keys.add(parsed)
+        for _, pkey in _premise_rows(w):
+            keys.add(pkey)
+    for step in body.get("steps") or []:
+        if not isinstance(step, dict):
+            continue
+        for end in ("conclusion", "premise"):
+            ref = step.get(end)
+            if isinstance(ref, dict) and (parsed := _parse_key(ref.get("key"))) is not None:
+                keys.add(parsed)
+    return keys
+
+
 @pytest.mark.xfail(
     strict=True,
     raises=MissingGroupedAggregates,
     reason=(
         "extra: decisions/ask-query-boundaries.md: Support `group by` with `count`, `sum`, "
-        "`min`, and `max` in `ask` (rezono/src/parse.ts, check.ts, evaluate.ts, answer-schema.ts, "
-        "edge/gate/src/expr.ts, edge/gate/src/local.ts) preserving four value states "
-        "(known, absent/n/a, unknown, invalid), role filtering, and contributor witnesses."
+        "`min`, and `max` in `ask` under `{ allowAskExtensions: true }` (rezono/src/parse.ts, "
+        "check.ts, evaluate.ts, answer-schema.ts, edge/gate/src/expr.ts, edge/gate/src/local.ts) "
+        "preserving four value states (known, absent/n/a, unknown, invalid), role filtering, and "
+        "canonical contributor witnesses."
     ),
 )
 def test_ask_grouped_aggregates_four_states_witness_and_role_filter():
@@ -165,42 +195,59 @@ def test_ask_grouped_aggregates_four_states_witness_and_role_filter():
     if weight_body.get("counts", {}).get("not_applicable", 0) < 1 or len(by_group) != 4:
         raise MissingGroupedAggregates(f"absent group key handling wrong: {weight_body.get('counts')} / {list(by_group)}")
 
-    # Contributor witnesses must record exact group_key, count=2, valid 64-hex contributors_sha256,
-    # and exact contributes step keys for e1 and e2 (never substring matches like e10).
+    # Pinned aggregate witness shape (decisions/ask-query-boundaries.md §3, matching explain.py):
+    # group_key is canonical JSON '["g-ok"]', count == 2, and contributors_sha256 equals exact digest.
+    expected_count_sha = _canonical_sha256([['["e1"]'], ['["e2"]']])
+    expected_weight_sha = _canonical_sha256([['["e1","10"]', "known:10"], ['["e2","30"]', "known:30"]])
+    expected_ok_aggs = {
+        (0, "entry", '["g-ok"]', 2, expected_count_sha, "known:2"),
+        (1, "entry__weight", '["g-ok"]', 2, expected_weight_sha, "known:40"),
+        (2, "entry__weight", '["g-ok"]', 2, expected_weight_sha, "known:10"),
+        (3, "entry__weight", '["g-ok"]', 2, expected_weight_sha, "known:30"),
+    }
     witnesses = weight_body.get("witnesses") or []
-    ok_aggs = [
-        agg
+    ok_aggs = {
+        (
+            agg.get("position"),
+            agg.get("relation"),
+            agg.get("group_key"),
+            agg.get("count"),
+            agg.get("contributors_sha256"),
+            agg.get("result"),
+        )
         for w in witnesses
         if isinstance(w, dict)
         for agg in (w.get("aggregates") or [])
-        if isinstance(agg, dict) and (_parse_key(agg.get("group_key")) == ("g-ok",) or agg.get("group_key") == "g-ok")
-    ]
-    if not ok_aggs or not all(
-        agg.get("count") == 2
-        and isinstance(agg.get("contributors_sha256"), str)
-        and SHA256_RE.fullmatch(agg["contributors_sha256"]) is not None
-        for agg in ok_aggs
-    ):
+        if isinstance(agg, dict) and agg.get("group_key") == '["g-ok"]'
+    }
+    if ok_aggs != expected_ok_aggs:
         raise MissingGroupedAggregates(
-            f"missing valid aggregate witness (group_key, count=2, contributors_sha256) for g-ok: {witnesses}"
+            f"g-ok aggregate witnesses mismatch: expected={sorted(expected_ok_aggs)}, got={sorted(ok_aggs)}"
         )
 
+    # Pinned contributes step shape (matching trace.py / edge/gate/src/ask.ts):
     steps = weight_body.get("steps") or []
-    contrib_entries: set[tuple[str, tuple[str, ...]]] = set()
-    for step in steps:
-        if not isinstance(step, dict) or step.get("how") != "contributes":
-            continue
-        premise = step.get("premise")
-        if not isinstance(premise, dict):
-            continue
-        rel = premise.get("relation")
-        key = _parse_key(premise.get("key"))
-        if isinstance(rel, str) and key is not None:
-            contrib_entries.add((rel, key))
-    has_e1 = bool(contrib_entries & {("entry", ("e1",)), ("entry__weight", ("e1", "10")), ("entry__weight", ("e1",))})
-    has_e2 = bool(contrib_entries & {("entry", ("e2",)), ("entry__weight", ("e2", "30")), ("entry__weight", ("e2",))})
-    if not (has_e1 and has_e2):
-        raise MissingGroupedAggregates(f"missing exact contributor steps for e1 and e2: {sorted(contrib_entries)}")
+    contrib_steps = {
+        (step.get("position"), step["premise"].get("relation"), _parse_key(step["premise"].get("key")), step.get("value"))
+        for step in steps
+        if isinstance(step, dict)
+        and step.get("how") == "contributes"
+        and isinstance(step.get("premise"), dict)
+    }
+    expected_contrib_steps = {
+        (0, "entry", ("e1",), None),
+        (0, "entry", ("e2",), None),
+        (1, "entry__weight", ("e1", "10"), "known:10"),
+        (1, "entry__weight", ("e2", "30"), "known:30"),
+        (2, "entry__weight", ("e1", "10"), "known:10"),
+        (2, "entry__weight", ("e2", "30"), "known:30"),
+        (3, "entry__weight", ("e1", "10"), "known:10"),
+        (3, "entry__weight", ("e2", "30"), "known:30"),
+    }
+    if not expected_contrib_steps <= contrib_steps:
+        raise MissingGroupedAggregates(
+            f"missing exact contributes steps for g-ok: expected>={sorted(expected_contrib_steps)}, got={sorted(contrib_steps)}"
+        )
 
     # 2. Unknown state propagation (missing required score on e6 must make g-unknown $unknown, never 0 or 5).
     score_reply = got["grouped_score_unknown"]
@@ -235,9 +282,9 @@ def test_ask_grouped_aggregates_four_states_witness_and_role_filter():
     raises=MissingCrossPackJoin,
     reason=(
         "extra: decisions/ask-query-boundaries.md: Support multi-binder `ask` combining "
-        "relations from multiple imported packs (rezono/src/parse.ts, check.ts, evaluate.ts, "
-        "answer-schema.ts, edge/gate/src/expr.ts, edge/gate/src/local.ts) with role-filtered "
-        "snapshots and published witnesses."
+        "relations from multiple imported packs under `{ allowAskExtensions: true }` "
+        "(rezono/src/parse.ts, check.ts, evaluate.ts, answer-schema.ts, edge/gate/src/expr.ts, "
+        "edge/gate/src/local.ts) with role-filtered snapshots and published witnesses."
     ),
 )
 def test_ask_combines_relations_from_multiple_imported_packs_with_role_filter_and_witness():
@@ -277,23 +324,32 @@ def test_ask_combines_relations_from_multiple_imported_packs_with_role_filter_an
     if alpha_reply["status"] != 400 or "R001" not in alpha_codes or "R015" in alpha_codes:
         raise MissingCrossPackJoin(f"alpha-only role must be refused with R001, got {alpha_reply}")
 
-    # 3. Counter-case: narrow role sees only i-1 and zero leakage of i-2 in rows or witnesses.
+    # 3. Counter-case: narrow role sees only i-1 with exact rows, counts, and witnesses (zero i-2 rows/keys).
     narrow_reply = got["narrow_join"]
     if narrow_reply["status"] != 200:
         raise MissingCrossPackJoin(f"narrow role cross-pack join failed: {narrow_reply}")
     narrow_body = narrow_reply["body"]
-    narrow_text = json.dumps(narrow_body, sort_keys=True)
     narrow_rows = [r for r in narrow_body.get("dataset", {}).get("rows", []) if r.get("$kind") == "Answer"]
     narrow_pairs = [(r.get("c2"), r.get("c3")) for r in narrow_rows]
-    if narrow_pairs != [("gold", "high")] or any(secret in narrow_text for secret in ("i-2", "silver", "low")):
-        raise MissingCrossPackJoin(f"narrow role leaked hidden cross-pack rows or witnesses: {narrow_body}")
     expected_narrow_witnesses = {
         ("pack_alpha.tag_rule", "alpha_tag", ("i-1", "gold")),
         ("pack_beta.metric_rule", "beta_metric", ("i-1", "high")),
     }
     narrow_witnesses = _witness_tuples(narrow_body.get("witnesses"))
-    if not expected_narrow_witnesses <= narrow_witnesses:
-        raise MissingCrossPackJoin(f"narrow role missing exact witnesses for visible joined row: {sorted(narrow_witnesses)}")
+    narrow_keys = _all_row_keys(narrow_body)
+    hidden_tokens = {"i-2", "silver", "low"}
+    leaked_keys = [k for k in narrow_keys if any(part in hidden_tokens for part in k)]
+    if (
+        narrow_pairs != [("gold", "high")]
+        or narrow_body.get("counts") != {"rows": 1, "undecided": 0, "not_applicable": 0}
+        or narrow_body.get("undecided") != []
+        or narrow_witnesses != expected_narrow_witnesses
+        or leaked_keys
+    ):
+        raise MissingCrossPackJoin(
+            f"narrow role join mismatch or hidden key leak: pairs={narrow_pairs}, "
+            f"witnesses={sorted(narrow_witnesses)}, leaked_keys={leaked_keys}"
+        )
 
 
 @pytest.mark.xfail(
@@ -324,46 +380,68 @@ def test_ask_local_rule_is_read_only_bounded_authorized_and_witnessed():
     reader_body = reader_reply["body"]
     if reader_body.get("computed") is not True:
         raise MissingLocalAskRule(f"local derivation answer must set computed=True: {reader_body}")
-    reader_ids = sorted(
-        r["$id"] for r in reader_body.get("dataset", {}).get("rows", []) if r.get("$kind") == "Answer"
+    reader_rows = sorted(
+        (r["$id"], _as_exact_number(r.get("c1")))
+        for r in reader_body.get("dataset", {}).get("rows", [])
+        if r.get("$kind") == "Answer"
     )
     undecided_ids = [u.get("binder") for u in reader_body.get("undecided", []) if u.get("state") == "unknown"]
-    if reader_ids != ["i-1", "i-3"] or undecided_ids != ["i-4"]:
-        raise MissingLocalAskRule(f"local derivation answer rows/undecided mismatch: ids={reader_ids}, undecided={undecided_ids}")
+    if reader_rows != [("i-1", "80"), ("i-3", "95")] or undecided_ids != ["i-4"]:
+        raise MissingLocalAskRule(f"local derivation answer rows/undecided mismatch: rows={reader_rows}, undecided={undecided_ids}")
 
-    witnesses = [w for w in (reader_body.get("witnesses") or []) if isinstance(w, dict) and w.get("rule_id") == "high_score"]
-    by_conclusion = {
-        _parse_key(w.get("conclusion", {}).get("key")): w
-        for w in witnesses
-        if isinstance(w.get("conclusion"), dict)
-    }
+    # Pinned local derivation witness shape (decisions/ask-query-boundaries.md §5):
+    # conclusion relation == "high_score", key == '["<id>"]', base slot premise == ("item__score", ("<id>", "<v>")).
+    witnesses = [
+        w
+        for w in (reader_body.get("witnesses") or [])
+        if isinstance(w, dict)
+        and w.get("rule_id") == "high_score"
+        and isinstance(w.get("conclusion"), dict)
+        and w["conclusion"].get("relation") == "high_score"
+    ]
+    by_conclusion = {_parse_key(w["conclusion"].get("key")): w for w in witnesses}
     w1 = by_conclusion.get(("i-1",))
     w3 = by_conclusion.get(("i-3",))
     if not w1 or not w3:
         raise MissingLocalAskRule(f"local derivation answer must carry high_score witnesses for exact keys i-1 and i-3: {witnesses}")
-    if not (_premise_rows(w1) & {("item__score", ("i-1", "80")), ("item__score", ("i-1",))}):
-        raise MissingLocalAskRule(f"i-1 witness missing exact item__score premise: {w1}")
-    if not (_premise_rows(w3) & {("item__score", ("i-3", "95")), ("item__score", ("i-3",))}):
-        raise MissingLocalAskRule(f"i-3 witness missing exact item__score premise: {w3}")
+    if ("item__score", ("i-1", "80")) not in _premise_rows(w1):
+        raise MissingLocalAskRule(f"i-1 witness missing exact item__score premise ('i-1', '80'): {w1}")
+    if ("item__score", ("i-3", "95")) not in _premise_rows(w3):
+        raise MissingLocalAskRule(f"i-3 witness missing exact item__score premise ('i-3', '95'): {w3}")
 
-    # 2. Scoped role evaluates the same local derivation strictly over its visible rows (i-3 hidden).
+    # 2. Scoped role evaluates the same local derivation strictly over its visible rows (exact rows/keys/witnesses).
     scoped_reply = got["scoped_local_rule"]
     if scoped_reply["status"] != 200:
         raise MissingLocalAskRule(f"local derivation ask failed for scoped role: {scoped_reply}")
     scoped_body = scoped_reply["body"]
-    scoped_text = json.dumps(scoped_body, sort_keys=True)
-    scoped_ids = [r["$id"] for r in scoped_body.get("dataset", {}).get("rows", []) if r.get("$kind") == "Answer"]
-    if scoped_ids != ["i-1"] or "i-3" in scoped_text or "95" in scoped_text:
-        raise MissingLocalAskRule(f"scoped role leaked hidden rows or witnesses: {scoped_body}")
+    scoped_rows = [
+        (r["$id"], _as_exact_number(r.get("c1")))
+        for r in scoped_body.get("dataset", {}).get("rows", [])
+        if r.get("$kind") == "Answer"
+    ]
+    scoped_undecided = [u.get("binder") for u in scoped_body.get("undecided", []) if u.get("state") == "unknown"]
     scoped_witnesses = {
-        _parse_key(w.get("conclusion", {}).get("key")): w
+        _parse_key(w["conclusion"].get("key")): w
         for w in (scoped_body.get("witnesses") or [])
-        if isinstance(w, dict) and w.get("rule_id") == "high_score" and isinstance(w.get("conclusion"), dict)
+        if isinstance(w, dict)
+        and w.get("rule_id") == "high_score"
+        and isinstance(w.get("conclusion"), dict)
+        and w["conclusion"].get("relation") == "high_score"
     }
-    if ("i-1",) not in scoped_witnesses or ("i-3",) in scoped_witnesses:
-        raise MissingLocalAskRule(f"scoped role witnesses must contain only exact i-1: {scoped_witnesses}")
-    if not (_premise_rows(scoped_witnesses[("i-1",)]) & {("item__score", ("i-1", "80")), ("item__score", ("i-1",))}):
-        raise MissingLocalAskRule(f"scoped i-1 witness missing exact item__score premise: {scoped_witnesses[('i-1',)]}")
+    scoped_keys = _all_row_keys(scoped_body)
+    leaked_scoped_keys = [k for k in scoped_keys if any(part in {"i-3", "95"} for part in k)]
+    if (
+        scoped_rows != [("i-1", "80")]
+        or scoped_undecided != ["i-4"]
+        or scoped_body.get("counts") != {"rows": 1, "undecided": 1, "not_applicable": 0}
+        or set(scoped_witnesses) != {("i-1",)}
+        or ("item__score", ("i-1", "80")) not in _premise_rows(scoped_witnesses[("i-1",)])
+        or leaked_scoped_keys
+    ):
+        raise MissingLocalAskRule(
+            f"scoped role mismatch or hidden key leak: rows={scoped_rows}, undecided={scoped_undecided}, "
+            f"witnesses={list(scoped_witnesses)}, leaked_keys={leaked_scoped_keys}"
+        )
 
     # 3. Counter-case: write/mutation attempt inside rules MUST be refused (400) with zero store mutation.
     write_reply = got["counter_write_in_rules"]

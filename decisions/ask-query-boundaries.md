@@ -39,7 +39,7 @@ Every current and extended form of `ask … where … show` enforces five non-ne
 
 ## 3. Grouped aggregates (`group by` with `count`, `sum`, `min`, `max`)
 
-Lift `R015` on `group by` in `rezono/src/parse.ts` and support grouped checking, schema generation, and evaluation across `rezono/src/` and `edge/gate/src/`:
+Keep the v0 `R015` diagnostic in default `parse(text)` / `check(text, schema)` so all settled v0 parser and conformance tests remain unchanged. Enable `group by` on the gate via an explicit opt-in option (`{ allowAskExtensions: true }` passed by `edge/gate/src/expr.ts` into `check` and `parse`), and support grouped checking, schema generation, and evaluation across `rezono/src/` and `edge/gate/src/`:
 
 ```rezono
 ask e: Entry where e.active show e.bucket, count(), sum(e.weight), min(e.weight), max(e.weight) group by e.bucket
@@ -58,7 +58,17 @@ ask e: Entry where e.active show e.bucket, count(), sum(e.weight), min(e.weight)
     - Any `invalid` input yields `{ "$invalid": reason }` (`invalid` outranks `unknown` and `n/a`).
     - Any `unknown` input (with no `invalid`) yields `{ "$unknown": reason }` — never `0` and never silently skipped.
     - Any `n/a` input in `sum`, `min`, or `max` (with no `unknown`/`invalid`) propagates `{ "$na": reason }`; `count()` counts the rows in the group (independent of optional non-grouped slots).
-- **Witnesses:** Each grouped `Answer` row has a corresponding `Witness` in `answer.witnesses` (recording `aggregates` with `group_key`, `count`, `contributors_sha256`, and canonical `result`) and `AnswerStep` entries in `answer.steps` with `how: "contributes"` (and `value` for `sum`, `min`, and `max`) linking the group conclusion to every role-readable contributing row.
+- **Witnesses (exact pinned shape, matching `compiler/rezono_compiler/explain.py` and `trace.py`):**
+  - Each grouped `Answer` row has a `Witness` in `answer.witnesses` whose `aggregates` list holds one `Aggregate` entry per grouped aggregate in `show` order (`position` `0, 1, ...`):
+    - `group_key`: the RFC 8785 canonical JSON array of the group's key parts (for example `'["g-ok"]'`, never a bare unbracketed string).
+    - `count`: exact integer count of contributing rows in the group.
+    - `result`: canonical state-prefixed text (`"known:<value>"`, `"not_applicable:<reason>"`, `"unknown:<reason>"`, or `"invalid:<reason>"`).
+    - `contributors_sha256`: the lowercase 64-hex SHA-256 of the RFC 8785 canonical JSON array of sorted contributor entries:
+      - for `count()` over binder kind relation `<kind>` (e.g. `entry`): `[[k], ...]` where `k` is each member's canonical snapshot row key (e.g. `'["e1"]'`);
+      - for `sum`, `min`, and `max` over slot relation `<kind>__<slot>` (e.g. `entry__weight`): `[[k, "known:<v>"], ...]` where `k` is each contributing snapshot row key (e.g. `'["e1","10"]'`).
+  - `answer.steps` carries one `AnswerStep` with `how: "contributes"` and matching `position` per contributing row:
+    - for `count()`: `premise: { "relation": "<kind>", "key": "[\"<id>\"]" }` (no `value` field);
+    - for `sum`, `min`, and `max`: `premise: { "relation": "<kind>__<slot>", "key": "[\"<id>\",\"<v>\"]" }` with `value: "known:<v>"`.
 
 ## 4. Combining relations from multiple imported packs in one `ask`
 
@@ -68,7 +78,7 @@ A pack that imports multiple packs (`bundle.imports`) compiles their kinds, slot
 ask a: AlphaTag, b: BetaMetric where a.item = b.item show a.item, a.tag, b.tier
 ```
 
-- **Multi-binder syntax and checking:** Lift `R015` on `MoreBinder` (`, name: Type`) in `rezono/src/parse.ts` and bind all declared binders in `rezono/src/check.ts`, `rezono/src/answer-schema.ts`, and `rezono/src/evaluate.ts`. Every binder must name a kind or derived relation present in the role's schema (`roleSchema`). Ambiguous bare slot names across binders are refused with `R011`, requiring explicit qualification (`a.slot`, `b.slot`).
+- **Multi-binder syntax and checking:** Keep the v0 `R015` diagnostic on `MoreBinder` in default `parse(text)` / `check(text, schema)` so settled conformance case `docs/rezono/cases/E31.yaml` remains untouched. Enable `MoreBinder` (`, name: Type`) under `{ allowAskExtensions: true }` in `rezono/src/parse.ts`, `rezono/src/check.ts`, `rezono/src/answer-schema.ts`, and `rezono/src/evaluate.ts`, called by `edge/gate/src/expr.ts`. Every binder must name a kind or derived relation present in the role's schema (`roleSchema`). Ambiguous bare slot names across binders are refused with `R011`, requiring explicit qualification (`a.slot`, `b.slot`).
 - **Role filtering:**
   - If the role lacks read access to any binder's kind or relation (for example, it reads `pack_a`'s relation but not `pack_b`'s), checking fails closed with `R001` (HTTP 400) without leaking whether the unreadable relation exists.
   - When the role reads both relations, only tuples present in the role's snapshots are joined. Hidden rows from either imported pack never appear in `nodes`, `dataset`, `undecided`, `counts`, `witnesses`, or `steps`.
@@ -95,7 +105,7 @@ A caller may define temporary local derivations for one `ask` request over the r
 - **Bounded evaluation, four states, and witnesses:**
   - Local rules evaluate strictly over the role's readable snapshots under the shared `budget.rows` and `budget.steps` limits. Exceeding either budget aborts with HTTP 422 (`cut`) and returns no partial answer.
   - Four value states propagate through local rule bodies and heads: a row whose body evaluates to `unknown` or `invalid` produces an `Undecided` row with its `state`, `reason`, and `cause` rather than silently disappearing.
-  - The answer sets `computed: true` ([explain contract](../contracts/explain.yaml)) and attaches `witnesses` and `steps` naming the local rule (`rule_id`), variable `bindings`, and exact role-readable `premises` (plus underlying published witnesses when a local rule reads a published derived relation), while leaving the publication store byte-for-byte unchanged.
+  - The answer sets `computed: true` ([explain contract](../contracts/explain.yaml)) and attaches `witnesses` and `steps` naming the local derivation (`rule_id`), its conclusion `{"relation": "<rule_id>", "key": "[\"<id>\"]"}`, variable `bindings`, and exact role-readable snapshot `premises` (each base slot row as `{"relation": "<kind>__<slot>", "key": "[\"<id>\",\"<v>\"]"}`, plus underlying published witnesses when a local derivation reads a published derived relation), while leaving the publication store byte-for-byte unchanged.
 
 ## 6. Considered alternatives
 
