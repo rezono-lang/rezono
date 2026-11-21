@@ -25,6 +25,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
 import tarfile
@@ -101,6 +102,7 @@ _SAFE_SUBPROCESS_ENV_KEYS = (
     "SSL_CERT_FILE",
     "SSL_CERT_DIR",
     "NODE_PATH",
+    "REZONO_NODE",
 )
 
 _PINNED_WORKER_SCRIPT = r"""
@@ -998,6 +1000,26 @@ def _write_pinned_metadata(pinned_root: Path) -> None:
         (dist_dir / "METADATA").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def _wire_pinned_node_modules(root: Path, target_dir: Path) -> None:
+    """Expose host ``rezono/node_modules`` dependencies to the extracted pinned module reader."""
+    pinned_rezono = target_dir / "rezono"
+    dst = pinned_rezono / "node_modules"
+    if not pinned_rezono.is_dir() or dst.exists() or dst.is_symlink():
+        return
+    for base in (root, ROOT):
+        candidate = base / "rezono" / "node_modules"
+        if not candidate.is_dir():
+            continue
+        if base == root and candidate.is_symlink():
+            continue
+        src = candidate.resolve()
+        try:
+            os.symlink(src, dst, target_is_directory=True)
+        except (OSError, NotImplementedError):
+            shutil.copytree(src, dst, symlinks=True, ignore_dangling_symlinks=True)
+        return
+
+
 def _extract_pinned_engine(root: Path, engine_sha: str, target_dir: Path) -> None:
     """Extract only pinned engine and pack directories from ``engine_sha`` via ``git archive``."""
     available: list[str] = []
@@ -1020,6 +1042,7 @@ def _extract_pinned_engine(root: Path, engine_sha: str, target_dir: Path) -> Non
         tar.extractall(target_dir, filter="data")
     if not (target_dir / BUILD_PACK_MANIFEST).is_file():
         raise ValueError(f"pinned commit {engine_sha} is missing {BUILD_PACK_MANIFEST}")
+    _wire_pinned_node_modules(root, target_dir)
     _write_pinned_metadata(target_dir)
 
 
