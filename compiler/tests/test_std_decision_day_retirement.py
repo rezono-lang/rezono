@@ -108,9 +108,9 @@ def _assert_pack_retired_day_numbers(model: pack.Pack, label: str) -> ir.Program
         "examples/subsidy/test_subsidy_dates.py--test_subsidy_schema_has_no_day_numbers, "
         "examples/platform/test_platform_release_dates.py--test_runs_orders_releases_by_their_sourced_date "
         "and examples/platform/test_support_window_dates.py--test_support_query_retires_as_of_day_for_native_date, "
-        "and for a preparatory planner PR that restates *_day rows and protected test assertions "
-        "(such as compiler/tests/test_std_decision.py, examples/platform/test_five_scenes.py, and "
-        "loop/tests/test_build_decision_capture.py) before step 6 lifts this mark."
+        "and for the preparatory step-6 planner PR that restates *_day rows and protected test "
+        "assertions (such as compiler/tests/test_std_decision.py, examples/platform/test_five_scenes.py, "
+        "and loop/tests/test_build_decision_capture.py), after which a follow-up worker PR lifts this mark."
     ),
 )
 def test_std_decision_retires_day_numbers_and_coupling_rules(tmp_path):

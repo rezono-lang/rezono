@@ -224,10 +224,9 @@ def test_scene_decisions_are_std_decision_facts(tmp_path):
     for row in reference_dates:
         ref_date = _iso_day(row.get("date"), f"reference_date {row.get('id')!r} date")
         expected_day = int(ref_date.replace("-", ""))
-        if "day" in row:
-            assert row["day"] == expected_day, (
-                f"Reference date {row.get('id')!r} day must equal {expected_day}"
-            )
+        assert row.get("day") == expected_day, (
+            f"Reference date {row.get('id')!r} day must equal {expected_day}"
+        )
     assert bindings, "examples/platform/facts/ must declare 'platform_decision_binding' rows for the five scenes"
 
     subject_ids = {row["id"] for row in subjects}
@@ -246,10 +245,9 @@ def test_scene_decisions_are_std_decision_facts(tmp_path):
             _iso_day(row.get("decided_on"), f"decision {did!r} decided_on")
             valid_from = _iso_day(row.get("valid_from"), f"decision {did!r} valid_from")
             expected_day = int(valid_from.replace("-", ""))
-            if "valid_from_day" in row:
-                assert row["valid_from_day"] == expected_day, (
-                    f"Decision {did!r} valid_from_day must equal {expected_day}"
-                )
+            assert row.get("valid_from_day") == expected_day, (
+                f"Decision {did!r} valid_from_day must equal {expected_day}"
+            )
 
     in_force_areas: dict[str, set[str]] = {}
     for binding in bindings:
