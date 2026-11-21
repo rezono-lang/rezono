@@ -425,7 +425,6 @@ def main() -> None:
             if body.get("service") != subject or body.get("token") != tokens[subject]:
                 raise RuntimeError(f"Unexpected health payload for {subject}: {body}")
             status_code = int(observed["status_code"])
-            probe_status = "healthy" if status_code == 200 else "unhealthy"
             event_time = int(body["event_time"])
             probe_id = f"probe-{subject}"
             probe_rows.append({
@@ -433,7 +432,7 @@ def main() -> None:
                 "service": subject,
                 "run": run_tag,
                 "token": tokens[subject],
-                "status": probe_status,
+                "http_status": status_code,
                 "event_time": event_time,
             })
             probe_details[subject] = {
@@ -451,7 +450,6 @@ def main() -> None:
                     token=tokens[subject],
                     reachable=True,
                     http_status=status_code,
-                    status=probe_status,
                     event_time=event_time,
                 )
             )
