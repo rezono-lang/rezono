@@ -325,7 +325,7 @@ def row_json(doc: dict, plan: dict, epoch: dict) -> list[dict]:
         rel = w["conclusion"]["relation"]
         if rel in plan["derived"]:
             row = elems[plan["derived"][rel][0], w["conclusion"]["key"]]
-            row.setdefault("$why", {})["$id"] = witness_uri(w)
+            row.setdefault("$why", {})["$id"] = witness_uri(w, doc)
     slot_of = {t: (n, s) for t, (n, s, _) in plan["slots"].items()}
     for entry in epoch["sources"]:
         rel, parts = entry["row"]["relation"], json.loads(entry["row"]["key"])
