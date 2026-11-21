@@ -18,7 +18,10 @@ has_base_ceiling: has base ceiling
 has_head_ceiling: has head ceiling
 has_base_observed: has base observed
 has_head_observed: has head observed
+budget_cell: budget cell
 budget_raised: budget raised
 budget_exceeded: budget exceeded
 budget_ratchet_violation: budget ratchet violation
+budget_missing_head: budget missing head
 budget_slack: budget slack
+budget_within: budget within

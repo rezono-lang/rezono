@@ -1,13 +1,9 @@
 """Require independent run-scoped probe and Hubble observations."""
 
-from pathlib import Path
-from runpy import run_path
-
-import pytest
+from flow_evidence import assess
 
 
 def test_flow_evidence():
-    assess = run_path(str(Path(__file__).resolve().parents[1] / "flow_evidence.py"))["assess"]
     case = {"run": "r", "id": "echo-ok", "source": "sender", "destination": "echo", "port": 8080,
             "protocol": "TCP", "expected": "allow"}
     probe = {**case, "witness": "probe", "outcome": "allow", "ref": "p"}

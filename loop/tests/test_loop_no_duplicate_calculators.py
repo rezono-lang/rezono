@@ -87,14 +87,6 @@ def _references_module_dynamically(path: Path, stem: str) -> bool:
     return False
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="extra: decisions/code-does-not-decide.md: loop/build_cutover.py must not "
-           "reimplement loop/build_selection_outcome.py with a divergent manifest-acceptance "
-           "rule; share one strict acceptance decision requiring rezono:proofs and "
-           "rezono:schema or retire the duplicate module.",
-)
 def test_build_cutover_and_selection_outcome_share_one_strict_acceptance_rule():
     from loop.build_cutover import select_suites
 

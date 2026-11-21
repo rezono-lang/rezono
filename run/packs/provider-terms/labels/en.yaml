@@ -15,7 +15,11 @@ detail_has_type: Detail has type
 order_has_usage_detail: Order has usage-billed detail
 invalid_order: Invalid order
 conflicted_quote_policy: Conflicted quote policy
+order_has_expiration: Order has expiration
+order_has_day_end: Order has approved day end
+order_has_valid_quote_policy: Order has valid quote policy
 order_guarantee: Order quote guarantee
+no_guarantee: Order quote refusal reason
 order_has_status: Order has status
 conflicted_order_status: Conflicted order status
 ambiguous_order_status: Ambiguous order status
