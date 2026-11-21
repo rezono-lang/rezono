@@ -67,9 +67,6 @@ def test_management_certificate_missing_or_duplicate_clock_marks_presented_leave
 
 
 @pytest.mark.cluster
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "M2: Depends on the disposable issuer, ordinary client TLS readback and test_management_certificate_findings. "
-    "Record a real handshake before and after renewal per decisions/platform-management-certificates.md."))
 def test_management_certificate_renewal_readback():
     from management_probes import live_events
 
