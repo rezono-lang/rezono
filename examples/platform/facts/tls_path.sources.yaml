@@ -2,3 +2,9 @@ default:
   kind: synthetic
   name: decisions/platform-source-and-scenario-cases.md
   position: tls-comparison-synthetic-case
+records:
+  - of: {kind: tls_clock, id: tls-policy}
+    kind: git
+    name: rezono-lang/rezono
+    revision: a8e1aa9fc74a27a726564ddeeb20c1c7c22f835f
+    position: decisions/platform-management-certificates.md
