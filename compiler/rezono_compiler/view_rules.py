@@ -325,7 +325,7 @@ def bind(doc: dict | None, view: TypedView, domain: Pack, theory: Pack, names: M
         cols = tables.get(name)
         if cols is None or any(t is None and n != date for n, t in cols):
             raise ViewRuleError(f'{source}: views[{view.theory}]: {name} is no table a view can read')
-        key = [{'name': n, 'type': t or 'string'} for n, t in cols]
+        key = [{'name': n, 'type': 'string' if n == date else t} for n, t in cols]
         old = relations.get(name)
         if old is not None and (old['role'] != 'base' or old['key'] != key):
             raise ViewRuleError(f'{source}: views[{view.theory}]: {name} does not match its table')

@@ -31,7 +31,7 @@ from .rules import BOOLEAN, Condition, calc_input_table, const_type, is_var, upp
 from .sqltext import literal, q
 
 OPS = {"eq": "=", "ne": "<>", "lt": "<", "le": "<=", "gt": ">", "ge": ">=", "add": "+", "sub": "-", "mul": "*", "div": "/"}
-SQL_TYPE = {"string": "VARCHAR", "integer": "BIGINT", "rational": "VARCHAR", "boolean": "BOOLEAN"}
+SQL_TYPE = {"string": "VARCHAR", "integer": "BIGINT", "rational": "VARCHAR", "boolean": "BOOLEAN", "date": "DATE"}
 # Integer division truncated toward zero, on the absolute values, so it does not depend on how `//` rounds a
 # negative operand; HUGEINT, so that abs(-2^63) fits. Only the quotient -2^63 / -1 does not fit a BIGINT.
 DUCKDB_MACROS = ("CREATE OR REPLACE MACRO rezono_quotient(a, b) AS CAST(CASE WHEN (a < 0) = (b < 0) "
@@ -86,6 +86,8 @@ def lit_sql(term, typ):
         return f"CAST({int(term)} AS BIGINT)"
     if typ == "boolean":
         return "TRUE" if BOOLEAN[term] else "FALSE"
+    if typ == "date":
+        return f"DATE {literal(term)}"
     return literal(term)
 
 
@@ -411,6 +413,8 @@ def functional_candidate_select(prog, rule, dialect="feldera"):
         cols.append((f"CAST({r.term(vt, 'string')} AS VARCHAR)", "__v"))
     elif vc.type == "integer":
         cols.append((f"CAST({r.term(vt, 'integer')} AS BIGINT)", "__v"))
+    elif vc.type == "date":
+        cols.append((f"CAST({r.term(vt, 'date')} AS DATE)", "__v"))
     else:
         cols.append((r.term(vt, "boolean"), "__v"))
     return r.select(cols)
@@ -481,6 +485,11 @@ def functional_select(prog, name, dialect="feldera"):
             val_selects = [
                 (f'CAST(CASE WHEN {is_known} THEN COALESCE(g."__min_v", CAST(0 AS BIGINT)) '
                  f'ELSE CAST(0 AS BIGINT) END AS BIGINT) AS {q(rel.value.name)}')
+            ]
+        elif vtype == "date":
+            val_selects = [
+                (f"CAST(CASE WHEN {is_known} THEN COALESCE(g.\"__min_v\", DATE '1970-01-01') "
+                 f"ELSE DATE '1970-01-01' END AS DATE) AS {q(rel.value.name)}")
             ]
         else:
             val_selects = [
@@ -621,7 +630,7 @@ def wants_witness(prog, rule, witnesses):
 
 def empty_relation(rel, dialect):
     """A declaration-only extension is empty, with typed columns and no implicit grants or NULLs."""
-    empty = {"string": "", "integer": "0", "boolean": "false"}
+    empty = {"string": "", "integer": "0", "boolean": "false", "date": "1970-01-01"}
     cols = []
     for c in rel.key:
         if c.type == "rational":
