@@ -7,3 +7,7 @@ entry_tls_path:
     entry: lb
     tls_port: 443
     backend_port: 8080
+tls_clock:
+  - id: tls-policy
+    day: '2026-06-10'
+    warning_days: 7
