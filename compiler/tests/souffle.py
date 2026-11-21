@@ -64,15 +64,20 @@ def _term(t, typ):
     return _quote(t)
 
 
-def _atom(prog, atom, over=None):
+def _atom(prog, atom, over=None, *, is_head=False):
     rel = prog.relations[atom.relation]
-    terms = ["W_" if over == c.name and t == "_" else _term(t, c.type) for t, c in zip(atom.terms, rel.key)]
+    cols = rel.head_columns if is_head else rel.row_columns
+    terms = ["W_" if over == c.name and t == "_" else _term(t, c.type) for t, c in zip(atom.terms, cols)]
     terms += ["W_" if over == c.name else "_" for c in rel.values]
     return f"{atom.relation}({', '.join(terms)})"
 
 
 def _decl(rel):
-    return f".decl {rel.name}({', '.join(f'{c.name}:{TYPE[c.type]}' for c in rel.key + rel.values)})"
+    cols = rel.row_columns + rel.values
+    for c in cols:
+        if c.type not in TYPE:
+            raise ValueError(f"Soufflé oracle does not support column type {c.type!r} ({rel.name}.{c.name})")
+    return f".decl {rel.name}({', '.join(f'{c.name}:{TYPE[c.type]}' for c in cols)})"
 
 
 def _string_candidates(prog, target, extra_literals=()):
@@ -89,9 +94,10 @@ def _string_candidates(prog, target, extra_literals=()):
             rules.append(f"{target}(x) :- {rel.name}({', '.join(terms)}).")
     literals = set(extra_literals)
     for r in prog.rules.values():
-        for atom in (r.head, *(b.atom for b in r.body), *(a.atom for a in r.aggregates)):
+        for atom, is_head in ((r.head, True), *((b.atom, False) for b in r.body), *((a.atom, False) for a in r.aggregates)):
             rel = prog.relations[atom.relation]
-            for t, col in zip(atom.terms, rel.key):
+            cols = rel.head_columns if is_head else rel.row_columns
+            for t, col in zip(atom.terms, cols):
                 if col.type == "string" and t != "_" and not is_var(t):
                     literals.add(_term(t, "string"))
         for s in r.assignments:
@@ -170,47 +176,239 @@ def _probe_rules():
     ]
 
 
-def _rule(prog, r):
+def _rule_body_parts(prog, r, *, include_aggregates=True, include_assignments=True, include_conditions=True):
     types = {}
     for b in r.body:
-        for t, c in zip(b.atom.terms, prog.relations[b.atom.relation].key):
+        for t, c in zip(b.atom.terms, prog.relations[b.atom.relation].row_columns):
             types.setdefault(t, c.type)
     parts = []
     for b in r.body:
         parts.append(("!" if b.polarity == "negative" else "") + _atom(prog, b.atom))
-    for a in r.aggregates:
-        inner = _atom(prog, a.atom, over=a.over)
-        fn = "count" if a.function == "count" else f"{a.function} W_"
-        parts.append(f"{_term(a.var, 'integer')} = {fn} : {{ {inner} }}")
-    for idx, s in enumerate(r.assignments):
-        if s.op == DAYS:
-            left_d, right_d = f"DayLeft_{idx}_", f"DayRight_{idx}_"
-            parts.append(
-                f"DayNum({_term(s.left, 'string')}, {left_d}), "
-                f"DayNum({_term(s.right, 'string')}, {right_d}), "
-                f"{_term(s.var, 'integer')} = {left_d} - {right_d}"
-            )
+    if include_aggregates:
+        for a in r.aggregates:
+            inner = _atom(prog, a.atom, over=a.over)
+            fn = "count" if a.function == "count" else f"{a.function} W_"
+            parts.append(f"{_term(a.var, 'integer')} = {fn} : {{ {inner} }}")
+    if include_assignments:
+        for idx, s in enumerate(r.assignments):
+            if s.op == DAYS:
+                left_d, right_d = f"DayLeft_{idx}_", f"DayRight_{idx}_"
+                parts.append(
+                    f"DayNum({_term(s.left, 'string')}, {left_d}), "
+                    f"DayNum({_term(s.right, 'string')}, {right_d}), "
+                    f"{_term(s.var, 'integer')} = {left_d} - {right_d}"
+                )
+                continue
+            parts.append(f"{_term(s.var, 'integer')} = {_term(s.left, 'integer')} {OPS[s.op]} {_term(s.right, 'integer')}")
+    if include_conditions:
+        for idx, c in enumerate(r.conditions):
+            if c.compare_as is not None and c.compare_as not in COMPARE_AS:
+                raise ValueError(f"unsupported compare_as {c.compare_as!r}")
+            if c.compare_as == "utc_instant":
+                left_k, right_k = f"UtcLeft_{idx}_", f"UtcRight_{idx}_"
+                parts.append(
+                    f"UtcKey({_term(c.left, 'string')}, {left_k}), "
+                    f"UtcKey({_term(c.right, 'string')}, {right_k}), "
+                    f"{left_k} {OPS[c.op]} {right_k}"
+                )
+                continue
+            if c.compare_as == "binary_text":
+                parts.append(f"{_term(c.left, 'string')} {OPS[c.op]} {_term(c.right, 'string')}")
+                continue
+            t = types.get(c.left) or types.get(c.right) or const_type(c.left)
+            if any(a.var in (c.left, c.right) for a in r.aggregates) or any(s.var in (c.left, c.right) for s in r.assignments):
+                t = "integer"
+            parts.append(f"{_term(c.left, t)} {OPS[c.op]} {_term(c.right, t)}")
+    return parts
+
+
+def _rule(prog, r):
+    return f"{_atom(prog, r.head, is_head=True)} :- {', '.join(_rule_body_parts(prog, r))}."
+
+
+def _join_args(*groups):
+    items = [item for group in groups for item in group if item]
+    return ", ".join(items)
+
+
+def _state_bearing_agg(prog, a):
+    rel = prog.relations[a.atom.relation]
+    state_idx = next(
+        (i for i, (t, c) in enumerate(zip(a.atom.terms, rel.row_columns))
+         if c.name == "state" and c.type == "string" and t == "_"),
+        None,
+    )
+    if state_idx is None:
+        return None
+    reason_idx = next(
+        (i for i, (t, c) in enumerate(zip(a.atom.terms, rel.row_columns))
+         if c.name == "reason" and c.type == "string" and t == "_"),
+        None,
+    )
+    return state_idx, reason_idx
+
+
+def _functional_sentinel(typ):
+    if typ == "integer":
+        return "0"
+    if typ == "boolean":
+        return '"false"'
+    return '""'
+
+
+def _functional_rules(prog, rel):
+    """Lower a non-rational `role: functional` relation into stratified Soufflé Datalog relations
+    emitting co-located `(key..., state, reason, value)` tuples over its closed domain."""
+    name = rel.name
+    dom = prog.relations[rel.domain]
+    prefix = f"Func_{name}"
+    key_decls = [f"{c.name}:{TYPE[c.type]}" for c in rel.key]
+    key_vars = [f"K{j}_" for j in range(len(rel.key))]
+    val_type = TYPE[rel.value.type]
+    sentinel = _functional_sentinel(rel.value.type)
+    empty_state = rel.empty_state or "unknown"
+    empty_reason = rel.empty_reason or ("empty" if empty_state == "not_applicable" else "no_value")
+
+    dom_terms = key_vars + ["_"] * len(dom.values)
+    lines = [
+        f".decl {prefix}_Dom({_join_args(key_decls)})",
+        f"{prefix}_Dom({_join_args(key_vars)}) :- {dom.name}({_join_args(dom_terms)}).",
+        f".decl {prefix}_Cand({_join_args(key_decls, ['st:number', 'rsn:symbol', f'val:{val_type}'])})",
+    ]
+
+    for r in sorted(prog.rules_for(name), key=lambda x: x.id):
+        head_keys = [_term(t, c.type) for t, c in zip(r.head.terms[:-1], rel.key)]
+        head_val = _term(r.head.terms[-1], rel.value.type)
+        state_aggs = [(idx, a, info) for idx, a in enumerate(r.aggregates)
+                      if (info := _state_bearing_agg(prog, a)) is not None]
+        if not state_aggs:
+            parts = _rule_body_parts(prog, r)
+            cand_args = _join_args(head_keys, ["0", '""', head_val])
+            lines.append(f"{prefix}_Cand({cand_args}) :- {', '.join(parts)}.")
             continue
-        parts.append(f"{_term(s.var, 'integer')} = {_term(s.left, 'integer')} {OPS[s.op]} {_term(s.right, 'integer')}")
-    for idx, c in enumerate(r.conditions):
-        if c.compare_as is not None and c.compare_as not in COMPARE_AS:
-            raise ValueError(f"unsupported compare_as {c.compare_as!r}")
-        if c.compare_as == "utc_instant":
-            left_k, right_k = f"UtcLeft_{idx}_", f"UtcRight_{idx}_"
-            parts.append(
-                f"UtcKey({_term(c.left, 'string')}, {left_k}), "
-                f"UtcKey({_term(c.right, 'string')}, {right_k}), "
-                f"{left_k} {OPS[c.op]} {right_k}"
-            )
-            continue
-        if c.compare_as == "binary_text":
-            parts.append(f"{_term(c.left, 'string')} {OPS[c.op]} {_term(c.right, 'string')}")
-            continue
-        t = types.get(c.left) or types.get(c.right) or const_type(c.left)
-        if any(a.var in (c.left, c.right) for a in r.aggregates) or any(s.var in (c.left, c.right) for s in r.assignments):
-            t = "integer"
-        parts.append(f"{_term(c.left, t)} {OPS[c.op]} {_term(c.right, t)}")
-    return f"{_atom(prog, r.head)} :- {', '.join(parts)}."
+
+        agg_guards = []
+        base_parts = _rule_body_parts(prog, r, include_aggregates=False, include_assignments=False, include_conditions=False)
+        full_parts = _rule_body_parts(prog, r)
+        for idx, a, (state_idx, reason_idx) in state_aggs:
+            agg_rel = prog.relations[a.atom.relation]
+            ap = f"Func_{r.id}_Agg{idx}"
+            seen_vars = {}
+            ak_decls, ak_vars, ak_rule_terms = [], [], []
+            for t, c in zip(a.atom.terms, agg_rel.row_columns):
+                if is_var(t) and t not in seen_vars:
+                    k = len(ak_vars)
+                    seen_vars[t] = k
+                    ak_decls.append(f"k{k}:{TYPE[c.type]}")
+                    ak_vars.append(f"AK{k}_")
+                    ak_rule_terms.append(_term(t, c.type))
+
+            lines.append(f".decl {ap}_Row({_join_args(ak_decls, ['st:number', 'rsn:symbol'])})")
+            for st_name, st_code in (("invalid", 3), ("unknown", 2), ("not_applicable", 1), ("known", 0)):
+                atom_terms = []
+                for pos, (t, c) in enumerate(zip(a.atom.terms, agg_rel.row_columns)):
+                    if pos == state_idx:
+                        atom_terms.append(f'"{st_name}"')
+                    elif pos == reason_idx:
+                        atom_terms.append("Rsn_" if st_code > 0 else "_")
+                    elif is_var(t):
+                        atom_terms.append(f"AK{seen_vars[t]}_")
+                    elif t == "_":
+                        atom_terms.append("_")
+                    else:
+                        atom_terms.append(_term(t, c.type))
+                atom_terms += ["_"] * len(agg_rel.values)
+                rsn_head = "Rsn_" if (st_code > 0 and reason_idx is not None) else '""'
+                lines.append(
+                    f"{ap}_Row({_join_args(ak_vars, [str(st_code), rsn_head])}) :- "
+                    f"{agg_rel.name}({_join_args(atom_terms)})."
+                )
+            lines += [
+                f".decl {ap}_HasRow({_join_args(ak_decls)})",
+                f"{ap}_HasRow({_join_args(ak_vars)}) :- {ap}_Row({_join_args(ak_vars, ['_', '_'])}).",
+                f".decl {ap}_Max({_join_args(ak_decls, ['st:number'])})",
+                (f"{ap}_Max({_join_args(ak_vars, ['MaxSt_'])}) :- "
+                 f"{ap}_HasRow({_join_args(ak_vars)}), "
+                 f"MaxSt_ = max St_ : {{ {ap}_Row({_join_args(ak_vars, ['St_', '_'])}) }}."),
+                f".decl {ap}_NotMinRsn({_join_args(ak_decls, ['rsn:symbol'])})",
+                (f"{ap}_NotMinRsn({_join_args(ak_vars, ['Rsn_'])}) :- "
+                 f"{ap}_Max({_join_args(ak_vars, ['MaxSt_'])}), "
+                 f"{ap}_Row({_join_args(ak_vars, ['MaxSt_', 'Rsn_'])}), "
+                 f"{ap}_Row({_join_args(ak_vars, ['MaxSt_', 'Rsn2_'])}), Rsn2_ < Rsn_."),
+                f".decl {ap}_MinRsn({_join_args(ak_decls, ['st:number', 'rsn:symbol'])})",
+                (f"{ap}_MinRsn({_join_args(ak_vars, ['MaxSt_', 'Rsn_'])}) :- "
+                 f"{ap}_Max({_join_args(ak_vars, ['MaxSt_'])}), "
+                 f"{ap}_Row({_join_args(ak_vars, ['MaxSt_', 'Rsn_'])}), "
+                 f"!{ap}_NotMinRsn({_join_args(ak_vars, ['Rsn_'])})."),
+            ]
+            agg_guards.append((ap, a.function, ak_rule_terms))
+
+        # Known branch(es): every state-bearing aggregate is known (or empty for count/sum).
+        # Build all combinations of (empty vs max=0) for count/sum, or (max=0) for min/max.
+        known_combos = [[]]
+        for ap, fn, ak_rule_terms in agg_guards:
+            opts = [f"{ap}_Max({_join_args(ak_rule_terms, ['0'])})"]
+            if fn in ("count", "sum"):
+                opts.append(f"!{ap}_HasRow({_join_args(ak_rule_terms)})")
+            known_combos = [combo + [opt] for combo in known_combos for opt in opts]
+        known_head = _join_args(head_keys, ["0", '""', head_val])
+        for combo in known_combos:
+            lines.append(f"{prefix}_Cand({known_head}) :- {', '.join(full_parts + combo)}.")
+        # Non-known branches: propagate each state-bearing aggregate's non-known state (and min/max empty).
+        for ap, fn, ak_rule_terms in agg_guards:
+            min_rsn_args = _join_args(ak_rule_terms, ["AggSt_", "AggRsn_"])
+            prop_head = _join_args(head_keys, ["AggSt_", "AggRsn_", sentinel])
+            prop_body = ", ".join(base_parts + [f"{ap}_MinRsn({min_rsn_args})", "AggSt_ > 0"])
+            lines.append(f"{prefix}_Cand({prop_head}) :- {prop_body}.")
+            if fn in ("min", "max"):
+                empty_head = _join_args(head_keys, ["1", '"empty"', sentinel])
+                empty_body = ", ".join(base_parts + [f"!{ap}_HasRow({_join_args(ak_rule_terms)})"])
+                lines.append(f"{prefix}_Cand({empty_head}) :- {empty_body}.")
+
+    inv_head = _join_args(key_vars, ['"invalid"', "Rsn_", sentinel])
+    mv_head = _join_args(key_vars, ['"invalid"', '"multiple_values"', sentinel])
+    unk_head = _join_args(key_vars, ['"unknown"', "Rsn_", sentinel])
+    na_head = _join_args(key_vars, ['"not_applicable"', "Rsn_", sentinel])
+    ok_head = _join_args(key_vars, ['"known"', '""', "Val_"])
+    lines += [
+        f".decl {prefix}_HasCand({_join_args(key_decls)})",
+        f"{prefix}_HasCand({_join_args(key_vars)}) :- {prefix}_Dom({_join_args(key_vars)}), {prefix}_Cand({_join_args(key_vars, ['_', '_', '_'])}).",
+        f".decl {prefix}_MaxSt({_join_args(key_decls, ['st:number'])})",
+        (f"{prefix}_MaxSt({_join_args(key_vars, ['MaxSt_'])}) :- "
+         f"{prefix}_HasCand({_join_args(key_vars)}), "
+         f"MaxSt_ = max St_ : {{ {prefix}_Cand({_join_args(key_vars, ['St_', '_', '_'])}) }}."),
+        f".decl {prefix}_Conflict({_join_args(key_decls)})",
+        (f"{prefix}_Conflict({_join_args(key_vars)}) :- "
+         f"{prefix}_Dom({_join_args(key_vars)}), "
+         f"{prefix}_Cand({_join_args(key_vars, ['0', '_', 'V1_'])}), "
+         f"{prefix}_Cand({_join_args(key_vars, ['0', '_', 'V2_'])}), V1_ != V2_."),
+        f".decl {prefix}_NotMinRsn({_join_args(key_decls, ['st:number', 'rsn:symbol'])})",
+        (f"{prefix}_NotMinRsn({_join_args(key_vars, ['St_', 'Rsn_'])}) :- "
+         f"{prefix}_Dom({_join_args(key_vars)}), "
+         f"{prefix}_Cand({_join_args(key_vars, ['St_', 'Rsn_', '_'])}), "
+         f"{prefix}_Cand({_join_args(key_vars, ['St_', 'Rsn2_', '_'])}), St_ > 0, Rsn2_ < Rsn_."),
+        f".decl {prefix}_MinRsn({_join_args(key_decls, ['st:number', 'rsn:symbol'])})",
+        (f"{prefix}_MinRsn({_join_args(key_vars, ['St_', 'Rsn_'])}) :- "
+         f"{prefix}_Dom({_join_args(key_vars)}), "
+         f"{prefix}_Cand({_join_args(key_vars, ['St_', 'Rsn_', '_'])}), "
+         f"St_ > 0, !{prefix}_NotMinRsn({_join_args(key_vars, ['St_', 'Rsn_'])})."),
+        (f"{name}({_join_args(key_vars, [_quote(empty_state), _quote(empty_reason), sentinel])}) :- "
+         f"{prefix}_Dom({_join_args(key_vars)}), !{prefix}_HasCand({_join_args(key_vars)})."),
+        (f"{name}({inv_head}) :- "
+         f"{prefix}_MaxSt({_join_args(key_vars, ['3'])}), {prefix}_MinRsn({_join_args(key_vars, ['3', 'Rsn_'])})."),
+        (f"{name}({mv_head}) :- "
+         f"{prefix}_MaxSt({_join_args(key_vars, ['MaxSt_'])}), MaxSt_ < 3, {prefix}_Conflict({_join_args(key_vars)})."),
+        (f"{name}({unk_head}) :- "
+         f"{prefix}_MaxSt({_join_args(key_vars, ['2'])}), !{prefix}_Conflict({_join_args(key_vars)}), "
+         f"{prefix}_MinRsn({_join_args(key_vars, ['2', 'Rsn_'])})."),
+        (f"{name}({na_head}) :- "
+         f"{prefix}_MaxSt({_join_args(key_vars, ['1'])}), !{prefix}_Conflict({_join_args(key_vars)}), "
+         f"{prefix}_MinRsn({_join_args(key_vars, ['1', 'Rsn_'])})."),
+        (f"{name}({ok_head}) :- "
+         f"{prefix}_MaxSt({_join_args(key_vars, ['0'])}), !{prefix}_Conflict({_join_args(key_vars)}), "
+         f"{prefix}_Cand({_join_args(key_vars, ['0', '_', 'Val_'])})."),
+    ]
+    return lines
 
 
 def program(prog):
@@ -218,7 +416,12 @@ def program(prog):
     for rel in sorted(prog.relations.values(), key=lambda r: r.name):
         lines.append(_decl(rel))
         lines.append(f".input {rel.name}" if rel.role in INPUT else f".output {rel.name}")
-    lines += [_rule(prog, r) for r in sorted(prog.rules.values(), key=lambda r: r.id)]
+    for r in sorted(prog.rules.values(), key=lambda r: r.id):
+        if prog.relations[r.head.relation].role != "functional":
+            lines.append(_rule(prog, r))
+    for rel in sorted(prog.relations.values(), key=lambda r: r.name):
+        if rel.role == "functional":
+            lines += _functional_rules(prog, rel)
     if any(s.op == DAYS for r in prog.rules.values() for s in r.assignments):
         lines += _day_rules(prog)
     modes = {c.compare_as for r in prog.rules.values() for c in r.conditions if c.compare_as}
@@ -551,7 +754,7 @@ def run(prog, data, workdir=None, program_text=None):
                 raise AssertionError("Soufflé did not order symbols by their UTF-8 bytes")
         out = {}
         for name, rel in prog.relations.items():
-            if rel.role == "derived":
+            if rel.role in ("derived", "functional"):
                 text = (d / "out" / f"{name}.csv").read_text(encoding="utf-8")
                 out[name] = {tuple(line.split("\t")) for line in text.splitlines() if line}
         return out
