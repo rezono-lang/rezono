@@ -50,13 +50,14 @@ def _decision_file(source: dict) -> bool:
 
 
 @pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "M2: decisions/platform-facts-not-conclusions.md: section 3. Derive provides in rules/core.dl from the "
-    "PortDecision for the product and function where one exists, else from each vendor_default_transport_source "
-    "statement whose series is the version or series of the release the service runs, else from the product's one "
-    "stated series, and add port_unknown. Keep Offer.port, the two forgejo git offers, and choice_evidence.dl / "
-    "unique_evidence.dl unchanged in step 2: a planner retires Offer.port, merges duplicate (product, function) "
-    "offers into one per pair, and switches choice_evidence.dl and unique_evidence.dl off offer__port atomically "
-    "in step 3 (Retire) so no cross-port ghost rows arise."))
+    "M2: decisions/platform-facts-not-conclusions.md: section 3 (Rules). Derive provides in rules/core.dl "
+    "from the PortDecision for the product and function where one exists, else from each "
+    "vendor_default_transport_source statement whose series is the version or series of the release the "
+    "service runs, else from the product's one stated series, and add port_unknown. Keep Offer.port, the "
+    "two forgejo git offers (o-git-https, o-git-ssh), and rules/choice_evidence.dl / rules/unique_evidence.dl "
+    "unchanged in step 2: section 3 (Retire) atomically removes Offer.port, merges duplicate "
+    "(product, function) offers into one per pair, and switches choice_evidence.dl and unique_evidence.dl "
+    "from offer__port to provides so no cross-port ghost rows arise."))
 def test_service_port_follows_the_vendor_statement_unless_decided():
     from rezono_compiler import sources
 

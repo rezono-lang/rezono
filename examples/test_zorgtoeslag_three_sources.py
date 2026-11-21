@@ -727,7 +727,7 @@ def test_retire_legacy_single_source_household_branch_in_zorgtoeslag_slice(tmp_p
             oracle.allowance(legacy, "ann", datetime.date(2026, 2, 1), datetime.date(2026, 2, 10))
 
     #    - Even attaching stored partner/insured/joint_income directly to `Persoon` without
-    #      civil/tax/insurer facts must NOT compute a known allowance (13500).
+    #      civil/tax/insurer facts must be refused fail-closed with ValueError.
     stored_on_persoon = tmp_path / "legacy-on-persoon.rezono"
     stored_on_persoon.write_text(
         "rezono 0\n"
@@ -742,14 +742,8 @@ def test_retire_legacy_single_source_household_branch_in_zorgtoeslag_slice(tmp_p
         encoding="utf-8",
         newline="\n",
     )
-    try:
-        outcome = oracle.allowance(stored_on_persoon, "p-ann", datetime.date(2026, 2, 1), datetime.date(2026, 2, 10))
-    except ValueError:
-        pass
-    else:
-        assert outcome == ("unknown", "no_version_applies"), (
-            f"oracle must ignore stored partner/insured/joint_income on Persoon without three-source facts, got {outcome!r}"
-        )
+    with pytest.raises(ValueError):
+        oracle.allowance(stored_on_persoon, "p-ann", datetime.date(2026, 2, 1), datetime.date(2026, 2, 10))
 
 
 @pytest.mark.xfail(
