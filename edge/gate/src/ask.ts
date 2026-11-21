@@ -2,6 +2,9 @@
 import type { CalcWitness, RowRef, Witness } from '../../../contracts/typescript/generated/proof.ts';
 import type { Answer as ContractAnswer, Question as ContractQuestion, Source } from '../../../contracts/typescript/generated/explain.ts';
 import { compareText as byText } from './pieces.ts';
+import { canonicalWitnessHash, canonicalWitnessIri } from './witness-iri.ts';
+
+export { canonicalWitnessHash, canonicalWitnessIri };
 
 export const ANSWER = 'rezono.answer/1';
 /** An error with the HTTP status the gate answers with. */
@@ -60,6 +63,8 @@ export interface Graph {
 	edges(direction: Direction, node: RowRef, after?: RowRef): AsyncIterable<Edge>;
 	/** The chosen witness of a conclusion, a rule's or a calculation's (W12); none for a row that is not one. */
 	witness(conclusion: RowRef): Promise<Witness | CalcWitness | undefined>;
+	/** All distinct witnesses of a conclusion in deterministic reader order (optional for backward compat). */
+	witnesses?(conclusion: RowRef): Promise<(Witness | CalcWitness)[]>;
 }
 export interface Cursor {
 	distance: number;
@@ -87,17 +92,23 @@ export interface AnswerStep {
 	position: number;
 	value?: string;
 }
+export type AnswerWitness = Witness & { iri: string };
+export type AnswerCalcWitness = CalcWitness & { iri: string };
+export interface WalkOptions {
+	/** Schema base IRI ending in `/` for `<base>witness/<64 hex>` witness IRIs; defaults to `rezono:w/<64 hex>`. */
+	baseIri?: string;
+}
 /** One page of an answer (contracts/explain.yaml, Answer). */
-export interface Answer extends Omit<ContractAnswer, 'nodes' | 'steps'> {
+export interface Answer extends Omit<ContractAnswer, 'nodes' | 'steps' | 'witnesses' | 'calc_witnesses'> {
 	format: string;
 	question: string;
 	manifest_id: string;
 	start?: RowRef;
 	nodes: AnswerNode[];
 	steps: AnswerStep[];
-	witnesses: Witness[];
+	witnesses: AnswerWitness[];
 	/** The calculation witnesses of the nodes shown (W12); absent when there are none. */
-	calc_witnesses?: CalcWitness[];
+	calc_witnesses?: AnswerCalcWitness[];
 	next?: string;
 	more?: RowRef[];
 }
@@ -200,12 +211,12 @@ async function* level(g: Graph, d: Direction, from: RowRef[], after?: RowRef): A
  * `grounds` are the fact with its sources. Without them (a manifest from before S25) the answer is as before.
  * Sources are read only for a question that applies, and only for the start and the nodes of the page.
  */
-export async function ask(g: Graph, q: Question, manifestId: string, start: RowRef, page: { limit: number; after?: Cursor }, sourcesOf?: SourcesOf): Promise<Answer | undefined> {
+export async function ask(g: Graph, q: Question, manifestId: string, start: RowRef, page: { limit: number; after?: Cursor }, sourcesOf?: SourcesOf, options?: WalkOptions): Promise<Answer | undefined> {
 	const t = traceOf(q);
 	start = plain(start);
-	const conclusion = (await g.witness(start)) !== undefined;
+	const conclusion = (await g.witness(start)) !== undefined || ((await g.witnesses?.(start))?.length ?? 0) > 0;
 	if (!applies(q, start, conclusion)) return undefined; // before any source is read
-	const a = await walk(g, t, [start], page, !conclusion && !(sourcesOf && (await sourcesOf(start))));
+	const a = await walk(g, t, [start], page, !conclusion && !(sourcesOf && (await sourcesOf(start))), options);
 	if (!a) return undefined;
 	const nodes = sourcesOf ? await Promise.all(a.nodes.map(async (n) => withSources(n, await sourcesOf(n)))) : a.nodes;
 	return { format: ANSWER, question: q.term, manifest_id: manifestId, start, ...a, nodes };
@@ -222,7 +233,7 @@ export type Walked = Pick<Answer, 'nodes' | 'steps' | 'witnesses' | 'calc_witnes
  * the walk is undefined (one start that is no conclusion: the gate answers 404). The starts of a delta are
  * given rows, also one removed in the target, so they are not strict.
  */
-export async function walk(g: Graph, t: Trace, starts: RowRef[], page: { limit: number; after?: Cursor }, strict = false): Promise<Walked | undefined> {
+export async function walk(g: Graph, t: Trace, starts: RowRef[], page: { limit: number; after?: Cursor }, strict = false, options?: WalkOptions): Promise<Walked | undefined> {
 	const keep = matcher(t.keep, 'keep');
 	const stop = matcher(t.stop, 'stop');
 	const seeds = [...new Map(starts.map((s) => [idOf(s), plain(s)])).values()].sort(byRef);
@@ -313,9 +324,30 @@ export async function walk(g: Graph, t: Trace, starts: RowRef[], page: { limit: 
 		.filter((e) => shown(far(dir, e)) && shown(near(dir, e)))
 		.sort((a, b) => byRef(a.c, b.c) || byText(a.how, b.how) || a.position - b.position || byRef(a.p, b.p))
 		.map((e) => ({ conclusion: plain(e.c), premise: plain(e.p), how: e.how, position: e.position, ...valued(e.value) }));
-	const found = (await Promise.all(nodes.map((n) => g.witness(n)))).filter((w) => w !== undefined);
-	const witnesses = found.filter((w): w is Witness => !isCalc(w));
-	const calc = found.filter(isCalc);
+	// Collect all distinct witnesses published for every shown node in deterministic reader order.
+	const perNode = await Promise.all(
+		nodes.map(async (n) => {
+			if (g.witnesses) return g.witnesses(n);
+			const one = await g.witness(n);
+			return one ? [one] : [];
+		})
+	);
+	const seenHash = new Set<string>();
+	const found: (Witness | CalcWitness)[] = [];
+	for (const list of perNode) {
+		for (const w of list) {
+			const h = canonicalWitnessHash(w);
+			if (seenHash.has(h)) continue;
+			seenHash.add(h);
+			found.push(w);
+		}
+	}
+	const witnesses: AnswerWitness[] = found
+		.filter((w): w is Witness => !isCalc(w))
+		.map((w) => ({ ...w, iri: canonicalWitnessIri(w, options?.baseIri) }));
+	const calc: AnswerCalcWitness[] = found
+		.filter(isCalc)
+		.map((w) => ({ ...w, iri: canonicalWitnessIri(w, options?.baseIri) }));
 	return {
 		nodes,
 		steps,
@@ -336,7 +368,22 @@ export function questionOf(bundle: unknown, term: string): Question | undefined 
 }
 /** The proof graph from a set of witnesses, a rule's or a calculation's, and their `step` rows, in memory. */
 export function memoryGraph(witnesses: (Witness | CalcWitness)[], steps: Edge[]): Graph {
-	const by = new Map(witnesses.map((w) => [idOf(w.conclusion), w]));
+	const by = new Map<string, (Witness | CalcWitness)[]>();
+	const seen = new Map<string, Set<string>>();
+	for (const w of witnesses) {
+		const cid = idOf(w.conclusion);
+		const h = canonicalWitnessHash(w);
+		let hashes = seen.get(cid);
+		if (!hashes) {
+			hashes = new Set();
+			seen.set(cid, hashes);
+		}
+		if (hashes.has(h)) continue;
+		hashes.add(h);
+		const list = by.get(cid);
+		if (list) list.push(w);
+		else by.set(cid, [w]);
+	}
 	const at = { back: new Map<string, Edge[]>(), forward: new Map<string, Edge[]>() };
 	for (const e of steps)
 		for (const d of ['back', 'forward'] as const) {
@@ -350,7 +397,8 @@ export function memoryGraph(witnesses: (Witness | CalcWitness)[], steps: Edge[])
 		async *edges(direction, n, after) {
 			for (const e of at[direction].get(idOf(n)) ?? []) if (!after || byRef(far(direction, e), after) > 0) yield e;
 		},
-		witness: async (c) => by.get(idOf(c))
+		witness: async (c) => by.get(idOf(c))?.[0],
+		witnesses: async (c) => [...(by.get(idOf(c)) ?? [])]
 	};
 }
 

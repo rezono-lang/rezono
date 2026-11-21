@@ -99,6 +99,11 @@ const notYet = (what: string): AskError => new AskError(501, `${what}: no Rezono
  * The schema of a role and where its rows are. A kind, a slot or a derived relation over a relation the role
  * does not read in full is open, and a single-valued slot over one also takes `unknown`.
  */
+/** The pack's own base IRI (§2.1), as the form takes it; a pack.yaml that declares no `iri:` gets the default. */
+export function packBase(bundle: Bundle): string {
+	return bundle.pack.base || `https://rezono.example/${bundle.pack.id}/`;
+}
+
 export function roleSchema(bundle: Bundle, snapshots: Listed[]): View {
 	const reads = new Set<string>();
 	const full = new Set<string>();
@@ -108,8 +113,7 @@ export function roleSchema(bundle: Bundle, snapshots: Listed[]): View {
 		if (s.complete || s.full) full.add(s.relation);
 	}
 	const partial = (relation: string): boolean => !full.has(relation);
-	// The pack's own base (§2.1), as the form takes it; a pack.yaml that declares no `iri:` gets the default.
-	const base = bundle.pack.base || `https://rezono.example/${bundle.pack.id}/`;
+	const base = packBase(bundle);
 	const view: View = { schema: { rezono: '1.0', pack: bundle.pack.id, base, kinds: {} }, kinds: new Map(), slots: new Map(), reads, trees: new Set() };
 	const { kinds } = view.schema;
 	const types: Record<string, TypeDef> = {};
