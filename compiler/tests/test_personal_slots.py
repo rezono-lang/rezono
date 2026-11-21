@@ -104,12 +104,21 @@ def test_rule_reading_personal_slot_is_refused(tmp_path: Path):
     assert "personal" not in attrs["alpha.title"]
 
 
+def _refused_codes(directory: Path) -> list[str]:
+    """The diagnostic codes compiling `directory` is refused with; an AssertionError when it compiles."""
+    try:
+        emit.compile_pack(pack.read(directory))
+    except (pack.CompileError, rules_dl.RuleError) as refused:
+        return [d.code for d in refused.diagnostics]
+    raise AssertionError(f"{directory.name}: compiled, but reads a personal slot")
+
+
 @pytest.mark.xfail(
     strict=True,
     raises=AssertionError,
     reason=(
-        "extra: decisions/personal-data-handling.md: A path equation through a personal slot is refused with "
-        "personal_slot_disallowed, like a unique key (section 2). Waits for "
+        "extra: decisions/personal-data-handling.md: A path equation that runs over a personal slot reads it, so "
+        "the compiler refuses it with R054, its one refusal for reading a personal slot. Waits for "
         "compiler/tests/test_personal_slots.py--test_rule_reading_personal_slot_is_refused (#1342), which lifts "
         "it with the fix."
     ),
@@ -118,7 +127,7 @@ def test_rule_reading_personal_slot_is_refused(tmp_path: Path):
     ("alpha.secret_note", "alpha"),
     ("alpha", "alpha.secret_note"),
 ], ids=["left", "right"])
-def test_personal_slot_cannot_participate_in_a_path_equation(tmp_path: Path, left: str, right: str):
+def test_path_equation_over_a_personal_slot_is_refused(tmp_path: Path, left: str, right: str):
     """decisions/personal-data-handling.md, section 2: a personal slot may not participate in a path_equation."""
     directory = _personal_pack(tmp_path / "pack",
                                ".decl titled(x: symbol, v: symbol)\ntitled(x, v) :- alpha__title(x, v).\n")
@@ -131,16 +140,24 @@ def test_personal_slot_cannot_participate_in_a_path_equation(tmp_path: Path, lef
 
     equation("alpha", "alpha")  # counter-case: the same pack with an equation over arrows only compiles
     emit.compile_pack(pack.read(directory))
-
     equation(left, right)
-    try:
-        pack.read(directory)
-    except pack.CompileError as refused:
-        found = [d.message for d in refused.diagnostics if d.code == "personal_slot_disallowed"]
-        assert found == [
-            "Beta path equation same: personal slot alpha.secret_note cannot participate in a path_equation"], refused
-    else:
-        raise AssertionError("a path equation through personal slot alpha.secret_note must be refused")
+    assert _refused_codes(directory) == ["R054"]
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason=(
+        "extra: decisions/personal-data-handling.md: R054 refuses a rule that reads a personal slot in a negative "
+        "body literal (section 3). Waits for "
+        "compiler/tests/test_personal_slots.py--test_rule_reading_personal_slot_is_refused (#1342), which lifts "
+        "it with the fix."
+    ),
+)
+def test_negated_literal_reading_a_personal_slot_is_refused(tmp_path: Path):
+    directory = _personal_pack(tmp_path / "pack",
+                               ".decl hidden(x: symbol)\nhidden(x) :- alpha(x), !alpha__secret_note(x, \"x\").\n")
+    assert _refused_codes(directory) == ["R054"]
 
 
 @pytest.mark.xfail(
@@ -148,14 +165,12 @@ def test_personal_slot_cannot_participate_in_a_path_equation(tmp_path: Path, lef
     raises=AssertionError,
     reason=(
         "extra: decisions/personal-data-handling.md: R054 refuses a rule that reads any table belonging to a "
-        "personal attribute, the parameter table of its bound included, the same tables the checker refuses "
-        "(section 3). Waits for compiler/tests/test_personal_slots.py--test_rule_reading_personal_slot_is_refused "
-        "(#1342), which lifts it with the fix."
+        "personal attribute, the parameter table of its bound included (section 3), as the checker does. Waits "
+        "for compiler/tests/test_personal_slots.py--test_rule_reading_personal_slot_is_refused (#1342), which "
+        "lifts it with the fix."
     ),
 )
 def test_rule_reading_a_parameter_table_of_a_personal_slot_is_refused(tmp_path: Path):
-    """decisions/personal-data-handling.md, section 3: a rule reads no table that belongs to a personal attribute,
-    the parameter table of its bound included."""
     rule = ".decl capped(v: number)\ncapped(v) :- alpha__secret_count__maximum(v).\n"
 
     def made(name: str, personal: bool) -> Path:
@@ -168,11 +183,4 @@ def test_rule_reading_a_parameter_table_of_a_personal_slot_is_refused(tmp_path: 
         return directory
 
     emit.compile_pack(pack.read(made("plain", False)))  # counter-case: the bound of a slot that is not personal
-    try:
-        emit.compile_pack(pack.read(made("personal", True)))
-    except (pack.CompileError, rules_dl.RuleError) as refused:
-        assert [d.code for d in refused.diagnostics] == ["R054"], refused
-        assert "alpha__secret_count__maximum" in str(refused), refused
-    else:
-        raise AssertionError("a rule reading the bound of personal slot alpha.secret_count must be refused "
-                             "with R054")
+    assert _refused_codes(made("personal", True)) == ["R054"]
