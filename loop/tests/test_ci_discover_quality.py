@@ -1012,14 +1012,6 @@ def test_ci_discover_shard_counts_come_from_build_facts_via_single_renderer(tmp_
     assert all(count >= 1 for count in shard_rows.values()), f"invalid shard counts: {shard_rows}"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="M2: decisions/build-reconciliation.md: CI observation capture must preserve distinct "
-           "event kinds (push/schedule/workflow_dispatch), fail closed without --before instead of "
-           "falling back to HEAD, derive real path coverage instead of hardcoded 'unknown', and "
-           "record source event time instead of Git commit timestamp.",
-)
 def test_ci_discover_honest_observation_capture(tmp_path: Path, monkeypatch):
     """CI observation records preserve event kind, event time, non-empty diff guard, and real path coverage."""
     import loop.ci_discover as ci_discover
@@ -1132,13 +1124,6 @@ def test_ci_discover_honest_observation_capture(tmp_path: Path, monkeypatch):
     ), f"mapped path 'alpha/engine.py' must emit a build_path_reader for 'alpha', got {readers!r}"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="M2: decisions/build-reconciliation.md: loop/ci_discover.py must require explicit "
-           "knowledge_time without hardcoded test-date defaults and must reject --pin-sha "
-           "CLI/API overrides bypassing build/engine-pin.yaml.",
-)
 def test_ci_discover_forbids_hardcoded_knowledge_time_and_pin_sha_override(tmp_path: Path):
     """knowledge_time is required without hardcoded test dates, and --pin-sha cannot bypass build/engine-pin.yaml."""
     import loop.ci_discover as ci_discover
