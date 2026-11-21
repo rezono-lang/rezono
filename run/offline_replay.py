@@ -123,29 +123,6 @@ def _dispatch_authorized(
         return (plan_hash,) in batch.read(connection, program, ["authorized"])["authorized"]
 
 
-def _dispatch_order(
-    plan_hash: str,
-    journal_path: Path,
-    recorded_receipt: object,
-) -> tuple[int, str, Mapping[str, object] | None]:
-    orders = 0
-    receipt = recorded_receipt if isinstance(recorded_receipt, Mapping) else None
-
-    def _claim(key: str) -> bool:
-        return claim_once(journal_path, key)
-
-    def _apply(_: str) -> Mapping[str, object] | None:
-        nonlocal orders
-        orders += 1
-        return receipt
-
-    def _status(_: str) -> Mapping[str, object] | None:
-        return receipt
-
-    state, resolved = invoke_order(plan_hash, _claim, _apply, _status)
-    return orders, state, resolved
-
-
 def _cleanup_status(
     pages: list[dict[str, Any]],
     sweep_id: str,
@@ -153,6 +130,8 @@ def _cleanup_status(
     run_id: str,
     delete_receipt: object,
     dispatched_us: int,
+    *,
+    scope: str = "offline",
 ) -> str:
     if not isinstance(delete_receipt, Mapping) or delete_receipt.get("accepted") is not True:
         return "unknown"
@@ -165,7 +144,6 @@ def _cleanup_status(
     if evidence is None:
         return "unknown"
 
-    scope = "offline"
     facts: dict[str, list[tuple[str | int, ...]]] = {
         **evidence,
         "sweep__run": [(sweep_id, run_id)],
@@ -224,25 +202,31 @@ def _run_phase(
     return loop_execute(run_id, requirements, completion, initial_rows, sweeps, len(steps))
 
 
-def replay(
-    scenario: Mapping[str, object],
+def execute_run(
+    spec: Mapping[str, object],
     fixture_dir: str | Path,
-    db_path: str | Path,
     *,
+    claim: Callable[[str], bool],
+    submit_order: Callable[[str], Mapping[str, object] | None],
+    order_status: Callable[[str], Mapping[str, object] | None],
+    observe_machines: Callable[[str], Sequence[Mapping[str, object]]],
+    deliver: Callable[[str], Mapping[str, object] | None],
+    delete_resources: Callable[[str], Mapping[str, object] | None],
+    list_inventory: Callable[[str], list[dict[str, Any]]],
+    scope: str = "offline",
     execute: Callable[..., tuple[list[list[str]], str]] | None = None,
 ) -> dict[str, object]:
-    """Replay the bounded offline run through both loop phases and return its summary."""
-    if not isinstance(scenario, Mapping):
-        raise ValueError("scenario must be a mapping")
+    """Execute one bounded run across order, installation, and cleanup phases."""
+    if not isinstance(spec, Mapping):
+        raise ValueError("spec must be a mapping")
     loop_execute = _loop_replay if execute is None else execute
     fixture_path = Path(fixture_dir)
-    journal_path = Path(db_path)
 
-    request_id = _load_committed_request(scenario, fixture_path)
-    plan_file = scenario.get("plan_file")
-    price_file = scenario.get("price_file")
+    request_id = _load_committed_request(spec, fixture_path)
+    plan_file = spec.get("plan_file")
+    price_file = spec.get("price_file")
     if not isinstance(plan_file, str) or not isinstance(price_file, str):
-        raise ValueError("scenario must declare plan_file and price_file")
+        raise ValueError("spec must declare plan_file and price_file")
 
     plan_bytes = (fixture_path / plan_file).read_bytes()
     plan_hash = sha256(plan_bytes).hexdigest()
@@ -250,16 +234,23 @@ def replay(
     plan = json.loads(plan_bytes.decode("utf-8"))
     cost_micros = _quote_cost(plan, (fixture_path / price_file).read_bytes())
 
-    event_us = _utc_micros(scenario.get("clock"))
-    authorized = _dispatch_authorized(plan_hash, plan["currency"], cost_micros, scenario.get("approval"), event_us)
+    event_us = _utc_micros(spec.get("clock"))
+    authorized = _dispatch_authorized(plan_hash, plan["currency"], cost_micros, spec.get("approval"), event_us)
 
-    orders, order_state, order_receipt = (
-        _dispatch_order(plan_hash, journal_path, scenario.get("order_receipt"))
-        if authorized
-        else (0, "refused", None)
-    )
+    orders = 0
+
+    def _apply(key: str) -> Mapping[str, object] | None:
+        nonlocal orders
+        orders += 1
+        return submit_order(key)
+
+    if authorized:
+        order_state, order_receipt = invoke_order(plan_hash, claim, _apply, order_status)
+    else:
+        order_state, order_receipt = "refused", None
+
     machines = (
-        prepare_machines(scenario.get("machine_observations", ()))
+        prepare_machines(observe_machines(plan_hash))
         if order_state == "applied"
         else []
     )
@@ -277,7 +268,11 @@ def replay(
         order_obs,
     )
 
-    installation = scenario.get("installation")
+    installation = (
+        deliver(plan_hash)
+        if order_outcome == "success" and bool(machines)
+        else None
+    )
     delivered = (
         order_outcome == "success"
         and bool(machines)
@@ -287,16 +282,18 @@ def replay(
         and plan.get("request_id") == request_id
     )
 
-    raw_inventory = scenario.get("inventory", ())
-    if not isinstance(raw_inventory, list):
-        raise ValueError("scenario inventory must be a list of pages")
     sweep_id = "after"
-    delete_receipt = scenario.get("delete_receipt")
-    cleanup_evidence = (
-        _cleanup_status(raw_inventory, sweep_id, plan_hash, plan_hash, delete_receipt, event_us)
-        if delivered
-        else "unknown"
-    )
+    if delivered:
+        delete_receipt = delete_resources(plan_hash)
+        raw_inventory = list_inventory(plan_hash)
+        if not isinstance(raw_inventory, list):
+            raise ValueError("inventory must be a list of pages")
+        cleanup_evidence = _cleanup_status(
+            raw_inventory, sweep_id, plan_hash, plan_hash, delete_receipt, event_us, scope=scope
+        )
+    else:
+        delete_receipt = None
+        cleanup_evidence = "unknown"
 
     install_obs: list[tuple[str, str]] = []
     if order_outcome == "success" and machines:
@@ -332,3 +329,34 @@ def replay(
         "loop_phases": ["order", "installation"],
         "operations": operations,
     }
+
+
+def replay(
+    scenario: Mapping[str, object],
+    fixture_dir: str | Path,
+    db_path: str | Path,
+    *,
+    execute: Callable[..., tuple[list[list[str]], str]] | None = None,
+) -> dict[str, object]:
+    """Replay the bounded offline run through both loop phases and return its summary."""
+    if not isinstance(scenario, Mapping):
+        raise ValueError("scenario must be a mapping")
+    raw_inventory = scenario.get("inventory", ())
+    if not isinstance(raw_inventory, list):
+        raise ValueError("scenario inventory must be a list of pages")
+    journal_path = Path(db_path)
+    receipt = scenario.get("order_receipt")
+    recorded_receipt = receipt if isinstance(receipt, Mapping) else None
+    return execute_run(
+        scenario,
+        fixture_dir,
+        claim=lambda key: claim_once(journal_path, key),
+        submit_order=lambda _: recorded_receipt,
+        order_status=lambda _: recorded_receipt,
+        observe_machines=lambda _: scenario.get("machine_observations", ()),
+        deliver=lambda _: scenario.get("installation"),
+        delete_resources=lambda _: scenario.get("delete_receipt"),
+        list_inventory=lambda _: raw_inventory,
+        scope="offline",
+        execute=execute,
+    )
