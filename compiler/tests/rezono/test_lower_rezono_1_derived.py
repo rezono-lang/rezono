@@ -415,7 +415,7 @@ def test_rezono_1_derived_bundle_includes_functional_relations(tmp_path):
     assert len(by_id["asks"]["columns"]) == 2
 
 
-def _write_json_form_pack(directory: Path, decls: list[dict]) -> Path:
+def _write_json_form_pack(directory: Path, decls: list[dict], facts: str | None = None) -> Path:
     from rezono_compiler import rezono_module
 
     directory = Path(shutil.copytree(FIXTURE, directory))
@@ -425,7 +425,11 @@ def _write_json_form_pack(directory: Path, decls: list[dict]) -> Path:
     spans = [{"at": at, "line": "1", "start": "0", "end": "1"} for at in rezono_module.place_pointers(module)]
     form = {"format": "rezono.module/5", "module": module, "spans": spans}
     (folder / "derived.rezono").write_text("rezono 1\npack minimal\n", encoding="utf-8", newline="\n")
-    (folder / "derived.json").write_text(json.dumps(form, sort_keys=True), encoding="utf-8")
+    (folder / "derived.json").write_text(json.dumps(form, sort_keys=True), encoding="utf-8", newline="\n")
+    if facts is not None:
+        (directory / "facts").mkdir(exist_ok=True)
+        (directory / "facts/case.yaml").write_text(facts, encoding="utf-8", newline="\n")
+        (directory / "facts/case.sources.yaml").write_text(FACT_SOURCE, encoding="utf-8", newline="\n")
     register(directory, {"module": "rezono/derived.rezono", "form": "rezono/derived.json", "layer": "facts"})
     return directory
 
@@ -623,3 +627,246 @@ extend Item
     states, known = _state_rows(derived["item_tier"], 1)
     assert states == {("a1", "known", ""), ("a2", "known", ""), ("a3", "unknown", "no_value")}
     assert known == {("a1",): "low", ("a2",): "high"}
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "M3: decisions/language-rezono-1.md: sections 2 and 5.4; compiler/rezono_compiler/rezono_derived.py "
+        "must refuse functional derivations whose `.one(...)` or `.count(...)` reads an open-world derived "
+        "Bool relation or projects an open-world slot (`slot.world == 'open'`) with R004."
+    ),
+)
+def test_rezono_1_functional_derivation_refuses_open_world_collection_and_slot(tmp_path):
+    # Counter-case: the exact same `.one(col)`, `.count(...)` and `.one(slot)` derivations over a closed
+    # derived Bool relation and a closed slot compile cleanly.
+    closed_ok = [
+        {"kind": "Area", "world": "closed", "slots": [], "derived": []},
+        {"kind": "ClosedItem", "world": "closed", "slots": [{"slot": "area", "type": "Area"}], "derived": []},
+        {"kind": "Choice", "world": "closed", "slots": [
+            {"slot": "owner", "type": "ClosedItem"},
+            {"slot": "target", "type": "Area"},
+        ], "derived": []},
+        {
+            "derived": "closed_pair",
+            "params": [{"name": "a", "type": "ClosedItem"}, {"name": "r", "type": "Area"}],
+            "type": "Bool",
+            "value": {"cmp": ["=", {"path": ["a", "area"]}, {"path": ["r"]}]},
+        },
+        {
+            "extend": "Area",
+            "binder": "g",
+            "derived": [
+                {
+                    "derived": "picked",
+                    "type": "ClosedItem",
+                    "card": "?",
+                    "value": {"agg": [
+                        "one",
+                        {"filter": [{"path": ["closed_pair"]}, {"cmp": ["=", {"path": ["r"]}, {"path": ["g"]}]}]},
+                        {"path": ["a"]},
+                    ]},
+                },
+                {
+                    "derived": "total",
+                    "type": "Int",
+                    "value": {"agg": [
+                        "count",
+                        {"path": ["closed_pair"]},
+                        {"cmp": ["=", {"path": ["r"]}, {"path": ["g"]}]},
+                    ]},
+                },
+            ],
+        },
+        {
+            "extend": "ClosedItem",
+            "binder": "s",
+            "derived": [{
+                "derived": "chosen_area",
+                "type": "Area",
+                "card": "?",
+                "value": {"agg": [
+                    "one",
+                    {"filter": [{"kind": "Choice"}, {"cmp": ["=", {"path": ["owner"]}, {"path": ["s"]}]}]},
+                    {"path": ["target"]},
+                ]},
+            }],
+        },
+    ]
+    assert _refusal(_write_json_form_pack(tmp_path / "closed-ok", closed_ok)) is None
+
+    problems: list[str] = []
+
+    # 1. `.one(col)` over an open-world derived Bool relation must be refused with R004.
+    open_one_rel = [
+        {"kind": "Area", "world": "closed", "slots": [], "derived": []},
+        {"kind": "OpenItem", "world": "open", "slots": [{"slot": "area", "type": "Area"}], "derived": []},
+        {
+            "derived": "open_pair",
+            "params": [{"name": "a", "type": "OpenItem"}, {"name": "r", "type": "Area"}],
+            "type": "Bool",
+            "value": {"cmp": ["=", {"path": ["a", "area"]}, {"path": ["r"]}]},
+        },
+        {
+            "extend": "Area",
+            "binder": "g",
+            "derived": [{
+                "derived": "picked",
+                "type": "OpenItem",
+                "card": "?",
+                "value": {"agg": [
+                    "one",
+                    {"filter": [{"path": ["open_pair"]}, {"cmp": ["=", {"path": ["r"]}, {"path": ["g"]}]}]},
+                    {"path": ["a"]},
+                ]},
+            }],
+        },
+    ]
+    refusal = _refusal(_write_json_form_pack(tmp_path / "open-one-rel", open_one_rel))
+    if refusal is None or "R004" not in refusal:
+        problems.append(f".one(col) over open derived Bool relation expected R004, got: {refusal!r}")
+
+    # 2. `.count(...)` over an open-world derived Bool relation must be refused with R004.
+    open_count_rel = [
+        {"kind": "Area", "world": "closed", "slots": [], "derived": []},
+        {"kind": "OpenItem", "world": "open", "slots": [{"slot": "area", "type": "Area"}], "derived": []},
+        {
+            "derived": "open_pair",
+            "params": [{"name": "a", "type": "OpenItem"}, {"name": "r", "type": "Area"}],
+            "type": "Bool",
+            "value": {"cmp": ["=", {"path": ["a", "area"]}, {"path": ["r"]}]},
+        },
+        {
+            "extend": "Area",
+            "binder": "g",
+            "derived": [{
+                "derived": "total",
+                "type": "Int",
+                "value": {"agg": [
+                    "count",
+                    {"path": ["open_pair"]},
+                    {"cmp": ["=", {"path": ["r"]}, {"path": ["g"]}]},
+                ]},
+            }],
+        },
+    ]
+    refusal = _refusal(_write_json_form_pack(tmp_path / "open-count-rel", open_count_rel))
+    if refusal is None or "R004" not in refusal:
+        problems.append(f".count(...) over open derived Bool relation expected R004, got: {refusal!r}")
+
+    # 3. `.one(open_slot)` projecting an open-world slot on a closed kind must be refused with R004.
+    open_one_slot = [
+        {"kind": "Area", "world": "closed", "slots": [], "derived": []},
+        {"kind": "Item", "world": "closed", "slots": [], "derived": []},
+        {"kind": "Choice", "world": "closed", "slots": [
+            {"slot": "owner", "type": "Item"},
+            {"slot": "target", "type": "Area", "world": "open"},
+        ], "derived": []},
+        {
+            "extend": "Item",
+            "binder": "s",
+            "derived": [{
+                "derived": "picked",
+                "type": "Area",
+                "card": "?",
+                "value": {"agg": [
+                    "one",
+                    {"filter": [{"kind": "Choice"}, {"cmp": ["=", {"path": ["owner"]}, {"path": ["s"]}]}]},
+                    {"path": ["target"]},
+                ]},
+            }],
+        },
+    ]
+    refusal = _refusal(_write_json_form_pack(tmp_path / "open-one-slot", open_one_slot))
+    if refusal is None or "R004" not in refusal:
+        problems.append(f".one(open_slot) with slot.world == 'open' expected R004, got: {refusal!r}")
+
+    assert not problems, "\n".join(problems)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "M3: decisions/language-rezono-1.md: section 2; compiler/rezono_compiler/rezono_derived.py "
+        "must allow implicit `it` slot paths inside Bool derived predicates declared in `kind` "
+        "(e.g. `size > 10` and slot-path equality comparisons without `it.`) while refusing unknown "
+        "identifiers with R001."
+    ),
+)
+def test_rezono_1_kind_bool_derived_allows_implicit_it_paths(tmp_path):
+    case_facts = """\
+area:
+  - {id: north}
+  - {id: south}
+item:
+  - {id: small, size: 5, area: north, backup: south}
+  - {id: large, size: 15, area: north, backup: north, parent: large}
+  - {id: edge, size: 10, area: south, backup: north, parent: small}
+"""
+    slots = [
+        {"slot": "size", "type": "Int"},
+        {"slot": "area", "type": "Area"},
+        {"slot": "backup", "type": "Area"},
+        {"slot": "parent", "type": "Item", "card": "?"},
+    ]
+
+    def _run_json_case(name: str, item_derived: list[dict]) -> tuple[dict, dict]:
+        decls = [
+            {"kind": "Area", "world": "closed", "slots": [], "derived": []},
+            {"kind": "Item", "world": "closed", "slots": slots, "derived": item_derived},
+        ]
+        directory = _write_json_form_pack(tmp_path / name, decls, case_facts)
+        model = pack.read(directory)
+        files = emit.compile_pack(model)
+        assert "ir/rules.json" in files, f"{name}: missing ir/rules.json among {sorted(files)}"
+        doc = json.loads(files["ir/rules.json"])
+        assert doc.get("format") == "rezono.rules/2", f"{name}: expected rezono.rules/2, got {doc.get('format')!r}"
+        assert _validate("rules.yaml", doc, "RuleProgram") == []
+        prog = rules.load(doc)
+        rows = dict(scenarios.states(model, directory))["0-case"]
+        con, _, _ = batch.run(model, prog, rows)
+        try:
+            return doc, batch.read(con, prog)
+        finally:
+            con.close()
+
+    # Counter-case: explicit `it.` paths in `kind Item` already compile to rezono.rules/2 and evaluate on DuckDB.
+    explicit_derived = [
+        {"derived": "home", "type": "Area", "value": {"path": ["area"]}},
+        {"derived": "big", "type": "Bool", "value": {"cmp": [">", {"path": ["it", "size"]}, {"lit": "10"}]}},
+        {"derived": "same_area", "type": "Bool", "value": {"cmp": ["=", {"path": ["it", "area"]}, {"path": ["it", "backup"]}]}},
+        {"derived": "self_parent", "type": "Bool", "value": {"cmp": ["=", {"path": ["it", "parent"]}, {"path": ["it"]}]}},
+    ]
+    _, explicit_rows = _run_json_case("explicit-it", explicit_derived)
+    assert explicit_rows["item_big"] == {("large",)}
+    assert explicit_rows["item_same_area"] == {("large",)}
+    assert explicit_rows["item_self_parent"] == {("large",)}
+
+    # Implicit `it`: omitting `it.` on slot paths in `kind Item` Bool derivations must compile to rezono.rules/2
+    # and yield the exact same derived rows on DuckDB.
+    implicit_derived = [
+        {"derived": "home", "type": "Area", "value": {"path": ["area"]}},
+        {"derived": "big", "type": "Bool", "value": {"cmp": [">", {"path": ["size"]}, {"lit": "10"}]}},
+        {"derived": "same_area", "type": "Bool", "value": {"cmp": ["=", {"path": ["area"]}, {"path": ["backup"]}]}},
+        {"derived": "self_parent", "type": "Bool", "value": {"cmp": ["=", {"path": ["parent"]}, {"path": ["it"]}]}},
+    ]
+    _, implicit_rows = _run_json_case("implicit-it", implicit_derived)
+    assert implicit_rows["item_big"] == {("large",)}
+    assert implicit_rows["item_same_area"] == {("large",)}
+    assert implicit_rows["item_self_parent"] == {("large",)}
+
+    # Counter-case: an unknown identifier in a `kind Item` Bool derivation must still be refused with R001.
+    unknown_decls = [
+        {
+            "kind": "Item",
+            "world": "closed",
+            "slots": [{"slot": "size", "type": "Int"}],
+            "derived": [{
+                "derived": "bad",
+                "type": "Bool",
+                "value": {"cmp": [">", {"path": ["nonexistent"]}, {"lit": "10"}]},
+            }],
+        },
+    ]
+    refusal = _refusal(_write_json_form_pack(tmp_path / "unknown-id", unknown_decls))
+    assert refusal is not None and "R001" in refusal, f"unknown identifier expected R001, got: {refusal!r}"
