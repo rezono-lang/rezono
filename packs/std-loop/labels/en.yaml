@@ -226,6 +226,7 @@ loop_claim_renewal.source: renewal source
 effect_permitted: permitted effect plan
 effect_attempt: journaled effect attempt
 effect_attempted: attempted effect plan
+effect_latest_attempt: latest effect attempt tick
 effect_effective_attempt: effective effect attempt
 effect_has_effective_attempt: effect plan with an effective attempt
 effect_submitted_attempt: submitted effect attempt
