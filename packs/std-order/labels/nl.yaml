@@ -4,6 +4,8 @@ ordered.precedes: gaat vooraf aan
 ordered.rank: rang
 ordered.on_scale: schaal
 scale: {text: schaal, gender: common}
+stated_precedes: gesteld vooraf te gaan aan
+direct_before: direct eerder dan
 before: eerder dan
 comparable: vergelijkbaar
 order_cycle: kringloop in de ordening

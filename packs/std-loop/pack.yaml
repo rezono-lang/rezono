@@ -3,4 +3,4 @@ version: 0.1.0
 default_language: en
 theory: true
 imports:
-  - {name: std-order, path: ../std-order, sha256: 4d119b21fa769b810dae065d4fc4ab5aaa1c2ada76b042052a4e4fcdd1031557}
+  - {name: std-order, path: ../std-order, sha256: 6c56982cfaa6535835b594be2fb280655795a96f0308d8e5d423c6040f923495}
