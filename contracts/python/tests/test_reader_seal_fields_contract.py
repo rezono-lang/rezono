@@ -72,11 +72,6 @@ def test_answer_contract_accepts_reader_hashes_and_rejects_bad_digest():
     assert _errors("explain.yaml", bad_hash, "Answer")
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="M2: decisions/reader-served-seal-fields.md (#1451): contracts/source.yaml and checker/rezono_checker/sources.py must accept origin_sign atomically",
-)
 def test_source_contract_accepts_origin_sign_and_rejects_unknown_sign():
     base = {"kind": "synthetic", "name": "example-generator", "position": "seed:1"}
     assert _errors("source.yaml", base, "Source") == []

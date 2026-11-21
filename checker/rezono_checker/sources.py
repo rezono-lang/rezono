@@ -32,8 +32,9 @@ from .snapshots import read_rows
 # (a test holds it to the contract).
 KINDS = {"git", "pack", "scenario", "proposal", "query", "tool", "person", "document", "synthetic"}
 OWNERSHIP = {"first_party", "third_party"}
+ORIGIN_SIGNS = {"origin_decision", "origin_vendor", "origin_design", "origin_observation"}
 FIELDS = {"kind", "name", "revision", "position", "url", "retrieved_at", "fragment_sha256", "ownership",
-          "licence", "attribution"}
+          "licence", "attribution", "origin_sign"}
 URL = re.compile(r"^https?://[^\s/?#]+([/?#][^\s]*)?$")
 INSTANT = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,6})?Z$")
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
@@ -71,6 +72,8 @@ def source_problem(s) -> str:
         return "fragment_sha256"
     if "ownership" in s and s["ownership"] not in OWNERSHIP:
         return "ownership"
+    if "origin_sign" in s and s["origin_sign"] not in ORIGIN_SIGNS:
+        return "origin_sign"
     if any(f in s and not TRIMMED.match(s[f]) for f in ("licence", "attribution")):
         return "licence"
     if s["kind"] == "document":
