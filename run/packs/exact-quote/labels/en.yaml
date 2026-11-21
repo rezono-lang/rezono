@@ -44,6 +44,8 @@ amount_part.numerator: numerator
 amount_part.denominator: denominator
 quote_currency: quote currency
 quote_currency.currency: currency
+publication_currency: price publication currency
+publication_currency.currency: currency
 rate_pair: accepted rate pair
 rate_pair.base: base currency
 rate_pair.target: target currency

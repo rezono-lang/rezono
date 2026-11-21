@@ -1,0 +1,31 @@
+id: https://rezono.org/examples/platform-core/admission-assumption
+name: platform_admission_assumption
+description: Typed inputs for ordered capacity admission and assumption comparison.
+in_language: en
+imports:
+  - linkml:types
+default_range: string
+annotations:
+  layer: facts
+
+classes:
+  OfferedCores:
+    description: Core count offered for one catalog item and size pair.
+    attributes:
+      id: {identifier: true}
+      cores: {range: integer, required: true, minimum_value: 0}
+  PoolCores:
+    description: Available core capacity of a named pool before admission.
+    attributes:
+      id: {identifier: true}
+      cores: {range: integer, required: true, minimum_value: 0}
+  OutboundApproval:
+    description: External approval releasing one requested outbound connection.
+    attributes:
+      id: {identifier: true}
+      connection: {required: true}
+  LandingSighting:
+    description: Recorded observation of a landed delivery, kept independent of assumptions.
+    attributes:
+      id: {identifier: true}
+      request: {required: true}

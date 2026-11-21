@@ -241,7 +241,11 @@ def _elements(doc: dict, plan: dict, rows: dict) -> dict[tuple, str]:
     return at
 
 
-def witness_uri(w: dict) -> str:
+def witness_uri(w: dict, schema: dict | None = None) -> str:
+    if schema is not None:
+        from . import rdf
+
+        return rdf.canonical_witness_iri(schema, w)
     return "rezono:w/" + canonical_sha256(w)
 
 

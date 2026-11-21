@@ -46,6 +46,21 @@ def _quote_pack() -> tuple[pack.Pack, rules.Program, dict[str, list[tuple]], str
     return model, program, pack_facts, quote_currency, accepted_pairs
 
 
+def pack_currencies() -> tuple[str, str, tuple[str, ...]]:
+    """Return the quote currency, publication currency, and declared currencies from exact-quote."""
+    _, _, pack_facts, quote_currency, accepted_pairs = _quote_pack()
+    pub_currencies = {currency for _, currency in pack_facts.get("publication_currency__currency", ())}
+    if len(pub_currencies) != 1:
+        raise ValueError("exact-quote pack must declare a single publication currency")
+    (publication_currency,) = pub_currencies
+    all_currencies = tuple(sorted({
+        quote_currency,
+        publication_currency,
+        *(currency for pair in accepted_pairs for currency in pair),
+    }))
+    return quote_currency, publication_currency, all_currencies
+
+
 def _digits(value: int) -> Iterator[int]:
     while value >= 10:
         value, digit = divmod(value, 10)

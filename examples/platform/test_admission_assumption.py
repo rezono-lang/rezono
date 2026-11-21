@@ -126,7 +126,6 @@ class MissingAssumptionProjection(AssertionError):
     pass
 
 
-@pytest.mark.xfail(strict=True, raises=MissingAssumptionProjection, reason="extra: Implement admission-order schema/rules and portal/assumption_scene.py in examples/platform following decisions/platform-admission-assumption.md. The rule compiler only orders integers, so the projection needs an independent numeric rank for the original UTC request order. The remaining balance needs a supported ordered fold or a proven input bound because recursive subtraction without a literal counter bound is rejected.")
 def test_published_withdrawal_releases_capacity_for_a_later_request(tmp_path):
     if not set(RELATIONS) <= set(rules.load(pack.read(ROOT).rules).derived()):
         raise MissingAssumptionProjection("the platform lacks an admission-order projection")

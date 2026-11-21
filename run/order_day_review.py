@@ -12,7 +12,7 @@ from typing import TypedDict
 
 from rezono_compiler import batch, pack, rules
 
-from run.effective_quote import Edition, quote_at
+from run.effective_quote import Edition, pack_currencies, quote_at
 
 
 EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
@@ -47,12 +47,14 @@ def plan(
     quote = quote_at(start.isoformat(), order_lines, prices, rates)
     if problems := quote["problems"]:
         raise ValueError(f"effective quote unavailable: {', '.join(problems)}")
+    _, _, currencies = pack_currencies()
+    currency_keys = tuple(currency.lower() for currency in currencies)
     line_fields = ("sku", "currency", "quantity", "billed_periods", "setup_price_micros")
     payload = {
         "order_day": order_day.isoformat(),
         "provider": provider,
         "lines": [{field: line[field] for field in line_fields} for line in order_lines],
-        **{field: quote[field] for field in ("usd", "eur", "price_source", "fx_source")},
+        **{field: quote[field] for field in (*currency_keys, "price_source", "fx_source")},
     }
     return json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
 
@@ -66,7 +68,7 @@ def _utc(value: object) -> datetime:
     return instant.astimezone(timezone.utc)
 
 
-def _usd_bound(value: object, total: list[int]) -> bool:
+def _amount_bound(value: object, total: list[int]) -> bool:
     if not isinstance(value, list) or len(value) != 2:
         return False
     n, d = value
@@ -115,10 +117,12 @@ def review(
     approval_hash = approval.get("plan_hash")
     if not isinstance(approval_hash, str) or approval_hash != plan_hash:
         return refuse("renew_approval")
+    quote_currency, _, currencies = pack_currencies()
+    quote_key = quote_currency.lower()
     currency = approval.get("currency")
     decision = approval.get("decision")
     budget_cents = approval.get("budget_cents")
-    if (currency not in ("USD", "EUR") or decision not in ("approve", "decline")
+    if (currency not in currencies or decision not in ("approve", "decline")
             or type(budget_cents) is not int or budget_cents < 0):
         return refuse("invalid_approval")
 
@@ -133,8 +137,8 @@ def review(
 
     mode, reference = guarantee.get("mode"), guarantee.get("reference")
     if (mode not in ("binding_quote", "reject_above") or guarantee.get("includes_setup") is not True
-            or guarantee.get("currency", "USD") != "USD" or not isinstance(reference, str)
-            or not reference.strip() or not _usd_bound(guarantee.get("total_usd"), candidate["usd"])):
+            or guarantee.get("currency", quote_currency) != quote_currency or not isinstance(reference, str)
+            or not reference.strip() or not _amount_bound(guarantee.get(f"total_{quote_key}"), candidate[quote_key])):
         return refuse("unbound_total")
 
     # A reject-above request supplies its own cap. A binding quote must carry the provider's plan digest.
@@ -159,6 +163,6 @@ def review(
 
     return {"reason": "authorized", "candidate_hash": plan_hash, "request": {
         "plan_hash": plan_hash, "provider": provider, "mode": mode, "reference": reference,
-        "currency": "USD", "max_total": candidate["usd"],
+        "currency": quote_currency, "max_total": candidate[quote_key],
         "expires_at": expires.isoformat().replace("+00:00", "Z"),
     }}

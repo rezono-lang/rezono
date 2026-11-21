@@ -130,3 +130,14 @@ platform_safe_frontier: platform safe frontier
 platform_safe_blocker: platform safe blocker
 platform_startup_goal: platform startup goal
 platform_restore_goal: platform restore goal
+offered_cores: offered cores
+offered_cores.cores: cores
+pool_cores: pool cores
+pool_cores.cores: cores
+outbound_approval: outbound approval
+outbound_approval.connection: connection
+landing_sighting: landing sighting
+landing_sighting.request: request
+request_outcome: request outcome
+landed_request: landed request
+free_cores: free cores

@@ -22,6 +22,7 @@ needs the other pack's `base`, which the schema's import does not carry (Q20).
 import hashlib
 import io
 import json
+import re
 
 import rdflib
 from rdflib import BNode, Graph, Literal, Namespace, URIRef
@@ -29,8 +30,9 @@ from rdflib.namespace import PROV, RDF, RDFS, XSD, split_uri
 from rdflib.plugins.serializers.turtle import TurtleSerializer
 from rdflib.term import _is_valid_uri
 
-from rezono_canon import canonical_json, canonical_sha256
+from rezono_canon import CanonError, canonical_json, canonical_sha256
 
+from . import hash as rhash
 from . import l0
 
 # `<ns>/publication/1.0#` (§7); `<ns>` is still open (Q1). A profile URI is an identifier, not a fetch target.
@@ -153,6 +155,205 @@ def element_space(schema: dict, kind: str) -> str:
 def element_iri(schema: dict, kind: str, rid: str) -> str:
     """`<kind iri>/<spelled id>` (§3.4)."""
     return f"{element_space(schema, kind)}/{spell(rid)}"
+
+
+_PIN_VALUE = re.compile(r"(?:(?P<manifest>m-[0-9]+)@)?(?P<dataset>d-[0-9a-f]{64})")
+_HEX64 = re.compile(r"[0-9a-f]{64}")
+
+
+def _snake(name: str) -> str:
+    """PascalCase kind name -> snake_case relation name."""
+    return re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", name).lower()
+
+
+def pin_iri(iri: str, *, dataset: str, manifest: str | None = None) -> str:
+    """Pin a canonical IRI to a dataset hash (`?pin=d-<64 hex>`) or epoch and hash (`?pin=m-<epoch>@d-<64 hex>`)."""
+    if isinstance(iri, URIRef):
+        iri = str(iri)
+    if not isinstance(iri, str) or not l0._IRI.fullmatch(iri):
+        _fail("iri", "an IRI to pin must be an absolute IRI")
+    if "?" in iri or "#" in iri:
+        _fail(iri, "cannot pin an IRI that already carries `?` or `#`")
+    if manifest is not None and dataset is None:
+        _fail("pin", "epoch pin without hash pin: `manifest` needs `dataset` `d-<64 hex>` (§6.4)")
+    if not isinstance(dataset, str) or not l0._DID.fullmatch(dataset):
+        _fail("pin", "hash pin must be `d-<64 hex>` (§6.4)")
+    if manifest is not None:
+        if not isinstance(manifest, str) or not l0._MID.fullmatch(manifest):
+            _fail("pin", "epoch pin must be `m-<epoch>` (§6.4)")
+        return f"{iri}?pin={manifest}@{dataset}"
+    return f"{iri}?pin={dataset}"
+
+
+def parse_pin(iri: str) -> tuple[str, dict[str, str] | None]:
+    """Split an optional `?pin=` query parameter from a canonical IRI (§6.4)."""
+    if isinstance(iri, URIRef):
+        iri = str(iri)
+    if not isinstance(iri, str) or not l0._IRI.fullmatch(iri):
+        _fail(str(iri), "must be an absolute IRI")
+    if "#" in iri:
+        _fail(iri, "fragments are not allowed in a canonical or pinned IRI")
+    if "?" not in iri:
+        return iri, None
+    base, query = iri.split("?", 1)
+    if "?" in query or not base or not l0._IRI.fullmatch(base):
+        _fail(iri, "malformed query in IRI")
+    if "&" in query or not query.startswith("pin="):
+        _fail(iri, "only the `pin` query parameter is allowed")
+    raw = query[4:]
+    if l0._MID.fullmatch(raw):
+        _fail(iri, "epoch pin without hash pin: `m-<epoch>` requires `@d-<64 hex>` (§6.4)")
+    match = _PIN_VALUE.fullmatch(raw)
+    if not match:
+        _fail(iri, "malformed pin: expected `d-<64 hex>` or `m-<epoch>@d-<64 hex>` (§6.4)")
+    if match.group("manifest") is not None:
+        return base, {"manifest": match.group("manifest"), "dataset": match.group("dataset")}
+    return base, {"dataset": match.group("dataset")}
+
+
+def conclusion_iri(schema: dict, kind: str, row_id: str, *, manifest: str | None = None,
+                   dataset: str | None = None) -> str:
+    """Canonical conclusion IRI `<kind iri>/<spelled id>` (optionally pinned via `?pin=`)."""
+    l0.check_schema(schema)
+    if not isinstance(kind, str) or kind not in schema["kinds"]:
+        _fail(str(kind), "not a kind of this schema")
+    if not isinstance(row_id, str) or not row_id:
+        _fail("row_id", "row id must be non-empty text")
+    iri = element_iri(schema, kind, row_id)
+    if dataset is not None or manifest is not None:
+        return pin_iri(iri, dataset=dataset, manifest=manifest)
+    return iri
+
+
+def canonical_witness_iri(schema: dict, witness: dict, *, manifest: str | None = None,
+                          dataset: str | None = None) -> str:
+    """Canonical witness IRI `<base>witness/<H(witness)>` (optionally pinned via `?pin=`)."""
+    l0.check_schema(schema)
+    try:
+        digest = canonical_sha256(witness)
+    except CanonError as err:
+        _fail("witness", str(err))
+    iri = f"{schema['base']}witness/{digest}"
+    if dataset is not None or manifest is not None:
+        return pin_iri(iri, dataset=dataset, manifest=manifest)
+    return iri
+
+
+def _schema_relation_maps(schema: dict, *, include_subkinds: bool = False) -> tuple[dict[str, str], dict[str, str]]:
+    """Bijective relation <-> kind maps for `schema`."""
+    candidates = [
+        name for name, spec in schema["kinds"].items()
+        if include_subkinds or "parent" not in spec
+    ]
+    counts: dict[str, int] = {}
+    for name in candidates:
+        rel = _snake(name)
+        counts[rel] = counts.get(rel, 0) + 1
+    rel_to_kind = {_snake(name): name for name in candidates if counts[_snake(name)] == 1}
+    kind_to_rel = {name: rel for rel, name in rel_to_kind.items()}
+    return rel_to_kind, kind_to_rel
+
+
+def _ref_to_kind_id(schema: dict, ref: dict, *, include_subkinds: bool = False) -> tuple[str, str] | None:
+    """Map a witness `RowRef` (`{"relation", "key"}`) to `(kind, row_id)` under `schema`, or None if outside it."""
+    if not isinstance(ref, dict):
+        return None
+    relation, key = ref.get("relation"), ref.get("key")
+    if not isinstance(relation, str) or not isinstance(key, str) or not key:
+        return None
+    rel_to_kind, _ = _schema_relation_maps(schema, include_subkinds=include_subkinds)
+    kind = rel_to_kind.get(relation)
+    if kind is None:
+        return None
+    if "tuple_key" in schema["kinds"][kind]:
+        return kind, key
+    try:
+        parts = json.loads(key)
+    except json.JSONDecodeError:
+        return None
+    if not (isinstance(parts, list) and len(parts) == 1 and isinstance(parts[0], str) and parts[0]):
+        return None
+    if canonical_json(parts) != key:
+        return None
+    return kind, parts[0]
+
+
+def resolve_iri(schema: dict, rows: list, iri: str, *, witnesses=(), manifest: str | None = None,
+                dataset: str | None = None) -> dict:
+    """Resolve a canonical conclusion IRI or canonical witness IRI (pinned or unpinned) to exactly one row."""
+    l0.check_schema(schema)
+    checked = l0.read_rows(schema, rows)
+    unpinned, pin = parse_pin(iri)
+    if pin is not None:
+        expected_dataset = rhash.hashes(schema, checked)["dataset"] if dataset is None else dataset
+        if not isinstance(expected_dataset, str) or not l0._DID.fullmatch(expected_dataset):
+            _fail("dataset", "dataset hash must be `d-<64 hex>` (§6.4)")
+        if pin["dataset"] != expected_dataset:
+            _fail(iri, f"dataset pin `{pin['dataset']}` does not match `{expected_dataset}`")
+        if "manifest" in pin:
+            if manifest is None:
+                _fail(iri, f"manifest pin `{pin['manifest']}` requires `manifest` to be supplied")
+            if not isinstance(manifest, str) or not l0._MID.fullmatch(manifest):
+                _fail("manifest", "manifest id must be `m-<epoch>` (§6.4)")
+            if manifest != pin["manifest"]:
+                _fail(iri, f"manifest pin `{pin['manifest']}` does not match `{manifest}`")
+
+    witness_prefix = f"{schema['base']}witness/"
+    if unpinned.startswith(witness_prefix):
+        digest = unpinned[len(witness_prefix):]
+        if not _HEX64.fullmatch(digest):
+            _fail(iri, "witness IRI must end with a 64-character lower-case hex digest")
+        matched_witness = None
+        for witness in witnesses:
+            try:
+                if canonical_sha256(witness) == digest:
+                    matched_witness = witness
+                    break
+            except CanonError as err:
+                _fail("witness", str(err))
+        if matched_witness is None:
+            _fail(iri, f"no witness with digest `{digest}`")
+        conclusion = matched_witness.get("conclusion") if isinstance(matched_witness, dict) else None
+        if not isinstance(conclusion, dict):
+            _fail(iri, "witness has no `conclusion` RowRef")
+        mapped = _ref_to_kind_id(schema, conclusion, include_subkinds=True)
+        if mapped is None:
+            _fail(iri, f"witness conclusion {conclusion!r} does not map to a kind of this schema")
+        kind, row_id = mapped
+        target_root = l0.root(schema, kind)
+        matches = [
+            row for row in checked
+            if row["$id"] == row_id
+            and kind in l0.chain(schema, row["$kind"])
+            and l0.root(schema, row["$kind"]) == target_root
+        ]
+        if len(matches) != 1:
+            _fail(iri, f"witness conclusion resolved to {len(matches)} rows, expected 1")
+        row = matches[0]
+        why_id = row.get("$why", {}).get("$id")
+        if why_id is not None and why_id != unpinned:
+            _fail(iri, f"row `$why.$id` `{why_id}` does not match witness IRI `{unpinned}`")
+        return row
+
+    space, sep, segment = unpinned.rpartition("/")
+    if not sep or not segment:
+        _fail(iri, "not a canonical conclusion or witness IRI of this schema")
+    space_to_root = {
+        element_space(schema, name): name
+        for name, spec in schema["kinds"].items()
+        if "parent" not in spec
+    }
+    root_kind = space_to_root.get(space)
+    if root_kind is None:
+        _fail(iri, "does not match any kind space of this schema")
+    row_id = unspell(segment)
+    matches = [
+        row for row in checked
+        if l0.root(schema, row["$kind"]) == root_kind and row["$id"] == row_id
+    ]
+    if len(matches) != 1:
+        _fail(iri, f"IRI resolved to {len(matches)} rows, expected 1")
+    return matches[0]
 
 
 def _type_iri(schema: dict, name: str) -> str:
@@ -563,27 +764,65 @@ def witness_iri(witness: dict) -> URIRef:
     return URIRef(f"{REZONO}w/{canonical_sha256(witness)}")
 
 
-def witness_to_prov(witness: dict, manifest: str, dataset: str, sources=None) -> Graph:
+def _row_entity_iri(ref: dict, schema: dict | None, *, require_schema: bool = False) -> URIRef:
+    if schema is None:
+        return row_iri(ref)
+    mapped = _ref_to_kind_id(schema, ref)
+    if mapped is not None:
+        return URIRef(element_iri(schema, mapped[0], mapped[1]))
+    if require_schema:
+        _fail(str(ref), "witness conclusion does not map to a kind of this schema")
+    return row_iri(ref)
+
+
+def _row_ref_under(iri, schema: dict | None) -> dict:
+    if schema is None:
+        return _row_ref(iri)
+    text = str(iri)
+    if text.startswith(REZONO + "r/"):
+        return _row_ref(text)
+    space, sep, segment = text.rpartition("/")
+    if not sep or not segment:
+        _fail(text, "not a canonical row IRI of this schema")
+    _, kind_to_rel = _schema_relation_maps(schema)
+    space_to_kind = {element_space(schema, name): name for name in kind_to_rel}
+    kind = space_to_kind.get(space)
+    if kind is None:
+        _fail(text, "not a canonical row IRI of this schema")
+    row_id = unspell(segment)
+    key = row_id if "tuple_key" in schema["kinds"][kind] else canonical_json([row_id])
+    return {"relation": kind_to_rel[kind], "key": key}
+
+
+def witness_to_prov(witness: dict, manifest: str, dataset: str, sources=None, *,
+                    schema: dict | None = None) -> Graph:
     """One witness as PROV-O, in a graph named by its epoch, a `prov:Bundle`.
 
     `manifest` and `dataset` pin the epoch (`m-<epoch>` with its hash pin `d-…`, §6.4). `sources` maps a base
-    row's `(relation, key)` to its Source objects: they become `prov:wasDerivedFrom`.
+    row's `(relation, key)` to its Source objects: they become `prov:wasDerivedFrom`. When `schema` is given,
+    the bundle, witness activity, conclusion entity and schema-known premise entities use their canonical IRIs.
     """
-    if not l0._MID.fullmatch(manifest) or not l0._DID.fullmatch(dataset):
+    if not isinstance(manifest, str) or not l0._MID.fullmatch(manifest) or not isinstance(dataset, str) or not l0._DID.fullmatch(dataset):
         _fail("epoch", "an epoch is `m-<epoch>` with its hash pin `d-<64 hex>` (§6.4)")
-    bundle = URIRef(f"{REZONO}m/{manifest}@{dataset}")
+    if schema is not None:
+        l0.check_schema(schema)
+        bundle = URIRef(f"{schema['base']}{manifest}@{dataset}")
+        a = URIRef(canonical_witness_iri(schema, witness))
+        conclusion = _row_entity_iri(witness["conclusion"], schema, require_schema=True)
+    else:
+        bundle = URIRef(f"{REZONO}m/{manifest}@{dataset}")
+        a = witness_iri(witness)
+        conclusion = row_iri(witness["conclusion"])
     g = Graph(identifier=bundle)
     g.bind("prov", PROV)
     g.bind("rd", RD)
     g.add((bundle, RDF.type, PROV.Bundle))
-    a = witness_iri(witness)
-    conclusion = row_iri(witness["conclusion"])
     g.add((a, RDF.type, PROV.Activity))
     g.add((a, RD.rule, Literal(witness["rule_id"])))
     g.add((conclusion, RDF.type, PROV.Entity))
     g.add((conclusion, PROV.wasGeneratedBy, a))
     for i, premise in enumerate(witness.get("premises", [])):
-        p = row_iri(premise["row"])
+        p = _row_entity_iri(premise["row"], schema)
         u = _bnode("u", a, i)
         g.add((p, RDF.type, PROV.Entity))
         g.add((a, PROV.used if premise["polarity"] == "positive" else RD.absent, p))
@@ -604,9 +843,9 @@ def witness_to_prov(witness: dict, manifest: str, dataset: str, sources=None) ->
     for i, agg in enumerate(witness.get("aggregates", [])):
         g.add((a, RD.aggregate, Literal(_json({"i": i, "a": agg}), datatype=RDF.JSON)))
     for (relation, key), objs in sorted((sources or {}).items()):
+        entity = _row_entity_iri({"relation": relation, "key": key}, schema)
         for source in objs:
-            g.add((row_iri({"relation": relation, "key": key}), PROV.wasDerivedFrom,
-                   Literal(canonical_json(source), datatype=RDF.JSON)))
+            g.add((entity, PROV.wasDerivedFrom, Literal(canonical_json(source), datatype=RDF.JSON)))
     return bind_namespaces(g)
 
 
@@ -615,8 +854,10 @@ def _json(value) -> str:
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
 
-def prov_to_witness(g: Graph) -> dict:
+def prov_to_witness(g: Graph, *, schema: dict | None = None) -> dict:
     """The witness of a graph made by `witness_to_prov`: the round trip loses nothing (O12c, M08)."""
+    if schema is not None:
+        l0.check_schema(schema)
     activities = list(g.subjects(RDF.type, PROV.Activity))
     if len(activities) != 1:
         _fail("prov", f"one prov:Activity per witness, not {len(activities)}")
@@ -624,20 +865,21 @@ def prov_to_witness(g: Graph) -> dict:
     conclusions = list(g.subjects(PROV.wasGeneratedBy, a))
     if len(conclusions) != 1:
         _fail("prov", "one conclusion `prov:wasGeneratedBy` the activity")
-    witness = {"conclusion": _row_ref(conclusions[0]), "rule_id": str(g.value(a, RD.rule))}
+    witness = {"conclusion": _row_ref_under(conclusions[0], schema), "rule_id": str(g.value(a, RD.rule))}
 
     def ordered(nodes):
         return sorted(nodes, key=lambda n: int(g.value(n, RD.position)))
 
     bindings = [{"variable": str(g.value(n, RD.variable)), "value": str(g.value(n, RD.value))}
                 for n in ordered(g.objects(a, RD.binding))]
-    premises = [{"row": _row_ref(g.value(u, PROV.entity)), "polarity": str(g.value(u, RD.polarity)),
+    premises = [{"row": _row_ref_under(g.value(u, PROV.entity), schema), "polarity": str(g.value(u, RD.polarity)),
                  "stratum": int(g.value(u, RD.stratum))} for u in ordered(g.objects(a, PROV.qualifiedUsage))]
     aggregates = [json.loads(str(o)) for o in g.objects(a, RD.aggregate)]
     aggregates = [x["a"] for x in sorted(aggregates, key=lambda x: x["i"])]
     for member, value in (("bindings", bindings), ("premises", premises), ("aggregates", aggregates)):
         if value:
             witness[member] = value
-    if witness_iri(witness) != a:
+    expected = URIRef(canonical_witness_iri(schema, witness)) if schema is not None else witness_iri(witness)
+    if expected != a:
         _fail(str(a), "the activity's IRI is not the hash of the witness read back")
     return witness

@@ -10,6 +10,9 @@ enum AmountPart world closed = numerator | denominator
 kind QuoteCurrency world closed
   currency: CurrencyCode
 
+kind PublicationCurrency world closed
+  currency: CurrencyCode
+
 kind RatePair world closed
   base: CurrencyCode
   target: CurrencyCode

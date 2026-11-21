@@ -40,7 +40,7 @@ An audit at commit `8d1fa9c` found the compiler, the publisher and the renderers
 | `loop/boundary_excess.py` | cases the router allows and service isolation denies | (b) | oracle of the control case per enforcement layer in loop design | move to `loop/tests/` |
 | `loop/attempt_approval.py` | whether a planned effect with an approved digest may be claimed | (b) | oracle of `run/packs/dispatch` `authorized`, which already binds approval to the exact plan hash; [the formal models](../formal/README.md) cite its test | move to `loop/tests/`, and update the link in `formal/README.md` in the same pull request |
 | `loop/uncertain_attempt.py` | a status read, never a repeat, after an uncertain attempt | (b) | oracle of the executor's follow-up to the formal `LoseReply` and `Reconcile` actions; `formal/README.md` cites its test | move to `loop/tests/`, and update the link in `formal/README.md` |
-| `loop/build_transition_choice.py` | the Python selection during the comparison week | (d), transitional | [build reconciliation](build-reconciliation.md) keeps Python authoritative while it compares | retire with that decision |
+| `loop/build_transition_choice.py` | the Python selection during the comparison week | (a) | retired with the comparison period ([build reconciliation](build-reconciliation.md)) | deleted with `loop/tests/test_build_transition_choice.py` |
 | `run/ovh_renewal.py` | blocking codes for a service that could renew or outlast its bound (lines 49 to 77) | (c) | `run/packs/provider-terms` (new): `renewal_block(service, code)`; the codes and field meanings are those of [price enforcement](run-price-enforcement.md) | `run/tests/test_renewal_bound_rule.py`, M4 |
 | `run/ovh_order_status.py` | what a vendor status string means | (c) | `run/packs/provider-terms`: the status vocabulary as pack facts and `order_outcome(order, outcome)` | `run/tests/test_order_status_rule.py`, M4 |
 | `run/ovh_order.py` | refusing usage-billed detail types (`CONSUMPTION`, `OUTPLAN`, line 95), cutting the expiry at the next UTC midnight (`min(expiration_utc, day_end)`, line 115), and assigning quote mode `binding_quote` (line 119); JSON shape, order-id and currency agreement, and exact microcent arithmetic are input-integrity checks | (c) for detail types, expiry bound and quote mode, (d) for input-integrity checks and parsing | `run/packs/provider-terms`: usage-billed detail types and quote mode as pack facts, and `order_guarantee(order, mode, expires_us)` under [price enforcement](run-price-enforcement.md) | `run/tests/test_order_guarantee_rule.py`, M4 |
@@ -55,7 +55,7 @@ An audit at commit `8d1fa9c` found the compiler, the publisher and the renderers
 | `k8s-admission/admission_release.py` | nothing of its own; it composes the release from the checked publication | (d) | renders each policy with `admission_translator.translate` from the checked rule program and its binding | `k8s-admission/test_translated_policy.py::test_release_renders_the_translated_policy`, M2 |
 | The preflight oracles in `k8s-admission/` | independent CEL and API server outcomes | (b), already | covered by [the admission rules](k8s-admission-rules.md) | leave |
 
-Count: (a) 4, (b) 7, (c) 12, (d) 7, plus the admission oracles that already are oracles.
+Count: (a) 5, (b) 7, (c) 12, (d) 6, plus the admission oracles that already are oracles.
 
 ## 3. Vocabulary
 
