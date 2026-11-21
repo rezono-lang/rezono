@@ -1,4 +1,7 @@
 name: cleanup-deadline
 version: 0.1.0
 default_language: en
-imports: []
+imports:
+  - name: std-loop
+    path: ../../../packs/std-loop
+    sha256: 97f6eef532e9378ce11fd033831383870043e227dcc5aa2da3ca303efe18bc39

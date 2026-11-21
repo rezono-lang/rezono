@@ -22,6 +22,11 @@ kinds:
   - {kind: watchdog_target, shape: rect}
   - {kind: watchdog_activity, shape: rect}
   - {kind: watchdog_active_effect, shape: rect}
+  - {kind: loop_effect_plan, shape: rect}
+  - {kind: loop_effect_attempt, shape: rect}
+  - {kind: loop_effect_readback, shape: rect}
+  - {kind: loop_claim, shape: rect}
+  - {kind: loop_claim_renewal, shape: rect}
 arrows:
   - {arrow: loop_completion.step, dash: none}
   - {arrow: loop_requirement.step, dash: none}
@@ -31,3 +36,8 @@ arrows:
   - {arrow: loop_deadline.start, dash: none}
   - {arrow: watchdog_activity.target, dash: none}
   - {arrow: watchdog_active_effect.target, dash: none}
+  - {arrow: loop_effect_plan.step, dash: none}
+  - {arrow: loop_effect_attempt.plan, dash: none}
+  - {arrow: loop_effect_readback.plan, dash: none}
+  - {arrow: loop_effect_readback.receipt, dash: none}
+  - {arrow: loop_claim_renewal.claim, dash: none}

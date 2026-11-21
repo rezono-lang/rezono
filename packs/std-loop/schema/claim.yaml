@@ -1,0 +1,26 @@
+id: https://rezono.org/std-loop/claim
+name: std_loop_claim
+description: Observed claims and claim renewals shared across runs (decisions/loop-engine-epoch.md).
+imports: [linkml:types]
+default_range: string
+annotations:
+  layer: facts
+
+classes:
+  LoopClaim:
+    description: A claim observed at a cut, such as a branch ref, a write-once ref or a store object.
+    attributes:
+      id: {identifier: true}
+      run: {required: true}
+      subject: {required: true}
+      generation: {required: true}
+      observed_at: {range: integer, required: true}
+      source: {required: true}
+  LoopClaimRenewal:
+    description: One recorded push or renewal of an observed claim.
+    attributes:
+      id: {identifier: true}
+      claim: {range: LoopClaim, required: true}
+      generation: {required: true}
+      at: {range: integer, required: true}
+      source: {required: true}

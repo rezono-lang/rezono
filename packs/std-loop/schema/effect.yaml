@@ -1,0 +1,72 @@
+id: https://rezono.org/std-loop/effect
+name: std_loop_effect
+description: Planned effects, journaled attempts, target readbacks and effect journal states (decisions/loop-engine-epoch.md).
+imports: [linkml:types, loop_inputs, round_progress]
+default_range: string
+annotations:
+  layer: facts
+
+enums:
+  LoopEffectState:
+    description: The journal state for a single effect plan, shared across runs with contracts/effect.yaml.
+    permissible_values:
+      planned:
+        description: The exact plan is retained and the attempt is available to claim.
+      applying:
+        description: The sole attempt is durably claimed before sending the request.
+      unknown:
+        description: The attempt is consumed and its outcome is uncertain. Reconcile only.
+      applied:
+        description: Matching effect evidence has been confirmed.
+      failed:
+        description: The consumed attempt was definitively rejected. An uncertain response is not failure.
+      cleaned:
+        description: Cleanup was confirmed. The original attempt remains consumed.
+  LoopEffectAttemptOutcome:
+    description: The recorded outcome of one journaled effect attempt.
+    permissible_values:
+      claimed:
+        description: The claim was made and no answer was recorded.
+      sent:
+        description: The request was sent and accepted.
+      refused:
+        description: The attempt was definitively refused before applying.
+      unknown:
+        description: The outcome of the sent attempt is uncertain.
+  LoopEffectReadbackState:
+    description: What a complete target readback observed after an effect attempt.
+    permissible_values:
+      expected:
+        description: The target shows what the plan produces.
+      before:
+        description: The target still shows the state before the effect.
+      other:
+        description: The target shows another state that neither matches the plan nor the prior state.
+
+classes:
+  LoopEffectPlan:
+    description: The exact planned input of one effect. Its id is the idempotency key (the plan hash).
+    attributes:
+      id: {identifier: true}
+      run: {required: true}
+      step: {range: LoopStep, required: true}
+      reason: {required: true}
+  LoopEffectAttempt:
+    description: One journaled attempt for a planned effect, as the effect adapter recorded it.
+    attributes:
+      id: {identifier: true}
+      run: {required: true}
+      plan: {range: LoopEffectPlan, required: true}
+      sent_at: {range: integer, required: true}
+      outcome: {range: LoopEffectAttemptOutcome, required: true}
+      source: {required: true}
+  LoopEffectReadback:
+    description: A complete read of an effect target after an attempt, settling only with a receipt of its own run and tick.
+    attributes:
+      id: {identifier: true}
+      run: {required: true}
+      plan: {range: LoopEffectPlan, required: true}
+      observed_at: {range: integer, required: true}
+      state: {range: LoopEffectReadbackState, required: true}
+      receipt: {range: LoopSweepReceipt}
+      source: {required: true}

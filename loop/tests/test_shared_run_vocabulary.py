@@ -74,22 +74,6 @@ def effect_states():
     return set(yaml.safe_load(EFFECT.read_text(encoding="utf-8"))["enums"]["EffectState"]["permissible_values"])
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingSharedKind,
-    reason=(
-        "extra: decisions/loop-engine-epoch.md: sections 2.2 and 2.3. Declare in packs/std-loop/schema "
-        "LoopEffectPlan {id, run, step: LoopStep, reason}, LoopEffectAttempt {id, run, plan: LoopEffectPlan, "
-        "sent_at: integer, outcome: claimed, sent, refused or unknown, source}, LoopEffectReadback {id, run, plan: "
-        "LoopEffectPlan, observed_at: integer, state: expected, before or other, receipt: LoopSweepReceipt, source}, "
-        "LoopClaim {id, run, subject, generation, observed_at: integer, source}, LoopClaimRenewal {id, claim: "
-        "LoopClaim, generation, at: integer, source} and the enum LoopEffectState with exactly the values of "
-        "EffectState in contracts/effect.yaml. Then run/packs/cleanup-deadline imports std-loop and its Attempt.state "
-        "ranges over LoopEffectState, so no pack outside std-loop declares a copy of those states. Re-pin std-loop "
-        "in build/pack.yaml, examples/platform/pack.yaml and compiler/rezono_compiler/standard_packs.py in the same "
-        "pull request."
-    ),
-)
 def test_effects_and_claims_are_declared_once():
     shared = classes(LOOP / "schema")
     missing = sorted(set(SHARED) - set(shared))
@@ -196,16 +180,6 @@ def gate_records(value):
     }
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingExtension,
-    reason=(
-        "extra: decisions/loop-engine-epoch.md: section 2.2, derived refusal. Declare in packs/std-loop/rules "
-        "`// @extend .decl derived_refusal(run: symbol, step: symbol, reason: symbol)` with no clause of its own, and "
-        "let refusal(run, step, reason) also hold for every derived_refusal row, so an importing pack's derived "
-        "refusal makes the step stuck and not unblocked, with the importing pack's premises in the witness."
-    ),
-)
 def test_a_derived_refusal_makes_its_step_stuck(tmp_path):
     if not extensible(LOOP / "rules", "derived_refusal"):
         raise MissingExtension("packs/std-loop/rules does not declare derived_refusal with // @extend")

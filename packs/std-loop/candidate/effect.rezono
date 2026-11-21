@@ -1,0 +1,67 @@
+rezono 0
+pack std-loop
+
+schema std_loop_effect
+  iri "https://rezono.org/std-loop/effect"
+  import "linkml:types"
+  default range Text
+  description "Planned effects, journaled attempts, target readbacks and effect journal states (decisions/loop-engine-epoch.md)."
+  annotation layer = "facts"
+
+enum LoopEffectState world closed = planned | applying | unknown | applied | failed | cleaned
+  description "The journal state for a single effect plan, shared across runs with contracts/effect.yaml."
+  value planned
+    description "The exact plan is retained and the attempt is available to claim."
+  value applying
+    description "The sole attempt is durably claimed before sending the request."
+  value unknown
+    description "The attempt is consumed and its outcome is uncertain. Reconcile only."
+  value applied
+    description "Matching effect evidence has been confirmed."
+  value failed
+    description "The consumed attempt was definitively rejected. An uncertain response is not failure."
+  value cleaned
+    description "Cleanup was confirmed. The original attempt remains consumed."
+
+enum LoopEffectAttemptOutcome world closed = claimed | sent | refused | unknown
+  description "The recorded outcome of one journaled effect attempt."
+  value claimed
+    description "The claim was made and no answer was recorded."
+  value sent
+    description "The request was sent and accepted."
+  value refused
+    description "The attempt was definitively refused before applying."
+  value unknown
+    description "The outcome of the sent attempt is uncertain."
+
+enum LoopEffectReadbackState world closed = expected | before | other
+  description "What a complete target readback observed after an effect attempt."
+  value expected
+    description "The target shows what the plan produces."
+  value before
+    description "The target still shows the state before the effect."
+  value other
+    description "The target shows another state that neither matches the plan nor the prior state."
+
+kind LoopEffectPlan world closed
+  description "The exact planned input of one effect. Its id is the idempotency key (the plan hash)."
+  run: Text
+  step: LoopStep
+  reason: Text
+
+kind LoopEffectAttempt world closed
+  description "One journaled attempt for a planned effect, as the effect adapter recorded it."
+  run: Text
+  plan: LoopEffectPlan
+  sent_at: Int
+  outcome: LoopEffectAttemptOutcome
+  source: Text
+
+kind LoopEffectReadback world closed
+  description "A complete read of an effect target after an attempt, settling only with a receipt of its own run and tick."
+  run: Text
+  plan: LoopEffectPlan
+  observed_at: Int
+  state: LoopEffectReadbackState
+  receipt: LoopSweepReceipt?
+  source: Text

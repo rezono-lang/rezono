@@ -1,5 +1,6 @@
 rezono 0
 pack cleanup-deadline
+use std-loop
 
 schema cleanup_deadline
   iri "https://rezono.org/run/cleanup-deadline"
@@ -9,10 +10,8 @@ schema cleanup_deadline
   description "Recorded cleanup deadline and observation watermark for an effect attempt."
   annotation layer = "facts"
 
-enum CleanupAttemptState world closed = planned | applying | unknown | applied | failed | cleaned
-
 kind Attempt world closed
-  state: CleanupAttemptState
+  state: LoopEffectState
   deadline_us: Int
   watermark_us: Int?
 
