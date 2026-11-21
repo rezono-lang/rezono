@@ -12,8 +12,8 @@ Verifies that examples/platform/facts/core.sources.yaml:
 from __future__ import annotations
 
 import json
+import re
 
-import pytest
 import yaml
 
 from case_support import ROOT
@@ -61,16 +61,6 @@ def test_keycloak_27rc_has_synthetic_origin():
         assert kinds == {"synthetic"}, f"resolved origins for keycloak-27rc must be strictly synthetic: {item}"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "extra: decisions/fact-origin-required.md: examples/platform/facts/core.sources.yaml must "
-        "keep an honest default (never pack/scenario/synthetic or self-citing facts/core.yaml, and "
-        "for kind='git' citing an existing decisions/*.md file) and must not repeat default "
-        "entries verbatim or duplicate record selectors in records"
-    ),
-)
 def test_core_sources_has_honest_default_without_duplicate_records():
     core_sources_yaml = FACTS / "core.sources.yaml"
 
@@ -78,28 +68,30 @@ def test_core_sources_has_honest_default_without_duplicate_records():
     default = sidecar.get("default")
     records = sidecar.get("records") or []
 
-    # 1. Honest default: no pack/scenario/synthetic, no self-citing facts/core.yaml,
-    #    and when kind == "git", must cite an existing decisions/*.md file.
-    if isinstance(default, dict):
-        kind = default.get("kind")
-        assert kind not in FORBIDDEN_DEFAULT_KINDS, (
-            f"core.sources.yaml default uses forbidden kind {kind!r}: {default}"
+    # 1. Honest default: must exist as a mapping with a 40-hex revision, no pack/scenario/synthetic,
+    #    no self-citing facts/core.yaml, and when kind == "git", must cite an existing decisions/*.md file.
+    assert isinstance(default, dict), f"core.sources.yaml must define a mapping default: {default!r}"
+    assert re.fullmatch(r"[0-9a-f]{40}", str(default.get("revision", ""))), (
+        f"core.sources.yaml default must carry a 40-hex revision: {default}"
+    )
+    kind = default.get("kind")
+    assert kind not in FORBIDDEN_DEFAULT_KINDS, (
+        f"core.sources.yaml default uses forbidden kind {kind!r}: {default}"
+    )
+    pos_path = str(default.get("position", "")).partition("#")[0]
+    assert pos_path not in {"facts/core.yaml", "examples/platform/facts/core.yaml"}, (
+        f"core.sources.yaml default self-cites facts/core.yaml: {default}"
+    )
+    if kind == "git":
+        assert pos_path.startswith("decisions/") and pos_path.endswith(".md") and (REPO / pos_path).is_file(), (
+            f"core.sources.yaml git default must cite an existing decisions/*.md file: {default}"
         )
-        pos_path = str(default.get("position", "")).partition("#")[0]
-        assert pos_path not in {"facts/core.yaml", "examples/platform/facts/core.yaml"}, (
-            f"core.sources.yaml default self-cites facts/core.yaml: {default}"
-        )
-        if kind == "git":
-            assert pos_path.startswith("decisions/") and pos_path.endswith(".md") and (REPO / pos_path).is_file(), (
-                f"core.sources.yaml git default must cite an existing decisions/*.md file: {default}"
-            )
 
     # 2. No record entries repeating default verbatim.
-    if isinstance(default, dict):
-        duplicates = [rec.get("of") for rec in records if _strip_of(rec) == default]
-        assert duplicates == [], (
-            f"core.sources.yaml has {len(duplicates)} duplicate record entries repeating default: {duplicates}"
-        )
+    duplicates = [rec.get("of") for rec in records if _strip_of(rec) == default]
+    assert duplicates == [], (
+        f"core.sources.yaml has {len(duplicates)} duplicate record entries repeating default: {duplicates}"
+    )
 
     # 3. No duplicate record selectors in records.
     seen: set[tuple[str, str, str | None]] = set()

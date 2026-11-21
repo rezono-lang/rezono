@@ -658,7 +658,7 @@ def parameter_values(prog: Program) -> list[tuple[str, str]]:
 
 
 def relations(prog: Program) -> list[tuple[str, str, bool]]:
-    """(engine name, select, is a rule's output) in dependency order."""
+    """(engine name, select, materialized on Feldera) in dependency order."""
     out = [(name, body, False) for name, body in input_views(prog) + parameter_values(prog)]
     if prog.choice:
         out.append((PARAMETER, choice_sql(prog), False))
@@ -666,7 +666,7 @@ def relations(prog: Program) -> list[tuple[str, str, bool]]:
         if kind == "version":
             v = prog.versions[key]
             witness, version = Lowering(prog, v).sql(witness_name(v))
-            out += [(witness_name(v), witness, False), (v.engine, version, False)]
+            out += [(witness_name(v), witness, True), (v.engine, version, True)]
         else:
             out.append((prog.engine[key], selection_sql(prog, key), True))
     return out
@@ -709,11 +709,11 @@ AS_OF_TABLE = f"CREATE TABLE {q(AS_OF)} (id VARCHAR NOT NULL, valid_at DATE NOT 
 
 
 def feldera(prog: Program) -> str:
-    """engine/calc.sql: the UDF declarations, the evaluation-date table and one view per rule version
-    and per rule (materialized, so it can be read)."""
+    """engine/calc.sql: the UDF declarations, the evaluation-date table and one materialized view
+    per rule, per rule version and per version witness, so Feldera can be queried for them."""
     out = [HEADER, feldera_functions(), AS_OF_TABLE]
-    for name, body, output in relations(prog):
-        kind = "CREATE MATERIALIZED VIEW" if output else "CREATE VIEW"
+    for name, body, materialized in relations(prog):
+        kind = "CREATE MATERIALIZED VIEW" if materialized else "CREATE VIEW"
         out.append(f"{kind} {q(name)} AS\n{body};\n")
     return feldera_names.render("".join(out))
 

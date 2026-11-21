@@ -35,6 +35,7 @@ enums:
       unknown: {}
       not_applicable: {}
       absent: {description: "Checked and not there: a negative premise of a proof, a row that holds by being absent from its snapshot. Never the sign of a present fact."}
+      invalid: {description: "Invalid value: an expression or constraint failed with an explicit reason (e.g. division by zero or multiple values). Distinct from violated (a rule breach) and from unknown."}
   Tone:
     description: "Evaluation, distinct from nominal hue. Unknown is not a numeric rank."
     permissible_values: {positive: {}, neutral: {}, caution: {}, negative: {}, unknown: {}}

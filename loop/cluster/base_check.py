@@ -1,7 +1,6 @@
 """Run added cluster tests from a selection file on the base source."""
 
 import argparse
-import os
 from pathlib import Path
 import subprocess
 import sys
@@ -10,16 +9,25 @@ import xml.etree.ElementTree as ET
 
 from pytest import ExitCode
 
+# Import red_before from beside this file (isolated CI policy dir) or from scripts/.
+_HERE = Path(__file__).resolve().parent
+for _candidate in (_HERE, *([_HERE.parents[1] / "scripts"] if len(_HERE.parents) > 1 else [])):
+    if (_candidate / "red_before.py").is_file():
+        if sys.path[:1] != [str(_candidate)]:
+            sys.path.insert(0, str(_candidate))
+        break
+
+import red_before
+
 CLUSTER_SKIP_FAILURE = "Skipped cluster test: "
 
 
 def read_selection(selection: Path) -> list[str]:
     """Read non-empty pytest node IDs from `selection`, failing closed on read errors."""
     try:
-        text = selection.read_text(encoding="utf-8")
+        return red_before.read_selection(selection)
     except (OSError, UnicodeError) as exc:
         raise SystemExit(f"ERROR cannot read selection file {selection}: {exc}") from exc
-    return [line for line in text.splitlines() if line.strip()]
 
 
 def _is_cluster_skip(element: ET.Element) -> bool:
@@ -103,15 +111,6 @@ def run_file(root: Path, path: str, ids: list[str], report: Path) -> tuple[int, 
     )
 
 
-def summarize(verdict: str, tests: list[str]) -> None:
-    """Print the verdict and append it to GITHUB_STEP_SUMMARY when running in Actions."""
-    print(verdict, flush=True)
-    summary = os.environ.get("GITHUB_STEP_SUMMARY")
-    if summary:
-        with open(summary, "a", encoding="utf-8") as out:
-            out.write(f"{verdict}\n\n" + "".join(f"- `{test}`\n" for test in tests))
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path.cwd(), help="Repository or fixture root directory")
@@ -124,7 +123,7 @@ def main() -> int:
 
     tests = read_selection(args.selection)
     if not tests:
-        summarize("No cluster items in the selection to run on the base.", tests)
+        red_before.summarize("No cluster items in the selection to run on the base.", tests)
         return 0
 
     files: dict[str, list[str]] = {}
@@ -142,23 +141,23 @@ def main() -> int:
             skipped += skip
 
     if not (passed or failed or skipped):
-        summarize("No cluster items in the selection to run on the base.", tests)
+        red_before.summarize("No cluster items in the selection to run on the base.", tests)
         return 0
     if skipped:
-        summarize(
+        red_before.summarize(
             f"ERROR {skipped} added cluster test case(s) skipped on the base "
             f"({passed} passed, {failed} failed); a skip proves nothing.",
             tests,
         )
         return 1
     if failed:
-        summarize(
+        red_before.summarize(
             f"The base source fails {failed} added cluster test case(s) "
             f"({passed} passed, 0 skipped): they tell the base from the change.",
             tests,
         )
         return 0
-    summarize(
+    red_before.summarize(
         f"ERROR all {passed} added cluster test case(s) pass on the base source "
         "and none fails (0 skipped), so they do not tell the old source from the new one.",
         tests,

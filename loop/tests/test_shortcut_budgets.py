@@ -509,10 +509,10 @@ def _python_bin_for_ci_step(tmp_path: Path) -> tuple[str, dict[str, str]]:
         capture_output=True,
     )
     if probe.returncode == 0:
-        return str(Path(sys.executable).resolve().parent), {}
+        return str(Path(sys.executable).parent), {}
     shim_dir = tmp_path / "python-shim"
     shim_dir.mkdir()
-    exe_posix = Path(sys.executable).resolve().as_posix()
+    exe_posix = Path(sys.executable).as_posix()
     shim = shim_dir / "python"
     shim.write_text(
         "#!/usr/bin/env bash\n"
@@ -848,7 +848,7 @@ def test_day_number_field_counter_uses_compiler_model_not_regex(tmp_path: Path):
         "type DayStamp = Int\n"
         "type DayLabel = Text\n\n"
         "kind Entry world closed\n"
-        "  id: Text key\n"
+        "  id: Text identifier\n"
         "  effective_day: DayStamp\n"
         "  label_day: DayLabel\n"
         "  recorded_on: Date\n",

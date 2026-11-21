@@ -117,20 +117,6 @@ def from_feldera(reference, inputs: list[str], views: dict[str, list[dict]]):
     return db
 
 
-@pytest.mark.xfail(strict=True, raises=MissingFelderaCalculationParity, reason=(
-    "M3: the decision on the derivation form of the first-release language (rezono 1) is pending; before that "
-    "form reaches Feldera, today's calculations must agree there with DuckDB and the checker "
-    "(docs/rezono/first-release-proposal.md, Feldera rule 5; decisions/feldera-calculation-parity.md). "
-    "Missing: compiler/rezono_compiler/calc_sql.py writes each calculation version and its witness relation "
-    "(calc__<rule>__<version>, calc__<rule>__<version>__witness) as a plain CREATE VIEW in engine/calc.sql, so "
-    "Feldera cannot be queried for them; every rule view, version view and witness relation must be a "
-    "CREATE MATERIALIZED VIEW there. Missing: the live route; select this test in "
-    "compiler/ci/run_feldera_oracle.sh, add its case to the subsidy shard in compiler/ci/feldera_shards.py "
-    "and leave it out of ORIGINAL there (scripts/feldera_admission.py stays unchanged). Lift this mark. If "
-    "compiler/tests/test_recorded_dates.py::test_independent_date_equality is already routed on main, also lift "
-    "the strict marks on examples/test_live_feldera_shards.py::test_merge_preserves_all_live_cases_and_outcomes "
-    "and examples/test_feldera_incident.py::test_classifier_uses_complete_reports_from_the_parallel_comparison; "
-    "otherwise leave them. Verify the exact implementation revision on hosted Feldera before queue admission."))
 @pytest.mark.parametrize("example", CALCULATED, ids=name)
 def test_feldera_calculations_match_duckdb_and_checker(example, committed_packs):
     model = committed_packs.model(example)

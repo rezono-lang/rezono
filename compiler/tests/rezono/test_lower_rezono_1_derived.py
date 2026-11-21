@@ -233,18 +233,6 @@ def _state_rows(rows: set[tuple], keys: int) -> tuple[set[tuple], dict[tuple, st
     return states, known
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingRezono1DerivedLowering,
-    reason="M3: decisions/language-rezono-1.md: Lower `derived` in a rezono 1 module to rezono.rules/2 in the "
-           "compiler: a single-key property `K.d` in `kind`/`extend` to a functional relation `<k>_<d>` over K, a "
-           "module-level declaration to a Bool set or to a functional relation over its `over` domain, with "
-           "co-located (key..., state, reason, value), `no_match` for an empty `.one()` (unknown for T, n/a for T?), "
-           "`invalid multiple_values` for more than one value, `no_value` for a missing slot, `.count(pred)` and "
-           "`.one()` undecided when a row is (refinements sections 3.1 and 3.3), `functional_open_domain` for an "
-           "open domain, and `means`/`@` to the clause's message and the bundle rule's `source` "
-           "(language-readable-rules.md section 2). Read sections 2, 4 and 8.",
-)
 def test_lower_rezono_1_derived(tmp_path):
     # Counter-case: a rezono 1 pack whose module declares kinds and no derivation compiles to no rule program.
     plain = _write_pack(tmp_path / "plain", MODULE.split("\nextend s: Item")[0] + "\n")
