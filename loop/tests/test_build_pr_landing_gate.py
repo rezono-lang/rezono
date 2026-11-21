@@ -17,35 +17,9 @@ HEAD_B = "b" * 40
 STALE_SHA = "c" * 40
 GEN_A = "1" * 40
 GEN_B = "2" * 40
-BUILD_KINDS = {
-    "BuildPullRequest",
-    "BuildPrTouchedPath",
-    "BuildLandingPolicy",
-    "BuildCoordinatorClaim",
-    "BuildMergeQueueRequest",
-}
-REVIEW_KINDS = {"CommitReading", "ReviewFinding"}
-
-
-class MissingLandingGate(AssertionError):
-    """The build landing gate schema/rules or std-review commit-reading kinds are not implemented yet."""
-
-
-def _declared_classes(schema_dir: Path) -> set[str]:
-    return {
-        name
-        for path in sorted(schema_dir.glob("*.yaml"))
-        for name in (yaml.safe_load(path.read_text(encoding="utf-8")).get("classes") or {})
-    }
 
 
 def _publish_build(tmp_path: Path, records: dict) -> tuple[dict[str, list[list[str]]], set[tuple[str, str]]]:
-    missing_build = sorted(BUILD_KINDS - _declared_classes(ROOT / "build" / "schema"))
-    missing_review = sorted(REVIEW_KINDS - _declared_classes(ROOT / "packs" / "std-review" / "schema"))
-    if missing_build or missing_review:
-        raise MissingLandingGate(
-            f"Missing landing-gate kinds: build={missing_build}, std-review={missing_review}"
-        )
     build = tmp_path / "build"
     shutil.copytree(ROOT / "build", build)
     for pack in ("std-loop", "std-order", "std-decision", "std-access", "std-review"):
@@ -148,29 +122,37 @@ def test_may_land_is_unknown_when_required_reading_for_head_sha_is_missing(tmp_p
                 "source": "github-diff-101",
             },
         ],
-        # Neither a stale commit reading nor a self-reading by the author may satisfy head_sha.
-        "commit_reading": [
-            {
-                "id": "read-stale",
-                "change": "chg-101",
-                "commit_sha": STALE_SHA,
-                "reviewer": "reviewer-independent",
-                "outcome": "clean",
-                "source": "review-log#1",
-            },
-            {
-                "id": "read-self",
-                "change": "chg-101",
-                "commit_sha": HEAD_A,
-                "reviewer": "worker-1",
-                "outcome": "clean",
-                "source": "review-log#2",
-            },
-        ],
+        "commit_reading": [],
     })
 
-    rows, witnesses = _publish_build(tmp_path / "run-missing", records)
     expected_unknown = ["current", "pr-101", HEAD_A, "unknown", "missing-independent-reading"]
+
+    # Zero readings recorded at all -> may_land is unknown with a checker-verified witness.
+    rows_zero, witnesses_zero = _publish_build(tmp_path / "run-zero-readings", records)
+    assert rows_zero.get("may_land") == [expected_unknown]
+    assert ("may_land", canonical_json(expected_unknown)) in witnesses_zero
+
+    # Neither a stale commit reading nor a self-reading by the author may satisfy head_sha.
+    records["commit_reading"] = [
+        {
+            "id": "read-stale",
+            "change": "chg-101",
+            "commit_sha": STALE_SHA,
+            "reviewer": "reviewer-independent",
+            "outcome": "clean",
+            "source": "review-log#1",
+        },
+        {
+            "id": "read-self",
+            "change": "chg-101",
+            "commit_sha": HEAD_A,
+            "reviewer": "worker-1",
+            "outcome": "clean",
+            "source": "review-log#2",
+        },
+    ]
+
+    rows, witnesses = _publish_build(tmp_path / "run-missing", records)
     assert rows.get("may_land") == [expected_unknown]
     assert ("may_land", canonical_json(expected_unknown)) in witnesses
 

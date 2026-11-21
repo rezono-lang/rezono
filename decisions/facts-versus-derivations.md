@@ -41,7 +41,7 @@ The independent checker (`checker/rezono_checker/check.py`) enforces this bounda
 }
 ```
 
-- **Non-blocking:** `"stored_derivable_fact"` is registered in `WARNINGS` in `checker/rezono_checker/check.py`, so `report["valid"]` remains `True` when no error findings are present. Because changing `checker/rezono_checker/check.py` touches a pre-landing review path ([checker and access review](checker-and-access-review.md)), the implementation pull request requires an independent reading label `p1-read-<head_sha>` before landing.
+- **Non-blocking:** `"stored_derivable_fact"` is registered in `WARNINGS` in `checker/rezono_checker/check.py`, so `report["valid"]` remains `True` when no error findings are present. Implementing `stored_derivable_fact` also registers the code in [`contracts/checker-refusal.yaml`](../contracts/checker-refusal.yaml) and `checker/rezono_checker/messages/{en,nl}.json`. Because changing `checker/rezono_checker/check.py` touches a pre-landing review path ([checker and access review](checker-and-access-review.md)), the implementation pull request requires an independent reading label `p1-read-<head_sha>` before landing.
 
 ## 3. Red test (`extra`)
 
