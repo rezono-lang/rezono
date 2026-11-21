@@ -11,6 +11,10 @@ export interface MountOptions {
 	fetch?: FetchLike;
 }
 
+export function flush(): void {
+	flushSync();
+}
+
 export async function renderSlip(target: HTMLElement, options: MountOptions): Promise<() => void> {
 	const fetchFn: FetchLike = options.fetch ?? ((input, init) => globalThis.fetch(input, init));
 	const view = await loadSlip(
