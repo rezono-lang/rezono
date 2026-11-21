@@ -20,6 +20,7 @@ FALLBACK_KEY: dict[str, tuple[dict, ...]] = {
         {"status": "unknown", "tone": "unknown", "color_role": "status.unknown", "glyph": "▨", "label_message": "status.unknown", "hatched": True},
         {"status": "not_applicable", "tone": "neutral", "color_role": "status.not_applicable", "glyph": "–", "label_message": "status.not_applicable"},
         {"status": "absent", "tone": "neutral", "color_role": "status.not_applicable", "glyph": "⦸", "label_message": "status.absent"},
+        {"status": "invalid", "tone": "negative", "color_role": "status.invalid", "glyph": "!", "label_message": "status.invalid"},
     ),
     "tones": (
         {"tone": "positive", "color_role": "status.valid", "glyph": "✓", "label_message": "tone.positive"},
@@ -56,6 +57,7 @@ FALLBACK_MESSAGES: dict[str, tuple[tuple[str, str], ...]] = {
         ("status.unknown", "status.unknown = unknown\n"),
         ("status.not_applicable", "status.not_applicable = not applicable\n"),
         ("status.absent", "status.absent = absent, checked\n"),
+        ("status.invalid", "status.invalid = invalid\n"),
         ("tone.positive", "tone.positive = positive\n"),
         ("tone.neutral", "tone.neutral = neutral\n"),
         ("tone.caution", "tone.caution = caution\n"),
@@ -83,6 +85,7 @@ FALLBACK_MESSAGES: dict[str, tuple[tuple[str, str], ...]] = {
         ("status.unknown", "status.unknown = onbekend\n"),
         ("status.not_applicable", "status.not_applicable = niet van toepassing\n"),
         ("status.absent", "status.absent = afwezig, gecontroleerd\n"),
+        ("status.invalid", "status.invalid = ongeldig\n"),
         ("tone.positive", "tone.positive = positief\n"),
         ("tone.neutral", "tone.neutral = neutraal\n"),
         ("tone.caution", "tone.caution = let op\n"),
