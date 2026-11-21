@@ -115,19 +115,26 @@ def test_check_proof_refuses_duplicate_key_proof_piece_and_snapshot():
             path = f"proof/{tree_name}/{rel}/0/0.json"
             pieces[path] = raw
             roots[tree_name][rel] = {"file": path, "sha256": _sha(raw), "levels": 1}
-    assert proof.check_proof(rules_doc, {"witnesses": [witness]}, snaps, pieces, roots, 65536, 128) == []
+    sees = {
+        "witnesses": [witness],
+        "load_bearing_entries": [
+            {"conclusion": witness["conclusion"], "premise": witness["premises"][0]["row"],
+             "how": "positive", "load_bearing": True},
+        ],
+    }
+    assert proof.check_proof(rules_doc, sees, snaps, pieces, roots, 65536, 128) == []
 
     dup_path = "proof/back/p/0/0.json"
     dup_bytes = pieces[dup_path][:-1] + b',"level":0}'
     dup_pieces = pieces | {dup_path: dup_bytes}
     dup_roots = {t: dict(by) for t, by in roots.items()}
     dup_roots["back"]["p"] = roots["back"]["p"] | {"sha256": _sha(dup_bytes)}
-    problems = proof.check_proof(rules_doc, {"witnesses": [witness]}, snaps, dup_pieces, dup_roots, 65536, 128)
+    problems = proof.check_proof(rules_doc, sees, snaps, dup_pieces, dup_roots, 65536, 128)
     assert any("duplicate JSON object key" in p for p in problems), problems
 
     dup_snaps = snaps | {"e": b'[{"key":["hidden"],"key":["a"]}]'}
     with pytest.raises(ValueError, match="duplicate JSON object key"):
-        proof.check_proof(rules_doc, {"witnesses": [witness]}, dup_snaps, pieces, roots, 65536, 128)
+        proof.check_proof(rules_doc, sees, dup_snaps, pieces, roots, 65536, 128)
 
 
 @pytest.mark.parametrize("bad_page", [

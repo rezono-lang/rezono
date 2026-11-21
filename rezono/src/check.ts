@@ -94,6 +94,8 @@ export interface TypingOptions {
 	rezono1?: boolean;
 	/** Module-level derivations callable by name and usable as tuple sets in rezono 1. */
 	relations?: Record<string, RelationDef>;
+	/** Allow Release-1 question contexts (`at`, `during`, `as known [on]`) without R015. */
+	allowContext?: boolean;
 }
 
 /** One scope: the question's row (the outermost) or the element of an aggregate, a quantifier or a filter. */
@@ -149,7 +151,7 @@ const common = <T>(a: Set<T>, b: Set<T>): Set<T> => new Set([...a].filter((x) =>
 
 /** Checks one question (an `ask` or a suppose line) or one check statement against a schema. */
 export function check(text: string, schema: Schema, options?: TypingOptions): Checked {
-	const parsed = parse(text);
+	const parsed = parse(text, options?.allowContext ? { allowContext: true } : undefined);
 	const { tree } = parsed;
 	if (!tree) return { typed: new Map(), heads: new Map(), diagnostics: parsed.diagnostics, resolve: {} };
 	const { typed, heads, resolve, found, ask, statement, suppose } = typing(text, schema, parsed.spans, options);
