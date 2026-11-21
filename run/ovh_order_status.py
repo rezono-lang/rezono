@@ -15,8 +15,9 @@ def _provider_terms() -> tuple[pack.Pack, rules.Program, dict[str, list[tuple]]]
     model = pack.read(_PACK_DIR)
     program = rules.load(model.rules)
     states = scenarios.fact_states(model, _PACK_DIR, diagnostics=False)
-    pack_facts = states[0][3] if states else {}
-    return model, program, pack_facts
+    if not states:
+        raise ValueError("provider-terms pack must provide fact states")
+    return model, program, states[0][3]
 
 
 def outcome(body: bytes) -> str:

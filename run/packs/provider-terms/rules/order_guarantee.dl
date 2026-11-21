@@ -22,6 +22,19 @@ invalid_order(o) :- order_detail__order(d, o), order_detail__detail_type(d, a),
 conflicted_quote_policy(p) :- quote_policy__mode(p, a), quote_policy__mode(p, b), a != b.
 conflicted_quote_policy(p) :- quote_policy(p), quote_policy(other), p != other.
 
+.decl order_has_expiration(order_ref: symbol)
+order_has_expiration(o) :- order__expiration_us(o, _).
+
+.decl order_has_day_end(order_ref: symbol)
+order_has_day_end(o) :- order__day_end_us(o, _).
+
+.decl order_has_valid_quote_policy(order_ref: symbol)
+order_has_valid_quote_policy(o) :-
+    order(o),
+    quote_policy(policy),
+    quote_policy__mode(policy, _),
+    !conflicted_quote_policy(policy).
+
 // Without a usage-billed detail, an unpaid order takes the provider quote mode and expires
 // at the earlier of its recorded expirationDate and the next UTC midnight of the approved day.
 .decl order_guarantee(order: symbol, mode: symbol, expires_us: number)
@@ -46,4 +59,22 @@ order_guarantee(o, mode, day_end) :-
     order__day_end_us(o, day_end),
     day_end < exp.
 
+.decl no_guarantee(order: symbol, reason: symbol)
+no_guarantee(o, "usage_billed") :-
+    order(o),
+    order_has_usage_detail(o).
+no_guarantee(o, "invalid_order") :-
+    order(o),
+    invalid_order(o).
+no_guarantee(o, "missing_expiration") :-
+    order(o),
+    !order_has_expiration(o).
+no_guarantee(o, "missing_day_end") :-
+    order(o),
+    !order_has_day_end(o).
+no_guarantee(o, "invalid_quote_policy") :-
+    order(o),
+    !order_has_valid_quote_policy(o).
+
 .output order_guarantee
+.output no_guarantee

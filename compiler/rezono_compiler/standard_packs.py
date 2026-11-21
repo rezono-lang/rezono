@@ -17,7 +17,7 @@ PREFIX = "std-"
 
 TABLE: dict[str, str] = {
     "std-access": "8e004b9bd062be365acfb3db30d9bb26fe393c3b979bd77e8d69fc60aae111e6",
-    "std-budget": "544caa9bfd0dce236640427c3cbce9216122d5f20121c9a38e935ffdd4d6f945",
+    "std-budget": "8f46da8b6706b1ceb089c1cab7b5b2ec49d9e85854ab2c855861cfbe59986787",
     "std-decision": "98e8f4243a571ee7e45de9de136df0098adfd462087761ea3209b91c25c256cb",
     "std-explain": "72e2897cd9baaa4962cf2235f83a332262b4da1e6d34e82d5f64d8335e27be0b",
     "std-identity": "129e5321602dea3b58ea5220103c4d313237d0dbf5e640c677b24fc98e5d265b",
