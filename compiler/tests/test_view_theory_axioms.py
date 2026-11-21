@@ -160,10 +160,8 @@ def ordered(edges, ranks=()):
 
 def test_the_order_axioms_read_the_relation_that_holds_the_view(order):
     assert {n for n, r in order.relations.items() if r.invariant} >= {'order_cycle', 'rank_conflict'}
-    assert 'before' in reads(order, 'before')
-    before_reads = local_reads(order, 'before')
-    assert {'std_order_ordered_precedes', 'before'} <= before_reads <= {
-        'std_order_ordered_precedes', 'before', 'stated_precedes'}
+    assert reads(order, 'before') == {'direct_before', 'before'}
+    assert local_reads(order, 'before') == {'std_order_ordered_precedes', 'before', 'stated_precedes'}
     assert reads(order, 'rank_conflict') == {'before', 'std_order_ordered_rank'}
 
 

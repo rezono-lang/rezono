@@ -16,18 +16,18 @@ from rezono_compiler import emit, pack
 from rezono_compiler import rules as ir
 
 THEORY = Path(__file__).resolve().parents[2] / "packs" / "std-order"
-CORE = {"before", "comparable", "order_cycle", "rank_conflict"}
-OPTIONAL_DERIVED = {"stated_precedes", "direct_before"}
 pytest.importorskip("duckdb")
 
 
 def reference(precedes, rank):
-    """Compute the order relations by fixpoint: before is the transitive closure of precedes; comparable
-    is before in either direction; order_cycle is what comes before itself; rank_conflict is a pair in
-    that closure whose ranks do not increase (if a comes before b and both have a rank)."""
-    before = set(precedes)
+    """Compute the order relations by fixpoint: stated_precedes is empty in the standalone theory;
+    direct_before is precedes; before is the transitive closure of direct_before; comparable is before
+    in either direction; order_cycle is what comes before itself; rank_conflict is a pair in that
+    closure whose ranks do not increase (if a comes before b and both have a rank)."""
+    direct_before = set(precedes)
+    before = set(direct_before)
     while True:
-        more = {(a, d) for a, b in before for c, d in precedes if b == c} - before
+        more = {(a, d) for a, b in before for c, d in direct_before if b == c} - before
         if not more:
             break
         before |= more
@@ -35,6 +35,8 @@ def reference(precedes, rank):
     for e, n in rank:
         ranks.setdefault(e, set()).add(n)
     return {
+        "stated_precedes": set(),
+        "direct_before": direct_before,
         "before": before,
         "comparable": before | {(b, a) for a, b in before},
         "order_cycle": {(a,) for a, b in before if a == b},
@@ -61,14 +63,12 @@ def evaluate(precedes, rank, tmp_path):
     """Every engine at hand, each compared with the reference."""
     prog = program()
     want = as_text(reference(set(precedes), set(rank)))
-    got = as_text(batch_eval(prog, precedes, rank))
-    assert {name: got[name] for name in CORE} == want
+    assert as_text(batch_eval(prog, precedes, rank)) == want
     if shutil.which("souffle"):
         import souffle
         text = souffle.pack_source(prog, THEORY)
         data = {"ordered__precedes": sorted(precedes), "ordered__rank": sorted(rank)}
-        oracle = souffle.run(prog, data, tmp_path, program_text=text)
-        assert {name: oracle[name] for name in CORE} == want
+        assert souffle.run(prog, data, tmp_path, program_text=text) == want
     return want
 
 
@@ -79,10 +79,9 @@ def test_the_theory_is_fact_free_and_compiles_on_its_own():
     files = emit.compile_pack(theory)
     assert '"ordered__precedes"' in files["engine/tables.sql"] and '"ordered__rank"' in files["engine/tables.sql"]
     prog = program()
-    derived = {r.name for r in prog.relations.values() if r.role == "derived"}
-    assert CORE <= derived <= (CORE | OPTIONAL_DERIVED)
-    if "stated_precedes" in derived:
-        assert prog.relations["stated_precedes"].extend
+    assert sorted(r.name for r in prog.relations.values() if r.role == "derived") == [
+        "before", "comparable", "direct_before", "order_cycle", "rank_conflict", "stated_precedes"]
+    assert prog.relations["stated_precedes"].extend
     assert sorted(r.name for r in prog.relations.values() if getattr(r, "invariant", False)) == ["order_cycle", "rank_conflict"]
     assert [q["term"] for q in theory.questions] == ["order_grounds", "order_reach"]
 
