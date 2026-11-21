@@ -580,7 +580,7 @@ export function roleBundle(bundle: Bundle, snapshots: RoleSnapshot[]): RoleBundl
 	);
 
 	const readableReasonColumn = new Map<string, number>();
-	for (const relation of bundle.relations ?? []) {
+	for (const relation of catalogue.relations) {
 		if (!readableRuleRelations.has(relation.id)) continue;
 		const cols = relation.columns ?? [];
 		const reasonIdx = cols.findIndex((col) => col.name === 'reason');
@@ -596,14 +596,12 @@ export function roleBundle(bundle: Bundle, snapshots: RoleSnapshot[]): RoleBundl
 			visibleReasonCodes.add(term.value);
 		}
 	};
-	for (const rule of bundle.rules ?? []) {
-		const headRelation = rule.head ? rule.head.relation : rule.relation;
-		if (typeof headRelation !== 'string') continue;
-		const reasonIdx = readableReasonColumn.get(headRelation);
-		if (reasonIdx === undefined) continue;
-		addReasonTerm(rule.head?.terms?.[reasonIdx]);
-	}
 	for (const rule of rules) {
+		const headRelation = rule.head ? rule.head.relation : rule.relation;
+		if (typeof headRelation === 'string') {
+			const reasonIdx = readableReasonColumn.get(headRelation);
+			if (reasonIdx !== undefined) addReasonTerm(rule.head?.terms?.[reasonIdx]);
+		}
 		for (const literal of rule.body ?? []) {
 			if (literal.kind !== 'atom' || typeof literal.relation !== 'string') continue;
 			const reasonIdx = readableReasonColumn.get(literal.relation);
@@ -621,7 +619,7 @@ export function roleBundle(bundle: Bundle, snapshots: RoleSnapshot[]): RoleBundl
 		if (parts[0] === 'reason') {
 			if (parts.length < 2) return false;
 			const code = id.slice('reason.'.length);
-			return code.length > 0 && visibleReasonCodes.has(code);
+			if (!code.length || !visibleReasonCodes.has(code)) return false;
 		}
 
 		if (parts[0] === 'rule' && parts.length >= 2) {
