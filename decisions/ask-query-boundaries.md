@@ -80,7 +80,7 @@ A caller may define temporary local rules for one `ask` request over the role's 
 ```json
 {
   "rules": [
-    "rule high_score(x: Item) when x.score >= 50"
+    "rule high_score(x: Item) when x in Item and x.score >= 50"
   ],
   "text": "ask x: Item where high_score(x) show x.score"
 }
@@ -90,7 +90,7 @@ A caller may define temporary local rules for one `ask` request over the role's 
 - **Checking, authorization, and safety (before any row is read):**
   - Every local rule is checked against the authenticated role's schema (`roleSchema`). Referencing any kind, slot, or relation not readable by the role is refused with `R001` (HTTP 400).
   - Any write, mutation, or proposal statement (`+ …`, `- …`, `propose …`, or non-rule command) inside `rules` is refused with HTTP 400.
-  - Local rules must be safe (every head variable bound by a positive premise; otherwise refused with `R042`, HTTP 400) and stratified (no recursion through negation or aggregation; otherwise refused with `R043`, HTTP 400).
+  - Local `ask` rules follow the same positive `x in Kind` binding rule as [native rules](language-native-rules.md): every head variable must be bound by a positive premise (`x in Kind`; otherwise refused with `R042`, HTTP 400), and local rules must be stratified (no recursion through negation or aggregation, such as `rule bad(x: Item) when x in Item and not bad(x)`; otherwise refused with `R043`, HTTP 400).
 - **Bounded evaluation, four states, and witnesses:**
   - Local rules evaluate strictly over the role's readable snapshots under the shared `budget.rows` and `budget.steps` limits. Exceeding either budget aborts with HTTP 422 (`cut`) and returns no partial answer.
   - Four value states propagate through local rule bodies and heads: a row whose body evaluates to `unknown` or `invalid` produces an `Undecided` row with its `state`, `reason`, and `cause` rather than silently disappearing.

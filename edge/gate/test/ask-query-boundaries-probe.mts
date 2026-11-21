@@ -393,11 +393,11 @@ async function runLocalRule() {
 		});
 
 		const readerLocalRule = await postJson(reader, '/sample/m-1/ask', {
-			rules: ['rule high_score(x: Item) when x.score >= 50'],
+			rules: ['rule high_score(x: Item) when x in Item and x.score >= 50'],
 			text: 'ask x: Item where high_score(x) show x.score'
 		});
 		const scopedLocalRule = await postJson(scoped, '/sample/m-1/ask', {
-			rules: ['rule high_score(x: Item) when x.score >= 50'],
+			rules: ['rule high_score(x: Item) when x in Item and x.score >= 50'],
 			text: 'ask x: Item where high_score(x) show x.score'
 		});
 		const counterWriteInRules = await postJson(reader, '/sample/m-1/ask', {
@@ -405,11 +405,11 @@ async function runLocalRule() {
 			text: 'ask x: Item where x.score >= 50 show x.score'
 		});
 		const counterUnauthorizedSlot = await postJson(scoped, '/sample/m-1/ask', {
-			rules: ['rule leaked(x: Item) when x.secret'],
+			rules: ['rule leaked(x: Item) when x in Item and x.secret'],
 			text: 'ask x: Item where leaked(x) show x.score'
 		});
 		const counterUnstratified = await postJson(reader, '/sample/m-1/ask', {
-			rules: ['rule bad(x: Item) when not bad(x)'],
+			rules: ['rule bad(x: Item) when x in Item and not bad(x)'],
 			text: 'ask x: Item where bad(x) show x.score'
 		});
 
@@ -424,7 +424,7 @@ async function runLocalRule() {
 		};
 		const budgetCut = await evalAsk({
 			text: 'ask x: Item where high_score(x) show x.score',
-			rules: ['rule high_score(x: Item) when x.score >= 50'],
+			rules: ['rule high_score(x: Item) when x in Item and x.score >= 50'],
 			manifest: 'm-1',
 			view,
 			read: async (relation: string) => ({ rows: (tables[relation] ?? []).map((key) => ({ key })) }),

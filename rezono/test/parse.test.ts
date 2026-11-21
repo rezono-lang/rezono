@@ -151,7 +151,7 @@ test('parse-level checks come first, and a plain syntax error has a place', () =
 	assert.deepEqual(codes('ask Host where a < b < c order by a'), ['R016 a < b < c']);
 	assert.deepEqual(codes('ask host at 2026-01-01 at 2026-02-01 where a'), ['R014 host', 'R018 at 2026-02-01']);
 	assert.deepEqual(codes('ask Host where a at 2026-01-01 as known 2026-02-01 limit 5'), ['R015 at 2026-01-01', 'R015 as known 2026-02-01', 'R015 limit 5']);
-	assert.deepEqual(codes('ask Host where a group by b, c'), ['R015 group by b, c']);
+	assert.deepEqual(codes('ask Host where a order by b, c'), ['R015 order by b, c']);
 	assert.equal(parse('ask Host where a < b < c').tree, undefined);
 });
 
