@@ -13,8 +13,8 @@ subject: language-requirements
 Across existing repository packs (`examples/`, `run/`, `build/`, `epoch/`, `packs/`), this exact pattern is currently hand-encoded in dozens of ad-hoc `*_missing*`, `*_without_*`, `unmet_*`, and `count`-guard Datalog rules and Python assertions. Making existential and cardinality requirements a native `rezono 1` declaration gives them:
 
 - one readable, domain-facing syntax with zero new hard expression keywords;
-- sound four-state semantics (`known`, `not_applicable`, `unknown`, `invalid`) that never silently pass or falsely claim a violation when a sweep or open-world read is incomplete;
-- direct lowering into `rezono.rules/2` with verified witnesses citing **both** the triggering pattern and what is missing (plus the completeness coverage premise when `world open, complete by <relation>` closes an observed kind);
+- sound four-state semantics (`known`, `not_applicable`, `unknown`, `invalid`) that separate **proven monotone bounds** from **exact counting** under incomplete (`world open`) registers: never silently passing or falsely violating when an exact count requires a complete sweep, while proving lower bounds (`exists` / `at least N`) from `N` distinct confirmed witnesses and upper/exact-bound violations (`at most N` / `exactly N`) from `N + 1` distinct confirmed witnesses without waiting for a complete sweep;
+- direct lowering into `rezono.rules/2` with independently verified witnesses carrying distinct identities, scope, and time (plus the completeness coverage premise `<cov>` whenever a complete sweep is load-bearing);
 - direct alignment with norm standing ([`decisions/platform-norm-standing.md`](platform-norm-standing.md)) and a sound foundation for future minimal additive repair (the chase).
 
 Nothing in this decision changes `rezono 0` (`rezono.module/1`–`/4`, `rezono.rules/1`, `rezono.calc/1`), existing module-level check expressions (`check`/`warn`/`require [name:] <expr>`), or single-kind conditional checks (`require <name> when <expr> then <expr>` inside `kind`; [`decisions/language-checks.md`](language-checks.md)).
@@ -161,27 +161,37 @@ Let target `Q` be a declared kind `Kind` or `Bool` relation `rel`, with optional
    - **`world closed`:** `Q` is complete for every key `k`.
    - **`world open, complete by <cov>`:** `Q` is complete for key `k` **if and only if** the coverage relation `<cov>` holds for the scope columns bound by `k` (and any equality constraints in `W`). Outside `<cov>`, `Q` is incomplete with core reason **`incomplete_read`**.
    - **`world open` (no `complete by`):** `Q` is incomplete everywhere with evaluation reason **`open_world`**.
-2. **Evaluating `W(k, x)` over rows `x` of `Q`:**
+2. **Evaluating `W(k, x)` and candidate identity over rows `x` of `Q`:**
    - Following [`decisions/language-rezono-1-refinements.md`](language-rezono-1-refinements.md) §3.1 (`.count(pred)` equals `.where(pred).count()`), for each observed row `x` of `Q`:
-     - `W(k, x) = known true` -> `x` is a matching witness (contributes `1` to count).
+     - `W(k, x) = known true` -> `x` is a confirmed matching candidate.
      - `W(k, x) = known false` or `not_applicable` -> `x` is excluded (contributes `0`).
      - `W(k, x) = unknown <r>` -> membership of `x` is undecided (`unknown <r>`).
-     - `W(k, x) = invalid <r>` -> membership of `x` is invalid (`invalid <r>`).
-3. **Clause outcome by bound and completeness:**
-   - **When `Q` is complete for `k`** (`world closed`, or `world open, complete by <cov>` with `<cov>` holding):
-     - If any row of `Q` has `W(k, x) = invalid <r>` -> clause is **`invalid <r>`** (unless for pure unbounded `exists`, a known matching witness already satisfies `T or I = T`? No: for cardinality bounds, counting is strict so `invalid` propagates; for consistency across requirements, any `invalid` predicate row on a candidate makes the clause **`invalid <r>`** so conflicting inputs are never masked!).
-     - Else if any row of `Q` has `W(k, x) = unknown <r>` -> for cardinality bounds, clause is **`unknown <r>`**; for pure unbounded `exists` (no explicit count bound), if at least one `known true` witness exists, clause is `known true` (`T or U = T`), otherwise **`unknown <r>`**.
-     - Else all memberships are decided (`observed` is an exact non-negative integer):
-       - Pure existential / `at least N`: `observed >= N` -> **`known true`**; `observed < N` -> **`known false`** (violated).
-       - `at most N`: `observed <= N` -> **`known true`**; `observed > N` -> **`known false`** (violated).
-       - `exactly N`: `observed = N` -> **`known true`**; `observed != N` -> **`known false`** (violated).
-   - **When `Q` is incomplete for `k`** (missing complete sweep `!cov`, or plain `world open`):
-     - **Pure unbounded existential (`exists x: Q [where W]`):**
-       - If any observed row has `W(k, x) = invalid <r>` -> **`invalid <r>`**.
-       - Else if at least one observed row satisfies `W(k, x) = known true` -> **`known true`** (positively witnessed: observing more rows cannot falsify existence).
-       - Else -> **`unknown incomplete_read`** (for `complete by <cov>` outside `<cov>`) or **`unknown open_world`** (for plain `world open`). **Never** a false pass and **never** a false violation!
-     - **Explicit cardinality bound (`at least N`, `at most N`, `exactly N`):**
-       - Matching [`decisions/language-rezono-1-defaults.md`](language-rezono-1-defaults.md) §2 ("aggregation over a `complete by` kind requires coverage"), if any observed row has `W(k, x) = invalid <r>`, the clause is **`invalid <r>`**; otherwise without a complete sweep the count is undecided and the clause evaluates to **`unknown incomplete_read`** (for `complete by <cov>` outside `<cov>`) or **`unknown open_world`** (for plain `world open`). It NEVER falsely passes and NEVER falsely emits a violation without a complete sweep.
+     - `W(k, x) = invalid <r>` -> membership of `x` is in conflict / invalid (`invalid <r>`).
+3. **Conflict precedence (checked strictly before proving any bound):**
+   - If any candidate row `x` of `Q` in scope `k` has `W(k, x) = invalid <r>`, **or** any candidate identity record in scope `k` is in conflict (for example `invalid multiple_values` from competing `.one(...)` identity claims, or `std-identity` `disputed` / `representatives_disagree` / `identity_conflict`), the clause MUST evaluate to **`invalid <r>`** and emit zero rows in `<name>_violation`.
+   - A conflicting trigger, candidate, or identity record MUST NEVER be silently dropped and MUST NEVER be masked by other matching witnesses to claim `known true` (`at least N`) or `known false` (`at most M` / `exactly M`).
+4. **Distinct canonical identities and possibly-duplicate records:**
+   - Cardinality bounds count **provably distinct canonical identities**, never raw duplicate records or uncanonicalized aliases.
+   - For a closed-identity kind without alias resolution, each distinct element identifier of the kind is a distinct canonical identity.
+   - When records may alias the same entity (for example via `std-identity` `same_as` / `representative`, or via an explicit canonical entity kind / canonical identity derivation such as `canonical_entity = IdentityClaim.where(observation = r).one(entity)`):
+     - Two records proven to refer to the same canonical identity collapse to **one** entity and MUST NOT be double-counted toward `N` distinct witnesses to prove `at least N` or toward `N + 1` distinct witnesses to violate `at most N` or `exactly N`.
+     - Records with **unproven distinctness** (possibly duplicate records — for example `std-identity` `representative_not_recorded`, or missing/unresolved canonical identity yielding `unknown`, or unclosed alias equivalence) MUST NOT be counted as separate witnesses toward `N` or `N + 1`. Only records with proven distinct canonical identities contribute to `confirmed_distinct(k)`.
+     - If `confirmed_distinct(k)` from the provably distinct subset alone does not settle the bound (or when exact counting is required and any candidate in scope has unproven distinctness), the clause MUST remain **`unknown`** (never falsely proving satisfaction or violation).
+5. **Separating a proven bound from an exact count:**
+   - Let `confirmed_distinct(k)` be the number of provably distinct canonical entities in `Q` for scope `k` with `W(k, x) = known true` (once Step 3 confirms there is no `invalid` conflict in scope `k`).
+   - Under an incomplete (`world open`) register without conflict, observing additional unseen rows (or resolving `unknown` predicates / uncanonicalized records) can only **increase** — never decrease — the true distinct matching count (`true_count >= confirmed_distinct(k)`). Therefore a **monotone proven bound** does not require an exact count or a complete sweep, whereas any judgment that depends on ruling out unseen rows requires an **exact count** (a complete sweep with all candidate predicates decided and all identities resolved):
+     - **Lower bound (`exists` / `at least N`, `N >= 1`):** Omitted `exists` is semantically identical to `at least 1`. On an incomplete register without conflict, `1` certain match proves **both** `exists` and `at least 1` (`known true`), and `N` distinct confirmed witnesses (for example `3` distinct confirmed replicas for `at least 3`) prove `at least N` (`known true`) — a complete sweep is **not** required once `N` distinct confirmed witnesses exist. Only when fewer than `N` distinct confirmed witnesses are observed (for example `2` observed replicas for `at least 3`) without a complete sweep does the outcome remain **`unknown incomplete_read`** (for `complete by <cov>` outside `<cov>`) or **`unknown open_world`** (for plain `world open`), with zero violation rows. Proving violation (`known false`, deficit `< N`) requires an exact count (complete sweep, all candidates decided and distinct).
+     - **Upper bound (`at most N`, `N >= 0`):** On an incomplete register without conflict, `N + 1` distinct confirmed witnesses (for example `5` distinct confirmed replicas for `at most 4`) prove violation (**`known false`** + finding in `<name>_violation`) even without a complete sweep, because unseen rows can never reduce the count back to `<= N`. Observing `<= N` distinct confirmed witnesses without a complete sweep MUST remain **`unknown incomplete_read`** (or **`unknown open_world`**), with zero violation rows. Proving satisfaction (`known true`, `observed <= N`) requires an exact count (complete sweep, all candidates decided and distinct).
+     - **Exact bound (`exactly N`, `N >= 0`):** On an incomplete register without conflict, `N + 1` distinct confirmed witnesses prove violation (**`known false`** + finding in `<name>_violation`) even without a complete sweep. Proving satisfaction (`known true`, `observed = N`) or deficit violation (`known false`, `observed < N`) requires an exact count (`N` resp. `< N` distinct confirmed witnesses **and** a complete sweep, with all candidates decided and distinct); observing `<= N` without a complete sweep MUST remain **`unknown incomplete_read`** (or **`unknown open_world`**), with zero violation rows.
+
+   | Bound | Incomplete register (`!cov` or plain `world open`), no conflict | Complete register (`world closed` or `cov` holds), all candidates decided & distinct, no conflict | Complete register with undecided candidate (`W = unknown <r>`) or unproven distinctness, no conflict |
+   | --- | --- | --- | --- |
+   | `exists` / `at least 1` | `confirmed_distinct >= 1` -> **`known true`**; `0` -> **`unknown incomplete_read`** (or `open_world`) | `observed >= 1` -> **`known true`**; `0` -> **`known false`** (violated, cites `<cov>` if `complete by`) | `confirmed_distinct >= 1` -> **`known true`**; `0` -> **`unknown <r>`** |
+   | `at least N` (`N >= 1`) | `confirmed_distinct >= N` -> **`known true`**; `< N` -> **`unknown incomplete_read`** (or `open_world`) | `observed >= N` -> **`known true`**; `< N` -> **`known false`** (violated, cites `<cov>` if `complete by`) | `confirmed_distinct >= N` -> **`known true`**; `< N` -> **`unknown <r>`** |
+   | `at most N` (`N >= 0`) | `confirmed_distinct >= N + 1` -> **`known false`** (violated); `<= N` -> **`unknown incomplete_read`** (or `open_world`) | `observed <= N` -> **`known true`** (cites `<cov>` if `complete by`); `>= N + 1` -> **`known false`** (violated) | `confirmed_distinct >= N + 1` -> **`known false`** (violated); `<= N` -> **`unknown <r>`** |
+   | `exactly N` (`N >= 0`) | `confirmed_distinct >= N + 1` -> **`known false`** (violated); `<= N` -> **`unknown incomplete_read`** (or `open_world`) | `observed = N` -> **`known true`** (cites `<cov>` if `complete by`); `!= N` -> **`known false`** (violated; deficit `< N` cites `<cov>` if `complete by`) | `confirmed_distinct >= N + 1` -> **`known false`** (violated); `<= N` -> **`unknown <r>`** |
+
+   This preserves [`decisions/language-rezono-1-defaults.md`](language-rezono-1-defaults.md) §2: `complete by <cov>` guards every exact count and absence conclusion (`observed < N`, `observed <= N`, `observed = N`, `!exists`) where unseen rows could overturn the judgment, while never blocking a monotone proven bound (`confirmed_distinct >= N` for `at least N` / `exists`, or `confirmed_distinct >= N + 1` falsifying `at most N` / `exactly N`) established by provably distinct, conflict-free witnesses.
 
 ### Step 3: Combining multiple `exists` clauses
 
@@ -215,18 +225,22 @@ The compiler (`compiler/rezono_compiler/rezono_requirements.py`, invoked from `p
      - `clause` is the 0-based index of the unmet `exists` clause (`0`, `1`, ...);
      - `target` is the canonical snake_case name of the required kind or relation (e.g. `"power_feed"`, `"replica"`, `"origin"`, `"provides"`);
      - `bound` is the canonical bound tag (`"at_least:1"` when omitted, `"at_least:N"`, `"at_most:N"`, `"exactly:N"`);
-     - `observed` is the exact observed matching count (`0`, `2`, `5`, ...).
-3. **Helper match relations** (strictly lower stratum than `<name>` and `<name>_violation`, non-recursive): one scoped match relation per `exists` clause binding `(k..., x)` for rows satisfying `W(k, x)`.
+     - `observed` is the observed count of provably distinct matching identities (`0`, `1`, `2`, `5`, ...).
+3. **Helper distinct-witness match relations** (strictly lower stratum than `<name>` and `<name>_violation`, non-recursive): one scoped match relation `M` per `exists` clause binding `(k..., identity)` for provably distinct confirmed rows satisfying `W(k, x) = known true`. Omitted `exists` lowers uniformly as `at least 1` over `M` so `exists` and `at least 1` never diverge in semantics or witness shape.
 
 ### Verified witnesses (`contracts/proof.yaml` and `checker/rezono_checker/`)
 
-Every row in `<name>_violation` carries a complete proof verified independently by `checker/rezono_checker/`:
+Every proven outcome row in `<name>` (`(k..., "known", "", "true")`) and every violation row in `<name>_violation` (`(k..., clause, target, bound, observed)`) carries a complete proof verified independently by `checker/rezono_checker/`:
 
-- **Trigger premises:** positive premises proving `k ∈ domain` and every base/derived atom establishing `when P(k) = true`.
-- **Completeness premise (when `Q` is `world open, complete by <cov>`):** positive premise `<cov>(...)` proving the sweep/scope was complete for `k`, so an absence or deficit finding can never be forged without a verified coverage row (and filtered roles must read `<cov>` in full per [`decisions/witnessed-read-completeness.md`](witnessed-read-completeness.md)).
-- **Missing-pattern / count evidence:**
-  - For pure existential (`at_least:1`): negative premise on the clause match helper (or count-0 aggregate evidence with `contributors_sha256`) proving zero matching rows exist in `target`.
-  - For explicit cardinality bounds (`at_least:N`, `at_most:N`, `exactly:N`): aggregate evidence (`relation`, `group_key`, `count = observed`, `contributors_sha256`, `result`) plus the bound comparison condition (`observed < N`, `observed > N`, or `observed != N`).
+- **Trigger and scope premises:** positive premises proving `k ∈ domain` and every base/derived atom establishing `when P(k) = true`.
+- **Distinct identities, scope, and time (for proven bounds):**
+  - For every proven lower bound (`known true` on `exists` / `at least 1` / `at least N`, e.g. `1` match proving `exists` and `at least 1`, or `3` distinct confirmed replicas proving `at least 3`) and every proven upper/exact-bound violation (`known false` on `at most N` / `exactly N` with `confirmed_distinct >= N + 1`, e.g. `5` distinct confirmed replicas proving violation of `at most 4`), the proof carries the count aggregate over `M` (`relation = M`, `group_key = [k...]`, `count = confirmed_distinct`, `contributors_sha256`, `result = "known:<count>"`), where `contributors_sha256` commits to the exact sorted set of `confirmed_distinct` distinct witness rows in `M`.
+  - Every contributing row in `M` for scope `k` carries its own independently checker-verified proof citing the witnessing record's **distinct canonical identity**, **scope**, and **observation/evaluation time**.
+- **Completeness premise (only when load-bearing):**
+  - When `Q` is `world open, complete by <cov>`, the positive coverage premise `<cov>(...)` MUST appear in every proof whose conclusion relies on exact counting: deficit violation (`observed < N` for `exists` / `at least N` / `exactly N`) and upper/exact satisfaction (`observed <= N` for `at most N`, `observed = N` for `exactly N`). Filtered roles must read `<cov>` in full per [`decisions/witnessed-read-completeness.md`](witnessed-read-completeness.md).
+  - When a monotone bound is proven directly from `N` (or `N + 1`) distinct confirmed witnesses on an incomplete register without needing a complete sweep, `<cov>` is **not** required and MUST NOT be fabricated.
+- **Missing-pattern / exact-count evidence:**
+  - For deficit violations (`observed = 0` or `observed < N` under a complete sweep / closed world): count aggregate evidence over `M` (`relation`, `group_key`, `count = observed`, `contributors_sha256`, `result`, or negative premise on the clause match helper when `observed = 0`) plus the bound comparison condition (`observed < N`, `observed > N`, or `observed != N`).
 - **Bundle metadata (`bundle/schema-bundle.json`):** `means` lowers to the rule message in the pack's default language and `@` lowers to `source` on the requirement's bundle rule entries (matching `derived` in [`decisions/language-rezono-1.md`](language-rezono-1.md) §2).
 
 ### Engine invariants (DuckDB, Feldera, Soufflé)
@@ -245,8 +259,8 @@ In Rezono's norm model ([`decisions/platform-norm-standing.md`](platform-norm-st
 
 | Requirement state `<name>(k)` | Norm standing correspondence | Witness & visibility |
 | --- | --- | --- |
-| `known true` | Satisfied (`✓` / pass) | Positive trigger + witness/count (and coverage premise if observed). |
-| `known false` | Violated (`✕` / fail) | Finding row in `<name>_violation` with verified witness citing trigger, missing target/deficit, and coverage premise. |
+| `known true` | Satisfied (`✓` / pass) | Positive trigger + distinct witness identities, scope, and time (and coverage premise `<cov>` whenever an upper or exact bound makes a complete sweep load-bearing). |
+| `known false` | Violated (`✕` / fail) | Finding row in `<name>_violation` with verified witness citing trigger, distinct witness identities/scope/time (for `at most N` / `exactly N` excess violations even without coverage), or missing target/deficit plus coverage premise `<cov>` (when complete sweep is load-bearing). |
 | `unknown incomplete_read` / `unknown open_world` | Incomplete coverage (`?` / unknown) | Explicit `unknown` row in `<name>`; zero rows in `<name>_violation` (matches `authority-coverage-incomplete` / `register-coverage-incomplete`). |
 | `not_applicable no_match` | Out of norm scope | Explicit `not_applicable` row in `<name>`; zero rows in `<name>_violation`. |
 | `invalid <reason>` | Conflicting / invalid grounds | Explicit `invalid` row in `<name>` carrying every competing candidate witness (matches `norm_ruling_conflict` visibility). |
@@ -276,7 +290,7 @@ This makes the exact same declaration serve two roles without duplicating rules:
 
 ## 6. Repository inventory of implicit requirements
 
-Scanning `examples/`, `run/`, `build/`, `epoch/`, and `packs/` identifies concrete implicit existential and cardinality requirements currently written as ad-hoc Datalog `!has_*` / `count` rules or Python checks. Per-pack conversion waits on the five M3 language building blocks in Section 7 and aligns with the single-pass `rezono 1` pack conversion rollout ([`decisions/language-rezono-1.md`](language-rezono-1.md) §8 step 5):
+Scanning `examples/`, `run/`, `build/`, `epoch/`, and `packs/` identifies concrete implicit existential and cardinality requirements currently written as ad-hoc Datalog `!has_*` / `count` rules or Python checks. Per-pack conversion waits on the seven M3 language building blocks in Section 7 and aligns with the single-pass `rezono 1` pack conversion rollout ([`decisions/language-rezono-1.md`](language-rezono-1.md) §8 step 5):
 
 | Area | Location | Current implicit rule / check | Requirement form |
 | --- | --- | --- | --- |
@@ -303,7 +317,7 @@ Scanning `examples/`, `run/`, `build/`, `epoch/`, and `packs/` identifies concre
 
 ## 7. Tests (`M3`)
 
-Five focused, independent, behavioral `M3` tests specify this decision:
+Seven focused, independent, behavioral `M3` tests specify this decision:
 
 | Test | File | What it verifies |
 | --- | --- | --- |
@@ -311,7 +325,9 @@ Five focused, independent, behavioral `M3` tests specify this decision:
 | 2. Lowering to `rezono.rules/2` | `compiler/tests/rezono/test_language_requirements.py::test_lower_requirement_to_rules_ir` | Compiler lowers `rezono 1` `require` declarations directly to `rezono.rules/2` (`<name>` functional outcome + `<name>_violation` derived finding, `invariant` flag, `means`/`@` bundle metadata, Feldera co-located view, `functional_open_domain` refusal for open domains, no silent drop, no `.dl` fallback). |
 | 3. Witness of missing pattern | `compiler/tests/rezono/test_language_requirements.py::test_requirement_violation_witness_cites_trigger_and_missing_pattern` | Evaluating a pack emits a finding in `<name>_violation` when triggered and missing whose independent-checker-verified proof cites both the triggering pattern and what is missing; satisfied instances emit zero findings; untriggered instances yield `not_applicable no_match`; missing trigger slots yield `unknown no_value`; conflicting inputs yield `invalid multiple_values`. |
 | 4. `unknown` without complete sweep | `compiler/tests/rezono/test_language_requirements.py::test_requirement_unknown_without_complete_sweep` | An observed `world open, complete by <cov>` target yields `unknown incomplete_read` (never false pass, never false violation) when `<cov>` does not hold and no witness is observed, yields `known true` when a witness is positively observed, and yields `known false` + finding whose verified witness cites `<cov>` once `<cov>` holds; plain `world open` yields `unknown open_world`. |
-| 5. Cardinality / counts | `compiler/tests/rezono/test_language_requirements.py::test_requirement_cardinality_bounds_and_incomplete_sweep` | `at least 3`, `at most 4`, and `exactly 1` fail with observed-count witnesses when out of bounds under complete sweep/closed world, pass with zero findings when in bounds, yield `unknown incomplete_read` under incomplete sweep, and yield `not_applicable no_match` when untriggered. |
+| 5. Cardinality / counts | `compiler/tests/rezono/test_language_requirements.py::test_requirement_cardinality_bounds_and_incomplete_sweep` | `at least 3`, `at most 4`, and `exactly 1` fail with observed-count witnesses when out of bounds under complete sweep/closed world, pass with zero findings when in bounds, yield `unknown incomplete_read` when unproven under incomplete sweep, and yield `not_applicable no_match` when untriggered. |
+| 6. Proven bounds vs exact counts | `compiler/tests/rezono/test_language_requirements.py::test_requirement_proven_bounds_vs_exact_count` | On an incomplete `world open` register without conflict: `1` certain match proves both `exists` and `at least 1` (`known true`), `3` distinct confirmed replicas prove `at least 3` (`known true`), `5` distinct confirmed replicas prove violation of `at most 4` (`known false`), `>= 2` prove violation of `exactly 1` (`known false`), and `2` for `at least 3` (or `<= 4` for `at most 4`, `1` for `exactly 1`) remains `unknown incomplete_read`; checker-verified witnesses carry distinct identities, scope, and time, with coverage `<cov>` present only when exact counting is load-bearing. |
+| 7. Conflicting & possibly-duplicate identities | `compiler/tests/rezono/test_language_requirements.py::test_requirement_bound_identity_conflict_and_alias_deduplication` | Conflicting identity claims yield `invalid multiple_values` (never silently dropped or masked even when 3 other clean replicas exist); duplicate/alias observations resolving to the same canonical identity are not double-counted toward `at least 3` (`unknown incomplete_read` on incomplete register); uncanonicalized / unproven-distinct records are not counted as extra distinct witnesses (`unknown no_match`, never `known true` or false `known false`). |
 
 ---
 
@@ -320,5 +336,6 @@ Five focused, independent, behavioral `M3` tests specify this decision:
 - **Reusing bare `check` / `require <name>: <expr>` with `.any(...)` and `.count(...)` only.** Rejected: a bare Boolean check collapses "which `exists` clause failed", "what target kind/relation was missing", and "what observed count violated which bound" into an opaque expression, loses the structured `(k..., clause, target, bound, observed)` finding relation, and cannot directly drive future additive chase repair.
 - **Adding `exists`, `least`, `most`, and `exactly` to the global hard keyword list.** Rejected: breaks ordinary domain identifiers and violates [`decisions/language-contextual-keywords.md`](language-contextual-keywords.md); block-scoping them inside `RequirementClauseLine` keeps all 16 expression keywords unchanged.
 - **Allowing `require` over an `open` trigger kind without `over`.** Rejected: totalizing a four-state outcome relation over an open domain contradicts Feldera rule 2 and [`decisions/language-rezono-1.md`](language-rezono-1.md) §2; an explicit closed `over <domain>(...)` relation keeps the trigger domain finite and closed.
-- **Emitting a violation finding when an observed target lacks a complete sweep.** Rejected: violates "unknown is explicit" and [`decisions/language-rezono-1-defaults.md`](language-rezono-1-defaults.md) §2; incomplete sweeps MUST yield `unknown incomplete_read` with zero violation rows.
+- **Requiring a complete sweep for all explicit cardinality bounds (conflating proven bounds with exact counts).** Rejected: observing `N` provably distinct, conflict-free matches monotonically proves `at least N` (and observing `N + 1` monotonically falsifies `at most N` and `exactly N`) regardless of unseen rows; conflating proven bounds with exact counts created an unsound discrepancy between `exists` and `at least 1` and hid real upper-bound violations (`5` replicas for `at most 4`) until a sweep closed.
+- **Emitting a deficit violation or claiming satisfaction of an upper/exact bound when an observed target lacks a complete sweep.** Rejected: violates "unknown is explicit" and [`decisions/language-rezono-1-defaults.md`](language-rezono-1-defaults.md) §2; unproven bounds (`< N` for `at least N`, `<= N` for `at most N` / `exactly N`) MUST yield `unknown incomplete_read` (or `unknown open_world`) with zero violation rows.
 - **Making every `require` block publication unconditionally (`invariant: true`).** Rejected: operational and audit obligations (CMDB drift, backup freshness, norm standing) must publish their witnessed findings rather than halting the entire epoch; opting into `invariant` on the header keeps blocking explicit where intended.
