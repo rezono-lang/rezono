@@ -17,7 +17,9 @@ export type Line = { line: string; [member: string]: unknown };
 export interface Build {
 	version: LanguageVersion;
 	spans: WeakMap<object, Span>;
+	memberSpans: WeakMap<object, Map<string, Span>>;
 	later: Diagnostic[];
+	placeMember(owner: object, member: string, span?: Span): void;
 	refuse(line: Logical, expected: string, to?: number): void;
 	error(diagnostic: Diagnostic): void;
 	removed(line: Logical, what: string, span?: Span, hint?: Diagnostic['hint']): void;

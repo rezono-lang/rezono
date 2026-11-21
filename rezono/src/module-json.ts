@@ -101,7 +101,7 @@ export function lineOf(text: string): (offset: number) => number {
 	return (offset) => line[offset];
 }
 
-function places(module: Module, spans: WeakMap<object, Span>, text: string): Place[] {
+function places(module: Module, spans: WeakMap<object, Span>, text: string, memberSpans?: WeakMap<object, Map<string, Span>>): Place[] {
 	const line = lineOf(text);
 	const out: Place[] = [];
 	const walk = (v: unknown, at: string) => {
@@ -109,8 +109,17 @@ function places(module: Module, spans: WeakMap<object, Span>, text: string): Pla
 		else if (typeof v === 'object' && v !== null) {
 			const span = spans.get(v);
 			if (span) out.push({ at, line: String(line(span.start)), start: String(span.start), end: String(span.end) });
+			const members = memberSpans?.get(v);
 			// The order of canonical JSON: keys by their UTF-16 code units, which is what `sort` compares.
-			for (const k of Object.keys(v).sort()) walk((v as Record<string, unknown>)[k], `${at}/${k.replace(/~/g, '~0').replace(/\//g, '~1')}`);
+			for (const k of Object.keys(v).sort()) {
+				const childAt = `${at}/${k.replace(/~/g, '~0').replace(/\//g, '~1')}`;
+				const child = (v as Record<string, unknown>)[k];
+				if (typeof child === 'object' && child !== null) walk(child, childAt);
+				else {
+					const memberSpan = members?.get(k);
+					if (memberSpan) out.push({ at: childAt, line: String(line(memberSpan.start)), start: String(memberSpan.start), end: String(memberSpan.end) });
+				}
+			}
 		}
 	};
 	walk(module, '');
@@ -118,11 +127,17 @@ function places(module: Module, spans: WeakMap<object, Span>, text: string): Pla
 }
 
 /** Builds and round-trip verifies the JSON form of an already-parsed module. */
-export function formOfModule(text: string, module: Module, spans: WeakMap<object, Span>, options?: ParseModuleOptions): ModuleForm {
+export function formOfModule(
+	text: string,
+	module: Module,
+	spans: WeakMap<object, Span>,
+	options?: ParseModuleOptions,
+	memberSpans?: WeakMap<object, Map<string, Span>>,
+): ModuleForm {
 	const again = parseModule(printModule(module), options);
 	if (!again.module || again.diagnostics.some(isError) || canonicalJson(again.module) !== canonicalJson(module))
 		throw new JsonFormError('the module is not the tree of its own printed text');
-	return { format: formatOf(module), module, spans: places(module, spans, text) };
+	return { format: formatOf(module), module, spans: places(module, spans, text, memberSpans) };
 }
 
 /**
@@ -131,9 +146,9 @@ export function formOfModule(text: string, module: Module, spans: WeakMap<object
  * is refused, never written.
  */
 export function moduleForm(text: string, options?: ParseModuleOptions): FormOf {
-	const { module, diagnostics, spans } = parseModule(text, options);
+	const { module, diagnostics, spans, memberSpans } = parseModule(text, options);
 	if (!module || diagnostics.some(isError)) return { diagnostics };
-	return { form: formOfModule(text, module, spans, options), diagnostics };
+	return { form: formOfModule(text, module, spans, options, memberSpans), diagnostics };
 }
 
 /** The bytes of a form: canonical JSON (RFC 8785), so the same text gives the same bytes. */
@@ -168,7 +183,7 @@ export function moduleFromJson(value: unknown): ModuleForm {
 	if (!own.module || canonicalJson(own.module) !== canonical) throw not('`module` is not the tree of its own text');
 	const expectedFormat = formatOf(own.module);
 	if (format !== expectedFormat) throw not('`format` does not match the module tree');
-	const expected = places(own.module, own.spans, text);
+	const expected = places(own.module, own.spans, text, own.memberSpans);
 	const placed = (s: unknown, i: number): s is Place => {
 		if (typeof s !== 'object' || s === null || Object.keys(s).sort().join() !== 'at,end,line,start') return false;
 		const p = s as Place;

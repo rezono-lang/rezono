@@ -19,9 +19,7 @@ import datetime
 import functools
 import json
 from pathlib import Path, PurePosixPath
-import re
 import subprocess
-import sys
 import tempfile
 from typing import Any
 
@@ -55,11 +53,6 @@ EXCLUDED_DIR_NAMES = frozenset({
     "__pycache__",
 })
 INTEGER_RANGES = frozenset({"integer", "int", "number"})
-
-_REZONO_BLOCK_HEADER = re.compile(r"^(?:kind|extend)\s+[A-Za-z_][A-Za-z0-9_]*\b")
-_REZONO_SLOT_DECL = re.compile(
-    r"^(?:derived\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*:\s*([A-Za-z_][A-Za-z0-9_]*)"
-)
 
 
 def _is_excluded_path(rel_parts: tuple[str, ...]) -> bool:
@@ -97,146 +90,219 @@ def _iter_pack_dirs(root: Path, *, include_rezono_only: bool = False) -> list[Pa
     return [found[key] for key in sorted(found)]
 
 
-def _is_day_number_field(name: str, range_name: Any) -> bool:
+def _is_day_number_field(name: str, range_name: Any, integer_types: frozenset[str] | set[str] = frozenset()) -> bool:
     """Whether a schema slot is an integer day-number slot (`day` or `*_day`)."""
     lower_name = name.strip().lower()
     if lower_name != "day" and not lower_name.endswith("_day"):
         return False
     if not isinstance(range_name, str):
         return False
-    return range_name.strip().lower() in INTEGER_RANGES
+    raw = range_name.strip()
+    local = raw.partition(".")[2] if "." in raw else raw
+    if local in integer_types:
+        return True
+    return local.lower() in INTEGER_RANGES
 
 
-def _count_yaml_day_number_fields(path: Path) -> int:
-    data = yaml.safe_load(path.read_text(encoding="utf-8"))
-    if not isinstance(data, dict):
-        return 0
-    default_range = data.get("default_range", "string")
-    top_slots = data.get("slots") if isinstance(data.get("slots"), dict) else {}
-    classes = data.get("classes") if isinstance(data.get("classes"), dict) else {}
+def _read_pack_schema_models(pack_dir: Path) -> tuple[list[Any], list[dict[str, Any]], dict[str, str], set[str]]:
+    """Read a pack's LinkML schemas and Rezono module forms via `rezono_compiler` (fail-closed)."""
+    from rezono_compiler import rezono_module
+    from rezono_compiler.schemaview import SchemaView
+
+    schemas: list[Any] = []
+    schema_dir = pack_dir / "schema"
+    if schema_dir.is_dir():
+        for yaml_path in sorted(schema_dir.rglob("*.yaml")):
+            if _is_excluded_path(yaml_path.relative_to(pack_dir).parts):
+                continue
+            try:
+                sv = SchemaView(yaml_path)
+                schema = sv.schema
+            except Exception as exc:
+                raise RuntimeError(f"failed to read LinkML schema {yaml_path}: {exc}") from exc
+            schemas.append(schema)
+
+    forms: list[dict[str, Any]] = []
+    rezono_dir = pack_dir / "rezono"
+    if rezono_dir.is_dir():
+        for rezono_path in sorted(rezono_dir.rglob("*.rezono")):
+            if _is_excluded_path(rezono_path.relative_to(pack_dir).parts):
+                continue
+            rel_mod = rezono_path.relative_to(pack_dir).as_posix()
+            rel_form = rezono_path.relative_to(pack_dir).with_suffix(".json").as_posix()
+            decl = rezono_module.Declared(rel_mod, rel_form, "facts")
+            errors: list[str] = []
+            form = rezono_module.authored_form(pack_dir, decl, rezono_path.read_bytes(), errors)
+            if form is None:
+                detail = "; ".join(str(err) for err in errors) or "module reader failed"
+                raise RuntimeError(f"failed to parse Rezono module {rezono_path}: {detail}")
+            forms.append(form)
+
+    type_bases: dict[str, str] = {}
+    declared_names: set[str] = set()
+    for schema in schemas:
+        for tname, tdef in (schema.types or {}).items():
+            name_str = str(tname)
+            declared_names.add(name_str)
+            if tdef.typeof:
+                type_bases[name_str] = str(tdef.typeof)
+        declared_names.update(str(cname) for cname in (schema.classes or {}))
+        declared_names.update(str(ename) for ename in (schema.enums or {}))
+    for form in forms:
+        declared_names.update(rezono_module.names(form))
+        type_bases.update(rezono_module.type_bases(form))
+
+    return schemas, forms, type_bases, declared_names
+
+
+def _imported_pack_dirs(pack_dir: Path, root_resolved: Path) -> list[Path]:
+    """Return resolvable imported pack directories declared in `pack.yaml` (fail-closed)."""
+    pack_yaml = pack_dir / "pack.yaml"
+    if not pack_yaml.is_file():
+        return []
+    try:
+        meta = yaml.safe_load(pack_yaml.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, yaml.YAMLError) as exc:
+        raise RuntimeError(f"failed to read pack manifest {pack_yaml}: {exc}") from exc
+    if not isinstance(meta, dict):
+        raise RuntimeError(f"invalid pack manifest {pack_yaml}: expected a YAML mapping")
+    imports = meta.get("imports")
+    if imports is None:
+        return []
+    if not isinstance(imports, list):
+        raise RuntimeError(f"invalid pack manifest {pack_yaml}: imports must be a list")
+    out: list[Path] = []
+    for entry in imports:
+        if not isinstance(entry, dict) or not isinstance(entry.get("path"), str):
+            raise RuntimeError(f"invalid pack manifest {pack_yaml}: each import entry must declare a string path")
+        candidate = (pack_dir / entry["path"]).resolve()
+        if candidate.is_dir() and candidate.is_relative_to(root_resolved):
+            out.append(candidate)
+    return out
+
+
+def _count_schema_day_number_fields(schema: Any, integer_types: set[str]) -> int:
+    default_range = schema.default_range or "string"
+    top_slots = schema.slots or {}
+    classes = schema.classes or {}
 
     count = 0
     used_top_slots: set[str] = set()
     for class_def in classes.values():
-        if not isinstance(class_def, dict):
-            continue
-        attributes = class_def.get("attributes") if isinstance(class_def.get("attributes"), dict) else {}
-        slot_usage = class_def.get("slot_usage") if isinstance(class_def.get("slot_usage"), dict) else {}
+        attributes = class_def.attributes or {}
+        slot_usage = class_def.slot_usage or {}
 
         for attr_name, attr_def in attributes.items():
-            if not isinstance(attr_name, str):
-                continue
-            rng = attr_def.get("range") if isinstance(attr_def, dict) else None
-            if rng is None and isinstance(top_slots.get(attr_name), dict):
-                rng = top_slots[attr_name].get("range")
+            rng = attr_def.range
+            if rng is None and attr_name in top_slots:
+                rng = top_slots[attr_name].range
             if rng is None:
                 rng = default_range
-            if _is_day_number_field(attr_name, rng):
+            if _is_day_number_field(str(attr_name), rng, integer_types):
                 count += 1
 
-        class_slots = class_def.get("slots") if isinstance(class_def.get("slots"), list) else []
-        for slot_name in class_slots:
-            if not isinstance(slot_name, str) or slot_name in attributes:
+        for slot_name in (class_def.slots or []):
+            if slot_name in attributes:
                 continue
             used_top_slots.add(slot_name)
-            rng = None
-            if isinstance(slot_usage.get(slot_name), dict):
-                rng = slot_usage[slot_name].get("range")
-            if rng is None and isinstance(top_slots.get(slot_name), dict):
-                rng = top_slots[slot_name].get("range")
+            rng = slot_usage[slot_name].range if slot_name in slot_usage else None
+            if rng is None and slot_name in top_slots:
+                rng = top_slots[slot_name].range
             if rng is None:
                 rng = default_range
-            if _is_day_number_field(slot_name, rng):
+            if _is_day_number_field(str(slot_name), rng, integer_types):
                 count += 1
 
     for slot_name, slot_def in top_slots.items():
-        if not isinstance(slot_name, str) or slot_name in used_top_slots:
+        if slot_name in used_top_slots:
             continue
-        rng = slot_def.get("range") if isinstance(slot_def, dict) else None
-        if rng is None:
-            rng = default_range
-        if _is_day_number_field(slot_name, rng):
+        rng = slot_def.range if slot_def.range is not None else default_range
+        if _is_day_number_field(str(slot_name), rng, integer_types):
             count += 1
 
     return count
 
 
-def _strip_rezono_comment(line: str) -> str:
-    """Strip `--` line comments outside quoted strings."""
-    quote: str | None = None
-    i = 0
-    n = len(line)
-    while i < n:
-        ch = line[i]
-        if quote is not None:
-            if ch == "\\" and i + 1 < n:
-                i += 2
-                continue
-            if ch == quote:
-                quote = None
-            i += 1
-            continue
-        if ch in ('"', "'"):
-            quote = ch
-            i += 1
-            continue
-        if ch == "-" and i + 1 < n and line[i + 1] == "-":
-            return line[:i]
-        i += 1
-    return line
+def _count_rezono_form_day_number_fields(
+    form: dict[str, Any],
+    declared_names: set[str],
+    integer_types: set[str],
+) -> int:
+    from rezono_compiler import rezono_slot
 
+    def _resolve_range(type_name: str) -> str:
+        if "." in type_name:
+            return type_name.partition(".")[2]
+        return rezono_slot.builtin_range(type_name, type_name in declared_names) or type_name
 
-def _count_rezono_day_number_fields(path: Path) -> int:
-    text = path.read_text(encoding="utf-8")
     count = 0
-    in_kind_block = False
-    member_indent: int | None = None
-
-    for raw_line in text.splitlines():
-        stripped_comment = _strip_rezono_comment(raw_line).rstrip()
-        if not stripped_comment.strip():
+    for decl in form["module"]["decls"]:
+        if not isinstance(decl, dict):
             continue
-        indent = len(stripped_comment) - len(stripped_comment.lstrip(" "))
-        content = stripped_comment[indent:]
-        if indent == 0:
-            if _REZONO_BLOCK_HEADER.match(content):
-                in_kind_block = True
-                member_indent = None
-            else:
-                in_kind_block = False
-                member_indent = None
-            continue
-        if not in_kind_block or content.startswith("|"):
-            continue
-        if member_indent is None:
-            member_indent = indent
-        if indent != member_indent:
-            continue
-        match = _REZONO_SLOT_DECL.match(content)
-        if match and _is_day_number_field(match.group(1), match.group(2)):
-            count += 1
-
+        if "kind" in decl:
+            for slot in decl.get("slots") or []:
+                if not isinstance(slot, dict):
+                    continue
+                sname, stype = slot.get("slot"), slot.get("type")
+                if isinstance(sname, str) and isinstance(stype, str):
+                    if _is_day_number_field(sname, _resolve_range(stype), integer_types):
+                        count += 1
+            for derived in decl.get("derived") or []:
+                if not isinstance(derived, dict):
+                    continue
+                dname, dtype = derived.get("derived"), derived.get("type")
+                if isinstance(dname, str) and isinstance(dtype, str):
+                    if _is_day_number_field(dname, _resolve_range(dtype), integer_types):
+                        count += 1
+        elif "extend" in decl:
+            for derived in decl.get("derived") or []:
+                if not isinstance(derived, dict):
+                    continue
+                dname, dtype = derived.get("derived"), derived.get("type")
+                if isinstance(dname, str) and isinstance(dtype, str):
+                    if _is_day_number_field(dname, _resolve_range(dtype), integer_types):
+                        count += 1
     return count
 
 
 def count_day_number_fields(root: Path) -> dict[str, int]:
-    """Count integer day-number schema fields per pack under `root`."""
+    """Count integer day-number schema fields per pack under `root` via `rezono_compiler`."""
+    from rezono_compiler import rezono_module
+
     root = Path(root)
+    root_resolved = root.resolve()
+    pack_dirs = _iter_pack_dirs(root, include_rezono_only=True)
+    loaded: dict[Path, tuple[list[Any], list[dict[str, Any]], dict[str, str], set[str]]] = {}
+
+    def _get_loaded(pdir: Path) -> tuple[list[Any], list[dict[str, Any]], dict[str, str], set[str]]:
+        key = pdir.resolve()
+        if key not in loaded:
+            loaded[key] = _read_pack_schema_models(pdir)
+        return loaded[key]
+
+    def _collect_type_bases(pdir: Path, visited: set[Path]) -> dict[str, str]:
+        key = pdir.resolve()
+        if key in visited:
+            return {}
+        visited.add(key)
+        combined: dict[str, str] = {}
+        for imp_dir in _imported_pack_dirs(pdir, root_resolved):
+            combined.update(_collect_type_bases(imp_dir, visited))
+        _, _, own_bases, _ = _get_loaded(pdir)
+        combined.update(own_bases)
+        return combined
+
     counts: dict[str, int] = {}
-    for pack_dir in _iter_pack_dirs(root, include_rezono_only=True):
-        total = 0
-        schema_dir = pack_dir / "schema"
-        if schema_dir.is_dir():
-            for yaml_path in sorted(schema_dir.rglob("*.yaml")):
-                if _is_excluded_path(yaml_path.relative_to(pack_dir).parts):
-                    continue
-                total += _count_yaml_day_number_fields(yaml_path)
-        rezono_dir = pack_dir / "rezono"
-        if rezono_dir.is_dir():
-            for rezono_path in sorted(rezono_dir.rglob("*.rezono")):
-                if _is_excluded_path(rezono_path.relative_to(pack_dir).parts):
-                    continue
-                total += _count_rezono_day_number_fields(rezono_path)
+    for pack_dir in pack_dirs:
+        schemas, forms, _, declared_names = _get_loaded(pack_dir)
+        type_bases = _collect_type_bases(pack_dir, set())
+        integer_types = rezono_module.integer_type_names(type_bases, type_bases, INTEGER_RANGES)
+
+        total = sum(_count_schema_day_number_fields(schema, integer_types) for schema in schemas)
+        total += sum(
+            _count_rezono_form_day_number_fields(form, declared_names, integer_types)
+            for form in forms
+        )
         if total > 0:
             counts[pack_dir.relative_to(root).as_posix()] = total
     return dict(sorted(counts.items()))
@@ -501,11 +567,14 @@ def _count_for_budget(budget_name: str, root: Path) -> dict[str, int]:
 def check_shortcut_budget(
     budget_name: str,
     root: Path,
-    base: str | None = None,
+    base: str,
 ) -> list[str]:
-    """Verify `budget_name` on `root` (and against git revision `base` when provided) via `packs/std-budget`."""
+    """Verify `budget_name` on `root` against git revision `base` via `packs/std-budget` (fail-closed)."""
     if budget_name not in BUDGET_NAMES:
         raise ValueError(f"unknown shortcut budget: {budget_name!r}")
+    if not isinstance(base, str) or not base.strip():
+        raise ValueError("base must be a non-empty git revision")
+    base_rev = base.strip()
 
     root = Path(root)
     budget_file = root / BUDGET_PATH
@@ -522,25 +591,20 @@ def check_shortcut_budget(
 
     head_observed = _count_for_budget(budget_name, root)
 
-    if base is None:
-        base_ceilings = head_ceilings
-        base_observed = head_observed
-    else:
-        with tempfile.TemporaryDirectory(prefix="shortcut-budget-base-") as tmp:
-            base_dir = Path(tmp)
-            has_base_budget = _materialize_git_tree(root, base, budget_name, base_dir)
-            base_observed = _count_for_budget(budget_name, base_dir)
-            if has_base_budget:
-                try:
-                    base_ceilings = _parse_budget_section(
-                        (base_dir / BUDGET_PATH).read_text(encoding="utf-8"),
-                        budget_name,
-                        strict_format=False,
-                    )
-                except (OSError, UnicodeDecodeError, ValueError, TypeError) as exc:
-                    return [f"invalid base budget file {base}:{BUDGET_PATH}: {exc}"]
-            else:
-                base_ceilings = head_ceilings
+    with tempfile.TemporaryDirectory(prefix="shortcut-budget-base-") as tmp:
+        base_dir = Path(tmp)
+        has_base_budget = _materialize_git_tree(root, base_rev, budget_name, base_dir)
+        base_observed = _count_for_budget(budget_name, base_dir)
+        if not has_base_budget:
+            return [f"missing base budget file {base_rev}:{BUDGET_PATH}"]
+        try:
+            base_ceilings = _parse_budget_section(
+                (base_dir / BUDGET_PATH).read_text(encoding="utf-8"),
+                budget_name,
+                strict_format=False,
+            )
+        except (OSError, UnicodeDecodeError, ValueError, TypeError) as exc:
+            return [f"invalid base budget file {base_rev}:{BUDGET_PATH}: {exc}"]
 
     tracked_cells = sorted(
         set(base_ceilings) | set(head_ceilings) | set(base_observed) | set(head_observed)
@@ -588,9 +652,11 @@ def check_shortcut_budget(
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=ROOT)
-    parser.add_argument("--base", default=None)
+    parser.add_argument("--base", required=True)
     parser.add_argument("--budget", choices=BUDGET_NAMES, action="append")
     args = parser.parse_args(argv)
+    if not isinstance(args.base, str) or not args.base.strip():
+        parser.error("--base must be a non-empty git revision")
 
     selected = args.budget or list(BUDGET_NAMES)
     failed = False

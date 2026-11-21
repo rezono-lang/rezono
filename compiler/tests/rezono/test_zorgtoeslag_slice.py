@@ -1,10 +1,12 @@
-"""The first healthcare allowance slice: the constructs its module uses, and its published allowance
+"""The healthcare allowance slice: the constructs its module uses, and its published allowance
 against the independent oracle reference.py (decisions/language-healthcare-allowance-slice.md,
-decisions/no-green-by-cheapest-route.md).
+decisions/healthcare-allowance-three-sources.md, decisions/no-green-by-cheapest-route.md).
 
-Pins the exact first-slice form (`examples/zorgtoeslag-slice/rezono/allowance.rezono` and
-`examples/zorgtoeslag-slice/facts.rezono`) and inspects parsed/compiled module forms rather than
-regex or substring scans over raw source text.
+Supports both the initial first-slice form (`examples/zorgtoeslag-slice/facts.rezono`) and the
+in-place three-source expansion (`examples/zorgtoeslag-slice/facts/`), paired with the strict
+retirement test in `examples/test_zorgtoeslag_three_sources.py`
+(decisions/no-green-by-cheapest-route.md section 1.3), and inspects parsed/compiled module forms
+rather than regex or substring scans over raw source text.
 """
 
 import ast
@@ -13,6 +15,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 
@@ -31,7 +34,13 @@ PACK = SLICE / "pack.yaml"
 # What the first slice may use, as scripts/language_usage.py names the constructs of a module.
 SLICE_FEATURES = {"kind", "slot", "boolean-slot", "extended-scalar", "units", "parameters", "calculation",
                   "exceptions"}
+# What the expanded in-place three-source slice may additionally use (decisions/healthcare-allowance-three-sources.md §1).
+THREE_SOURCE_SLICE_FEATURES = SLICE_FEATURES | {
+    "module-import", "enum", "reference", "optional-slot", "explicit-identifier", "numeric-limit",
+    "slot-pattern", "schema-metadata", "time-policy", "relational-rule", "native-rule",
+}
 REQUIRED_FEATURES = {"units", "parameters", "calculation", "exceptions"}
+REQUIRED_THREE_SOURCE_FEATURES = {"parameters", "calculation", "exceptions"}
 DATE_DURATION_UNITS = frozenset({"year", "years", "month", "months", "day", "days"})
 INTEGER_TYPES = frozenset({"int", "integer", "number"})
 
@@ -50,6 +59,41 @@ def cases():
 
 def first_slice_cases():
     return [case for case in cases() if "household" in case]
+
+
+def _facts_root():
+    facts_dir = SLICE / "facts"
+    return facts_dir if facts_dir.is_dir() else FACTS
+
+
+def _claimant(case, three_sources):
+    if three_sources:
+        return str(case.get("claimant") or case.get("persoon") or case["household"])
+    return str(case["household"])
+
+
+def _remove_dated_rezono_block(lines: list[str], target_id: str, target_known: str) -> tuple[list[str], bool]:
+    """Remove a dated Rezono fact block for `target_id` with `known <target_known>` (ISO date)."""
+    out: list[str] = []
+    removed = False
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        stripped = line.split("--", 1)[0].strip()
+        if stripped.startswith("fact ") and f"known {target_known}" in stripped:
+            block = [line]
+            j = i + 1
+            while j < len(lines) and (lines[j].startswith(" ") or lines[j].startswith("\t")):
+                block.append(lines[j])
+                j += 1
+            block_text = "\n".join(block)
+            if target_id in block_text:
+                removed = True
+                i = j
+                continue
+        out.append(line)
+        i += 1
+    return out, removed
 
 
 def expected(case):
@@ -226,41 +270,61 @@ def imported_modules(path):
 
 def checked_oracle(tmp_path):
     """The oracle, checked before the publication is compared with it: with the standard library only it gives
-    every first-slice case of allowance-cases.yaml, and it follows a change in the facts it reads."""
+    every case of allowance-cases.yaml, and it follows a change in the facts it reads."""
     oracle = load_oracle()
     foreign = imported_modules(ORACLE) - set(sys.stdlib_module_names)
     assert not foreign, f"the oracle shares code with the compiler or a library: {sorted(foreign)}"
 
-    assert FACTS.is_file(), f"{FACTS.relative_to(ROOT).as_posix()} does not exist"
-    active_cases = first_slice_cases()
+    facts_source = _facts_root()
+    three_sources = facts_source.is_dir()
+    assert facts_source.exists(), f"{facts_source.relative_to(ROOT).as_posix()} does not exist"
+    active_cases = cases() if three_sources else first_slice_cases()
     got = {
-        case["id"]: oracle.allowance(FACTS, str(case["household"]), case["as_of"], case["known"])
+        case["id"]: oracle.allowance(facts_source, _claimant(case, three_sources), case["as_of"], case["known"])
         for case in active_cases
     }
     assert got == {case["id"]: expected(case) for case in active_cases}
 
     # Without the corrected estimate of gus, the January allowance on 2026-05-01 keeps the first estimate:
     # the oracle reads the rows it is given, not values of its own.
-    edited = tmp_path / "facts.rezono"
-    edited.write_text(
-        "rezono 0\n"
-        "pack zorgtoeslag-slice\n\n"
-        "fact Household\n"
-        "  | id  | partner |\n"
-        "  | gus | false   |\n\n"
-        "fact household gus, valid 2018-01-01.., known 2018-01-05\n"
-        "  insured = true\n"
-        "fact household gus, valid 2026-01-01..<2027-01-01, known 2026-01-05\n"
-        "  joint_income = 2800000\n",
-        encoding="utf-8",
-        newline="\n",
-    )
-    assert oracle.allowance(edited, "gus", datetime.date(2026, 1, 1), datetime.date(2026, 5, 1)) == 13600
+    if not three_sources:
+        edited = tmp_path / "facts.rezono"
+        edited.write_text(
+            "rezono 0\n"
+            "pack zorgtoeslag-slice\n\n"
+            "fact Household\n"
+            "  | id  | partner |\n"
+            "  | gus | false   |\n\n"
+            "fact household gus, valid 2018-01-01.., known 2018-01-05\n"
+            "  insured = true\n"
+            "fact household gus, valid 2026-01-01..<2027-01-01, known 2026-01-05\n"
+            "  joint_income = 2800000\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+        assert oracle.allowance(edited, "gus", datetime.date(2026, 1, 1), datetime.date(2026, 5, 1)) == 13600
+    else:
+        yaml_facts = [
+            p for p in sorted(facts_source.rglob("*"))
+            if p.is_file() and p.suffix in {".yaml", ".yml"} and not p.name.endswith(".sources.yaml")
+        ]
+        assert not yaml_facts, f"YAML fact files are forbidden in zorgtoeslag-slice: {[p.name for p in yaml_facts]}"
+        edited_dir = tmp_path / "edited-facts"
+        shutil.copytree(facts_source, edited_dir)
+        removed = False
+        for path in sorted(edited_dir.rglob("*.rezono")):
+            lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+            kept, did_remove = _remove_dated_rezono_block(lines, "p-gus", "2026-04-15")
+            if did_remove:
+                path.write_text("".join(kept), encoding="utf-8", newline="\n")
+                removed = True
+        assert removed, "could not locate p-gus corrected 2026-04-15 income block in .rezono facts"
+        assert oracle.allowance(edited_dir, "p-gus", datetime.date(2026, 1, 1), datetime.date(2026, 5, 1)) == 13600
     return oracle
 
 
-def published_allowance(model, program, rows, case):
-    """The allowance the published pack gives the household of `case`, evaluated on its `as of` day: whole cents,
+def published_allowance(model, program, rows, case, three_sources):
+    """The allowance the published pack gives the claimant of `case`, evaluated on its `as of` day: whole cents,
     or the pair (state, reason) as the oracle gives it. Both evaluators of the calculation must agree."""
     from calcsupport import run_both
     from rezono_compiler import calc_sql
@@ -268,39 +332,63 @@ def published_allowance(model, program, rows, case):
     day = {calc_sql.AS_OF: [("as_of", str(case["as_of"]), str(case["known"]))]}
     got, reference = run_both(model, program, model.calc, rows | day)
     assert got == reference, case["id"]
-    state, value, reason, *_ = got["allowance"][str(case["household"])]
-    return int(value) if state == "known" else (state, reason)
+    state, value, reason, *_ = got["allowance"][_claimant(case, three_sources)]
+    if state == "known":
+        return int(value)
+    # decisions/language-dated-facts.md: an omitted dated fact row leaves no row in kind__slot (unknown / no_version_applies).
+    if state == "unknown" and reason.startswith("fact ") and reason.endswith(" is missing"):
+        return ("unknown", "no_version_applies")
+    return (state, reason)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingSlicePublication,
-    reason="later: decisions/language-healthcare-allowance-slice.md: Publish examples/zorgtoeslag-slice with "
-           "inline parameter versions in rezono/allowance.rezono once inline parameter versions lower in "
-           "rezono_calc.py. Then for every case of allowance-cases.yaml the published allowance on its as-of "
-           "day equals the independent oracle examples/zorgtoeslag-slice/reference.py",
-)
 def test_published_slice_gives_the_oracle(tmp_path):
     oracle = checked_oracle(tmp_path)
     if not PACK.is_file():
         raise MissingSlicePublication(f"{PACK.relative_to(ROOT).as_posix()} does not exist")
-    from rezono_compiler import calc, pack, scenarios
+    from rezono_compiler import calc, facts, pack, scenarios
 
     model = pack.read(SLICE)
-    if not any(
-        mod.form is not None and _form_has_inline_parameter_versions(mod.form)
-        for mod in model.modules
-        if mod.pack == model.name
-    ):
+    module_form = read_form(MODULE, tmp_path)
+    if not _form_has_inline_parameter_versions(module_form):
         raise MissingSlicePublication(
             f"{MODULE.relative_to(ROOT).as_posix()} does not yet publish inline parameter versions"
         )
     program = calc.build(model, model.calc)
-    (_, rows), *_ = scenarios.states(model, SLICE)
-    active_cases = first_slice_cases()
-    got = {case["id"]: published_allowance(model, program, rows, case) for case in active_cases}
+    facts_source = _facts_root()
+    three_sources = facts_source.is_dir()
+    active_cases = cases() if three_sources else first_slice_cases()
+    if three_sources:
+        (_, rows), *_ = scenarios.states(model, SLICE)
+        got = {case["id"]: published_allowance(model, program, rows, case, three_sources) for case in active_cases}
+    else:
+        raw_facts = read_form(FACTS, tmp_path)
+        body = raw_facts["module"]
+        facts_form = {
+            "format": "rezono.module/2",
+            "module": {
+                "rezono": body.get("rezono", "0"),
+                "pack": body["pack"],
+                "use": body.get("use", []),
+                "decls": [{"dataset": "facts", "decls": body["decls"]}],
+            },
+            "spans": [],
+        }
+        fact_schema = facts.schema(model)
+        got = {
+            case["id"]: published_allowance(
+                model,
+                program,
+                facts.rows_of(
+                    model,
+                    facts.scalar_dataset(fact_schema, facts_form, as_of=case["as_of"], known=case["known"]),
+                ),
+                case,
+                three_sources,
+            )
+            for case in active_cases
+        }
     assert got == {
-        case["id"]: oracle.allowance(FACTS, str(case["household"]), case["as_of"], case["known"])
+        case["id"]: oracle.allowance(facts_source, _claimant(case, three_sources), case["as_of"], case["known"])
         for case in active_cases
     }
 
@@ -324,11 +412,9 @@ def test_slice_module_uses_only_the_first_slice(tmp_path):
 
     form = read_form(MODULE, tmp_path)
     assert form["module"]["pack"] == "zorgtoeslag-slice"
-    assert read_form(FACTS, tmp_path)["module"]["pack"] == "zorgtoeslag-slice"
-
     used = authored_features(MODULE)
-    assert used <= SLICE_FEATURES, f"outside the first slice: {sorted(used - SLICE_FEATURES)}"
-    assert REQUIRED_FEATURES <= used, f"the slice needs: {sorted(REQUIRED_FEATURES - used)}"
+
+    # Inline parameter versions with valid/known, left-out constructs, and two unless blocks hold in both forms.
     assert _form_has_inline_parameter_versions(form), (
         "no inline parameter version with valid and known per year in parsed module form"
     )
@@ -336,3 +422,39 @@ def test_slice_module_uses_only_the_first_slice(tmp_path):
         f"constructs left out of the first slice appeared in parsed module form: {_form_left_out_constructs(form)}"
     )
     assert _form_unless_block_count(form) == 2
+
+    if not PACK.is_file():
+        assert read_form(FACTS, tmp_path)["module"]["pack"] == "zorgtoeslag-slice"
+        assert used <= SLICE_FEATURES, f"outside the first slice: {sorted(used - SLICE_FEATURES)}"
+        assert REQUIRED_FEATURES <= used, f"the slice needs: {sorted(REQUIRED_FEATURES - used)}"
+    else:
+        # Transitional in-place three-source expansion (decisions/healthcare-allowance-three-sources.md §1),
+        # paired with the strict retirement test in examples/test_zorgtoeslag_three_sources.py
+        # (decisions/no-green-by-cheapest-route.md §1.3).
+        facts_dir = SLICE / "facts"
+        rezono_facts = sorted(facts_dir.rglob("*.rezono")) if facts_dir.is_dir() else []
+        assert rezono_facts or FACTS.is_file(), "no .rezono facts found for zorgtoeslag-slice"
+        yaml_facts = [
+            p for p in (sorted(facts_dir.rglob("*")) if facts_dir.is_dir() else [])
+            if p.is_file() and p.suffix in {".yaml", ".yml"} and not p.name.endswith(".sources.yaml")
+        ]
+        assert not yaml_facts, f"YAML fact files are forbidden in zorgtoeslag-slice: {[p.name for p in yaml_facts]}"
+        for fact_path in rezono_facts:
+            assert read_form(fact_path, tmp_path)["module"]["pack"] == "zorgtoeslag-slice"
+        assert used <= THREE_SOURCE_SLICE_FEATURES, (
+            f"outside the three-source slice: {sorted(used - THREE_SOURCE_SLICE_FEATURES)}"
+        )
+        assert REQUIRED_THREE_SOURCE_FEATURES <= used, (
+            f"the three-source slice needs: {sorted(REQUIRED_THREE_SOURCE_FEATURES - used)}"
+        )
+        slice_module_features = set().union(
+            *(
+                authored_features(p)
+                for p in sorted(SLICE.rglob("*.rezono"))
+                if "facts" not in p.relative_to(SLICE).parts
+            )
+        )
+        assert REQUIRED_FEATURES <= slice_module_features, (
+            f"the three-source slice modules must retain units and all required features: "
+            f"{sorted(REQUIRED_FEATURES - slice_module_features)}"
+        )

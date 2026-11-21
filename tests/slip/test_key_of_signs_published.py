@@ -28,18 +28,6 @@ def texts(resource: str) -> dict[str, str]:
     return {m.group(1): m.group(2).strip() for m in re.finditer(r"^([A-Za-z0-9_.-]+)\s*=\s*(.*)$", body, re.MULTILINE)}
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=(MissingKeyOfSigns, AssertionError),
-    reason=(
-        "M3: decisions/release-1-scope.md: Put the key of signs in every schema bundle the compiler writes, "
-        "whatever the pack imports: a part key with the statuses, tones, signs and differences of "
-        "packs/std-view/key.yaml, entry for entry and in their order there, declared on Bundle in "
-        "contracts/bundle.yaml with the ranges of contracts/view.yaml, and in the bundle's messages the label each "
-        "entry names, in every language of std-view, as packs/std-view/messages has it "
-        "(decisions/release-1-scope.md, section The key of signs). Expectation: packs/std-view, read in the test."
-    ),
-)
 def test_key_of_signs_published(tmp_path):
     store, manifest = publish_main(tmp_path)
     [compiled] = [item for item in manifest["compiled"] if item["file"] == "bundle/schema-bundle.json"]

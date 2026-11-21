@@ -303,7 +303,7 @@ export { semantics, placed, refused, reserved };
  * logical line of a file as a slice with `offset` set to the slice's UTF-16 start in the file, and passes
  * the file's code-point map (`at`), so reported spans keep exact file code-point offsets in O(|line|) time.
  */
-const nativeRules = new Set(['NativeRuleLine', 'StepClauseLine', 'StepChangeLine']);
+const nativeRules = new Set(['NativeRuleLine', 'StepClauseLine', 'StepChangeLine', 'RequirementClauseLine']);
 
 export function readRule<T>(
 	text: string,

@@ -122,16 +122,6 @@ def _safe_blocker_absence_rows(model):
     return run, cut, rows
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "M2: decisions/standard-packs-everywhere.md: platform_safe_rounds.dl (and any rule reaching "
-        "platform_safe_blocker) must not use vacuous absent_needs >= 0 count guards, while the "
-        "verified witness of platform_safe_blocker must still cite the admitted absence receipt "
-        "leaves (decisions/safe-step-rounds.md §4)"
-    ),
-)
 def test_platform_safe_blocker_has_no_vacuous_count_guard():
     model, program = _load_platform()
     blocker_rels = _transitive_deps(program, "platform_safe_blocker") | {"platform_safe_blocker"}
@@ -174,15 +164,6 @@ def test_platform_safe_blocker_has_no_vacuous_count_guard():
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "M2: decisions/standard-packs-everywhere.md: platform_safe_rounds.dl must derive "
-        "platform_startup_goal target and required steps/tokens from an explicit declared target "
-        "inventory rather than hardcoding fixture names (decisions/safe-step-rounds.md §4)"
-    ),
-)
 def test_platform_startup_goal_derives_target_from_declared_inventory():
     _, program = _load_platform()
     startup_rules = [r for r in program.rules.values() if r.head.relation == "platform_startup_goal"]
@@ -290,16 +271,6 @@ def _eval_restore_interval(
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "M2: decisions/standard-packs-everywhere.md: no rule reaching the safe-rounds goals may "
-        "hardcode literal 'management/availability', 'unreachable', or 'empty'; read expectations "
-        "from std-loop's LoopExpectation so changing LoopExpectation changes the outcome "
-        "(decisions/safe-step-rounds.md §4)"
-    ),
-)
 def test_platform_safe_rounds_reads_expectations_from_loop_expectation_without_hardcoded_literals():
     _, program = _load_platform()
     reaching_rels = set(SAFE_ROUND_GOALS)
@@ -383,4 +354,522 @@ def test_platform_safe_rounds_reads_expectations_from_loop_expectation_without_h
     assert broken_mid == {("fence-1",)} and verified_mid == set(), (
         "mid-interval observation differing from LoopExpectation must break the interval; "
         f"got broken={broken_mid}, verified={verified_mid}"
+    )
+
+
+@cache
+def _platform_pack_fact_rows():
+    from rezono_compiler import scenarios as compiler_scenarios
+
+    model, _ = _load_platform()
+    states = compiler_scenarios.fact_states(model, ROOT, diagnostics=False)
+    pack_rows, = [rows for kind, _, _, rows in states if kind == "facts"]
+    return {rel: tuple(rows) for rel, rows in pack_rows.items()}
+
+
+def _eval_platform_with_pack_facts(
+    overlay_records: dict[str, list[dict]],
+    extra_rows: dict[str, list[tuple]],
+    targets: tuple[str, ...],
+) -> dict[str, set[tuple[str, ...]]]:
+    model, program = _load_platform()
+    pack_rows = _platform_pack_fact_rows()
+    overlay_rows = compiler_facts.rows_of(model, overlay_records)
+
+    override_expectations = {
+        rec["id"] for rec in overlay_records.get("loop_expectation", ())
+    }
+    merged: dict[str, list[tuple]] = {}
+    all_relations = set(pack_rows) | set(overlay_rows) | set(extra_rows)
+    for rel in all_relations:
+        combined: list[tuple] = []
+        seen: set[tuple] = set()
+        for row in pack_rows.get(rel, ()):
+            if (
+                rel in {"loop_expectation", "loop_expectation__value"}
+                and row
+                and row[0] in override_expectations
+            ):
+                continue
+            if row not in seen:
+                seen.add(row)
+                combined.append(row)
+        for src in (overlay_rows, extra_rows):
+            for row in src.get(rel, ()):
+                if row not in seen:
+                    seen.add(row)
+                    combined.append(row)
+        if combined:
+            merged[rel] = combined
+
+    needed = set(targets)
+    for target in targets:
+        needed |= _transitive_deps(program, target)
+    needed &= set(program.derived())
+
+    with compiler_batch.connect(program, merged) as con:
+        compiler_batch.compute(con, program, relations=needed)
+        return compiler_batch.read(con, program, targets)
+
+
+def _eval_restore_fence_case(
+    *,
+    fence_observations: list[dict],
+    start_evidence: str,
+    end_evidence: str,
+) -> set[tuple[str, ...]]:
+    run = "rec-fence-binding-run"
+    cut = "restored"
+    trial = "management-trial"
+    digest = sha256(b"authored management dataset\n").hexdigest()
+    records = {
+        "loop_active_run": [{"id": run}],
+        "loop_sweep_receipt": [{"id": cut, "run": run, "event_time": 20}],
+        "loop_step": [{"id": "restore-copy"}],
+        "loop_requirement": [
+            {
+                "id": "restore-needs-outage",
+                "run": run,
+                "step": "restore-copy",
+                "token": "management/availability",
+                "reason": "management-offline",
+            },
+            {
+                "id": "restore-needs-control",
+                "run": run,
+                "step": "restore-copy",
+                "token": "recovery-api/availability",
+                "reason": "control",
+            },
+            {
+                "id": "restore-needs-credentials",
+                "run": run,
+                "step": "restore-copy",
+                "token": "recovery-key/availability",
+                "reason": "credentials",
+            },
+            {
+                "id": "restore-needs-storage",
+                "run": run,
+                "step": "restore-copy",
+                "token": "backup-store/availability",
+                "reason": "storage",
+            },
+        ],
+        "loop_completion": [
+            {
+                "id": "restore-copy-done",
+                "run": run,
+                "step": "restore-copy",
+                "token": "management-copy/payload",
+                "reason": "matching-copy",
+            },
+        ],
+        "loop_expectation": [
+            {"id": "management/availability", "value": "unreachable"},
+            {"id": "recovery-api/availability", "value": "available"},
+            {"id": "recovery-key/availability", "value": "available"},
+            {"id": "backup-store/availability", "value": "available"},
+            {"id": "management-copy/payload", "value": digest},
+            {"id": "unrelated/health", "value": "ok"},
+        ],
+        "loop_observation": [
+            {
+                "id": "local-control-readback",
+                "run": run,
+                "token": "recovery-api/availability",
+                "event_time": 9,
+                "state": "known",
+                "value": "available",
+                "reason": "local-control-readback",
+                "scope": "control",
+                "sweep": cut,
+            },
+            {
+                "id": "local-key-readback",
+                "run": run,
+                "token": "recovery-key/availability",
+                "event_time": 9,
+                "state": "known",
+                "value": "available",
+                "reason": "local-key-readback",
+                "scope": "credentials",
+                "sweep": cut,
+            },
+            {
+                "id": "direct-store-readback",
+                "run": run,
+                "token": "backup-store/availability",
+                "event_time": 9,
+                "state": "known",
+                "value": "available",
+                "reason": "direct-store-readback",
+                "scope": "storage",
+                "sweep": cut,
+            },
+            {
+                "id": "unrelated-start",
+                "run": run,
+                "token": "unrelated/health",
+                "event_time": 9,
+                "state": "known",
+                "value": "ok",
+                "reason": "unrelated-start",
+                "scope": "health",
+                "sweep": cut,
+            },
+            {
+                "id": "isolated-readback",
+                "run": run,
+                "token": "management-copy/payload",
+                "event_time": 15,
+                "state": "known",
+                "value": digest,
+                "reason": "isolated-readback",
+                "scope": "recovery",
+                "sweep": cut,
+            },
+            {
+                "id": "unrelated-end",
+                "run": run,
+                "token": "unrelated/health",
+                "event_time": 19,
+                "state": "known",
+                "value": "ok",
+                "reason": "unrelated-end",
+                "scope": "health",
+                "sweep": cut,
+            },
+            *fence_observations,
+        ],
+        "backup_trial": [
+            {"id": trial, "backup": "management-copy", "cluster": "recovery", "run": run},
+        ],
+        "backup_capture": [
+            {
+                "id": "management-capture",
+                "backup": "management-copy",
+                "source_cluster": "management",
+                "run": run,
+                "payload_sha256": digest,
+            },
+        ],
+        "backup_readback": [
+            {
+                "id": "isolated-readback",
+                "backup": "management-copy",
+                "cluster": "recovery",
+                "run": run,
+                "trial": trial,
+                "source_evidence": "management-capture",
+                "payload_sha256": digest,
+            },
+        ],
+        "restore_dependency_binding": [
+            {
+                "id": "local-api-binding",
+                "trial": trial,
+                "function": "control",
+                "provider": "recovery-api",
+                "cluster": "recovery",
+            },
+            {
+                "id": "local-key-binding",
+                "trial": trial,
+                "function": "credentials",
+                "provider": "recovery-key",
+                "cluster": "recovery",
+            },
+            {
+                "id": "direct-store-binding",
+                "trial": trial,
+                "function": "storage",
+                "provider": "backup-store",
+                "cluster": "storage",
+            },
+        ],
+        "restore_dataset_binding": [
+            {
+                "id": "catalog-copy",
+                "trial": trial,
+                "dataset": "management-catalog",
+                "backup": "management-copy",
+                "capture": "management-capture",
+            },
+        ],
+        "restore_offline_interval": [
+            {
+                "id": "fence-interval-1",
+                "run": run,
+                "trial": trial,
+                "start_evidence": start_evidence,
+                "end_evidence": end_evidence,
+                "readback_evidence": "isolated-readback",
+            },
+        ],
+    }
+    out = _eval_platform_with_pack_facts(records, {}, ("platform_restore_goal",))
+    return out["platform_restore_goal"]
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason=(
+        "M2: decisions/safe-step-rounds.md: Bind the recovery fence interval in "
+        "examples/platform/rules/platform_safe_rounds.dl to the management-unreachable fence "
+        "token instead of accepting any unrelated token's matching LoopExpectation as fence proof."
+    ),
+)
+def test_restore_fence_binds_token_to_management_unreachable():
+    run = "rec-fence-binding-run"
+    cut = "restored"
+    expected_goal = {(run, cut, "management-catalog", "isolated-readback")}
+
+    # Control: opening and closing management-unreachable probes satisfy the fence.
+    valid_goals = _eval_restore_fence_case(
+        fence_observations=[
+            {
+                "id": "opening-offline-probe",
+                "run": run,
+                "token": "management/availability",
+                "event_time": 9,
+                "state": "known",
+                "value": "unreachable",
+                "reason": "opening-offline-probe",
+                "scope": "outage",
+                "sweep": cut,
+            },
+            {
+                "id": "closing-offline-probe",
+                "run": run,
+                "token": "management/availability",
+                "event_time": 19,
+                "state": "known",
+                "value": "unreachable",
+                "reason": "closing-offline-probe",
+                "scope": "outage",
+                "sweep": cut,
+            },
+        ],
+        start_evidence="opening-offline-probe",
+        end_evidence="closing-offline-probe",
+    )
+    assert valid_goals == expected_goal, (
+        f"valid management-unreachable fence must satisfy platform_restore_goal; got {valid_goals}"
+    )
+
+    # Management is reachable (fence unmet), while unrelated/health matches its LoopExpectation.
+    reachable_goals = _eval_restore_fence_case(
+        fence_observations=[
+            {
+                "id": "mgmt-reachable-start",
+                "run": run,
+                "token": "management/availability",
+                "event_time": 9,
+                "state": "known",
+                "value": "reachable",
+                "reason": "mgmt-reachable-start",
+                "scope": "outage",
+                "sweep": cut,
+            },
+            {
+                "id": "mgmt-reachable-end",
+                "run": run,
+                "token": "management/availability",
+                "event_time": 19,
+                "state": "known",
+                "value": "reachable",
+                "reason": "mgmt-reachable-end",
+                "scope": "outage",
+                "sweep": cut,
+            },
+        ],
+        start_evidence="unrelated-start",
+        end_evidence="unrelated-end",
+    )
+    assert reachable_goals == set(), (
+        "unrelated token matching LoopExpectation must not qualify as fence proof while "
+        f"management/availability is reachable; got {reachable_goals}"
+    )
+
+    # Management-unreachable fence is missing completely while unrelated/health matches.
+    missing_fence_goals = _eval_restore_fence_case(
+        fence_observations=[],
+        start_evidence="unrelated-start",
+        end_evidence="unrelated-end",
+    )
+    assert missing_fence_goals == set(), (
+        "unrelated token matching LoopExpectation must not qualify as fence proof when "
+        f"management/availability has no observations; got {missing_fence_goals}"
+    )
+
+    # Opening management probe exists at t=9 without a closing probe; interval cites a control token.
+    wrong_token_goals = _eval_restore_fence_case(
+        fence_observations=[
+            {
+                "id": "opening-offline-probe",
+                "run": run,
+                "token": "management/availability",
+                "event_time": 9,
+                "state": "known",
+                "value": "unreachable",
+                "reason": "opening-offline-probe",
+                "scope": "outage",
+                "sweep": cut,
+            },
+            {
+                "id": "closing-control-readback",
+                "run": run,
+                "token": "recovery-api/availability",
+                "event_time": 19,
+                "state": "known",
+                "value": "available",
+                "reason": "closing-control-readback",
+                "scope": "control",
+                "sweep": cut,
+            },
+        ],
+        start_evidence="local-control-readback",
+        end_evidence="closing-control-readback",
+    )
+    assert wrong_token_goals == set(), (
+        "fence interval citing recovery-api/availability instead of the management-unreachable "
+        f"fence token must not satisfy platform_restore_goal; got {wrong_token_goals}"
+    )
+
+
+def _eval_empty_scope_case(
+    *,
+    expected_scope_value: str,
+    observed_token: str,
+    observed_value: str,
+) -> tuple[set[tuple[str, ...]], set[tuple[str, ...]]]:
+    run = "startup-empty-scope-run"
+    cut = "empty"
+    scope = {"run": run, "collector": "inventory", "window": cut}
+    records = {
+        "loop_active_run": [{"id": run}],
+        "loop_sweep_receipt": [{"id": cut, "run": run, "event_time": 10}],
+        "loop_step": [{"id": "protect-entry"}],
+        "loop_expectation": [
+            {"id": "platform/managed-scope", "value": expected_scope_value},
+            {"id": "restore-bad/network-probe", "value": "denied"},
+        ],
+        "flow_sweep_window": [{**scope, "id": "empty-inv", "start": 0, "stop": 10}],
+        "flow_expected_node": [{**scope, "id": "empty-inv-platform", "node": "platform"}],
+        "flow_node_report": [
+            {
+                **scope,
+                "id": "empty-inv-report",
+                "node": "platform",
+                "first": 0,
+                "last": 10,
+                "gaps": 0,
+                "lost": 0,
+            },
+        ],
+        "loop_observation": [
+            {
+                "id": "empty-scope-absent",
+                "run": run,
+                "token": observed_token,
+                "event_time": 9,
+                "state": "absent",
+                "value": observed_value,
+                "reason": "empty-scope-absent",
+                "scope": "inventory",
+                "sweep": cut,
+            },
+        ],
+    }
+    extra_rows = {
+        "verified_receipt": [
+            ("receipt-inv", "inventory-observer", "scope-inv", "cut-10", "inv-inv", "cnt-inv"),
+        ],
+        "verified_member": [
+            ("receipt-inv", "member-platform", 0, "sweep-node"),
+            ("receipt-inv", "member-platform", 1, run),
+            ("receipt-inv", "member-platform", 2, "inventory"),
+            ("receipt-inv", "member-platform", 3, cut),
+            ("receipt-inv", "member-platform", 4, "platform"),
+        ],
+        "verified_round": [("round-empty", run, cut, "batch-protect-entry")],
+        "verified_round_member": [("round-empty", "protect-entry")],
+    }
+    out = _eval_platform_with_pack_facts(
+        records,
+        extra_rows,
+        ("platform_cut_empty_scope", "platform_safe_frontier"),
+    )
+    return out["platform_cut_empty_scope"], out["platform_safe_frontier"]
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason=(
+        "M2: decisions/safe-step-rounds.md: Bind platform_cut_empty_scope in "
+        "examples/platform/rules/platform_safe_rounds.dl to the LoopExpectation for "
+        "platform/managed-scope instead of treating any absent non-prerequisite token as "
+        "proving an empty managed scope."
+    ),
+)
+def test_empty_managed_scope_reads_loop_expectation_for_managed_scope():
+    run = "startup-empty-scope-run"
+    cut = "empty"
+    opening_step = (run, cut, "protect-entry")
+
+    # 1. An absent observation on an unrelated token must NOT open the empty-managed-scope boundary,
+    #    even when its observed value matches that unrelated token's own LoopExpectation ("denied").
+    for unrelated_value in ("missing", "denied"):
+        unrelated_empty, unrelated_frontier = _eval_empty_scope_case(
+            expected_scope_value="empty",
+            observed_token="restore-bad/network-probe",
+            observed_value=unrelated_value,
+        )
+        assert unrelated_empty == set() and opening_step not in unrelated_frontier, (
+            f"absent observation on unrelated token 'restore-bad/network-probe' (value={unrelated_value!r}) "
+            "must not open the empty-managed-scope boundary; "
+            f"empty_scope={unrelated_empty}, frontier={unrelated_frontier}"
+        )
+
+    # 2. Matching LoopExpectation for platform/managed-scope opens the boundary.
+    matched_empty, matched_frontier = _eval_empty_scope_case(
+        expected_scope_value="empty",
+        observed_token="platform/managed-scope",
+        observed_value="empty",
+    )
+    assert (run, cut, "platform/managed-scope", "empty-scope-absent") in matched_empty, (
+        "admitted absent observation matching LoopExpectation for platform/managed-scope must "
+        f"derive platform_cut_empty_scope; got {matched_empty}"
+    )
+    assert opening_step in matched_frontier, (
+        f"matched empty-managed-scope receipt must admit opening step; got {matched_frontier}"
+    )
+
+    # 3. Changing ONLY LoopExpectation for platform/managed-scope closes the boundary.
+    mismatched_empty, mismatched_frontier = _eval_empty_scope_case(
+        expected_scope_value="clean",
+        observed_token="platform/managed-scope",
+        observed_value="empty",
+    )
+    assert mismatched_empty == set() and opening_step not in mismatched_frontier, (
+        "changing LoopExpectation for platform/managed-scope from 'empty' to 'clean' without "
+        "changing the observation must close the empty-managed-scope boundary; "
+        f"empty_scope={mismatched_empty}, frontier={mismatched_frontier}"
+    )
+
+    # 4. Updating the observation value to match the new LoopExpectation re-opens the boundary.
+    updated_empty, updated_frontier = _eval_empty_scope_case(
+        expected_scope_value="clean",
+        observed_token="platform/managed-scope",
+        observed_value="clean",
+    )
+    assert (run, cut, "platform/managed-scope", "empty-scope-absent") in updated_empty, (
+        "observation matching updated LoopExpectation ('clean') must derive "
+        f"platform_cut_empty_scope; got {updated_empty}"
+    )
+    assert opening_step in updated_frontier, (
+        f"updated matched empty-managed-scope receipt must admit opening step; got {updated_frontier}"
     )

@@ -76,6 +76,8 @@ def lower_pack(pack, meta: dict, pack_dir: Path, errors: list[str],
 
 
 def lower(pack, pack_dir: Path, d, form: dict, gen: Generated, errors: list[str]) -> None:
+    if form.get("format") == rezono_module.REZONO_1_FORMAT:
+        return  # rezono 1 decision tables lower to rezono.rules/2 functional relations (rezono_derived.py)
     where, line = f"{pack_dir.name}/{d.module}", rezono_module.lines(form)
 
     def place(at: str) -> int:

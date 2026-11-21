@@ -61,23 +61,25 @@ def lower_source(module: modules.Module, form: dict, root: str,
     except (OSError, UnicodeError) as error:
         raise CompileError(f"{where}: cannot read the native rule positions") from error
     offsets = {place["at"]: place["start"] for place in form["spans"]}
-    statements, columns, semantics, refused = [], [], {}, []
+    statements, columns, notes, semantics, refused = [], [], [], {}, []
     site = Site(where, text, offsets)
     for at, declaration in declarations:
         # Every declaration is checked, so a refusal in one does not hide the refusal of another; a module with
         # any refusal lowers no rule at all.
         try:
-            lower_declaration(site, linked, module, at, declaration, statements, columns, semantics)
+            lower_declaration(site, linked, module, at, declaration, statements, columns, notes, semantics)
         except CompileError as error:
             refused.extend(error.diagnostics)
     if refused:
         raise CompileError("\n".join(str(diagnostic) for diagnostic in refused), refused)
-    return rules_dl.NativeSource(module.pack, module.file.stem, where, text, tuple(statements), tuple(columns),
-                                 tuple(semantics.items()))
+    return rules_dl.NativeSource(
+        module.pack, module.file.stem, where, text, tuple(statements), tuple(columns),
+        tuple(semantics.items()), tuple(notes),
+    )
 
 
 def lower_declaration(site: Site, linked: native_rule_signatures.Linked, module: modules.Module, at: str,
-                      declaration: dict, statements: list, columns: list,
+                      declaration: dict, statements: list, columns: list, notes: list,
                       semantics: dict[str, tuple[dict | None, ...]]) -> None:
     if "step" in declaration:
         declaration = {
@@ -93,8 +95,17 @@ def lower_declaration(site: Site, linked: native_rule_signatures.Linked, module:
     line = text.count("\n", 0, offset) + 1
     column = offset - text.rfind("\n", 0, offset)
     options = declaration.get("options")
-    if set(declaration) - {"rule", "columns", "args", "when", "options"}:
+    if set(declaration) - {"rule", "columns", "args", "when", "options", "means", "source"}:
         refuse(where, at, line, column, "Rule options and locals are not lowered yet")
+    if ("means" in declaration or "source" in declaration) and "when" not in declaration:
+        refuse(where, at, line, column, "A rule sentence or source needs a `when` clause", "R000")
+    means = declaration.get("means")
+    if means is not None and not isinstance(means, str):
+        m_line, m_col = site.span(f"{at}/means")[1:] if f"{at}/means" in offsets else (line, column)
+        refuse(where, f"{at}/means", m_line, m_col, "A rule sentence must be text", "R000")
+    source_ref = declaration.get("source")
+    if source_ref is not None and not isinstance(source_ref, str):
+        refuse(where, f"{at}/source", line, column, "A rule source must be text", "R000")
     if options is not None:
         for index, option in enumerate(options):
             opt_at = f"{at}/options/{index}"
@@ -117,6 +128,11 @@ def lower_declaration(site: Site, linked: native_rule_signatures.Linked, module:
         head = declaration.get("args", [{"path": [name]} for name, _, _ in signature.key])
         names = "columns" if "args" not in declaration else "args"
         branches = alternatives(f"{at}/when", declaration["when"])
+        note: rules_dl.RuleNote | None = None
+        if means is not None or source_ref is not None:
+            note_at = f"{at}/means"
+            m_line, m_col = site.span(note_at)[1:] if means is not None and note_at in offsets else (line, column)
+            note = rules_dl.RuleNote(means, source_ref, where, m_line, m_col, note_at)
         for premises in branches:
             body: list[tuple] = []
             bound: set[str] = set()
@@ -137,6 +153,7 @@ def lower_declaration(site: Site, linked: native_rule_signatures.Linked, module:
                 head_terms.append(("var", head_name))
             statements.append(("rule", (clause.relation, head_terms, line), body, line))
             columns.append(column)
+            notes.append(note)
 
 
 def alternatives(pointer: str, node: dict) -> list[list[tuple[str, dict]]]:
