@@ -586,6 +586,8 @@ def _check_functional_witness(i, w, rule, func, rules, rows, findings, groups=No
         active_insts = matching_insts
     elif state in prop_states:
         state_matching = [t for t, st in prop_insts if st == state]
+        if not state_matching:
+            find("premise_mismatch", relation=c["relation"], key=c["key"])
         premise_rules = [(rule, state_matching)]
         active_insts = state_matching
     else:

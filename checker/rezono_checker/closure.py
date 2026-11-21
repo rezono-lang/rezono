@@ -416,6 +416,8 @@ def _aggregate_st(current, spec, table, rule):
                 else:
                     out.append(((*vals, bound_val), st))
         else:
+            if result == "not_applicable" and not group_rows and getattr(spec, "state_key", None) is None:
+                continue
             prop = result if result in STATE_PRIORITY else "invalid"
             for vals, st in run:
                 new_st = _worse_state(st, prop)

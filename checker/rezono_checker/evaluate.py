@@ -7,7 +7,7 @@ instance to the same arithmetic. Values are canonical text: an integer is decima
 import datetime
 import re
 
-from .canon import INTEGER, measure, number, number_text, payload
+from .canon import INTEGER, calc_value, measure, number, number_text, payload
 
 
 def _value(term, theta):
@@ -90,6 +90,8 @@ VALID_STATES = ("known", "unknown", "not_applicable", "invalid")
 
 
 def _rational(text):
+    if not isinstance(text, str) or not calc_value(text, "rational"):
+        return None
     try:
         return number(text)
     except ValueError:
@@ -97,21 +99,21 @@ def _rational(text):
 
 
 def _holds(op, left, right, compare_as=None):
-    """A comparison of two canonical values: equality as text (or exact rationals when both operands
-    are valid rationals), order between exact numbers (integers and rationals). With `compare_as`
-    (decisions/ordered-rule-scalars.md) both operands are read as that type and compared as bytes; an operand
-    that is not of the type decides no comparison, not even `ne`."""
+    """A comparison of two canonical values: equality as text, order between exact canonical numbers
+    (integers and reduced rationals). With `compare_as` (decisions/ordered-rule-scalars.md) both
+    operands are read as that type and compared as bytes; an operand that is not of the type decides
+    no comparison, not even `ne`."""
     if compare_as is not None:
         a, b = TYPED_KEYS[compare_as](left), TYPED_KEYS[compare_as](right)
         if a is None or b is None:
             return False
         return {"eq": a == b, "ne": a != b, "lt": a < b, "le": a <= b, "gt": a > b, "ge": a >= b}[op]
-    a, b = _rational(left), _rational(right)
-    if a is not None and b is not None:
-        return {"eq": a == b, "ne": a != b, "lt": a < b, "le": a <= b, "gt": a > b, "ge": a >= b}[op]
     if op in ("eq", "ne"):
         return (left == right) == (op == "eq")
-    return False
+    a, b = _rational(left), _rational(right)
+    if a is None or b is None:
+        return False
+    return {"lt": a < b, "le": a <= b, "gt": a > b, "ge": a >= b}[op]
 
 
 def cells(spec, members) -> list:

@@ -436,18 +436,29 @@ def test_direct_count_and_malformed_state_cell_fail_closed():
 # --- Finding 2: Rational order and equality comparisons in evaluate._holds ---
 
 @pytest.mark.parametrize("op, left, right, want", [
+    # Canonical rational order and equality.
     ("lt", "1/3", "1/2", True),
     ("lt", "1/2", "1/3", False),
-    ("le", "1/2", "2/4", True),
-    ("ge", "2/4", "1/2", True),
+    ("le", "1/2", "1/2", True),
+    ("ge", "3/2", "3/2", True),
     ("gt", "3/2", "1", True),
     ("gt", "1", "3/2", False),
     ("lt", "-3/2", "-4/3", True),
     ("gt", "-1/2", "-2/3", True),
-    ("eq", "2/4", "1/2", True),
-    ("ne", "2/4", "1/2", False),
-    ("eq", "4/2", "2", True),
+    ("eq", "1/2", "1/2", True),
     ("ne", "3/2", "2", True),
+    # Textual equality for eq/ne (ordinary string columns containing "2/4" vs "1/2").
+    ("eq", "2/4", "1/2", False),
+    ("ne", "2/4", "1/2", True),
+    ("eq", "4/2", "2", False),
+    ("ne", "4/2", "2", True),
+    # Non-canonical fractions fail closed in order comparisons.
+    ("le", "1/2", "2/4", False),
+    ("ge", "2/4", "1/2", False),
+    ("lt", "2/4", "1", False),
+    ("lt", "4/2", "3", False),
+    ("lt", "0/5", "1", False),
+    ("lt", "2/1", "3", False),
     ("lt", "1/0", "2", False),
     ("lt", "1/-2", "1/2", False),
     ("lt", "1.5", "2", False),
@@ -718,3 +729,223 @@ def test_functional_witness_rejects_forged_aggregate_bindings():
     rep_empty = check_epoch([honest_full_w, forged_empty_w], manifest, loaded, read, derived=derived)
     assert not rep_empty["valid"]
     assert "premise_mismatch" in _errors(rep_empty), rep_empty["findings"]
+
+
+def test_non_functional_derived_count_over_derived_state_column_stays_plain_count():
+    """A non-functional derived rule counting over a derived relation with a `state: string` column
+    keeps state_key=None and produces known:N (not four-state propagation)."""
+    doc = {
+        "format": "rezono.rules/2",
+        "relations": [
+            {"name": "g", "role": "base", "key": [_col("g")]},
+            {"name": "raw", "role": "base", "key": [_col("g"), _col("id"), _col("state")]},
+            {"name": "ms", "role": "derived", "key": [_col("g"), _col("id"), _col("state")]},
+            {"name": "cnt", "role": "derived", "key": [_col("g"), _col("n", "integer")]},
+        ],
+        "rules": [
+            _rule("ms_r", "ms", ["?g", "?id", "?st"], [_lit("raw", "?g", "?id", "?st")], stratum="0"),
+            _rule("cnt_r", "cnt", ["?g", "?n"], [_lit("g", "?g")], stratum="1",
+                  aggregates=[{"relation": "ms", "terms": ["?g", "_", "_"], "function": "count",
+                               "as": "?n", "stratum": "0"}]),
+        ],
+    }
+    loaded = checker_rules.load_rules(doc)
+    assert loaded["cnt_r"].aggregates[0].state_key is None
+
+    rows = {
+        "g": [["g1"]],
+        "raw": [["g1", "a", "open"], ["g1", "b", "unknown"]],
+        "ms": [["g1", "a", "open"], ["g1", "b", "unknown"]],
+        "cnt": [["g1", "2"]],
+    }
+    members = sorted(encode_key(r) for r in rows["ms"])
+    witnesses = [
+        {
+            "conclusion": _ref("ms", "g1", "a", "open"), "rule_id": "ms_r",
+            "bindings": [{"variable": "?g", "value": "g1"}, {"variable": "?id", "value": "a"},
+                         {"variable": "?st", "value": "open"}],
+            "premises": [{"row": _ref("raw", "g1", "a", "open"), "polarity": "positive", "stratum": 0}],
+        },
+        {
+            "conclusion": _ref("ms", "g1", "b", "unknown"), "rule_id": "ms_r",
+            "bindings": [{"variable": "?g", "value": "g1"}, {"variable": "?id", "value": "b"},
+                         {"variable": "?st", "value": "unknown"}],
+            "premises": [{"row": _ref("raw", "g1", "b", "unknown"), "polarity": "positive", "stratum": 0}],
+        },
+        {
+            "conclusion": _ref("cnt", "g1", "2"), "rule_id": "cnt_r",
+            "bindings": [{"variable": "?g", "value": "g1"}, {"variable": "?n", "value": "2"}],
+            "premises": [{"row": _ref("g", "g1"), "polarity": "positive", "stratum": 0}],
+            "aggregates": [{
+                "relation": "ms", "position": 0, "group_key": encode_key(["g1"]),
+                "count": 2, "contributors_sha256": sha256_json([[k] for k in members]), "result": "known:2",
+            }],
+        },
+    ]
+    manifest, read = _manifest_and_reader(rows)
+    rep = check_epoch(witnesses, manifest, loaded, read, derived=checker_rules.derived_relations(doc, loaded))
+    assert rep["valid"], rep["findings"]
+
+
+def test_empty_min_max_non_state_bearing_vs_state_bearing_in_functional_derivation():
+    """Empty min/max over a non-state-bearing base relation drops the candidate (falling back to
+    empty_state or another firing rule), whereas empty min/max over a state-bearing relation
+    propagates `not_applicable`."""
+    doc = {
+        "format": "rezono.rules/2",
+        "relations": [
+            {"name": "g", "role": "base", "key": [_col("g")]},
+            {"name": "plain_score", "role": "base", "key": [_col("g"), _col("id"), _col("n", "integer")]},
+            {"name": "fallback_val", "role": "base", "key": [_col("g"), _col("n", "integer")]},
+            {"name": "state_score", "role": "derived",
+             "key": [_col("g"), _col("id"), _col("state"), _col("n", "integer")]},
+            {"name": "min_plain", "role": "functional", "key": [_col("g")], "domain": "g",
+             "value": _col("value", "integer"), "conflict_policy": "publish", "empty_state": "unknown"},
+            {"name": "min_state", "role": "functional", "key": [_col("g")], "domain": "g",
+             "value": _col("value", "integer"), "conflict_policy": "publish", "empty_state": "unknown"},
+        ],
+        "rules": [
+            _rule("state_score_r", "state_score", ["?g", "?id", "known", "?n"],
+                  [_lit("plain_score", "?g", "?id", "?n")], stratum="1"),
+            _rule("min_plain_agg", "min_plain", ["?g", "?m"], [_lit("g", "?g")], stratum="2",
+                  aggregates=[{"relation": "plain_score", "terms": ["?g", "_", "_"],
+                               "function": "min", "over": "n", "as": "?m", "stratum": "0"}]),
+            _rule("min_plain_fb", "min_plain", ["?g", "?m"],
+                  [_lit("g", "?g"), _lit("fallback_val", "?g", "?m")], stratum="2"),
+            _rule("min_state_agg", "min_state", ["?g", "?m"], [_lit("g", "?g")], stratum="2",
+                  aggregates=[{"relation": "state_score", "terms": ["?g", "_", "_", "_"],
+                               "function": "min", "over": "n", "as": "?m", "stratum": "1"}]),
+        ],
+    }
+    loaded = checker_rules.load_rules(doc)
+    assert loaded["min_plain_agg"].aggregates[0].state_key is None
+    assert loaded["min_state_agg"].aggregates[0].state_key == 2
+
+    rows = {
+        "g": [["g_empty"], ["g_fallback"]],
+        "plain_score": [],
+        "fallback_val": [["g_fallback", "42"]],
+        "state_score": [],
+        # Non-state-bearing empty min drops candidate: g_empty -> empty_state (unknown), g_fallback -> fallback (42).
+        "min_plain": [
+            ["g_empty", "unknown", "no_value", ""],
+            ["g_fallback", "known", "", "42"],
+        ],
+        # State-bearing empty min propagates not_applicable even though empty_state="unknown".
+        "min_state": [
+            ["g_empty", "not_applicable", "empty", ""],
+            ["g_fallback", "not_applicable", "empty", ""],
+        ],
+    }
+    empty_digest = sha256_json([])
+    witnesses = [
+        {
+            "conclusion": _ref("min_plain", "g_empty", "unknown", "no_value", ""),
+            "rule_id": "min_plain_fb",
+            "bindings": [{"variable": "?g", "value": "g_empty"}],
+            "premises": [{"row": _ref("g", "g_empty"), "polarity": "positive", "stratum": 0}],
+        },
+        {
+            "conclusion": _ref("min_plain", "g_fallback", "known", "", "42"),
+            "rule_id": "min_plain_fb",
+            "bindings": [{"variable": "?g", "value": "g_fallback"}],
+            "premises": [
+                {"row": _ref("g", "g_fallback"), "polarity": "positive", "stratum": 0},
+                {"row": _ref("fallback_val", "g_fallback", "42"), "polarity": "positive", "stratum": 0},
+            ],
+        },
+        {
+            "conclusion": _ref("min_state", "g_empty", "not_applicable", "empty", ""),
+            "rule_id": "min_state_agg",
+            "bindings": [{"variable": "?g", "value": "g_empty"}],
+            "premises": [{"row": _ref("g", "g_empty"), "polarity": "positive", "stratum": 0}],
+            "aggregates": [{
+                "relation": "state_score", "position": 0, "group_key": encode_key(["g_empty"]),
+                "count": 0, "contributors_sha256": empty_digest, "result": "not_applicable",
+            }],
+        },
+        {
+            "conclusion": _ref("min_state", "g_fallback", "not_applicable", "empty", ""),
+            "rule_id": "min_state_agg",
+            "bindings": [{"variable": "?g", "value": "g_fallback"}],
+            "premises": [{"row": _ref("g", "g_fallback"), "polarity": "positive", "stratum": 0}],
+            "aggregates": [{
+                "relation": "state_score", "position": 0, "group_key": encode_key(["g_fallback"]),
+                "count": 0, "contributors_sha256": empty_digest, "result": "not_applicable",
+            }],
+        },
+    ]
+    manifest, read = _manifest_and_reader(rows)
+    rep = check_epoch(witnesses, manifest, loaded, read, derived=checker_rules.derived_relations(doc, loaded))
+    assert rep["valid"], rep["findings"]
+
+
+@pytest.mark.parametrize("prop_state, prop_reason", [
+    ("unknown", "no_value"),
+    ("not_applicable", "empty"),
+])
+def test_forged_non_propagating_rule_citation_for_propagated_state_is_rejected(
+    prop_state: str, prop_reason: str,
+):
+    """Citing a non-propagating rule for a propagated unknown/not_applicable state must fail
+    with `premise_mismatch`."""
+    doc = {
+        "format": "rezono.rules/2",
+        "relations": [
+            {"name": "g", "role": "base", "key": [_col("g")]},
+            {"name": "extra", "role": "base", "key": [_col("g"), _col("n", "integer")]},
+            {"name": "ms", "role": "derived", "key": [_col("g"), _col("id"), _col("state"), _col("n", "integer")]},
+            {"name": "raw", "role": "base", "key": [_col("g"), _col("id"), _col("state"), _col("n", "integer")]},
+            {"name": "res", "role": "functional", "key": [_col("g")], "domain": "g",
+             "value": _col("value", "integer"), "conflict_policy": "publish"},
+        ],
+        "rules": [
+            _rule("ms_r", "ms", ["?g", "?id", "?st", "?n"], [_lit("raw", "?g", "?id", "?st", "?n")], stratum="1"),
+            _rule("res_agg", "res", ["?g", "?t"], [_lit("g", "?g")], stratum="2",
+                  aggregates=[{"relation": "ms", "terms": ["?g", "_", "_", "_"],
+                               "function": "sum", "over": "n", "as": "?t", "stratum": "1"}]),
+            _rule("res_other", "res", ["?g", "?n"], [_lit("g", "?g"), _lit("extra", "?g", "?n")], stratum="2"),
+        ],
+    }
+    loaded = checker_rules.load_rules(doc)
+    rows = {
+        "g": [["g1"]],
+        "extra": [],
+        "raw": [["g1", "i1", prop_state, ""]],
+        "ms": [["g1", "i1", prop_state, ""]],
+        "res": [["g1", prop_state, prop_reason, ""]],
+    }
+    manifest, read = _manifest_and_reader(rows)
+    derived = checker_rules.derived_relations(doc, loaded)
+
+    ms_w = {
+        "conclusion": _ref("ms", "g1", "i1", prop_state, ""),
+        "rule_id": "ms_r",
+        "bindings": [{"variable": "?g", "value": "g1"}, {"variable": "?id", "value": "i1"},
+                     {"variable": "?st", "value": prop_state}, {"variable": "?n", "value": ""}],
+        "premises": [{"row": _ref("raw", "g1", "i1", prop_state, ""), "polarity": "positive", "stratum": 0}],
+    }
+    honest_w = {
+        "conclusion": _ref("res", "g1", prop_state, prop_reason, ""),
+        "rule_id": "res_agg",
+        "bindings": [{"variable": "?g", "value": "g1"}],
+        "premises": [{"row": _ref("g", "g1"), "polarity": "positive", "stratum": 0}],
+        "aggregates": [{
+            "relation": "ms", "position": 0, "group_key": encode_key(["g1"]),
+            "count": 1, "contributors_sha256": sha256_json([[encode_key(["g1", "i1", prop_state, ""]), prop_state]]),
+            "result": prop_state,
+        }],
+    }
+    assert check_epoch([ms_w, honest_w], manifest, loaded, read, derived=derived)["valid"]
+
+    # Forged witness cites `res_other` (which did NOT propagate the state!).
+    forged_w = {
+        "conclusion": _ref("res", "g1", prop_state, prop_reason, ""),
+        "rule_id": "res_other",
+        "bindings": [{"variable": "?g", "value": "g1"}],
+        "premises": [{"row": _ref("g", "g1"), "polarity": "positive", "stratum": 0}],
+    }
+    rep = check_epoch([ms_w, forged_w], manifest, loaded, read, derived=derived)
+    assert not rep["valid"]
+    assert "premise_mismatch" in _errors(rep), rep["findings"]
+
