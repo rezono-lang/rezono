@@ -109,17 +109,6 @@ def _write_files(root: Path, files: dict[str, str]) -> None:
         path.write_text(text, encoding="utf-8", newline="\n")
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingRedDecisionGuard,
-    reason=(
-        "extra: decisions/decision-driven-work.md: section 1. Require every added or edited red mark in "
-        "scripts/red_guard.py to cite an existing decisions/<id>.md with a valid YAML head immediately after "
-        "its milestone prefix (stdlib-only validation via decision_citation, has_valid_decision_head and "
-        "review(..., head_tree=...)), and add the monotonically shrinking budget loop/red-decision-budget.json "
-        "covering legacy uncited red marks."
-    ),
-)
 def test_red_guard_refuses_new_or_edited_red_mark_without_headed_decision_and_shrinks_budget(tmp_path):
     import red_guard
     import red_list
