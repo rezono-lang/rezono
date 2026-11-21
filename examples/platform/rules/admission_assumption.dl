@@ -159,3 +159,30 @@ free_cores(pool, free) :-
 .output request_outcome
 .output landed_request
 .output free_cores
+
+// The admission operator reads the ordered request intake, catalog, policy and pool inputs in full.
+may_read("operator", "offered_cores", x) :- offered_cores(x).
+may_read("operator", "outbound_approval", x) :- outbound_approval(x).
+may_read("operator", "pool_cores", x) :- pool_cores(x).
+may_read("operator", "tenant_catalog_item", x) :- tenant_catalog_item(x).
+may_read("operator", "tenant_catalog_offer", x) :- tenant_catalog_offer(x).
+may_read("operator", "tenant_profile", x) :- tenant_profile(x).
+may_read("operator", "tenant_request_connection", x) :- tenant_request_connection(x).
+may_read("operator", "tenant_request_item", x) :- tenant_request_item(x).
+may_read("operator", "tenant_review_decision", x) :- tenant_review_decision(x).
+may_read("operator", "tenant_reviewer", x) :- tenant_reviewer(x).
+may_read("operator", "tenant_service_request", x) :- tenant_service_request(x).
+may_read("operator", "tenant_zone_link", x) :- tenant_zone_link(x).
+
+may_read_full("operator", "offered_cores") :- capability("read").
+may_read_full("operator", "outbound_approval") :- capability("read").
+may_read_full("operator", "pool_cores") :- capability("read").
+may_read_full("operator", "tenant_catalog_item") :- capability("read").
+may_read_full("operator", "tenant_catalog_offer") :- capability("read").
+may_read_full("operator", "tenant_profile") :- capability("read").
+may_read_full("operator", "tenant_request_connection") :- capability("read").
+may_read_full("operator", "tenant_request_item") :- capability("read").
+may_read_full("operator", "tenant_review_decision") :- capability("read").
+may_read_full("operator", "tenant_reviewer") :- capability("read").
+may_read_full("operator", "tenant_service_request") :- capability("read").
+may_read_full("operator", "tenant_zone_link") :- capability("read").
