@@ -74,18 +74,35 @@ def effect_states():
     return set(yaml.safe_load(EFFECT.read_text(encoding="utf-8"))["enums"]["EffectState"]["permissible_values"])
 
 
+def _std_loop_model():
+    from rezono_compiler import pack
+
+    return pack.read(LOOP)
+
+
+def _std_loop_extensible(name):
+    from rezono_compiler import rules as ir
+
+    rel = ir.load(_std_loop_model().rules).relations.get(name)
+    return bool(rel and rel.extend)
+
+
 def test_effects_and_claims_are_declared_once():
-    shared = classes(LOOP / "schema")
-    missing = sorted(set(SHARED) - set(shared))
+    model = _std_loop_model()
+    by_class = {}
+    for kind in model.kinds.values():
+        slots = set(kind.slots)
+        if kind.identifier:
+            slots.add(kind.identifier)
+        by_class[kind.cls] = slots
+    missing = sorted(set(SHARED) - set(by_class))
     if missing:
-        raise MissingSharedKind(f"packs/std-loop/schema lacks {missing}")
+        raise MissingSharedKind(f"packs/std-loop lacks {missing}")
     for name, slots in SHARED.items():
-        attributes = set(shared[name].get("attributes") or {})
-        assert slots <= attributes, (name, sorted(slots - attributes))
+        assert slots <= by_class[name], (name, sorted(slots - by_class[name]))
     states = effect_states()
-    loop_enums = enums(LOOP / "schema")
-    assert "LoopEffectState" in loop_enums, "packs/std-loop/schema lacks the enum LoopEffectState"
-    assert set(loop_enums["LoopEffectState"].get("permissible_values") or {}) == states
+    assert "loop_effect_state" in model.enums, "packs/std-loop lacks the enum LoopEffectState"
+    assert set(model.enums["loop_effect_state"]) == states
     folders = [ROOT / "build" / "schema", ROOT / "epoch" / "schema",
                *sorted(path / "schema" for path in (ROOT / "run" / "packs").iterdir() if path.is_dir())]
     copies = [f"{folder.relative_to(ROOT)}: {name}" for folder in folders if folder.is_dir()
@@ -181,8 +198,8 @@ def gate_records(value):
 
 
 def test_a_derived_refusal_makes_its_step_stuck(tmp_path):
-    if not extensible(LOOP / "rules", "derived_refusal"):
-        raise MissingExtension("packs/std-loop/rules does not declare derived_refusal with // @extend")
+    if not _std_loop_extensible("derived_refusal"):
+        raise MissingExtension("packs/std-loop does not declare derived_refusal as extensible")
     model = shell(tmp_path, "gate-reader", GATE_RULE)
     program, rows, explainer = evaluate(model, gate_records("red"))
     refused = [row for row in rows.get("stuck", set()) if row[:2] == (RUN, "check")]
@@ -237,8 +254,8 @@ EFFECT_CASES = [
 
 
 def test_an_effect_is_attempted_once_per_plan(tmp_path):
-    if not extensible(LOOP / "rules", "effect_permitted"):
-        raise MissingExtension("packs/std-loop/rules does not declare effect_permitted with // @extend")
+    if not _std_loop_extensible("effect_permitted"):
+        raise MissingExtension("packs/std-loop does not declare effect_permitted as extensible")
     model = shell(tmp_path, "effect-reader", PERMIT_RULE)
     for (attempt, readback), planned, pending, confirmed, discarded, state in EFFECT_CASES:
         case = (attempt, readback)

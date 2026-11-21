@@ -7,13 +7,14 @@ import shutil
 import pytest
 import yaml
 
+from model_parity import schema_file
 from rezono_compiler import emit, facts, modules, pack
 from support import FIXTURE, violations
 from test_rezono_module import module
 
 
 ROOT = Path(__file__).resolve().parents[3]
-ORACLE = ROOT / "examples/library/schema/library.yaml"
+ORACLE_REL = "examples/library/schema/library.yaml"
 READER_CASE = ROOT / "rezono/test/reader_cases/conditional_check.json"
 
 
@@ -24,7 +25,7 @@ class MissingConditionalLowering(AssertionError):
 def test_lower_conditional_check(tmp_path):
     legacy = Path(shutil.copytree(FIXTURE, tmp_path / "legacy/minimal"))
     authored = Path(shutil.copytree(FIXTURE, tmp_path / "authored/minimal"))
-    library = yaml.safe_load(ORACLE.read_bytes())
+    library = schema_file(ORACLE_REL)
     original = library["classes"]["Member"]["rules"]
 
     branch = {"attributes": {"id": {"identifier": True}}}

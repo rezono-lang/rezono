@@ -201,15 +201,6 @@ def _load_souffle_oracle_without_compiler() -> dict[str, object]:
     return ns
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "M3: decisions/language-rezono-1.md: checker/rezono_checker/check.py must enforce exact "
-        "reason 'no_match' on 0-candidate functional keys (unless empty_reason is explicitly set) "
-        "and exact ('invalid', 'multiple_values') on >1-candidate conflicts (fix Soufflé oracle, "
-        "checker, and fixtures together; checker/ requires independent pre-land review via p1-read-<sha>)"
-    ),
-)
 def test_checker_enforces_exact_functional_empty_and_conflict_reasons():
     # 1. Default empty_state ('unknown') with no explicit empty_reason: 'no_match' and 'multiple_values' pass.
     doc = _functional_program()

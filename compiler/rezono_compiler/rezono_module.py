@@ -440,6 +440,8 @@ def place_pointers(value: object, at: str = "", member: str = "", *, legacy_meta
             elif member == "memberMetadata":
                 if isinstance(child, dict):
                     yield pointer
+            elif key == "means" and isinstance(child, str) and ("rule" in value or "derived" in value):
+                yield pointer
             elif key not in ("annotations", "prefixes", "fields"):
                 yield from place_pointers(child, pointer, key)
     elif isinstance(value, list):

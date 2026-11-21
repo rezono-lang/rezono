@@ -58,7 +58,13 @@ def test_compiled_conformance_aggregate_refuses_a_nonnumeric_publication_value(t
     (row,) = [row for row in rows if row["$kind"] == kind and row[group_column] == subject]
     assert row[value_column] == case["expect"]["value"]
     (witness,) = [w for w in result.witnesses if w["conclusion"] == {"relation": relation, "key": row["$id"]}]
-    assert row["$why"]["$id"] == publication.witness_uri(witness)
+    # Accept both the legacy opaque URI and the canonical <base>witness/<H> IRI during the transition
+    # of publication.py:328 (decisions/publication-conclusion-addresses.md §5); the strict red test in
+    # publication/tests/test_conclusion_addresses.py requires the canonical IRI exclusively.
+    assert row["$why"]["$id"] in {
+        publication.witness_uri(witness),
+        publication.witness_uri(witness, result.publication_schema),
+    }
     l0.check_schema(result.publication_schema)
     assert l0.read_rows(result.publication_schema, [row]) == [row]
     assert publication.differences(result.publication_schema, result.publication_plan, rows, result.rows) == []
