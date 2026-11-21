@@ -116,7 +116,7 @@ A line is one row: its label, its value with its state, its sign from the key, a
 - A completeness row is a positive premise like any other.
 - A line that is itself a conclusion opens to its own slip, in place.
 - Where an answer stopped at its limit, the slip shows the continuation the answer names.
-- A value whose state is not `known` shows the sign of its state and the message of its reason, and no digit. A total above it shows the state the publication gives that total.
+- A value whose state is not `known` shows the sign of its state and the message of its reason, and no digit. A total above it shows the state the publication gives that total. In particular, an `invalid` value shows the `invalid` status sign (`!`, distinct from `violated` `✕` and `unknown` `▨`) per [the `invalid` status sign decision](std-view-invalid-sign.md).
 
 ## The seal
 

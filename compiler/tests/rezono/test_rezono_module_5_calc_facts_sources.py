@@ -49,25 +49,31 @@ def _calc_pack(tmp_path: Path, name: str, fmt: str, version: str) -> tuple[Path,
 
 
 def test_rezono_module_5_calculation_lowers_to_calc_ir(tmp_path):
+    # rezono 0 keeps lowering calculations to rezono.calc/1 (decisions/language-rezono-1.md section 5.6);
+    # rezono 1 derivations with unit/as-of lower to rezono.rules/2 (test_rezono_1_derived_retires_calc_fallback).
     v0_dir, v0_form = _calc_pack(tmp_path, "calc_v0", rezono_module.IDENTIFIER_FORMAT, "0")
-    v1_dir, v1_form = _calc_pack(tmp_path, "calc_v1", rezono_module.REZONO_1_FORMAT, "1")
-
     assert rezono_calc.has_calculation(v0_form) is True
-    assert rezono_calc.has_calculation(v1_form) is True
+    v0_files = emit.compile_pack(pack.read(v0_dir))
+    assert "ir/calc.json" in v0_files
 
-    # Counter-case: a rezono.module/5 schema-only module carries no calculation.
+    # Counter-case: a rezono.module/5 schema-only module carries no calculation and records language_version "1".
     schema_only = _form(
         rezono_module.REZONO_1_FORMAT,
         {"rezono": "1", "pack": "minimal", "use": [], "decls": [{"kind": "Note", "world": "closed", "slots": [], "derived": []}]},
     )
     assert rezono_calc.has_calculation(schema_only) is False
-
-    v0_files = emit.compile_pack(pack.read(v0_dir))
-    v1_files = emit.compile_pack(pack.read(v1_dir))
-
-    assert "ir/calc.json" in v1_files
-    assert json.loads(v1_files["ir/calc.json"]) == json.loads(v0_files["ir/calc.json"])
-    assert json.loads(v1_files["bundle/schema-bundle.json"])["pack"]["language_version"] == "1"
+    schema_dir = Path(shutil.copytree(FIXTURE, tmp_path / "schema_v1"))
+    rezono_dir = schema_dir / "rezono"
+    rezono_dir.mkdir(exist_ok=True)
+    (rezono_dir / "note.rezono").write_text("rezono 1\npack minimal\n", encoding="utf-8", newline="\n")
+    (rezono_dir / "note.json").write_text(json.dumps(schema_only, sort_keys=True), encoding="utf-8")
+    meta_path = schema_dir / "pack.yaml"
+    meta = yaml.safe_load(meta_path.read_text(encoding="utf-8"))
+    meta["rezono"] = [{"module": "rezono/note.rezono", "form": "rezono/note.json", "layer": "facts"}]
+    meta_path.write_text(yaml.safe_dump(meta, sort_keys=False), encoding="utf-8", newline="\n")
+    schema_files = emit.compile_pack(pack.read(schema_dir))
+    assert "ir/calc.json" not in schema_files
+    assert json.loads(schema_files["bundle/schema-bundle.json"])["pack"]["language_version"] == "1"
 
 
 def _dataset_form(fmt: str, version: str | None, *, spans: list[dict] | None = None) -> dict:
