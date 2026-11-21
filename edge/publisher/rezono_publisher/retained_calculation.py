@@ -136,6 +136,10 @@ def _resolve(st: StoreReader, pin: PinnedSelection, *, context_sha256: str | Non
     compiled = manifest["compiled"]
     [rule_entry] = [entry for entry in compiled if entry["file"] == "ir/rules.json"]
     [calc_entry] = [entry for entry in compiled if entry["file"] == "ir/calc.json"]
+    bundle_entries = [entry for entry in compiled if entry["file"] == "bundle/schema-bundle.json"]
+    if len(bundle_entries) > 1:
+        raise ValueError("duplicate retained schema bundle")
+    bundle_doc = json.loads(verified_bytes(bundle_entries[0])) if bundle_entries else None
     if native_cost is not None:
         definition, provider, currency = native_cost
         if (rule_entry["sha256"], calc_entry["sha256"]) != (definition.rules_sha256, definition.calc_sha256):
@@ -152,8 +156,8 @@ def _resolve(st: StoreReader, pin: PinnedSelection, *, context_sha256: str | Non
         raise ValueError("missing or duplicate complete checker snapshots")
     [entry] = [w for w in manifest["witnesses"] if w["role"] == "checker"]
     proof = json.loads(verified_bytes(entry))
-    rules = load_rules(rule_doc)
-    check_calc_bindings(rule_doc, rules, calc_doc)
+    rules = load_rules(rule_doc, bundle=bundle_doc)
+    check_calc_bindings(rule_doc, rules, calc_doc, bundle=bundle_doc)
     # The manifest names the trusted context and the index its epoch was admitted with; the authority is the
     # caller's own pin of the context hash. They must agree, and the context must be a retained observation:
     # the checker then admits again from exactly those bytes. Without them nothing is admitted, and a protected

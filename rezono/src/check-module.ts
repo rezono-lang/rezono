@@ -143,6 +143,7 @@ function buildModuleSchema(module: Module, extraSymbols?: Record<string, string>
 		world?: SlotDecl['world'],
 		inverse?: string,
 		derived = false,
+		personal = false,
 	): SlotDef => {
 		ensureMoneyType(typeName);
 		const base: SlotDef = kindNames.has(typeName)
@@ -151,6 +152,7 @@ function buildModuleSchema(module: Module, extraSymbols?: Record<string, string>
 		if (world) base.world = world;
 		if (inverse) base.inverse = inverse.includes('.') ? inverse.split('.').pop()! : inverse;
 		if (derived) base.derived = true;
+		if (personal) base.personal = true;
 		return base;
 	};
 
@@ -172,7 +174,7 @@ function buildModuleSchema(module: Module, extraSymbols?: Record<string, string>
 		} else if ('kind' in decl) {
 			const slots: Record<string, SlotDef> = {};
 			for (const s of decl.slots) {
-				slots[s.slot] = slotDefFor(s.type, s.card, s.world, s.inverse, false);
+				slots[s.slot] = slotDefFor(s.type, s.card, s.world, s.inverse, false, Boolean(s.personal));
 			}
 			for (const d of decl.derived) {
 				slots[d.derived] = slotDefFor(d.type, d.card, undefined, undefined, true);
@@ -199,7 +201,7 @@ function buildModuleSchema(module: Module, extraSymbols?: Record<string, string>
 			const k = kinds[decl.extend];
 			if (k) {
 				for (const s of decl.slots ?? []) {
-					k.slots[s.slot] = slotDefFor(s.type, s.card, s.world, s.inverse, false);
+					k.slots[s.slot] = slotDefFor(s.type, s.card, s.world, s.inverse, false, Boolean(s.personal));
 				}
 				for (const d of decl.derived) {
 					k.slots[d.derived] = slotDefFor(d.type, d.card, undefined, undefined, true);
@@ -395,7 +397,7 @@ export function checkModule(text: string, options?: CheckModuleOptions): FormOf 
 	}
 
 	const { schema, relations, kindNames } = buildModuleSchema(module, options?.symbols);
-	const t = typing(text, schema, spans, { rezono1: true, relations });
+	const t = typing(text, schema, spans, { rezono1: true, relations, forbidPersonal: true });
 	const baseFactIds = collectBaseFactIds(module, schema);
 
 	const checkDerivedExpr = (expr: Expr, expectedTy: Ty, expectedSet: boolean): void => {
@@ -788,7 +790,7 @@ export function checkModule(text: string, options?: CheckModuleOptions): FormOf 
 			if (decl.per && schema.kinds[decl.per]) t.element(decl.per, checkParamBody);
 			else checkParamBody();
 		} else if ('check' in decl) {
-			const st = typing(text, schema, spans, { rezono1: true, relations });
+			const st = typing(text, schema, spans, { rezono1: true, relations, forbidPersonal: true });
 			st.statement(decl);
 			t.found.push(...st.found);
 		} else if ('step' in decl) {

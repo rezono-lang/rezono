@@ -53,7 +53,8 @@ from .calc import sources as calc_sources
 from .canon import CalcColumnType, calc_value, encode_key
 from .evidence import PROTECTED
 from .check import _check_witness, _rows, shaped
-from .rules import load_rules
+from .refusals import RefusalError
+from .rules import check_calc_personal_slots, check_doc_personal_slots, load_rules
 from .snapshots import read_rows
 from .variant_access import check_variant_status_readers as check_variant_status_readers
 
@@ -532,6 +533,12 @@ def check_role(role: str, complete: dict, snapshots: dict, claimed_full, bundle:
         kinds, parents, columns = _schema_from_bundle(bundle, doc)
     except ValueError as err:
         return frozenset(), [{"reason": "malformed_bundle", "detail": str(err), "severity": "error"}]
+    try:
+        check_doc_personal_slots(doc, bundle)
+        if calc_ir is not None:
+            check_calc_personal_slots(calc_ir, bundle)
+    except RefusalError as err:
+        return frozenset(), [{"reason": err.refusal.code, **err.refusal.arguments, "severity": "error"}]
     findings: list[dict] = []
 
     def rows(snaps: dict, whose: str) -> dict:

@@ -28,6 +28,7 @@ from dataclasses import dataclass
 import re
 
 from .canon import INTEGER, CalcColumnType
+from .refusals import Refusal, RefusalError
 
 FORMATS = ("rezono.rules/1", "rezono.rules/2")
 FUNCTIONS = ("count", "sum", "min", "max")
@@ -384,53 +385,53 @@ def _check_access_boundary(rules: Rules) -> None:
 def personal_tables(bundle: dict) -> dict[str, str]:
     """The attribute tables marked `personal: true` in a schema bundle (`{table: slot_id}`).
 
-    Independent defense in depth (decisions/personal-data-handling.md §3): fails closed on
-    malformed bundle sections, non-boolean `personal` flags, personal arrows, or personal
-    attributes without a consistent table name. Raises ValueError.
+    Independent defense in depth (decisions/personal-data-handling.md §3): fails closed with
+    registered checker refusals (`RefusalError`) on malformed bundle sections, non-boolean
+    `personal` flags, personal arrows, or personal attributes without a consistent table name.
     """
     if not isinstance(bundle, dict):
-        raise ValueError("schema bundle must be a mapping")
+        raise RefusalError(Refusal("malformed_bundle"))
     raw_kinds = bundle.get("kinds")
     if raw_kinds is not None and not isinstance(raw_kinds, list):
-        raise ValueError("schema bundle kinds must be a list")
+        raise RefusalError(Refusal("bundle_section_malformed", field="kinds"))
     kind_tables: dict[str, str] = {}
     for entry in raw_kinds or ():
         if not isinstance(entry, dict):
-            raise ValueError("schema bundle kind must be a mapping")
+            raise RefusalError(Refusal("bundle_section_malformed", field="kinds"))
         kid = entry.get("id")
         if isinstance(kid, str) and kid:
             ktable = entry.get("table", kid)
             if not isinstance(ktable, str) or not ktable:
-                raise ValueError(f"kind {kid!r}: table must be a non-empty string")
+                raise RefusalError(Refusal("bundle_section_malformed", field="kinds"))
             kind_tables[kid] = ktable
 
     raw_arrows = bundle.get("arrows")
     if raw_arrows is not None and not isinstance(raw_arrows, list):
-        raise ValueError("schema bundle arrows must be a list")
+        raise RefusalError(Refusal("bundle_section_malformed", field="arrows"))
     non_personal_tables: set[str] = set()
     for entry in raw_arrows or ():
         if not isinstance(entry, dict):
-            raise ValueError("schema bundle arrow must be a mapping")
+            raise RefusalError(Refusal("bundle_section_malformed", field="arrows"))
+        arrow_name = str(entry.get("id") or entry.get("table") or "arrow")
         if "personal" in entry:
             if type(entry["personal"]) is not bool:
-                raise ValueError(f"arrow {entry.get('id', entry.get('table', ''))!r}: personal must be a boolean")
+                raise RefusalError(Refusal("bundle_personal_flag_invalid", relation=arrow_name))
             if entry["personal"]:
-                raise ValueError(f"arrow {entry.get('id', entry.get('table', ''))!r}: arrows cannot be marked personal")
+                raise RefusalError(Refusal("bundle_personal_arrow", relation=arrow_name))
         if isinstance(entry.get("table"), str) and entry["table"]:
             non_personal_tables.add(entry["table"])
 
     raw_attrs = bundle.get("attributes")
     if raw_attrs is not None and not isinstance(raw_attrs, list):
-        raise ValueError("schema bundle attributes must be a list")
+        raise RefusalError(Refusal("bundle_section_malformed", field="attributes"))
     tables: dict[str, str] = {}
     for entry in raw_attrs or ():
         if not isinstance(entry, dict):
-            raise ValueError("schema bundle attribute must be a mapping")
+            raise RefusalError(Refusal("bundle_section_malformed", field="attributes"))
+        attr_name = str(entry.get("id") or entry.get("table") or "attribute")
         has_personal = "personal" in entry
         if has_personal and type(entry["personal"]) is not bool:
-            raise ValueError(
-                f"attribute {entry.get('id', entry.get('table', ''))!r}: personal must be a boolean"
-            )
+            raise RefusalError(Refusal("bundle_personal_flag_invalid", relation=attr_name))
         raw_table = entry.get("table")
         kind = entry.get("kind")
         name = entry.get("name")
@@ -447,17 +448,14 @@ def personal_tables(bundle: dict) -> dict[str, str]:
             continue
         if "table" in entry:
             if not isinstance(raw_table, str) or not raw_table:
-                raise ValueError(f"personal attribute {entry.get('id', '')!r}: table must be a non-empty string")
+                raise RefusalError(Refusal("bundle_personal_table_invalid", relation=attr_name))
             if derived_table is not None and raw_table != derived_table:
-                raise ValueError(
-                    f"personal attribute {entry.get('id', raw_table)!r}: table {raw_table!r} "
-                    f"does not match {derived_table!r}"
-                )
+                raise RefusalError(Refusal("bundle_personal_table_invalid", relation=attr_name))
             table = raw_table
         elif derived_table is not None:
             table = derived_table
         else:
-            raise ValueError(f"personal attribute {entry.get('id', '')!r}: missing table or kind/name")
+            raise RefusalError(Refusal("bundle_personal_table_invalid", relation=attr_name))
         label = (
             entry["id"]
             if isinstance(entry.get("id"), str) and entry["id"]
@@ -473,42 +471,134 @@ def personal_tables(bundle: dict) -> dict[str, str]:
 
 
 def check_personal_slots(rules: dict, bundle: dict) -> None:
-    """Refuse any rule whose head, body, aggregate, or functional domain references a personal attribute
-    table from `bundle` (`bundle/schema-bundle.json`, decisions/personal-data-handling.md §3, R054).
-    Raises ValueError."""
+    """Refuse any loaded rule whose head, body, aggregate, or functional domain references a personal
+    attribute table from `bundle` (`bundle/schema-bundle.json`, decisions/personal-data-handling.md §3).
+    Raises RefusalError."""
     personal = personal_tables(bundle)
     if not personal:
         return
     for func in sorted(getattr(rules, "functionals", {}).values(), key=lambda f: f.name):
         if func.domain in personal:
-            slot = personal[func.domain]
-            raise ValueError(
-                f"{func.name}: functional domain cannot read personal slot `{slot}` ({func.domain}) (R054)"
+            raise RefusalError(
+                Refusal("personal_slot_in_functional_domain", relation=func.name, field=personal[func.domain])
             )
     for rule in sorted(rules.values(), key=lambda r: r.id):
         if rule.head.relation in personal:
-            slot = personal[rule.head.relation]
-            raise ValueError(
-                f"{rule.id}: rule cannot reference personal slot `{slot}` ({rule.head.relation}) (R054)"
+            raise RefusalError(
+                Refusal("personal_slot_in_rule", rule=rule.id, relation=rule.head.relation,
+                        field=personal[rule.head.relation])
             )
         for b in rule.body:
             if b.atom.relation in personal:
-                slot = personal[b.atom.relation]
-                raise ValueError(
-                    f"{rule.id}: rule cannot read personal slot `{slot}` ({b.atom.relation}) (R054)"
+                raise RefusalError(
+                    Refusal("personal_slot_in_rule", rule=rule.id, relation=b.atom.relation,
+                            field=personal[b.atom.relation])
                 )
         for a in rule.aggregates:
             if a.atom.relation in personal:
-                slot = personal[a.atom.relation]
-                raise ValueError(
-                    f"{rule.id}: rule cannot read personal slot `{slot}` ({a.atom.relation}) (R054)"
+                raise RefusalError(
+                    Refusal("personal_slot_in_rule", rule=rule.id, relation=a.atom.relation,
+                            field=personal[a.atom.relation])
+                )
+
+
+def check_doc_personal_slots(doc: dict, bundle: dict) -> None:
+    """Refuse any raw rule IR document whose rules or functional domains reference a personal attribute
+    table from `bundle` (`bundle/schema-bundle.json`). Works on both full and minimal rule documents,
+    independently of `load_rules`. Raises RefusalError."""
+    personal = personal_tables(bundle)
+    if not isinstance(doc, dict):
+        raise RefusalError(Refusal("rule_ir_malformed", field="document"))
+    raw_relations = doc.get("relations", ())
+    if raw_relations is not None and not isinstance(raw_relations, (list, tuple)):
+        raise RefusalError(Refusal("rule_ir_malformed", field="relations"))
+    raw_rules = doc.get("rules", ())
+    if raw_rules is not None and not isinstance(raw_rules, (list, tuple)):
+        raise RefusalError(Refusal("rule_ir_malformed", field="rules"))
+    if not personal:
+        return
+    for rel in raw_relations or ():
+        if not isinstance(rel, dict):
+            raise RefusalError(Refusal("rule_ir_malformed", field="relations"))
+        if rel.get("role") == "functional":
+            domain = rel.get("domain")
+            if isinstance(domain, str) and domain in personal:
+                rname = str(rel.get("name") or "functional")
+                raise RefusalError(
+                    Refusal("personal_slot_in_functional_domain", relation=rname, field=personal[domain])
+                )
+    for rule in raw_rules or ():
+        if not isinstance(rule, dict):
+            raise RefusalError(Refusal("rule_ir_malformed", field="rules"))
+        rid = str(rule.get("id") or "rule")
+        head = rule.get("head")
+        if isinstance(head, dict):
+            hrel = head.get("relation")
+            if isinstance(hrel, str) and hrel in personal:
+                raise RefusalError(
+                    Refusal("personal_slot_in_rule", rule=rid, relation=hrel, field=personal[hrel])
+                )
+        for section in ("body", "aggregates"):
+            atoms = rule.get(section, ())
+            if atoms is not None and not isinstance(atoms, (list, tuple)):
+                raise RefusalError(Refusal("rule_ir_malformed", field=section))
+            for atom in atoms or ():
+                if not isinstance(atom, dict):
+                    raise RefusalError(Refusal("rule_ir_malformed", field=section))
+                rel = atom.get("relation")
+                if isinstance(rel, str) and rel in personal:
+                    raise RefusalError(
+                        Refusal("personal_slot_in_rule", rule=rid, relation=rel, field=personal[rel])
+                    )
+
+
+def check_calc_personal_slots(calculation: dict, bundle: dict) -> None:
+    """Refuse any calculation IR (`ir/calc.json`) whose bindings (`facts`, `inputs`, `parameters`,
+    `parameter_choice`, or `subject_table`) reference a personal attribute table from `bundle`
+    (`bundle/schema-bundle.json`, decisions/personal-data-handling.md §3). Raises RefusalError."""
+    personal = personal_tables(bundle)
+    if not isinstance(calculation, dict):
+        raise RefusalError(Refusal("calc_ir_malformed", field="calculation"))
+    for field_name in ("subject_table", "parameters"):
+        value = calculation.get(field_name)
+        if value is not None and not isinstance(value, str):
+            raise RefusalError(Refusal("calc_ir_malformed", field=field_name))
+        if isinstance(value, str) and value in personal:
+            raise RefusalError(Refusal("personal_slot_in_calculation", field=field_name, relation=value))
+    for mapping_name in ("parameter_choice", "inputs"):
+        mapping = calculation.get(mapping_name)
+        if mapping is None:
+            continue
+        if not isinstance(mapping, dict):
+            raise RefusalError(Refusal("calc_ir_malformed", field=mapping_name))
+        for role, table in sorted(mapping.items(), key=lambda kv: str(kv[0])):
+            if not isinstance(role, str) or (table is not None and not isinstance(table, str)):
+                raise RefusalError(Refusal("calc_ir_malformed", field=mapping_name))
+            if isinstance(table, str) and table in personal:
+                raise RefusalError(
+                    Refusal("personal_slot_in_calculation", field=f"{mapping_name}.{role}", relation=table)
+                )
+    raw_facts = calculation.get("facts")
+    if raw_facts is not None:
+        if not isinstance(raw_facts, list):
+            raise RefusalError(Refusal("calc_ir_malformed", field="facts"))
+        for fact in raw_facts:
+            if not isinstance(fact, dict):
+                raise RefusalError(Refusal("calc_ir_malformed", field="facts"))
+            table = fact.get("table")
+            if table is not None and not isinstance(table, str):
+                raise RefusalError(Refusal("calc_ir_malformed", field="facts"))
+            if isinstance(table, str) and table in personal:
+                fid = fact.get("id") if isinstance(fact.get("id"), str) and fact.get("id") else table
+                raise RefusalError(
+                    Refusal("personal_slot_in_calculation", field=f"facts.{fid}", relation=table)
                 )
 
 
 def load_rules(doc: dict, *, bundle: dict | None = None) -> dict:
     """Read rule definitions and check their stratification. When `bundle` (`bundle/schema-bundle.json`)
-    is given, also refuse any rule referencing an attribute marked `personal: true` (R054).
-    Raises ValueError on bad input."""
+    is given, also refuse any rule referencing an attribute marked `personal: true`.
+    Raises ValueError (or RefusalError) on bad input."""
     fmt = doc.get("format")
     ir = fmt is not None
     if ir and fmt not in FORMATS:
@@ -736,8 +826,15 @@ def check_worlds(doc: dict, rules: dict) -> dict:
     return worlds
 
 
-def check_calc_bindings(doc: dict, rules: dict, calculation: dict | None) -> None:
-    """Verify the rule-to-calculation boundary from both IRs, independently of the compiler."""
+def check_calc_bindings(doc: dict, rules: dict, calculation: dict | None, *, bundle: dict | None = None) -> None:
+    """Verify the rule-to-calculation boundary from both IRs, independently of the compiler.
+    When `bundle` (`bundle/schema-bundle.json`) is given, also refuse any calculation binding
+    referencing an attribute marked `personal: true`."""
+    if bundle is not None:
+        if calculation is not None:
+            check_calc_personal_slots(calculation, bundle)
+        else:
+            personal_tables(bundle)
     declarations = doc.get("relations", ())
     inputs = {r["name"]: r for r in declarations if r.get("role") == "calc"}
     program = calculation or {}

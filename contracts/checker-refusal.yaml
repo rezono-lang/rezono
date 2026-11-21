@@ -72,10 +72,35 @@ enums:
         annotations:
           arguments: relation rule bound count key bindings
           scope: epoch
+      bundle_personal_arrow:
+        description: An arrow entry in the compiled schema bundle is marked personal, which is forbidden.
+        annotations:
+          arguments: relation
+          scope: epoch
+      bundle_personal_flag_invalid:
+        description: A slot entry in the compiled schema bundle carries a non-boolean personal flag.
+        annotations:
+          arguments: relation
+          scope: epoch
+      bundle_personal_table_invalid:
+        description: A personal attribute in the compiled schema bundle lacks a valid or consistent table name.
+        annotations:
+          arguments: relation
+          scope: epoch
+      bundle_section_malformed:
+        description: A top-level section of the compiled schema bundle has an invalid shape.
+        annotations:
+          arguments: field
+          scope: epoch
       calc_invalid:
         description: A calculation witness failed verification.
         annotations:
           arguments: witness relation key
+          scope: epoch
+      calc_ir_malformed:
+        description: A field of the calculation IR document has an invalid shape.
+        annotations:
+          arguments: field
           scope: epoch
       calc_leaf:
         description: A leaf step of a calculation witness does not match its snapshot or parameter row.
@@ -602,6 +627,21 @@ enums:
         annotations:
           arguments: kind key
           scope: role
+      personal_slot_in_calculation:
+        description: A calculation IR binding references a table belonging to a personal attribute.
+        annotations:
+          arguments: field relation
+          scope: epoch
+      personal_slot_in_functional_domain:
+        description: A functional derivation declares a personal attribute table as its domain.
+        annotations:
+          arguments: relation field
+          scope: epoch
+      personal_slot_in_rule:
+        description: A rule references a table belonging to a personal attribute.
+        annotations:
+          arguments: rule relation field
+          scope: epoch
       piece_bounds_mismatch:
         description: "A child piece's first and last keys do not match the bounds declared in its parent."
         annotations:
@@ -862,6 +902,11 @@ enums:
         annotations:
           arguments: relation
           scope: role
+      rule_ir_malformed:
+        description: A field of the rule IR document has an invalid shape.
+        annotations:
+          arguments: field
+          scope: epoch
       seal_bad_date:
         description: A seal relation row has a malformed date.
         annotations:
