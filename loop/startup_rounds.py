@@ -337,7 +337,8 @@ def load_startup_topology(
     ):
         for table, rows in compiler_facts.load(model, sig_facts).items():
             fact_rows.setdefault(table, []).extend(rows)
-    port_decisions = facts_dir / "port_decision.yaml"
+    sibling_dir = facts_dir if resolved_facts.parent == facts_dir.resolve() else resolved_facts.parent
+    port_decisions = sibling_dir / "port_decision.yaml"
     if (
         port_decisions.is_file()
         and resolved_facts != port_decisions.resolve()
@@ -346,7 +347,7 @@ def load_startup_topology(
         for table, rows in compiler_facts.load(model, port_decisions).items():
             fact_rows.setdefault(table, []).extend(rows)
     if "vendor_default_transport_source" not in fact_rows:
-        for transport_file in sorted(facts_dir.glob("*_transport_source.yaml")):
+        for transport_file in sorted(sibling_dir.glob("*_transport_source.yaml")):
             if resolved_facts == transport_file.resolve():
                 continue
             for table, rows in compiler_facts.load(model, transport_file).items():
