@@ -7,7 +7,7 @@ import { canonicalJson } from '../../../viewer/src/lib/canon.ts';
 import { ask as trace, AskError, calcSteps, memoryGraph, parseAfter, questionOf, stepsOf, type RuleDoc, type Sources, type SourcesOf } from './ask.ts';
 import { catalogueQueryScope } from './catalogue-query.ts';
 import { roleBundle } from './catalogue.ts';
-import { matchKindConclusionIri, parsePinnedIri, pinIri } from './conclusion-address.ts';
+import { isWitnessIri, matchKindConclusionIri, parsePinnedIri, pinIri } from './conclusion-address.ts';
 import { readPublishedVariantDifference, scenarioAnswer, type DifferenceCursor } from './difference.ts';
 import { ask as evaluate, roleSchema, type Asking } from './expr.ts';
 import { compareKey, pageByKey, type KeyRange } from './pieces.ts';
@@ -26,6 +26,7 @@ const ROW_LIMIT = 25_000;
 const PAIR_LIMIT = 2048;
 const EVALUATION_STEPS = 250_000;
 const SHA256 = /^[0-9a-f]{64}$/;
+const DATASET_ID = /^d-[0-9a-f]{64}$/;
 const MAIN = /^m-[0-9]+$/;
 const SAFE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 const WITNESS_CHECK = 'rezono:proofs';
@@ -257,6 +258,26 @@ async function readableSnapshots(view: Current): Promise<Snapshot[]> {
 		}
 	}
 	return readable;
+}
+
+async function readPublishedDataset(view: Current, pack: string, role: string): Promise<string | undefined> {
+	const index = await view.read(`${pack}/${view.manifest.id}/${role}/publication/index.json`, undefined, true);
+	if (index === undefined) return undefined;
+	if (!record(index) || index.format !== 'rezono.publication-form/1' || index.pack !== pack || index.role !== role
+		|| !record(index.manifest) || index.manifest.id !== view.manifest.id || index.manifest.epoch !== view.manifest.epoch
+		|| typeof index.dataset !== 'string' || !DATASET_ID.test(index.dataset)
+		|| !Array.isArray(index.sources)) {
+		fault();
+	}
+	const expected = [...view.snaps.values()]
+		.map(({ relation, sha256 }) => ({ relation, sha256 }))
+		.sort((a, b) => (a.relation < b.relation ? -1 : a.relation > b.relation ? 1 : 0));
+	if (index.sources.length !== expected.length) fault();
+	for (let i = 0; i < expected.length; i++) {
+		const got = index.sources[i];
+		if (!record(got) || got.relation !== expected[i]!.relation || got.sha256 !== expected[i]!.sha256) fault();
+	}
+	return index.dataset;
 }
 
 function listed(view: Current) {
@@ -512,9 +533,25 @@ export async function openLocalGate(root: string, role: string): Promise<Handle>
 			if (parts.length === 2 && id === 'manifests') {
 				const withdrawnCurrent = epochWithdrawal(withdrawals, current.manifest.id);
 				if (withdrawnCurrent) return gone(withdrawnCurrent);
-				const headKeys = await store.list(pack + '/heads/', { limit: LIMIT });
-				const items: { id: string; epoch: number; knowledge_time: string; manifest_sha256: string; witness_check?: WitnessCheckStatus }[] = [];
 				const prefix = pack + '/heads/';
+				const headKeys: string[] = [];
+				let after: string | undefined;
+				for (;;) {
+					const page = await store.list(prefix, { limit: LIMIT, ...(after !== undefined && { after }) });
+					headKeys.push(...page);
+					if (page.length < LIMIT) break;
+					after = page[page.length - 1];
+				}
+				const items: {
+					id: string;
+					epoch: number;
+					knowledge_time: string;
+					manifest_sha256: string;
+					standing: 'current' | 'superseded' | 'withdrawn';
+					dataset?: string;
+					witness_check?: WitnessCheckStatus;
+					withdrawal?: ReturnType<typeof withdrawalBody>['withdrawal'];
+				}[] = [];
 				for (const hk of headKeys) {
 					if (!hk.startsWith(prefix) || !hk.endsWith('.json')) continue;
 					const digits = hk.slice(prefix.length, -5);
@@ -523,13 +560,28 @@ export async function openLocalGate(root: string, role: string): Promise<Handle>
 					if (!Number.isSafeInteger(epochNum) || epochNum < 0 || epochNum > current.manifest.epoch) continue;
 					const candidate = epochNum === current.manifest.epoch ? current : await source.current('m-' + epochNum);
 					if (!candidate) continue;
-					if (epochWithdrawal(withdrawals, candidate.manifest.id)) continue;
+					const withdrawn = epochWithdrawal(withdrawals, candidate.manifest.id);
+					if (withdrawn) {
+						items.push({
+							id: candidate.manifest.id,
+							epoch: candidate.manifest.epoch,
+							knowledge_time: candidate.manifest.knowledge_time,
+							manifest_sha256: candidate.manifestSha256,
+							standing: 'withdrawn',
+							withdrawal: withdrawalBody(withdrawn).withdrawal,
+							...(candidate.witnessCheck !== undefined && { witness_check: candidate.witnessCheck })
+						});
+						continue;
+					}
 					if (candidate !== current && !await stillReadable(candidate, current)) continue;
+					const dataset = await readPublishedDataset(candidate, pack, role);
 					items.push({
 						id: candidate.manifest.id,
 						epoch: candidate.manifest.epoch,
 						knowledge_time: candidate.manifest.knowledge_time,
 						manifest_sha256: candidate.manifestSha256,
+						standing: candidate === current ? 'current' : 'superseded',
+						...(dataset !== undefined && { dataset }),
 						...(candidate.witnessCheck !== undefined && { witness_check: candidate.witnessCheck })
 					});
 				}
@@ -544,9 +596,7 @@ export async function openLocalGate(root: string, role: string): Promise<Handle>
 				let targetView = current;
 				if (iriPin?.manifest && iriPin.manifest !== current.manifest.id) {
 					const earlier = await source.current(iriPin.manifest);
-					if (!earlier || earlier.manifest.epoch >= current.manifest.epoch) {
-						throw new AskError(409, 'pin does not match publication');
-					}
+					if (!earlier || earlier.manifest.epoch >= current.manifest.epoch) return missing();
 					const withdrawn = epochWithdrawal(withdrawals, earlier.manifest.id);
 					if (withdrawn) return gone(withdrawn);
 					if (!await stillReadable(earlier, current)) return missing();
@@ -555,10 +605,15 @@ export async function openLocalGate(root: string, role: string): Promise<Handle>
 					const withdrawn = epochWithdrawal(withdrawals, current.manifest.id);
 					if (withdrawn) return gone(withdrawn);
 				}
-				if (iriPin && iriPin.dataset !== targetView.manifestSha256) {
+				const publishedDataset = await readPublishedDataset(targetView, pack, role);
+				if (iriPin && publishedDataset !== iriPin.dataset) {
 					throw new AskError(409, 'pin does not match publication');
 				}
-				const matched = matchKindConclusionIri(targetView.bundle, new Set(targetView.snaps.keys()), unpinnedIri);
+				const schemaView = roleSchema(targetView.bundle, [...targetView.snaps.values()]);
+				if (isWitnessIri(schemaView.schema.base, unpinnedIri)) {
+					return json({ error: 'witness IRI resolution is not implemented' }, 501);
+				}
+				const matched = matchKindConclusionIri(schemaView, unpinnedIri);
 				if (!matched) return missing();
 				const rows = await targetView.rows(matched.relation);
 				const found = rows.find((r) =>
@@ -570,10 +625,13 @@ export async function openLocalGate(root: string, role: string): Promise<Handle>
 				const withdrawnRow = rowWithdrawal(withdrawals, targetView.manifest.id, matched.relation, found.key);
 				if (withdrawnRow) return gone(withdrawnRow);
 				if (targetView !== current && await source.latest() !== headKey(pack, current.manifest.epoch)) return missing();
-				const pinnedIri = pinIri(unpinnedIri, { manifest: targetView.manifest.id, dataset: targetView.manifestSha256 });
+				const pinnedIri = publishedDataset !== undefined
+					? pinIri(unpinnedIri, { manifest: targetView.manifest.id, dataset: publishedDataset })
+					: undefined;
 				return json({
 					iri: unpinnedIri,
-					pinned_iri: pinnedIri,
+					...(publishedDataset !== undefined && { dataset: publishedDataset }),
+					...(pinnedIri !== undefined && { pinned_iri: pinnedIri }),
 					manifest: targetView.manifest.id,
 					epoch: targetView.manifest.epoch,
 					manifest_sha256: targetView.manifestSha256,

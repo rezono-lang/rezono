@@ -1,12 +1,15 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
+import type { Schema } from '../../../rezono/src/index.ts';
+import { AskError } from '../src/ask.ts';
 import {
-	canonicalWitnessIri,
 	conclusionIri,
+	isWitnessIri,
 	parsePinnedIri,
 	pinIri,
 	spellSegment,
@@ -14,206 +17,370 @@ import {
 } from '../src/conclusion-address.ts';
 import { openLocalGate } from '../src/local.ts';
 
-const PACK = 'flow-drift';
-const BASE = 'https://rezono.org/example/flow-drift/';
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
+const VECTORS_PATH = join(REPO_ROOT, 'contracts/fixtures/conclusion-address-vectors.json');
 
-const SCHEMA = {
-	pack: { id: PACK, base: BASE },
-	kinds: [
-		{ id: 'service', class: 'Service', world: 'closed' }
-	],
-	relations: [
-		{ id: 'flow_drift', world: 'closed', columns: [{ name: 'run', type: 'text' }] },
-		{ id: 'complete_sweep', world: 'closed', columns: [{ name: 'run', type: 'text' }] }
-	],
-	attributes: [],
-	enums: [],
-	questions: []
-};
+const PACK = 'demo';
+const BASE = 'https://rezono.example/demo/';
 
-async function buildFlowDriftStore() {
-	const root = await mkdtemp(join(tmpdir(), 'gate-conclusion-'));
-	const write = async (key: string, value: unknown) => {
-		const path = join(root, key);
-		await mkdir(dirname(path), { recursive: true });
-		const bytes = JSON.stringify(value);
-		await writeFile(path, bytes);
-		return createHash('sha256').update(bytes).digest('hex');
-	};
-	const object = async (data: unknown) => {
-		const sha256 = createHash('sha256').update(JSON.stringify(data)).digest('hex');
-		const key = PACK + '/objects/' + sha256 + '.json';
-		await write(key, data);
-		return { uri: 's3://test-store/' + key, sha256 };
-	};
-	const bundleKey = PACK + '/bundles/schema-bundle.json';
-	const bundleSha = await write(bundleKey, SCHEMA);
+const sha256 = (bytes: string) => createHash('sha256').update(bytes).digest('hex');
 
-	const serviceRow = { key: ['svc-gw'] };
-	const driftRowMatched = {
-		key: ['run-1', 'hubble', 'win-1', 'svc-gw', 'svc-auth', 'tcp', '443', 'matched', 'valid', 'allow/1', 'obs/1']
-	};
-	const driftRowExcess = {
-		key: ['run-1', 'hubble', 'win-1', 'svc-orders', 'svc-secrets', 'tcp', '8200', 'excess', 'violated', 'policy/base', 'obs/2']
-	};
-	const sweepRow = {
-		key: ['run-1', 'hubble', 'win-1', 'sweep/win-1']
-	};
-
-	const witness = await object({ witnesses: [], hidden: [] });
-
-	// Epoch 1: operator sees service + both matched & excess + complete_sweep; tenant sees only service & matched (zero leak).
-	const m1 = {
-		id: 'm-1',
-		epoch: 1,
-		access_semantics: 2,
-		knowledge_time: '2026-11-20T21:00:00Z',
-		definition_sha256: bundleSha,
-		checks: [{ name: 'rezono:proofs', status: 'green' }],
-		snapshots: [
-			{ relation: 'service', role: 'operator', complete: true, full: true, format: 'json', ...(await object([serviceRow])) },
-			{ relation: 'flow_drift', role: 'operator', complete: true, full: true, format: 'json', ...(await object([driftRowMatched, driftRowExcess])) },
-			{ relation: 'complete_sweep', role: 'operator', complete: true, full: true, format: 'json', ...(await object([sweepRow])) },
-			{ relation: 'service', role: 'tenant', complete: false, full: false, format: 'json', ...(await object([serviceRow])) },
-			{ relation: 'flow_drift', role: 'tenant', complete: false, full: false, format: 'json', ...(await object([driftRowMatched])) }
-		],
-		witnesses: [
-			{ role: 'operator', ...witness },
-			{ role: 'tenant', ...witness }
-		],
-		compiled: [{ file: 'bundle/schema-bundle.json', uri: 's3://test-store/' + bundleKey, sha256: bundleSha }]
-	};
-	const m1Sha = await write(PACK + '/manifests/m-1.json', m1);
-	await write(PACK + '/heads/' + (10n ** 19n - 1n - 1n).toString().padStart(19, '0') + '.json', {
-		format: 'rezono.head/1', manifest: 'm-1', epoch: 1, sha256: m1Sha
-	});
-
-	// Epoch 2: drift resolved for operator; tenant still sees service & matched row.
-	const m2 = {
-		id: 'm-2',
-		epoch: 2,
-		access_semantics: 2,
-		knowledge_time: '2026-11-20T21:40:00Z',
-		definition_sha256: bundleSha,
-		checks: [{ name: 'rezono:proofs', status: 'green' }],
-		snapshots: [
-			{ relation: 'service', role: 'operator', complete: true, full: true, format: 'json', ...(await object([serviceRow])) },
-			{ relation: 'flow_drift', role: 'operator', complete: true, full: true, format: 'json', ...(await object([driftRowMatched])) },
-			{ relation: 'complete_sweep', role: 'operator', complete: true, full: true, format: 'json', ...(await object([sweepRow])) },
-			{ relation: 'service', role: 'tenant', complete: false, full: false, format: 'json', ...(await object([serviceRow])) },
-			{ relation: 'flow_drift', role: 'tenant', complete: false, full: false, format: 'json', ...(await object([driftRowMatched])) }
-		],
-		witnesses: [
-			{ role: 'operator', ...witness },
-			{ role: 'tenant', ...witness }
-		],
-		compiled: [{ file: 'bundle/schema-bundle.json', uri: 's3://test-store/' + bundleKey, sha256: bundleSha }]
-	};
-	const m2Sha = await write(PACK + '/manifests/m-2.json', m2);
-	await write(PACK + '/heads/' + (10n ** 19n - 1n - 2n).toString().padStart(19, '0') + '.json', {
-		format: 'rezono.head/1', manifest: 'm-2', epoch: 2, sha256: m2Sha
-	});
-
-	return { root, m1Sha, m2Sha, driftRowMatched, driftRowExcess, sweepRow };
+async function put(root: string, rel: string, value: unknown): Promise<string> {
+	const text = JSON.stringify(value);
+	const full = join(root, rel);
+	await mkdir(dirname(full), { recursive: true });
+	await writeFile(full, text, 'utf8');
+	return sha256(text);
 }
 
-test('L0 §3.4 segment spelling and pinned IRI parsing enforce strict bijective rules', () => {
-	for (const sample of ['abc', 'a.b_c-1', '.', '..', 'tilde~here', '["run-1","a/b"]', 'café € 12']) {
-		const spelled = spellSegment(sample);
-		assert.equal(unspellSegment(spelled), sample);
+function headKey(epoch: number): string {
+	return `${PACK}/heads/${(10n ** 19n - 1n - BigInt(epoch)).toString().padStart(19, '0')}.json`;
+}
+
+function buildBundle() {
+	return {
+		pack: { id: PACK, base: BASE },
+		kinds: [
+			{ id: 'service', class: 'Service', world: 'closed' },
+			{ id: 'edge_service', class: 'EdgeService', parent: 'service', world: 'closed' }
+		],
+		attributes: [],
+		arrows: [],
+		relations: [
+			{
+				id: 'flow_drift',
+				world: 'closed',
+				columns: [
+					{ name: 'src', type: 'string' },
+					{ name: 'dst', type: 'string' },
+					{ name: 'kind', type: 'string' }
+				]
+			},
+			{
+				id: 'complete_sweep',
+				world: 'closed',
+				columns: [{ name: 'relation', type: 'string' }]
+			}
+		]
+	};
+}
+
+interface SnapshotSpec {
+	relation: string;
+	role: string;
+	complete: boolean;
+	full?: boolean;
+	rows: { key: string[]; [k: string]: unknown }[];
+}
+
+async function writeEpoch(
+	root: string,
+	bundleRef: { file: string; uri: string; sha256: string },
+	epoch: number,
+	knowledgeTime: string,
+	specs: SnapshotSpec[],
+	roleDatasets: Record<string, string>
+): Promise<{ manifestSha: string; datasets: Record<string, string> }> {
+	const manifestId = `m-${epoch}`;
+	const snapshots: { relation: string; role: string; format: 'json'; complete: boolean; full?: boolean; uri: string; sha256: string }[] = [];
+	for (const spec of specs) {
+		const snapSha = sha256(JSON.stringify(spec.rows));
+		const relPath = `${PACK}/objects/${snapSha}.json`;
+		await put(root, relPath, spec.rows);
+		snapshots.push({
+			relation: spec.relation,
+			role: spec.role,
+			format: 'json',
+			complete: spec.complete,
+			...(spec.full !== undefined && { full: spec.full }),
+			uri: `s3://local/${relPath}`,
+			sha256: snapSha
+		});
 	}
-	assert.equal(spellSegment('.'), '~2E');
-	assert.equal(spellSegment('..'), '~2E~2E');
-	assert.throws(() => unspellSegment('~41'), /non-canonical/);
+	const manifest = {
+		id: manifestId,
+		epoch,
+		knowledge_time: knowledgeTime,
+		access_semantics: 2,
+		definition_sha256: '1'.repeat(64),
+		checks: [{ name: 'rezono:proofs', status: 'green' }],
+		compiled: [bundleRef],
+		snapshots
+	};
+	const manifestSha = await put(root, `${PACK}/manifests/${manifestId}.json`, manifest);
+	await put(root, headKey(epoch), { format: 'rezono.head/1', manifest: manifestId, epoch, sha256: manifestSha });
 
-	const hex = 'a'.repeat(64);
-	const iri = conclusionIri(BASE, { id: 'flow_drift', class: 'FlowDrift' }, '["run-1"]');
-	const pinned = pinIri(iri, { manifest: 'm-2', dataset: hex });
-	assert.deepEqual(parsePinnedIri(pinned), { iri, pin: { manifest: 'm-2', dataset: hex } });
-	assert.deepEqual(parsePinnedIri(pinIri(iri, { dataset: hex })), { iri, pin: { dataset: hex } });
-	assert.deepEqual(parsePinnedIri(iri), { iri, pin: null });
+	for (const [role, dataset] of Object.entries(roleDatasets)) {
+		const sources = snapshots
+			.filter((s) => s.role === role)
+			.map(({ relation, sha256: s }) => ({ relation, sha256: s }))
+			.sort((a, b) => (a.relation < b.relation ? -1 : a.relation > b.relation ? 1 : 0));
+		await put(root, `${PACK}/${manifestId}/${role}/publication/index.json`, {
+			format: 'rezono.publication-form/1',
+			pack: PACK,
+			manifest: { id: manifestId, epoch, knowledge_time: knowledgeTime },
+			role,
+			schema: 's-' + '2'.repeat(64),
+			dataset,
+			sources,
+			objects: []
+		});
+	}
 
-	const wIri = canonicalWitnessIri(BASE, { rule_id: 'r1', conclusion: { relation: 'x', key: '["a"]' } });
-	assert.match(wIri, /^https:\/\/rezono\.org\/example\/flow-drift\/witness\/[0-9a-f]{64}$/);
-	assert.throws(() => canonicalWitnessIri('https://rezono.org/no-slash', { rule_id: 'r1' }), /ending in "\/"/);
-	assert.throws(() => canonicalWitnessIri('https://rezono.org/bad?q=1/', { rule_id: 'r1' }), /without query/);
+	return { manifestSha, datasets: roleDatasets };
+}
 
-	// Refused pins per decisions/publication-conclusion-addresses.md §3
-	assert.throws(() => parsePinnedIri(iri + '?pin=m-1'), /without dataset hash/);
-	assert.throws(() => parsePinnedIri(iri + '#frag'), /fragments/);
-	assert.throws(() => parsePinnedIri(iri + '?other=1'), /unknown query/);
-	assert.throws(() => parsePinnedIri(iri + '?pin=d-nothex'), /malformed/);
+test('shared Python-generated vectors agree on spelling, pin parsing, and root-kind conclusion IRIs', async () => {
+	const vectors = JSON.parse(await readFile(VECTORS_PATH, 'utf8')) as {
+		schema: Schema;
+		spell_valid: { raw: string; spelled: string }[];
+		unspell_invalid: string[];
+		pin_valid: { iri: string; pin: { manifest?: string; dataset: string }; pinned: string }[];
+		pin_invalid: string[];
+		conclusion_iri: { kind: string; row_id: string; pin: { manifest?: string; dataset: string } | null; expected: string }[];
+	};
+
+	for (const c of vectors.spell_valid) {
+		assert.equal(spellSegment(c.raw), c.spelled);
+		assert.equal(unspellSegment(c.spelled), c.raw);
+	}
+	for (const seg of vectors.unspell_invalid) {
+		assert.throws(() => unspellSegment(seg), AskError);
+	}
+	for (const c of vectors.pin_valid) {
+		assert.equal(pinIri(c.iri, c.pin), c.pinned);
+		assert.deepEqual(parsePinnedIri(c.pinned), { iri: c.iri, pin: c.pin });
+	}
+	for (const bad of vectors.pin_invalid) {
+		assert.throws(() => parsePinnedIri(bad), AskError);
+	}
+	for (const c of vectors.conclusion_iri) {
+		assert.equal(conclusionIri(vectors.schema, c.kind, c.row_id, c.pin ?? undefined), c.expected);
+	}
+	assert.equal(isWitnessIri(BASE, `${BASE}witness/${'a'.repeat(64)}`), true);
+	assert.equal(isWitnessIri(BASE, `${BASE}witness/not-hex`), false);
 });
 
-test('local gate lists multi-epoch manifests and resolves pinned conclusion IRIs with strict pin verification and role isolation', async (t) => {
-	const { root, m1Sha, m2Sha, driftRowMatched, driftRowExcess, sweepRow } = await buildFlowDriftStore();
-	t.after(() => rm(root, { recursive: true, force: true }));
+test('local gate lists manifests (including withdrawn earlier epochs, role-scoped) and resolves pinned conclusion IRIs', async () => {
+	const root = await mkdtemp(join(tmpdir(), 'rezono-gate-conclusion-'));
+	try {
+		const bundle = buildBundle();
+		const bundleSha = await put(root, `${PACK}/bundles/schema-bundle.json`, bundle);
+		const bundleRef = { file: 'bundle/schema-bundle.json', uri: `s3://local/${PACK}/bundles/schema-bundle.json`, sha256: bundleSha };
 
-	const operator = await openLocalGate(root, 'operator');
-	const tenant = await openLocalGate(root, 'tenant');
+		const svcGw = { key: ['svc-gw'] };
+		const svcEdge = { key: ['svc-edge'] };
+		const svcWithdrawn = { key: ['svc-withdrawn'] };
+		const driftExcess = { key: ['svc-gw', 'db-1', 'excess'] };
+		const driftMatched = { key: ['svc-gw', 'db-1', 'matched'] };
+		const sweepRow = { key: ['flow_drift'] };
 
-	// Multi-epoch manifest listing (m-1, m-2)
-	const listRes = await operator(new Request(`http://rezono.local/${PACK}/manifests`));
-	assert.equal(listRes.status, 200);
-	const listBody = await listRes.json();
-	assert.deepEqual(listBody.manifests.map((m: { id: string }) => m.id), ['m-1', 'm-2']);
-	assert.equal(listBody.manifests[0].manifest_sha256, m1Sha);
-	assert.equal(listBody.manifests[1].manifest_sha256, m2Sha);
+		const dOp0 = 'd-' + '10'.repeat(32);
+		const dOp1 = 'd-' + '11'.repeat(32);
+		const dTn1 = 'd-' + '21'.repeat(32);
+		const dOp2 = 'd-' + '12'.repeat(32);
+		const dTn2 = 'd-' + '22'.repeat(32);
+		const dOp3 = 'd-' + '13'.repeat(32);
+		const dTn3 = 'd-' + '23'.repeat(32);
 
-	// Resolve keyed kind (`bundle.kinds`: Service) strictly by single key, refusing tuple JSON
-	const svcPinned = conclusionIri(BASE, { id: 'service', class: 'Service' }, 'svc-gw', { manifest: 'm-2', dataset: m2Sha });
-	const resSvc = await operator(new Request(`http://rezono.local/${PACK}/resolve?iri=${encodeURIComponent(svcPinned)}`));
-	assert.equal(resSvc.status, 200);
-	assert.deepEqual((await resSvc.json()).key, ['svc-gw']);
+		// Epoch 0: operator only (tenant was never in m-0)
+		await writeEpoch(
+			root,
+			bundleRef,
+			0,
+			'2026-11-18T10:00:00Z',
+			[{ relation: 'service', role: 'operator', complete: true, rows: [svcGw] }],
+			{ operator: dOp0 }
+		);
 
-	const svcTupleMismatch = conclusionIri(BASE, { id: 'service', class: 'Service' }, '["svc-gw"]', { manifest: 'm-2', dataset: m2Sha });
-	assert.equal((await operator(new Request(`http://rezono.local/${PACK}/resolve?iri=${encodeURIComponent(svcTupleMismatch)}`))).status, 404);
+		// Epoch 1: operator + tenant; tenant had complete=true on service (later revoked in m-3 -> fails stillReadable)
+		await writeEpoch(
+			root,
+			bundleRef,
+			1,
+			'2026-11-19T10:00:00Z',
+			[
+				{ relation: 'service', role: 'operator', complete: true, rows: [svcGw, svcEdge] },
+				{ relation: 'edge_service', role: 'operator', complete: true, rows: [svcEdge] },
+				{ relation: 'flow_drift', role: 'operator', complete: true, rows: [driftExcess] },
+				{ relation: 'service', role: 'tenant', complete: true, rows: [svcGw] }
+			],
+			{ operator: dOp1, tenant: dTn1 }
+		);
 
-	// Resolve tuple-keyed derived relation (`bundle.relations`: flow_drift -> FlowDrift) at current epoch (m-2)
-	const matchedId = JSON.stringify(driftRowMatched.key);
-	const matchedPinnedM2 = conclusionIri(BASE, { id: 'flow_drift', class: 'FlowDrift' }, matchedId, {
-		manifest: 'm-2',
-		dataset: m2Sha
-	});
-	const resMatched = await operator(new Request(`http://rezono.local/${PACK}/resolve?iri=${encodeURIComponent(matchedPinnedM2)}`));
-	assert.equal(resMatched.status, 200);
-	const matchedBody = await resMatched.json();
-	assert.equal(matchedBody.manifest, 'm-2');
-	assert.equal(matchedBody.relation, 'flow_drift');
-	assert.deepEqual(matchedBody.key, driftRowMatched.key);
-	assert.equal(matchedBody.pinned_iri, matchedPinnedM2);
+		// Epoch 2: operator + tenant, withdrawn by decision
+		await writeEpoch(
+			root,
+			bundleRef,
+			2,
+			'2026-11-20T10:00:00Z',
+			[
+				{ relation: 'service', role: 'operator', complete: true, rows: [svcGw] },
+				{ relation: 'service', role: 'tenant', complete: false, full: false, rows: [svcGw] }
+			],
+			{ operator: dOp2, tenant: dTn2 }
+		);
 
-	// Resolve historical epoch (m-1) drift row via its m-1 pin
-	const excessId = JSON.stringify(driftRowExcess.key);
-	const excessPinnedM1 = conclusionIri(BASE, { id: 'flow_drift', class: 'FlowDrift' }, excessId, {
-		manifest: 'm-1',
-		dataset: m1Sha
-	});
-	const resExcessM1 = await operator(new Request(`http://rezono.local/${PACK}/resolve?iri=${encodeURIComponent(excessPinnedM1)}`));
-	assert.equal(resExcessM1.status, 200);
-	assert.equal((await resExcessM1.json()).manifest, 'm-1');
+		// Epoch 3 (current): operator full + subkind + relations; tenant filtered (complete=false, full=false)
+		const ep3 = await writeEpoch(
+			root,
+			bundleRef,
+			3,
+			'2026-11-21T10:00:00Z',
+			[
+				{ relation: 'service', role: 'operator', complete: true, rows: [svcGw, svcEdge, svcWithdrawn] },
+				{ relation: 'edge_service', role: 'operator', complete: true, rows: [svcEdge] },
+				{ relation: 'flow_drift', role: 'operator', complete: true, rows: [driftMatched] },
+				{ relation: 'complete_sweep', role: 'operator', complete: true, rows: [sweepRow] },
+				{ relation: 'service', role: 'tenant', complete: false, full: false, rows: [svcGw] },
+				{ relation: 'edge_service', role: 'tenant', complete: false, full: false, rows: [] }
+			],
+			{ operator: dOp3, tenant: dTn3 }
+		);
 
-	// Mismatched hash pin is refused (409), never answered with another row
-	const badPin = conclusionIri(BASE, { id: 'flow_drift', class: 'FlowDrift' }, matchedId, {
-		manifest: 'm-2',
-		dataset: '0'.repeat(64)
-	});
-	const resBadPin = await operator(new Request(`http://rezono.local/${PACK}/resolve?iri=${encodeURIComponent(badPin)}`));
-	assert.equal(resBadPin.status, 409);
+		// Withdraw epoch m-2 and row svc-withdrawn in m-3
+		await put(root, `${PACK}/withdrawals/w-epoch-2.json`, {
+			format: 'rezono.withdrawal/1',
+			id: 'w-epoch-2',
+			state: 'withdrawn',
+			decider: ['board'],
+			decided_on: '2026-11-21',
+			reason: 'superseded due to source correction',
+			epochs: ['m-2'],
+			rows: []
+		});
+		await put(root, `${PACK}/withdrawals/w-row-3.json`, {
+			format: 'rezono.withdrawal/1',
+			id: 'w-row-3',
+			state: 'withdrawn',
+			decider: ['board'],
+			decided_on: '2026-11-21',
+			reason: 'service entry retracted',
+			epochs: [],
+			rows: [{ relation: 'service', key: ['svc-withdrawn'], manifest: 'm-3' }]
+		});
 
-	// Role isolation: tenant resolves matched row (200) but gets 404 for excess drift and complete_sweep
-	const tenantOk = await tenant(new Request(`http://rezono.local/${PACK}/resolve?iri=${encodeURIComponent(matchedPinnedM2)}`));
-	assert.equal(tenantOk.status, 200);
+		const operator = await openLocalGate(root, 'operator');
+		const tenant = await openLocalGate(root, 'tenant');
+		const outsider = await openLocalGate(root, 'outsider');
 
-	const tenantDeniedDrift = await tenant(new Request(`http://rezono.local/${PACK}/resolve?iri=${encodeURIComponent(excessPinnedM1)}`));
-	assert.equal(tenantDeniedDrift.status, 404);
+		// 1. Operator manifest listing includes superseded, withdrawn earlier epoch, and current with real dataset hashes
+		const opListRes = await operator(new Request(`http://rezono.local/${PACK}/manifests`));
+		assert.equal(opListRes.status, 200);
+		const opList = (await opListRes.json()) as {
+			pack: string;
+			manifests: { id: string; epoch: number; standing: string; dataset?: string; withdrawal?: { id: string; reason: string } }[];
+		};
+		assert.equal(opList.pack, PACK);
+		assert.deepEqual(
+			opList.manifests.map((m) => [m.id, m.standing, m.dataset ?? null]),
+			[
+				['m-0', 'superseded', dOp0],
+				['m-1', 'superseded', dOp1],
+				['m-2', 'withdrawn', null],
+				['m-3', 'current', dOp3]
+			]
+		);
+		assert.equal(opList.manifests[2]!.withdrawal?.id, 'w-epoch-2');
+		assert.equal(opList.manifests[2]!.withdrawal?.reason, 'superseded due to source correction');
 
-	const sweepIri = conclusionIri(BASE, { id: 'complete_sweep', class: 'CompleteSweep' }, JSON.stringify(sweepRow.key), {
-		manifest: 'm-2',
-		dataset: m2Sha
-	});
-	const opSweep = await operator(new Request(`http://rezono.local/${PACK}/resolve?iri=${encodeURIComponent(sweepIri)}`));
-	assert.equal(opSweep.status, 200);
-	const tenantSweep = await tenant(new Request(`http://rezono.local/${PACK}/resolve?iri=${encodeURIComponent(sweepIri)}`));
-	assert.equal(tenantSweep.status, 404);
+		// 2. Tenant manifest listing omits m-0 (never in it) and m-1 (!stillReadable), includes withdrawn m-2 and current m-3
+		const tnListRes = await tenant(new Request(`http://rezono.local/${PACK}/manifests`));
+		assert.equal(tnListRes.status, 200);
+		const tnList = (await tnListRes.json()) as {
+			manifests: { id: string; standing: string; dataset?: string }[];
+		};
+		assert.deepEqual(
+			tnList.manifests.map((m) => [m.id, m.standing, m.dataset ?? null]),
+			[
+				['m-2', 'withdrawn', null],
+				['m-3', 'current', dTn3]
+			]
+		);
+
+		// 3. Resolve keyed root kind with REAL published dataset hash (NOT manifestSha256)
+		const svcPinned = `${BASE}Service/svc-gw?pin=m-3@${dOp3}`;
+		const svcRes = await operator(new Request(`http://rezono.local/${PACK}/resolve?iri=${encodeURIComponent(svcPinned)}`));
+		assert.equal(svcRes.status, 200);
+		const svcBody = (await svcRes.json()) as {
+			iri: string;
+			dataset: string;
+			pinned_iri: string;
+			manifest: string;
+			relation: string;
+			key: string[];
+		};
+		assert.equal(svcBody.iri, `${BASE}Service/svc-gw`);
+		assert.equal(svcBody.dataset, dOp3);
+		assert.equal(svcBody.pinned_iri, svcPinned);
+		assert.equal(svcBody.relation, 'service');
+		assert.deepEqual(svcBody.key, ['svc-gw']);
+
+		// Passing manifestSha256 as dataset pin MUST fail with 409
+		const manifestShaPin = `${BASE}Service/svc-gw?pin=m-3@d-${ep3.manifestSha}`;
+		assert.equal((await operator(new Request(`http://rezono.local/${PACK}/resolve?iri=${encodeURIComponent(manifestShaPin)}`))).status, 409);
+
+		// Passing wrong dataset hash MUST fail with 409
+		const wrongDatasetPin = `${BASE}Service/svc-gw?pin=m-3@d-${'0'.repeat(64)}`;
+		assert.equal((await operator(new Request(`http://rezono.local/${PACK}/resolve?iri=${encodeURIComponent(wrongDatasetPin)}`))).status, 409);
+
+		// 4. Subkind shares root kind's IRI space; subkind IRI is refused (404)
+		const edgeUnderRoot = `${BASE}Service/svc-edge?pin=m-3@${dOp3}`;
+		const edgeRootRes = await operator(new Request(`http://rezono.local/${PACK}/resolve?iri=${encodeURIComponent(edgeUnderRoot)}`));
+		assert.equal(edgeRootRes.status, 200);
+		const edgeUnderSub = `${BASE}EdgeService/svc-edge?pin=m-3@${dOp3}`;
+		assert.equal((await operator(new Request(`http://rezono.local/${PACK}/resolve?iri=${encodeURIComponent(edgeUnderSub)}`))).status, 404);
+
+		// 5. Keyed kind rejects tuple-encoded key
+		const svcTupleMismatch = `${BASE}Service/${spellSegment('["svc-gw"]')}?pin=m-3@${dOp3}`;
+		assert.equal((await operator(new Request(`http://rezono.local/${PACK}/resolve?iri=${encodeURIComponent(svcTupleMismatch)}`))).status, 404);
+
+		// 6. Tuple-keyed derived relations (FlowDrift & CompleteSweep) resolve cleanly via roleSchema
+		const driftM3 = `${BASE}FlowDrift/${spellSegment(JSON.stringify(driftMatched.key))}?pin=m-3@${dOp3}`;
+		const driftM3Res = await operator(new Request(`http://rezono.local/${PACK}/resolve?iri=${encodeURIComponent(driftM3)}`));
+		assert.equal(driftM3Res.status, 200);
+		assert.deepEqual(((await driftM3Res.json()) as { key: string[] }).key, driftMatched.key);
+
+		const driftM1 = `${BASE}FlowDrift/${spellSegment(JSON.stringify(driftExcess.key))}?pin=m-1@${dOp1}`;
+		const driftM1Res = await operator(new Request(`http://rezono.local/${PACK}/resolve?iri=${encodeURIComponent(driftM1)}`));
+		assert.equal(driftM1Res.status, 200);
+		assert.equal(driftM1Res.headers.get('x-rezono-standing'), 'superseded');
+		assert.equal(driftM1Res.headers.get('x-rezono-superseded-by'), 'm-3');
+
+		const sweepM3 = `${BASE}CompleteSweep/${spellSegment(JSON.stringify(sweepRow.key))}?pin=m-3@${dOp3}`;
+		assert.equal((await operator(new Request(`http://rezono.local/${PACK}/resolve?iri=${encodeURIComponent(sweepM3)}`))).status, 200);
+
+		// 7. No 409 vs 404 epoch-existence leak: absent, future, never-in-epoch, and unreadable epochs are indistinguishable (404)
+		const absentEpochRes = await tenant(new Request(`http://rezono.local/${PACK}/resolve?iri=${encodeURIComponent(`${BASE}Service/svc-gw?pin=m-999@${dTn3}`)}`));
+		const futureEpochRes = await tenant(new Request(`http://rezono.local/${PACK}/resolve?iri=${encodeURIComponent(`${BASE}Service/svc-gw?pin=m-4@${dTn3}`)}`));
+		const neverInEpochRes = await tenant(new Request(`http://rezono.local/${PACK}/resolve?iri=${encodeURIComponent(`${BASE}Service/svc-gw?pin=m-0@${dOp0}`)}`));
+		const unreadableEpochRes = await tenant(new Request(`http://rezono.local/${PACK}/resolve?iri=${encodeURIComponent(`${BASE}Service/svc-gw?pin=m-1@${dTn1}`)}`));
+		for (const res of [absentEpochRes, futureEpochRes, neverInEpochRes, unreadableEpochRes]) {
+			assert.equal(res.status, 404);
+			assert.deepEqual(await res.json(), { error: 'not found' });
+		}
+
+		// 8. Withdrawn epoch (m-2) and withdrawn row (svc-withdrawn in m-3) return 410
+		const withdrawnEpochRes = await operator(new Request(`http://rezono.local/${PACK}/resolve?iri=${encodeURIComponent(`${BASE}Service/svc-gw?pin=m-2@${dOp2}`)}`));
+		assert.equal(withdrawnEpochRes.status, 410);
+		assert.equal(withdrawnEpochRes.headers.get('x-rezono-standing'), 'withdrawn');
+		assert.equal(((await withdrawnEpochRes.json()) as { error: string }).error, 'withdrawn');
+
+		const withdrawnRowRes = await operator(new Request(`http://rezono.local/${PACK}/resolve?iri=${encodeURIComponent(`${BASE}Service/svc-withdrawn?pin=m-3@${dOp3}`)}`));
+		assert.equal(withdrawnRowRes.status, 410);
+		assert.equal(withdrawnRowRes.headers.get('x-rezono-standing'), 'withdrawn');
+
+		// 9. Witness IRIs (§4.4) return 501 for authorized roles, 404 for unauthorized roles
+		const witnessIri = `${BASE}witness/${'b'.repeat(64)}`;
+		const witnessRes = await operator(new Request(`http://rezono.local/${PACK}/resolve?iri=${encodeURIComponent(witnessIri)}`));
+		assert.equal(witnessRes.status, 501);
+		const witnessPinnedRes = await operator(new Request(`http://rezono.local/${PACK}/resolve?iri=${encodeURIComponent(`${witnessIri}?pin=m-3@${dOp3}`)}`));
+		assert.equal(witnessPinnedRes.status, 501);
+		assert.equal((await outsider(new Request(`http://rezono.local/${PACK}/resolve?iri=${encodeURIComponent(witnessIri)}`))).status, 404);
+
+		// 10. Role isolation: tenant cannot resolve FlowDrift
+		assert.equal((await tenant(new Request(`http://rezono.local/${PACK}/resolve?iri=${encodeURIComponent(`${BASE}FlowDrift/${spellSegment(JSON.stringify(driftMatched.key))}?pin=m-3@${dTn3}`)}`))).status, 404);
+	} finally {
+		await rm(root, { recursive: true, force: true });
+	}
 });

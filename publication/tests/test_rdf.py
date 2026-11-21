@@ -423,3 +423,34 @@ def test_turtle_files_no_namespace_per_subject_or_object():
 
     assert filed(_awkward(50), rdf.turtle) == filed(_awkward(400), rdf.turtle)
     assert filed(_awkward(400), lambda g: g.serialize(format="turtle")) > filed(_awkward(50), rdf.turtle) + 350
+
+
+def test_conclusion_address_shared_vectors():
+    """Shared conclusion-address vectors in contracts/fixtures/ agree between Python rdf.py and edge/gate."""
+    from pathlib import Path
+
+    vectors = json.loads(
+        (Path(__file__).resolve().parents[2] / "contracts/fixtures/conclusion-address-vectors.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    for case in vectors["spell_valid"]:
+        assert rdf.spell(case["raw"]) == case["spelled"]
+        assert rdf.unspell(case["spelled"]) == case["raw"]
+    for seg in vectors["unspell_invalid"]:
+        with pytest.raises(l0.L0Error):
+            rdf.unspell(seg)
+    for case in vectors["pin_valid"]:
+        pin = case["pin"]
+        assert rdf.pin_iri(case["iri"], dataset=pin["dataset"], manifest=pin.get("manifest")) == case["pinned"]
+        assert rdf.parse_pin(case["pinned"]) == (case["iri"], pin)
+    for bad in vectors["pin_invalid"]:
+        with pytest.raises(l0.L0Error):
+            rdf.parse_pin(bad)
+    schema = vectors["schema"]
+    for case in vectors["conclusion_iri"]:
+        pin = case["pin"] or {}
+        assert (
+            rdf.conclusion_iri(schema, case["kind"], case["row_id"], manifest=pin.get("manifest"), dataset=pin.get("dataset"))
+            == case["expected"]
+        )
