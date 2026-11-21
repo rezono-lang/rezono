@@ -860,6 +860,8 @@ def pack_source(prog, pack_dir):
 
 def run(prog, data, workdir=None, program_text=None):
     """Evaluate with Soufflé: {relation: set of tuples of str} for every derived relation."""
+    if workdir is not None:
+        Path(workdir).mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=workdir) as d:
         d = Path(d)
         (d / "facts").mkdir()
