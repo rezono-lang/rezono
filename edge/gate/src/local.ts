@@ -10,6 +10,10 @@ import { roleBundle } from './catalogue.ts';
 import { ask as evaluate, roleSchema, type Asking } from './expr.ts';
 import { compareKey, pageByKey, type KeyRange } from './pieces.ts';
 import { rowQueryScope, type RowSelection } from './row-query.ts';
+import {
+	earlierWithdrawal, epochWithdrawal, loadWithdrawals, rangeMatchingRows, rowsWithdrawal, rowWithdrawal,
+	standingHeaders, withdrawalBody, WithdrawnError, type WithdrawalRecord
+} from './standing.ts';
 import { fileStore, StoreLimit, type Store } from './store.ts';
 import { readPublishedSweep, sweepAnswer } from './sweep.ts';
 
@@ -51,8 +55,12 @@ function missing(): never {
 	throw new AskError(404, 'not found');
 }
 
-function json(value: unknown, status = 200): Response {
-	return Response.json(value, { status, headers });
+function json(value: unknown, status = 200, extra?: Record<string, string>): Response {
+	return Response.json(value, { status, headers: extra ? { ...headers, ...extra } : headers });
+}
+
+function gone(entry: WithdrawalRecord): Response {
+	return json(withdrawalBody(entry), 410, { 'x-rezono-standing': 'withdrawn' });
 }
 
 function textList(raw: string | null): string[] | undefined {
@@ -140,6 +148,7 @@ function publication(store: Store, pack: string, role: string) {
 	const latest = async () => (await store.list(pack + '/heads/', { limit: 1 }))[0];
 	return {
 		latest,
+		read,
 		async current(id?: string) {
 			const epoch = id && MAIN.test(id) ? Number(id.slice(2)) : undefined;
 			if (id !== undefined && (epoch === undefined || !Number.isSafeInteger(epoch) || id !== 'm-' + epoch))
@@ -267,7 +276,28 @@ function sourcesOf(view: Current, role: string): SourcesOf | undefined {
 	return async (row) => (await (index ??= load())).get(id(row));
 }
 
-async function named(view: Current, role: string, term: string, search: URLSearchParams): Promise<Answer> {
+async function rangeChecked(view: Current, withdrawals: readonly WithdrawalRecord[], relation: string, at: KeyRange): Promise<Page> {
+	const all = await view.rows(relation);
+	const withdrawn = rowsWithdrawal(withdrawals, view.manifest.id, relation, rangeMatchingRows(all, at));
+	if (withdrawn) throw new WithdrawnError(withdrawn);
+	return pageByKey(all, at);
+}
+
+function isManifestRoute(method: string, parts: readonly string[], search: URLSearchParams, manifestId: string): boolean {
+	const [, id, route] = parts;
+	if (parts.length === 2 && (id === 'head' || id === 'bundle')) {
+		const selected = search.get('m');
+		return selected === null || selected === manifestId;
+	}
+	if (parts.length === 3 && id === 'manifests' && route === manifestId) return true;
+	if (id !== manifestId) return false;
+	if (parts.length === 4 && (route === 'snapshots' || route === 'rows' || route === 'ask')) return true;
+	if (parts.length === 3 && route === 'rows') return true;
+	if (method === 'POST' && parts.length === 3 && route === 'ask') return true;
+	return false;
+}
+
+async function named(view: Current, withdrawals: readonly WithdrawalRecord[], role: string, term: string, search: URLSearchParams): Promise<Answer> {
 	const question = questionOf(view.bundle, term);
 	if (!question) return missing();
 	if (question.start !== 'present' || question.steps.some((step) => !step.trace))
@@ -276,6 +306,8 @@ async function named(view: Current, role: string, term: string, search: URLSearc
 	const key = textList(search.get('key'));
 	if (!relation || !key) throw new AskError(400, 'a named question needs a relation and key');
 	if (!view.snaps.has(relation) || !(await view.rows(relation)).some((row) => compareKey(row.key, key) === 0)) return missing();
+	const direct = rowWithdrawal(withdrawals, view.manifest.id, relation, key);
+	if (direct) throw new WithdrawnError(direct);
 	const ref = view.manifest.witnesses?.find((set) => set.role === role);
 	if (!ref) return missing();
 	const published = await view.object(ref as WitnessSet, 'objects') as Witnesses;
@@ -287,10 +319,20 @@ async function named(view: Current, role: string, term: string, search: URLSearc
 	const calc = published.calc_witnesses ?? [];
 	const answer = await trace(memoryGraph([...published.witnesses, ...calc], [...steps, ...calcSteps(calc)]), question,
 		view.manifest.id, { relation, key: canonicalJson(key) }, { limit: Math.min(limitOf(search.get('limit')), question.limit), after: parseAfter(search.get('after')) }, sourcesOf(view, role));
-	return answer ?? missing();
+	if (!answer) return missing();
+	let withdrawn: WithdrawalRecord | undefined;
+	for (const node of answer.nodes) {
+		let parsed: unknown;
+		try { parsed = JSON.parse(node.key); } catch { continue; }
+		if (keyParts(parsed)) {
+			withdrawn = earlierWithdrawal(withdrawn, rowWithdrawal(withdrawals, view.manifest.id, node.relation, parsed));
+		}
+	}
+	if (withdrawn) throw new WithdrawnError(withdrawn);
+	return answer;
 }
 
-async function batch(view: Current, search: URLSearchParams) {
+async function batch(view: Current, withdrawals: readonly WithdrawalRecord[], search: URLSearchParams) {
 	const relations = [...new Set(textList(search.get('relations')) ?? [])];
 	const keys = [...new Set(textList(search.get('ids')) ?? [])];
 	const limit = limitOf(search.get('limit'));
@@ -299,14 +341,20 @@ async function batch(view: Current, search: URLSearchParams) {
 	if (search.get('order') && search.get('order') !== 'key') throw new AskError(501, 'inverse index is unavailable');
 	const rows: Record<string, Keyed[]> = Object.create(null);
 	const more: {relation: string; id: string; after: string[]}[] = [];
+	let withdrawn: WithdrawalRecord | undefined;
 	for (const relation of relations.filter((name) => view.snaps.has(name))) {
+		const all = await view.rows(relation);
 		rows[relation] = [];
 		for (const id of keys) {
-			const { rows: selected, next } = await view.range(relation, { prefix: [id], limit });
+			const matching = rangeMatchingRows(all, { prefix: [id] });
+			withdrawn = earlierWithdrawal(withdrawn, rowsWithdrawal(withdrawals, view.manifest.id, relation, matching));
+			if (withdrawn) continue;
+			const { rows: selected, next } = pageByKey(all, { prefix: [id], limit });
 			rows[relation].push(...selected);
 			if (next) more.push({ relation, id, after: next });
 		}
 	}
+	if (withdrawn) throw new WithdrawnError(withdrawn);
 	return { rows, ...(more.length && { more }) };
 }
 
@@ -335,39 +383,59 @@ export async function openLocalGate(root: string, role: string): Promise<Handle>
 			const source = publication(store, pack, role);
 			const current = await source.current();
 			if (!current) return missing();
+			const withdrawals = await loadWithdrawals(store, pack, (key) => source.read(key));
 			if (parts.length === 2 && id === 'sweeps') {
 				if (url.searchParams.get('m') !== current.manifest.id) return missing();
+				const withdrawn = epochWithdrawal(withdrawals, current.manifest.id);
+				if (withdrawn) return gone(withdrawn);
 				const published = await readPublishedSweep(current, pack, role);
 				if (!published || await source.latest() !== headKey(pack, current.manifest.epoch)) return missing();
-				return json(published.listing);
+				return json(published.listing, 200, standingHeaders(pack, current.manifest.epoch, current.manifest.id, current.manifest.epoch));
 			}
 			const pin = id === 'head' || id === 'bundle' ? url.searchParams.get('m') ?? undefined
 				: id === 'manifests' ? route : id;
 			let view = current;
-			if (pin && pin !== current.manifest.id) {
+			if (pin !== undefined && pin !== current.manifest.id) {
 				const earlier = await source.current(pin);
-				if (!earlier || earlier.manifest.epoch >= current.manifest.epoch || !await stillReadable(earlier, current))
-					return missing();
+				if (!earlier || earlier.manifest.epoch >= current.manifest.epoch) return missing();
+				const withdrawn = epochWithdrawal(withdrawals, earlier.manifest.id);
+				if (withdrawn) {
+					if (!isManifestRoute(req.method, parts, url.searchParams, earlier.manifest.id)) return missing();
+					return gone(withdrawn);
+				}
+				if (!await stillReadable(earlier, current)) return missing();
 				view = earlier;
+			} else {
+				const withdrawn = epochWithdrawal(withdrawals, current.manifest.id);
+				if (withdrawn) {
+					if (!isManifestRoute(req.method, parts, url.searchParams, current.manifest.id)) return missing();
+					return gone(withdrawn);
+				}
 			}
+			const standing = standingHeaders(pack, view.manifest.epoch, current.manifest.id, current.manifest.epoch);
 			const response = await (async () => {
-				if (parts.length === 2 && id === 'head') return json(listed(view));
+				if (parts.length === 2 && id === 'head') return json(listed(view), 200, standing);
 				if (parts.length === 2 && id === 'bundle') {
 					const selected = url.searchParams.get('m');
 					return selected === null || selected === view.manifest.id
-						? json(roleBundle(view.bundle, await readableSnapshots(view))) : missing();
+						? json(roleBundle(view.bundle, await readableSnapshots(view)), 200, standing) : missing();
 				}
-				if (parts.length === 3 && id === 'manifests' && route === view.manifest.id) return json(listed(view));
+				if (parts.length === 3 && id === 'manifests' && route === view.manifest.id) return json(listed(view), 200, standing);
 				if (id !== view.manifest.id) return missing();
-				if (parts.length === 4 && route === 'snapshots') return json(await view.rows(item));
+				if (parts.length === 4 && route === 'snapshots') {
+					const rows = await view.rows(item);
+					const withdrawn = rowsWithdrawal(withdrawals, view.manifest.id, item, rows);
+					if (withdrawn) throw new WithdrawnError(withdrawn);
+					return json(rows, 200, standing);
+				}
 				if (parts.length === 4 && route === 'rows') {
 					if (url.searchParams.get('order') && url.searchParams.get('order') !== 'key')
 						throw new AskError(501, 'inverse index is unavailable');
-					return json(await view.range(item, { prefix: textList(url.searchParams.get('prefix')) ?? [],
+					return json(await rangeChecked(view, withdrawals, item, { prefix: textList(url.searchParams.get('prefix')) ?? [],
 						after: textList(url.searchParams.get('after')), limit: limitOf(url.searchParams.get('limit')),
-						starts: url.searchParams.get('starts') ?? undefined }));
+						starts: url.searchParams.get('starts') ?? undefined }), 200, standing);
 				}
-				if (parts.length === 3 && route === 'rows') return json(await batch(view, url.searchParams));
+				if (parts.length === 3 && route === 'rows') return json(await batch(view, withdrawals, url.searchParams), 200, standing);
 				if (parts.length === 4 && route === 'ask') {
 					const q = questionOf(view.bundle, item);
 					if (q?.start === 'sweep' && q.answer === 'series') {
@@ -375,13 +443,20 @@ export async function openLocalGate(root: string, role: string): Promise<Handle>
 						if (!name || view !== current) return missing();
 						const published = await readPublishedSweep(current, pack, role, name);
 						if (!published || await source.latest() !== headKey(pack, current.manifest.epoch)) return missing();
-						return json(sweepAnswer(item, name, id, published.series));
+						return json(sweepAnswer(item, name, id, published.series), 200, standing);
 					}
-					return json(await named(view, role, item, url.searchParams));
+					return json(await named(view, withdrawals, role, item, url.searchParams), 200, standing);
 				}
 				if (req.method === 'POST' && route === 'ask') {
 					const body = await bodyOf(req);
-					const read = (relation: string, at: KeyRange) => view.range(relation, at);
+					const read = body.scope === 'row'
+						? (relation: string, at: KeyRange) => rangeChecked(view, withdrawals, relation, at)
+						: async (relation: string, at: KeyRange) => {
+							const rows = await view.rows(relation);
+							const withdrawn = rowsWithdrawal(withdrawals, view.manifest.id, relation, rows);
+							if (withdrawn) throw new WithdrawnError(withdrawn);
+							return pageByKey(rows, at);
+						};
 					const snapshots = [...view.snaps.values()];
 					const subject = body.scope === 'row'
 						? await rowQueryScope(view.bundle, snapshots, read, ROW_LIMIT, body.row, { manifest: id, role })
@@ -393,13 +468,14 @@ export async function openLocalGate(root: string, role: string): Promise<Handle>
 					const answered = await evaluate(asking);
 					if ('refused' in answered) return json({ error: 'the text does not check', diagnostics: answered.refused }, 400);
 					if ('cut' in answered) return json({ cut: answered.cut }, 422);
-					return json(answered.answer);
+					return json(answered.answer, 200, standing);
 				}
 				return missing();
 			})();
 			if (view !== current && await source.latest() !== headKey(pack, current.manifest.epoch)) return missing();
 			return response;
 		} catch (error) {
+			if (error instanceof WithdrawnError) return gone(error.withdrawal);
 			if (error instanceof StoreLimit) return json({ error: 'read budget exhausted' }, 422);
 			if (error instanceof AskError && error.status < 500) return json({ error: error.message }, error.status);
 			if (error instanceof AskError && error.status === 501) return json({ error: 'question unavailable for this publication' }, 501);

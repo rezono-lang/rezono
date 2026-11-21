@@ -108,16 +108,6 @@ def _query(root: Path, role: str, *paths: str) -> list[dict]:
     return json.loads(run.stdout)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=(MissingSupersessionMarker, AssertionError),
-    reason=(
-        "extra: decisions/publication-supersession-and-withdrawal.md: Derive supersession in "
-        "edge/gate/src/local.ts from newer main heads so requests pinned to an earlier main manifest "
-        "remain HTTP 200 with untouched manifest bytes and carry x-rezono-standing: superseded, "
-        "x-rezono-superseded-by and a successor-version Link header."
-    ),
-)
 def test_superseded_manifest_remains_readable_with_marker_and_untouched_bytes(tmp_path):
     m1_path, m1_before, m1_sha = _publish_epoch(tmp_path, 1, [("a", "alpha")])
     _publish_epoch(tmp_path, 2, [("a", "alpha"), ("b", "beta")], base_manifest="m-1")
@@ -151,16 +141,6 @@ def test_superseded_manifest_remains_readable_with_marker_and_untouched_bytes(tm
     assert "x-rezono-superseded-by" not in current_reply["headers"]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=(WithdrawnEpochNotGone, AssertionError),
-    reason=(
-        "extra: decisions/publication-supersession-and-withdrawal.md: Load immutable withdrawal "
-        "decision records under <pack>/withdrawals/<id>.json in edge/gate/src/local.ts and respond to "
-        "requests for withdrawn epochs with HTTP 410, x-rezono-standing: withdrawn and the withdrawal "
-        "reason while leaving the old manifest bytes untouched."
-    ),
-)
 def test_withdrawn_epoch_returns_http_410_with_reason(tmp_path):
     m1_path, m1_before, _ = _publish_epoch(tmp_path, 1, [("a", "alpha")])
     _publish_epoch(tmp_path, 2, [("a", "alpha"), ("b", "beta")], base_manifest="m-1")
