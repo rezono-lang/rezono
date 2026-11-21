@@ -341,14 +341,6 @@ def published_allowance(model, program, rows, case, three_sources):
     return (state, reason)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingSlicePublication,
-    reason="later: decisions/language-healthcare-allowance-slice.md: Publish examples/zorgtoeslag-slice with "
-           "inline parameter versions in rezono/allowance.rezono once inline parameter versions lower in "
-           "rezono_calc.py. Then for every case of allowance-cases.yaml the published allowance on its as-of "
-           "day equals the independent oracle examples/zorgtoeslag-slice/reference.py",
-)
 def test_published_slice_gives_the_oracle(tmp_path):
     oracle = checked_oracle(tmp_path)
     if not PACK.is_file():
