@@ -255,14 +255,14 @@ export async function readStaircase<T extends StaircaseEpochView>(opts: {
 
 	for (let epoch = 1; epoch <= targetView.manifest.epoch; epoch++) {
 		const mid = 'm-' + epoch;
-		const withdrawnEpoch = epochWithdrawal(withdrawals, mid);
-		if (withdrawnEpoch) throw new WithdrawnError(withdrawnEpoch);
-
 		const epochView = epoch === targetView.manifest.epoch ? targetView : await loadEpoch(mid);
 		if (!epochView) continue;
 		if (epochView !== targetView) {
 			if (!await stillReadable(epochView, currentView) || !await stillReadable(epochView, targetView)) continue;
 		}
+
+		const withdrawnEpoch = epochWithdrawal(withdrawals, epochView.manifest.id);
+		if (withdrawnEpoch) throw new WithdrawnError(withdrawnEpoch);
 
 		const epochVisible = epochView === targetView
 			? targetVisible
