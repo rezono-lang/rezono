@@ -114,13 +114,10 @@ def test_register_date_is_only_used_for_drift():
     assert {"product_release_reference__published", "product_release_source__published"} <= premises
 
     fact_file = ROOT / "facts/keycloak_release.yaml"
+    assert fact_file.with_suffix(".sources.yaml").exists()
     entries = sources.file_entries(model, fact_file)
     assert len(entries) == 4
     assert all(entry["sources"] for entry in entries)
-    if fact_file.with_suffix(".sources.yaml").exists():
-        allowed = sources.kinds() - {"pack", "scenario"}
-        assert not sources.missing_origins(model, entries, ROOT)
-        assert all(source["kind"] in allowed for entry in entries for source in entry["sources"])
-    else:
-        assert all(source["kind"] == "pack" and source["name"] == "facts/keycloak_release.yaml"
-                   for entry in entries for source in entry["sources"])
+    allowed = sources.kinds() - {"pack", "scenario"}
+    assert not sources.missing_origins(model, entries, ROOT)
+    assert all(source["kind"] in allowed for entry in entries for source in entry["sources"])

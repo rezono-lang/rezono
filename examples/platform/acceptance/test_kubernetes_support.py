@@ -129,13 +129,10 @@ def test_register_difference_is_support_drift():
     assert {"series_support_reference__support_end", "series_support_source__support_end"} <= premises
 
     fact_file = ROOT / "facts/kubernetes_support.yaml"
+    assert fact_file.with_suffix(".sources.yaml").exists()
     entries = sources.file_entries(model, fact_file)
     register = [entry for entry in entries if entry["row"]["relation"].split("__", 1)[0] == "series_support_reference"]
     assert register and all(entry["sources"] for entry in register)
-    if fact_file.with_suffix(".sources.yaml").exists():
-        allowed = sources.kinds() - {"pack", "scenario"}
-        assert not sources.missing_origins(model, register, ROOT)
-        assert all(item["kind"] in allowed for entry in register for item in entry["sources"])
-    else:
-        assert all(item["kind"] == "pack" and item["name"] == "facts/kubernetes_support.yaml"
-                   for entry in register for item in entry["sources"])
+    allowed = sources.kinds() - {"pack", "scenario"}
+    assert not sources.missing_origins(model, register, ROOT)
+    assert all(item["kind"] in allowed for entry in register for item in entry["sources"])
