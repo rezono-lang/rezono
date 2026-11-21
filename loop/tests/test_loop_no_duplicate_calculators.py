@@ -215,13 +215,22 @@ def test_build_cutover_and_selection_outcome_share_one_strict_acceptance_rule():
         )
 
 
+def _formal_section_11_table_rows() -> list[str]:
+    """Return Markdown table rows from section 11 (Independent oracles) of docs/formal.md."""
+    formal = (ROOT / "docs" / "formal.md").read_text(encoding="utf-8")
+    marker = "## 11. Independent oracles"
+    assert marker in formal, "docs/formal.md is missing section 11 (Independent oracles)"
+    section = formal.split(marker, 1)[1].split("\n## ", 1)[0]
+    return [line.strip() for line in section.splitlines() if line.strip().startswith("|")]
+
+
 @pytest.mark.xfail(
     strict=True,
     raises=AssertionError,
     reason="extra: decisions/code-does-not-decide.md: loop/status_times.py and "
-           "loop/flow_evidence.py must not remain in production loop/ computing live "
-           "status/evidence decisions beside the std-loop pack rules; retire them or "
-           "keep them strictly test-oracle-only under loop/tests/ with zero production imports.",
+           "loop/flow_evidence.py must be removed from production loop/ while their moved "
+           "independent test-only oracles remain under loop/tests/ with zero production "
+           "imports and docs/formal.md section 11 recording ../loop/tests/flow_evidence.py.",
 )
 def test_status_times_and_flow_evidence_are_not_live_calculators_in_production_loop():
     from rezono_compiler import pack, rules
@@ -242,7 +251,7 @@ def test_status_times_and_flow_evidence_are_not_live_calculators_in_production_l
     for name in ("status_times.py", "flow_evidence.py"):
         assert not (LOOP / name).exists(), (
             f"loop/{name} still computes live decisions in production loop/ beside packs/std-loop; "
-            f"retire it or move it under loop/tests/ as a test-only oracle"
+            f"remove the production module while keeping the moved test-only oracle under loop/tests/"
         )
 
     # No production file under loop/ may import or dynamically execute either module.
@@ -253,16 +262,23 @@ def test_status_times_and_flow_evidence_are_not_live_calculators_in_production_l
                 f"production module {path.relative_to(ROOT).as_posix()} imports or loads {stem!r}"
             )
 
-    # If kept under loop/tests/ as fate (b) independent test oracles, their module docstrings
-    # must state that they are test oracles for the std-loop rules.
-    oracle_rules = {
-        "status_times.py": ("delivery_waiting_time", "delivery_completed_at"),
-        "flow_evidence.py": ("flow_case_verdict", "flow_case_incomplete"),
-    }
-    for filename, rule_names in oracle_rules.items():
+    # Both moved independent test oracles under loop/tests/ must remain in place (never deleted).
+    for filename in ("status_times.py", "flow_evidence.py"):
         oracle_copy = LOOP / "tests" / filename
-        if oracle_copy.is_file():
-            doc = (ast.get_docstring(ast.parse(oracle_copy.read_text(encoding="utf-8"))) or "").lower()
-            assert "oracle" in doc and any(rel in doc for rel in rule_names), (
-                f"loop/tests/{filename} must declare itself as an independent test oracle for {rule_names}"
-            )
+        assert oracle_copy.is_file(), (
+            f"moved test-only oracle loop/tests/{filename} is missing; "
+            f"keep the independent test oracle under loop/tests/"
+        )
+
+    # docs/formal.md section 11 (Independent oracles) must record the moved test oracle row,
+    # never the retired production module path.
+    oracle_rows = _formal_section_11_table_rows()
+    assert oracle_rows, "docs/formal.md section 11 (Independent oracles) table is empty"
+    assert any("(../loop/tests/flow_evidence.py)" in row for row in oracle_rows), (
+        "docs/formal.md section 11 table must record the independent test oracle at "
+        "../loop/tests/flow_evidence.py"
+    )
+    for retired_link in ("(../loop/flow_evidence.py)", "(../loop/status_times.py)"):
+        assert not any(retired_link in row for row in oracle_rows), (
+            f"docs/formal.md section 11 table still references retired production module {retired_link}"
+        )
