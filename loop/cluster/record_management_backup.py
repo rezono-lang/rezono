@@ -505,7 +505,7 @@ def _scale_down_management(cluster: ManagementCluster) -> None:
         ready = [
             ep
             for sl in slices
-            for ep in sl.get("endpoints", [])
+            for ep in (sl.get("endpoints") or [])
             if ep.get("conditions", {}).get("ready") is True
         ]
         if not ready:
