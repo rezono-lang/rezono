@@ -480,10 +480,15 @@ def _assert_all_rezono_modules_pinned() -> None:
             continue
         raise RuntimeError(f"refusing rezono module {name} without pinned file or path")
 
+import duckdb
 import rezono_checker
-from rezono_checker.evidence import Evidence
+from rezono_checker import access as checker_access
+from rezono_checker import metadata as checker_metadata
+from rezono_checker.calc import published_views
+from rezono_checker.evidence import PROTECTED as PROTECTED_RELATIONS, Evidence
 from rezono_checker.rules import derived_relations, load_rules, load_seals
 from rezono_compiler import __main__ as compiler_cli
+from rezono_compiler import feldera_names
 
 _assert_all_rezono_modules_pinned()
 
@@ -507,6 +512,14 @@ seals = load_seals(rules_doc)
 bundle_doc = json.loads((compiled_dir / "bundle" / "schema-bundle.json").read_text(encoding="utf-8"))
 calc_file = compiled_dir / "ir" / "calc.json"
 calc_doc = json.loads(calc_file.read_text(encoding="utf-8")) if calc_file.is_file() else None
+params_file = compiled_dir / "engine" / "parameters.json"
+params_doc = json.loads(params_file.read_text(encoding="utf-8")) if params_file.is_file() else {}
+tables_sql_text = (compiled_dir / "engine" / "tables.sql").read_text(encoding="utf-8")
+integrity_sql_text = (compiled_dir / "engine" / "integrity.sql").read_text(encoding="utf-8")
+
+_, _, schema_columns = checker_access._schema_from_bundle(bundle_doc, rules_doc)
+calc_views = (published_views(calc_doc) | {calc_doc["as_of"]}) if calc_doc is not None else set()
+known_relations = set(schema_columns) | set(derived) | set(PROTECTED_RELATIONS) | calc_views
 
 manifest_path = Path(payload["manifest_path"]).resolve()
 archive_root = Path(payload["archive_dir"]).resolve()
@@ -514,7 +527,7 @@ role_name = payload.get("role", "reader")
 role_mode = payload.get("role_mode", "complete")
 evidence_dir_raw = payload.get("evidence_dir")
 
-def _resolve_blob(uri: object) -> Path:
+def _uri_to_rel(uri: object) -> str:
     if not isinstance(uri, str) or not uri:
         raise ValueError(f"invalid archive URI: {uri!r}")
     if "://" in uri:
@@ -526,70 +539,205 @@ def _resolve_blob(uri: object) -> Path:
         rel = uri
     if not rel or rel.startswith("/") or "\\" in rel or ".." in Path(rel).parts:
         raise ValueError(f"unsafe archive path: {uri!r}")
-    blob = (archive_root / rel).resolve()
-    if not blob.is_relative_to(archive_root) or not blob.is_file():
-        raise FileNotFoundError(f"archive blob missing: {uri!r}")
+    return rel
+
+def _resolve_under(base_dir: Path, uri: object) -> Path:
+    rel = _uri_to_rel(uri)
+    blob = (base_dir / rel).resolve()
+    if not blob.is_relative_to(base_dir) or not blob.is_file():
+        raise FileNotFoundError(f"blob missing under {base_dir.name}: {uri!r}")
     return blob
 
 def read_archive_uri(uri: str) -> bytes:
-    return _resolve_blob(uri).read_bytes()
+    return _resolve_under(archive_root, uri).read_bytes()
 
+# Trusted admission context MUST come strictly from evidence_dir, never from the untrusted archive_root.
 handoff_evidence = None
+evidence_invalid = False
 if evidence_dir_raw:
     evidence_dir = Path(evidence_dir_raw).resolve()
+    evidence_archive = (evidence_dir / "archive").resolve()
     context_key = "observations/retained/context.json"
-    context_file = evidence_dir / "context.json"
-    if context_file.is_file():
+    context_candidates = [
+        evidence_dir / "context.json",
+        evidence_archive / context_key,
+    ]
+    context_file = next(
+        (p.resolve() for p in context_candidates if p.is_file() and p.resolve().is_relative_to(evidence_dir)),
+        None,
+    )
+    if context_file is None:
+        evidence_invalid = True
+    else:
         ctx_bytes = context_file.read_bytes()
         ctx_uri = f"s3://rezono/{context_key}"
-        extra_blobs = {ctx_uri: ctx_bytes}
-    else:
-        ctx_uri = f"s3://rezono/{context_key}"
-        ctx_bytes = read_archive_uri(ctx_uri)
-        extra_blobs = {}
-    context_ref = {
-        "file": context_key,
-        "uri": ctx_uri,
-        "sha256": hashlib.sha256(ctx_bytes).hexdigest(),
-    }
-    index_key = "observations/submitted/index.json"
-    index_file = evidence_dir / "index.json"
-    candidates_ref = None
-    if index_file.is_file():
-        idx_bytes = index_file.read_bytes()
-        idx_uri = f"s3://rezono/{index_key}"
-        extra_blobs[idx_uri] = idx_bytes
-        candidates_ref = {
-            "file": index_key,
-            "uri": idx_uri,
-            "sha256": hashlib.sha256(idx_bytes).hexdigest(),
+        trusted_blobs = {ctx_uri: ctx_bytes}
+        context_ref = {
+            "file": context_key,
+            "uri": ctx_uri,
+            "sha256": hashlib.sha256(ctx_bytes).hexdigest(),
         }
-    else:
-        try:
+        index_key = "observations/submitted/index.json"
+        index_candidates = [
+            evidence_dir / "index.json",
+            evidence_archive / index_key,
+        ]
+        index_file = next(
+            (p.resolve() for p in index_candidates if p.is_file() and p.resolve().is_relative_to(evidence_dir)),
+            None,
+        )
+        candidates_ref = None
+        if index_file is not None:
+            idx_bytes = index_file.read_bytes()
             idx_uri = f"s3://rezono/{index_key}"
-            idx_bytes = read_archive_uri(idx_uri)
-        except (OSError, ValueError):
-            idx_bytes = None
-        if idx_bytes is not None:
+            trusted_blobs[idx_uri] = idx_bytes
             candidates_ref = {
                 "file": index_key,
                 "uri": idx_uri,
                 "sha256": hashlib.sha256(idx_bytes).hexdigest(),
             }
+        else:
+            try:
+                idx_uri = f"s3://rezono/{index_key}"
+                idx_bytes = read_archive_uri(idx_uri)
+            except (OSError, ValueError):
+                idx_bytes = None
+            if idx_bytes is not None:
+                candidates_ref = {
+                    "file": index_key,
+                    "uri": idx_uri,
+                    "sha256": hashlib.sha256(idx_bytes).hexdigest(),
+                }
 
-    def _read_with_evidence(uri: str) -> bytes:
-        if uri in extra_blobs:
-            return extra_blobs[uri]
-        return read_archive_uri(uri)
+        def _read_evidence_uri(uri: str) -> bytes:
+            if uri in trusted_blobs:
+                return trusted_blobs[uri]
+            rel = _uri_to_rel(uri)
+            if evidence_archive.is_dir():
+                try:
+                    return _resolve_under(evidence_archive, uri).read_bytes()
+                except (OSError, ValueError):
+                    pass
+            # Never read retained authority blobs from the untrusted publication archive.
+            if rel.startswith("observations/retained/") or rel == "context.json":
+                raise FileNotFoundError(f"retained evidence blob missing from trusted evidence_dir: {uri!r}")
+            return read_archive_uri(uri)
 
-    handoff_evidence = Evidence(
-        context=context_ref,
-        candidates=candidates_ref,
-        read_bytes=_read_with_evidence,
-    )
-    archive_reader = _read_with_evidence
-else:
-    archive_reader = read_archive_uri
+        handoff_evidence = Evidence(
+            context=context_ref,
+            candidates=candidates_ref,
+            read_bytes=_read_evidence_uri,
+        )
+
+archive_reader = read_archive_uri
+
+def _checks_valid(doc: dict) -> bool:
+    checks = doc.get("checks")
+    if not isinstance(checks, list) or not checks:
+        return False
+    seen: set[str] = set()
+    for check in checks:
+        if not isinstance(check, dict):
+            return False
+        name = check.get("name")
+        if not isinstance(name, str) or not name:
+            return False
+        if check.get("status") != "green":
+            return False
+        if "violations" in check:
+            val = check["violations"]
+            if type(val) is not int or val != 0:
+                return False
+        seen.add(name)
+    return {"rezono:proofs", "rezono:schema"} <= seen
+
+def _duckdb_sql(sql: str) -> str:
+    logical = feldera_names.render(sql, feldera_names.LOGICAL)
+    return logical.replace("CREATE MATERIALIZED VIEW", "CREATE VIEW").replace("CREATE LOCAL VIEW", "CREATE VIEW")
+
+def _verify_complete_schema(complete_snaps: dict[str, bytes]) -> bool:
+    if set(complete_snaps) - known_relations:
+        return False
+    meta_params = {
+        t: [tuple(str(v) for v in r.values()) for r in rs]
+        for t, rs in params_doc.items()
+        if t.startswith("rezono__")
+    }
+    if bundle_doc.get("kinds") or meta_params:
+        if checker_metadata.check(bundle_doc, meta_params):
+            return False
+    public_params = {
+        t: sorted(tuple(str(v) for v in r.values()) for r in rs)
+        for t, rs in params_doc.items()
+        if not t.startswith("rezono__")
+    }
+    for table, expected_rows in public_params.items():
+        if table not in complete_snaps:
+            return False
+        try:
+            decoded = json.loads(complete_snaps[table])
+        except (ValueError, json.JSONDecodeError):
+            return False
+        if not isinstance(decoded, list):
+            return False
+        got_rows = []
+        for item in decoded:
+            if not isinstance(item, dict) or not isinstance(item.get("key"), list):
+                return False
+            if not all(isinstance(cell, str) for cell in item["key"]):
+                return False
+            got_rows.append(tuple(item["key"]))
+        if sorted(got_rows) != expected_rows:
+            return False
+
+    db = duckdb.connect()
+    try:
+        db.execute("CREATE OR REPLACE MACRO rlike(s, p) AS regexp_matches(s, p);")
+        for script in (_duckdb_sql(tables_sql_text), _duckdb_sql(integrity_sql_text)):
+            if "CREATE" in script:
+                db.execute(script)
+        base_tables = [
+            row[0]
+            for row in db.execute(
+                "SELECT table_name FROM information_schema.tables "
+                "WHERE table_type = 'BASE TABLE' ORDER BY table_name"
+            ).fetchall()
+        ]
+        for table in base_tables:
+            quoted = '"' + table.replace('"', '""') + '"'
+            if table in params_doc:
+                rows_to_load = [tuple(r.values()) for r in params_doc[table]]
+            else:
+                if table not in complete_snaps:
+                    return False
+                try:
+                    decoded = json.loads(complete_snaps[table])
+                except (ValueError, json.JSONDecodeError):
+                    return False
+                if not isinstance(decoded, list):
+                    return False
+                rows_to_load = []
+                for item in decoded:
+                    if not isinstance(item, dict) or not isinstance(item.get("key"), list):
+                        return False
+                    if not all(isinstance(cell, str) for cell in item["key"]):
+                        return False
+                    rows_to_load.append(tuple(item["key"]))
+            if rows_to_load:
+                width = len(db.execute(f"SELECT * FROM {quoted} LIMIT 0").description)
+                if any(len(r) != width for r in rows_to_load):
+                    return False
+                placeholders = ", ".join("?" * width)
+                db.executemany(f"INSERT INTO {quoted} VALUES ({placeholders})", rows_to_load)
+        if bundle_doc.get("checks"):
+            counts = db.execute("SELECT info, COUNT(*) FROM validation_result GROUP BY info").fetchall()
+            if any(count > 0 for _, count in counts):
+                return False
+        return True
+    except Exception:
+        return False
+    finally:
+        db.close()
 
 def _read_role_snaps(snaps: list[dict]) -> dict[str, bytes] | None:
     out: dict[str, bytes] = {}
@@ -602,7 +750,7 @@ def _read_role_snaps(snaps: list[dict]) -> dict[str, bytes] | None:
             return None
         if not isinstance(expected, str) or not _SHA64.fullmatch(expected):
             return None
-        if entry.get("format") not in ("json", "jsonl"):
+        if entry.get("format") != "json":
             return None
         try:
             raw = archive_reader(entry.get("uri"))
@@ -633,8 +781,18 @@ def _read_witness_docs(entries: list[dict]) -> list[dict] | None:
         docs.append(doc)
     return docs
 
-manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-checker_valid = isinstance(manifest, dict) and isinstance(manifest.get("id"), str) and bool(manifest["id"])
+try:
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+except (OSError, ValueError, json.JSONDecodeError):
+    manifest = None
+
+checker_valid = (
+    not evidence_invalid
+    and isinstance(manifest, dict)
+    and isinstance(manifest.get("id"), str)
+    and bool(manifest["id"])
+    and _checks_valid(manifest)
+)
 snapshots = manifest.get("snapshots") if checker_valid else None
 witnesses = manifest.get("witnesses") if checker_valid else None
 if not isinstance(snapshots, list) or not isinstance(witnesses, list):
@@ -649,10 +807,14 @@ role_snap_bytes = _read_role_snaps(role_snaps) if checker_valid else None
 role_witness_docs = _read_witness_docs(role_witness_entries) if checker_valid else None
 if role_snap_bytes is None or role_witness_docs is None:
     checker_valid = False
+if checker_valid and (set(role_snap_bytes) - known_relations):
+    checker_valid = False
 
 if checker_valid:
     if role_mode == "complete":
         if not all(snap.get("complete") is True for snap in role_snaps):
+            checker_valid = False
+        elif not _verify_complete_schema(role_snap_bytes):
             checker_valid = False
         else:
             role_manifest = {**manifest, "snapshots": role_snaps}
@@ -693,6 +855,8 @@ if checker_valid:
             cand_wit_docs = _read_witness_docs(cand_wits)
             if cand_snap_bytes is None or cand_wit_docs is None:
                 continue
+            if not _verify_complete_schema(cand_snap_bytes):
+                continue
             cand_manifest = {**manifest, "snapshots": cand_snaps}
             cand_ok = True
             for cdoc in cand_wit_docs:
@@ -723,8 +887,6 @@ if checker_valid:
         if verified_complete is None:
             checker_valid = False
         else:
-            from rezono_checker import access as checker_access
-            _assert_all_rezono_modules_pinned()
             complete_snap_bytes, complete_wits, complete_calcs = verified_complete
             claimed_full = frozenset(snap["relation"] for snap in role_snaps if snap.get("full") is True)
             role_manifest = {**manifest, "snapshots": [{**snap, "complete": True} for snap in role_snaps]}
@@ -775,16 +937,27 @@ _assert_all_rezono_modules_pinned()
 
 rows: dict[str, list[dict]] = {}
 if checker_valid and role_snap_bytes is not None:
-    for rel, raw in role_snap_bytes.items():
-        decoded = json.loads(raw)
-        if not isinstance(decoded, list):
-            checker_valid = False
-            rows = {}
-            break
-        rows[rel] = decoded
+    try:
+        for rel, raw in role_snap_bytes.items():
+            decoded = json.loads(raw)
+            if not isinstance(decoded, list):
+                checker_valid = False
+                rows = {}
+                break
+            rows[rel] = decoded
+    except (ValueError, json.JSONDecodeError):
+        checker_valid = False
+        rows = {}
 
 result_path.write_text(
-    json.dumps({"valid": checker_valid, "rows": rows if checker_valid else {}}, sort_keys=True),
+    json.dumps(
+        {
+            "valid": checker_valid,
+            "manifest": manifest if checker_valid else None,
+            "rows": rows if checker_valid else {},
+        },
+        sort_keys=True,
+    ),
     encoding="utf-8",
 )
 """
@@ -1016,11 +1189,13 @@ def _verify_publication_on_pinned_engine(
     main_ref: str = DEFAULT_MAIN_REF,
     evidence_dir: Path | None = None,
     timeout_seconds: int = PINNED_TIMEOUT_SECONDS,
-) -> tuple[bool, dict[str, list[dict[str, Any]]] | None, str | None]:
+) -> tuple[bool, dict[str, Any] | None, dict[str, list[dict[str, Any]]] | None, str | None]:
     """Verify an existing archive publication via ``rezono_checker`` from the pinned engine.
 
-    Returns ``(checker_valid, rows, engine_error)``. Any pin or pinned subprocess failure
-    returns ``(False, None, engine_error)``; any rejected publication returns ``(False, {}, None)``.
+    Returns ``(checker_valid, verified_manifest, rows, engine_error)`` from the same atomic
+    verification pass to avoid manifest/rows TOCTOU drift. Any pin or pinned subprocess failure
+    returns ``(False, None, None, engine_error)``; any rejected publication returns
+    ``(False, None, {}, None)``.
     """
     try:
         engine_sha = _resolve_engine_sha(root=root, pin_path=pin_path)
@@ -1032,7 +1207,7 @@ def _verify_publication_on_pinned_engine(
             main_ref=main_ref,
         )
     except (OSError, ValueError, subprocess.CalledProcessError) as exc:
-        return False, None, f"engine pin validation failed: {exc}"
+        return False, None, None, f"engine pin validation failed: {exc}"
 
     try:
         with tempfile.TemporaryDirectory(prefix="rezono-pinned-verify-") as tmp:
@@ -1075,16 +1250,19 @@ def _verify_publication_on_pinned_engine(
             if proc.returncode != 0 or not result_path.is_file():
                 detail = (proc.stderr or proc.stdout or f"exit {proc.returncode}").strip()
                 first_line = detail.splitlines()[-1] if detail else f"exit {proc.returncode}"
-                return False, None, f"pinned publication verification failed: {first_line}"
+                return False, None, None, f"pinned publication verification failed: {first_line}"
 
             output = json.loads(result_path.read_text(encoding="utf-8"))
             valid = output.get("valid") is True
+            verified_manifest = output.get("manifest")
             rows = output.get("rows")
             if not isinstance(rows, dict):
-                return False, None, "pinned verifier returned malformed payload"
-            return valid, rows if valid else {}, None
+                return False, None, None, "pinned verifier returned malformed payload"
+            if valid and not isinstance(verified_manifest, dict):
+                return False, None, None, "pinned verifier returned malformed manifest payload"
+            return valid, verified_manifest if valid else None, rows if valid else {}, None
     except (OSError, ValueError, subprocess.SubprocessError, tarfile.TarError, json.JSONDecodeError) as exc:
-        return False, None, f"pinned publication verification failed: {exc}"
+        return False, None, None, f"pinned publication verification failed: {exc}"
 
 
 def _resolve_git_range(
@@ -1635,6 +1813,8 @@ def _load_publication_files(
                 return _rejected_manifest(manifest), {}, None
             if not isinstance(expected_sha, str) or not _SHA64.fullmatch(expected_sha):
                 return _rejected_manifest(manifest), {}, None
+            if entry.get("format") != "json":
+                return _rejected_manifest(manifest), {}, None
             blob_path = _resolve_archive_blob(root_dir, entry.get("uri"))
             if blob_path is None:
                 return _rejected_manifest(manifest), {}, None
@@ -1752,7 +1932,7 @@ def evaluate_coordinator_state(
             role=role,
         )
         if engine_error is None and archive_dir is not None and rows_path is None and rows:
-            checker_valid, verified_rows, verify_error = _verify_publication_on_pinned_engine(
+            checker_valid, verified_manifest, verified_rows, verify_error = _verify_publication_on_pinned_engine(
                 root=root,
                 manifest_path=manifest_path,
                 archive_dir=archive_dir,
@@ -1766,10 +1946,11 @@ def evaluate_coordinator_state(
                 manifest = None
                 rows = None
                 engine_error = verify_error
-            elif not checker_valid or verified_rows is None:
+            elif not checker_valid or verified_manifest is None or verified_rows is None:
                 manifest = _rejected_manifest(manifest)
                 rows = {}
             else:
+                manifest = verified_manifest
                 rows = verified_rows
 
     return read_coordinator_state(
