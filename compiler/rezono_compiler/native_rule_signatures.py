@@ -17,7 +17,7 @@ Column = tuple[str, str, str]
 ClauseKey = tuple[str, str, str]
 ResolvedPath = tuple[str | None, str]
 Place = dict[str, str]
-SCALARS = {"Text": "string", "Int": "integer"}
+SCALARS = {"Text": "string", "Int": "integer", "Date": "date"}
 # The value states in code order (publication section 2.1).
 STATES = ("known", "not_applicable", "unknown", "invalid")
 
@@ -115,7 +115,7 @@ class Schema:
     def type(self, source: Source, spelling: str, at: str) -> tuple[str, str]:
         if spelling in SCALARS:
             return spelling, SCALARS[spelling]
-        if spelling in {"Bool", "Date"}:
+        if spelling == "Bool":
             raise Refusal("R049", f"{spelling} has no rule column representation", at)
         authored, owners = source.scope(spelling, at)
         candidates = [engine for owner in owners for engine in self.by_owner.get((owner, authored), ())]
@@ -143,11 +143,11 @@ class Schema:
     def scalar_type(self, definition: modules.Module, name: str, at: str) -> tuple[str, str]:
         errors: list[str] = []
         sql = pack.sql_type(definition.sv, name, name, errors)
-        storage = types.rule_type(sql)
+        storage = "date" if sql == "DATE" else types.rule_type(sql)
         if errors or storage is None:
             raise Refusal("R049", f"{name} has no rule column representation", at)
-        if name in {"string", "integer"}:
-            return ("Text" if storage == "string" else "Int"), storage
+        if name in {"string", "integer", "date"}:
+            return {"string": "Text", "integer": "Int", "date": "Date"}[storage], storage
         owner = next((module for module in self.names.closures[definition.id]
                       if name in self.names.modules[module].sv.all_types(imports=False)), definition.id)
         module = self.names.modules[owner]

@@ -24,7 +24,7 @@ from __future__ import annotations
 import datetime
 import re
 
-from .rules import Atom, const_type, days, is_var
+from .rules import Atom, const_type, days, is_var, iso_date
 from .rules_sql import UTC_PATTERN, UTC_WHOLE
 
 FORMAT = "rezono.gap/1"
@@ -252,6 +252,8 @@ def _item_text(prog, rule, kind, index, types):
     t = types.get(c.left) or types.get(c.right) or const_type(c.left)
     if c.compare_as == "utc_instant":   # only an instant that is valid has a key; the key orders by its bytes
         return (f"utc_key({_term(c.left, t)}, KL_), utc_key({_term(c.right, t)}, KR_), KL_ {OPS[c.op]} KR_")
+    if t == "date" and c.op not in ("eq", "ne"):
+        return f"{days_text(_term(c.left, t))} {OPS[c.op]} {days_text(_term(c.right, t))}"
     return f"{_term(c.left, t)} {OPS[c.op]} {_term(c.right, t)}"
 
 
@@ -409,14 +411,18 @@ def utc_key(text):
     return text[:19] + ("." + fraction if fraction else "")
 
 
-def _ordered(c, a, b):
-    """`a op b` under the condition's comparison type; a text that is no instant satisfies nothing."""
+def _ordered(c, a, b, typ=None):
+    """`a op b` under the condition's comparison type; a text that is no instant or date satisfies nothing."""
     if c.compare_as == "utc_instant":
         a, b = utc_key(a), utc_key(b)
         if a is None or b is None:
             return False
     if c.compare_as:
         a, b = a.encode(), b.encode()
+    elif typ == "date":
+        if not (iso_date(a) and iso_date(b)):
+            return False
+        a, b = datetime.date.fromisoformat(a), datetime.date.fromisoformat(b)
     return _compare(c.op, a, b)
 
 
@@ -438,7 +444,7 @@ def _extend(prog, rule, kind, index, theta, rows, types):
     if kind == "condition":
         c = rule.conditions[index]
         t = types.get(c.left) or types.get(c.right) or const_type(c.left)
-        return [theta] if _ordered(c, val(c.left, t), val(c.right, t)) else []
+        return [theta] if _ordered(c, val(c.left, t), val(c.right, t), t) else []
     if kind == "assignment":
         s = rule.assignments[index]
         if s.op == "days":   # a view's reading of a date; a text that is no day derives nothing

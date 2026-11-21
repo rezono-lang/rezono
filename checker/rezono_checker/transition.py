@@ -8,7 +8,7 @@ from rezono_canon import canonical_bytes, canonical_sha256, sha256_hex
 from . import closure
 from .canon import INTEGER, calc_value, encode_key
 from .check import check_epoch
-from .evaluate import BIGINT
+from .evaluate import BIGINT, _date
 from .rules import check_worlds, derived_relations, load_rules
 
 Key = tuple[str, ...]
@@ -84,14 +84,14 @@ def _catalogue(program) -> dict[str, Relation]:
         types = tuple(column["type"] for column in key)
         if not all(_text(name) for name in names) or len(set(names)) != len(names):
             raise Refused("malformed_definition")
-        # decisions/boolean-rule-inputs.md: a boolean rule column holds the canonical text true or false.
-        if any(column not in ("string", "integer", "rational", "boolean") for column in types):
+        # decisions/boolean-rule-inputs.md & independent-date-equality.md: canonical text encodings for boolean/date.
+        if any(column not in ("string", "integer", "rational", "boolean", "date") for column in types):
             raise Refused("malformed_definition")
         if role == "functional":
             domain = entry.get("domain")
             val = entry.get("value")
             if (not _text(domain) or not isinstance(val, dict) or not _text(val.get("name"))
-                    or val.get("type") not in ("string", "integer", "rational", "boolean")):
+                    or val.get("type") not in ("string", "integer", "rational", "boolean", "date")):
                 raise Refused("malformed_definition")
             catalogue[name] = Relation(role, types + ("string", "string", val["type"]),
                                        types + (val["type"],), domain)
@@ -133,6 +133,8 @@ def _typed_part(part, column: str) -> None:
     if column == "rational" and not calc_value(part, "rational"):
         raise Refused("malformed_row_key")
     if column == "boolean" and part not in ("true", "false"):
+        raise Refused("malformed_row_key")
+    if column == "date" and _date(part) is None:
         raise Refused("malformed_row_key")
 
 

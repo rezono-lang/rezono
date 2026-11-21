@@ -7,6 +7,6 @@ version: 0.1.1
 default_language: en
 theory: true
 imports:
-  - {name: std-decision, path: ../../packs/std-decision, sha256: 4a0207fd27a016c932844705df813adc1037c7258ef819ae57e1642862e04a31}
+  - {name: std-decision, path: ../../packs/std-decision, sha256: 98e8f4243a571ee7e45de9de136df0098adfd462087761ea3209b91c25c256cb}
 rezono:
   - {module: rezono/award.rezono, form: rezono/award.json, layer: conclusions}

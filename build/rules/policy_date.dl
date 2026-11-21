@@ -1,6 +1,4 @@
 .decl build_utc_day(tick: number, unix_day: number)
-.decl build_march_date(unix_day: number, year: number, month_index: number, day: number)
-.decl build_utc_date(unix_day: number, year: number, month: number, day: number)
 .decl build_claimed_policy_date(run: symbol, tick: number, reference: symbol, day: number)
 .decl build_policy_date_conflict(run: symbol, tick: number)
 .decl build_policy_date_at_cut(run: symbol, reference: symbol)
@@ -12,38 +10,13 @@ build_utc_day(tick, unix_day) :- build_run__observed_at(_, tick),
 build_utc_day(tick, unix_day) :- build_run__observed_at(_, tick),
     quotient = tick / 86400, start = quotient * 86400, tick < start, unix_day = quotient - 1.
 
-// Gregorian calendar dates start with March for the leap-year calculation.
-// Adapted from Howard Hinnant's civil_from_days:
-// https://howardhinnant.github.io/date_algorithms.html#civil_from_days
-// ReferenceDate supports 1900-01-01 through 9999-12-31.
-build_march_date(unix_day, year, month_index, day) :- build_utc_day(_, unix_day),
-    unix_day >= -25567, unix_day <= 2932896,
-    from_march_zero = unix_day + 719468,
-    era = from_march_zero / 146097, era_days = era * 146097, day_in_era = from_march_zero - era_days,
-    leap_cycle = day_in_era / 1460, century = day_in_era / 36524, last_day = day_in_era / 146096,
-    ordinary_days = day_in_era - leap_cycle, with_centuries = ordinary_days + century,
-    preceding_days = with_centuries - last_day, year_in_era = preceding_days / 365,
-    era_years = era * 400, year = era_years + year_in_era,
-    whole_year_days = year_in_era * 365, leap_days = year_in_era / 4, century_days = year_in_era / 100,
-    with_leap_days = whole_year_days + leap_days, days_before_year = with_leap_days - century_days,
-    day_in_year = day_in_era - days_before_year,
-    scaled_day = day_in_year * 5, month_start = scaled_day + 2, month_index = month_start / 153,
-    scaled_month = month_index * 153, month_offset = scaled_month + 2, days_before_month = month_offset / 5,
-    zero_based_day = day_in_year - days_before_month, day = zero_based_day + 1.
-
-build_utc_date(unix_day, year, month, day) :- build_march_date(unix_day, year, index, day),
-    index < 10, month = index + 3.
-build_utc_date(unix_day, year, month, day) :- build_march_date(unix_day, march_year, index, day),
-    index >= 10, month = index - 9, year = march_year + 1.
-
 build_claimed_policy_date(run, tick, reference, day) :- build_verified_cut(run),
     build_policy_date__run(binding, run), build_policy_date__reference(binding, reference),
-    build_policy_date__observed_at(binding, tick), build_run__observed_at(run, tick), reference_date__day(reference, day).
+    build_policy_date__observed_at(binding, tick), build_run__observed_at(run, tick),
+    reference_date__date(reference, calendar_date), day = @days(calendar_date, "1970-01-01").
 
 build_policy_date_conflict(run, tick) :- build_claimed_policy_date(run, tick, _, first),
     build_claimed_policy_date(run, tick, _, second), first != second.
 
 build_policy_date_at_cut(run, reference) :- build_claimed_policy_date(run, tick, reference, claimed),
-    build_utc_day(tick, unix_day), build_utc_date(unix_day, year, month, day),
-    year_digits = year * 10000, month_digits = month * 100, year_month = year_digits + month_digits,
-    calendar_day = year_month + day, claimed = calendar_day, !build_policy_date_conflict(run, tick).
+    build_utc_day(tick, unix_day), claimed = unix_day, !build_policy_date_conflict(run, tick).

@@ -26,8 +26,7 @@ COMPARISONS = ("eq", "ne", "lt", "le", "gt", "ge")
 COMPARE_AS = ("binary_text", "utc_instant")
 ARITHMETIC = ("add", "sub", "mul", "div")
 # `days`: the whole number of days from the ISO date `right` (a constant) to the ISO date `left` (a text
-# variable), in the proleptic Gregorian calendar. Only a view's reading makes it: no rule file can
-# write it, so hand-written rules still read text and whole numbers (R4).
+# or date variable bound by a positive literal), in the proleptic Gregorian calendar.
 DAYS = "days"
 TYPES = ("string", "integer", "rational", "boolean", "date")
 BOOLEAN = {"true": True, "false": False}
@@ -700,9 +699,9 @@ def _check_rule(rule, relations):
         types[a.var] = "integer"
     for s in rule.assignments:
         if s.op == DAYS:
-            if s.var in bound or not VAR.match(s.var) or s.left not in positive or types[s.left] != "string" \
+            if s.var in bound or not VAR.match(s.var) or s.left not in positive or types[s.left] not in ("string", "date") \
                     or not iso_date(s.right):
-                raise IRError("bad_assignment", f"{rule.id}: {s}: days reads a text variable of a positive literal "
+                raise IRError("bad_assignment", f"{rule.id}: {s}: days reads a text or date variable of a positive literal "
                                                 "and counts from a constant ISO date")
             bound.add(s.var)
             types[s.var] = "integer"
@@ -738,8 +737,8 @@ def _check_rule(rule, relations):
         kinds = {types[t] for t in (c.left, c.right) if is_var(t)}
         if not kinds:  # two constants: typed by their own form
             kinds = {const_type(t) for t in (c.left, c.right)}
-        if c.op not in ("eq", "ne") and kinds not in ({"integer"}, {"rational"}):
-            raise IRError("bad_condition", f"{rule.id}: order comparisons need integers or rationals")
+        if c.op not in ("eq", "ne") and kinds not in ({"integer"}, {"rational"}, {"date"}):
+            raise IRError("bad_condition", f"{rule.id}: order comparisons need integers, rationals or dates")
         if len(kinds) > 1:
             raise IRError("type_mismatch", f"{rule.id}: {c.left} and {c.right} have different types")
         for t in (c.left, c.right):

@@ -1,10 +1,9 @@
 // Rules of std-decision, in the Datalog subset, so Soufflé is the oracle.
 // The base relations are the pack's tables: decision(d), decision__state(d, s), decision__supersedes(new, old),
-// decision__decider(d, who), decision__valid_from_day(d, n), decision__valid_until_day(d, n),
-// reference_date__day(r, n), and the two ends of a ground g: ground__decision(g, d) and ground__rests_on(g, d).
-// A day is a whole number YYYYMMDD until rules read dates (schema/decision.yaml).
+// decision__decider(d, who), decision__valid_from(d, f), decision__valid_until(d, u),
+// reference_date__date(r, n), and the two ends of a ground g: ground__decision(g, d) and ground__rests_on(g, d).
 //
-// Time comes from the validity days and from supersedes, never from the state: the state is what the record
+// Time comes from the validity dates and from supersedes, never from the state: the state is what the record
 // says today, and a reference date may lie before or after today. So a decision whose record says superseded
 // is in force on a reference date before its successor took effect.
 
@@ -21,17 +20,17 @@ supersession_cycle(a) :- replaces(a, a).
 // Axiom: a decision does not end on or before the day it starts.
 // @invariant
 .decl window_inverted(decision: symbol)
-window_inverted(d) :- decision__valid_from_day(d, f), decision__valid_until_day(d, u), u <= f.
+window_inverted(d) :- decision__valid_from(d, f), decision__valid_until(d, u), u <= f.
 
 // took_effect: on reference date r, decision d has been taken and its first day f has come. The rule reads the
 // decision itself, decision(d), so a proof that rests on a decision ends in its record.
 .decl took_effect(decision: symbol, on: symbol)
-took_effect(d, r) :- decision(d), reference_date__day(r, n), decision__valid_from_day(d, f), f <= n,
+took_effect(d, r) :- decision(d), reference_date__date(r, n), decision__valid_from(d, f), f <= n,
     !decision__state(d, "proposed").
 
 // ended: on reference date r, the last day of decision d has passed (valid_until u is the first day without it).
 .decl ended(decision: symbol, on: symbol)
-ended(d, r) :- reference_date__day(r, n), decision__valid_until_day(d, u), u <= n.
+ended(d, r) :- reference_date__date(r, n), decision__valid_until(d, u), u <= n.
 
 // replaced: on reference date r, decision s, which supersedes d, has taken effect. It stays so when s itself
 // ends or is replaced later: a decision does not come back by itself.
@@ -47,7 +46,7 @@ was_replaced(d, r) :- replaced(d, _, r).
 in_force_on(d, r) :- took_effect(d, r), !ended(d, r), !was_replaced(d, r).
 
 .decl has_start(decision: symbol)
-has_start(d) :- decision__valid_from_day(d, _).
+has_start(d) :- decision__valid_from(d, _).
 
 // has_successor: a decision that has been taken and names its first day supersedes d.
 .decl has_successor(decision: symbol)

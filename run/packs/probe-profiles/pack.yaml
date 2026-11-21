@@ -5,4 +5,4 @@ imports:
   - {name: std-explain, path: ../../../packs/std-explain, sha256: 72e2897cd9baaa4962cf2235f83a332262b4da1e6d34e82d5f64d8335e27be0b}
   - {name: std-part, path: ../../../packs/std-part, sha256: 207f4f097f68e6dade792b714754e0f279ce2c948be8adce82108a3abc18cca9}
   - {name: std-access, path: ../../../packs/std-access, sha256: 8e004b9bd062be365acfb3db30d9bb26fe393c3b979bd77e8d69fc60aae111e6}
-  - {name: std-decision, path: ../../../packs/std-decision, sha256: 4a0207fd27a016c932844705df813adc1037c7258ef819ae57e1642862e04a31}
+  - {name: std-decision, path: ../../../packs/std-decision, sha256: 98e8f4243a571ee7e45de9de136df0098adfd462087761ea3209b91c25c256cb}

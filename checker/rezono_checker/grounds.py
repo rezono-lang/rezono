@@ -40,7 +40,7 @@ def aggregate_grounds(spec, theta, rows, groups) -> set[Ground]:
 def comparison(condition, theta):
     op = condition.op
     left, right = _value(condition.left, theta), _value(condition.right, theta)
-    result = _holds(op, left, right, condition.compare_as)
+    result = _holds(op, left, right, condition.compare_as, condition.operand_type)
     if op in ("gt", "ge"):
         op, left, right = {"gt": "lt", "ge": "le"}[op], right, left
     if op in ("eq", "ne"):

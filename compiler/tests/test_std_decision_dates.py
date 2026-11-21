@@ -51,15 +51,6 @@ def importers():
     return found
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "M3: decisions/standard-packs-everywhere.md, sections 1.2 to 1.4, step 3. Let a .dl rule compare two "
-    "native date columns in their order (after compiler/tests/test_recorded_dates.py::"
-    "test_independent_date_equality) and pass a date column to @days only for day arithmetic, give "
-    "ReferenceDate a required Date slot `date`, make the rules of packs/std-decision (and its staged candidate) "
-    "compare valid_from, valid_until and reference_date__date as dates, drop the four schema rules that tie a "
-    "date to its day number, and make build/rules/policy_date.dl and run/packs/probe-profiles/rules/budgets.dl "
-    "read the date. Re-pin std-decision in every importing pack.yaml. Step 2 (a planner gives the tests that "
-    "feed std-decision rows their dates) must have landed first; report to the planner if it has not."))
 def test_std_decision_rules_read_dates():
     model = pack.read(STD)
     program = ir.load(model.rules)
