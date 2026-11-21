@@ -115,6 +115,7 @@ classes:
       labels: {range: Label, multivalued: true, inlined_as_list: true}
       messages: {range: MessageResource, multivalued: true, inlined_as_list: true, required: true}
       channels: {range: Channels, required: true, inlined: true}
+      key: {range: KeyOfSigns, required: true, inlined: true, description: "The key of signs from std-view (decisions/release-1-scope.md section 4): statuses, tones, signs and differences, with their labels in messages."}
       jurisdictions: {multivalued: true, description: Reserved for std-jurisdiction; empty in M1.}
       questions: {range: Question, multivalued: true, inlined_as_list: true, description: "The explanation questions (contracts/explain.yaml): imported ones first, then the pack's own. Absent when there are none."}
       reader_questions: {range: ReaderQuestion, multivalued: true, inlined_as_list: true, description: "The reader questions (contracts/explain.yaml): imported ones first, then the pack's own. Absent when there are none."}
@@ -429,6 +430,14 @@ classes:
     attributes:
       lang: {required: true}
       resource: {required: true}
+
+  KeyOfSigns:
+    description: "The key of signs from std-view (decisions/release-1-scope.md section 4): statuses, tones, signs and differences, carried by every schema bundle."
+    attributes:
+      statuses: {range: StatusSign, multivalued: true, inlined_as_list: true, required: true, description: One sign per status.}
+      tones: {range: ToneSign, multivalued: true, inlined_as_list: true, required: true, description: Evaluation signs.}
+      signs: {range: LegendSign, multivalued: true, inlined_as_list: true, required: true, description: The epistemic legend.}
+      differences: {range: DifferenceSign, multivalued: true, inlined_as_list: true, required: true, description: One sign per difference.}
 
   Channels:
     description: "The pack's part of the key; colour roles, glyphs and statuses come from std-view, and a house style gives the pack's own values for some of those roles."
