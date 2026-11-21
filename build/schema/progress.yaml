@@ -1,0 +1,57 @@
+id: https://rezono.org/build/progress
+name: build_progress
+description: Milestone progress, release-1 completion and off-board work observations at a build cut.
+imports: [linkml:types, selection]
+default_range: string
+annotations:
+  layer: facts
+
+enums:
+  BuildMilestoneScope:
+    permissible_values:
+      release_1:
+      outside_release_1:
+  BuildOffboardState:
+    permissible_values:
+      known:
+      unknown:
+
+classes:
+  BuildMilestone:
+    description: One tracked milestone mark and whether it belongs to release 1.
+    attributes:
+      id: {identifier: true}
+      scope: {range: BuildMilestoneScope, required: true}
+  BuildProgressScan:
+    description: A complete progress and off-board work scan bound to one verified build cut.
+    attributes:
+      id: {identifier: true}
+      run: {range: BuildRun, required: true}
+      observed_at: {range: integer, required: true}
+      source: {required: true}
+  BuildRedTest:
+    description: One red test currently observed on the board in a progress scan.
+    attributes:
+      id: {identifier: true}
+      scan: {range: BuildProgressScan, required: true}
+      test: {required: true}
+      milestone: {range: BuildMilestone, required: true}
+  BuildGreenTransition:
+    description: One test observed in Git history to have carried a milestone mark and turned green at a commit.
+    attributes:
+      id: {identifier: true}
+      scan: {range: BuildProgressScan, required: true}
+      test: {required: true}
+      milestone: {range: BuildMilestone, required: true}
+      commit: {range: Commit, required: true}
+  BuildOffboardWork:
+    description: One off-board release-1 work stream observed in a progress scan.
+    attributes:
+      id: {identifier: true}
+      scan: {range: BuildProgressScan, required: true}
+      item: {required: true}
+      state: {range: BuildOffboardState, required: true}
+      completed: {range: integer, minimum_value: 0}
+      total: {range: integer, minimum_value: 0}
+      reason: {}
+      source: {required: true}

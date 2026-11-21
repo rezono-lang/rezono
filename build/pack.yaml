@@ -2,6 +2,9 @@ name: build-selection
 version: 0.1.0
 default_language: en
 imports:
+  - name: std-access
+    path: ../packs/std-access
+    sha256: 8e004b9bd062be365acfb3db30d9bb26fe393c3b979bd77e8d69fc60aae111e6
   - name: std-decision
     path: ../packs/std-decision
     sha256: 2fd4cc60cc4f1c7dca42da2f5368a08a992de39df7cd7db205b9118dd1b8fe5a
