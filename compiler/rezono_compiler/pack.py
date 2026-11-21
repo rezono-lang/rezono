@@ -921,7 +921,7 @@ def read(pack_dir: str | Path) -> Pack:
         forms = {m.rel: m.form for m in mods if m.pack_dir == pack_dir and m.form is not None}
         generated = rezono_table.lower_pack(pack, meta, pack_dir, errors, forms=forms)
     if not errors:
-        from . import native_rule_lowering, rezono_derived, rezono_step
+        from . import native_rule_lowering, rezono_derived, rezono_requirements, rezono_step
 
         try:
             intermediate_invariants: list[IntermediateInvariant] = []
@@ -938,17 +938,27 @@ def read(pack_dir: str | Path) -> Pack:
             pack.intermediate_invariants = tuple(intermediate_invariants)
             pack.steps = tuple(steps)
             derivations = rezono_derived.lower_pack(meta["name"], mods, names, pack)
+            requirements = rezono_requirements.lower_pack(
+                meta["name"], mods, names, pack, native=native, derivations=derivations,
+            )
+            all_notes = rezono_derived.Lowered(
+                notes={**derivations.notes, **requirements.notes},
+                properties=derivations.properties,
+            )
             rule_notes: dict[str, tuple[str, rules_dl.RuleNote]] = {}
             pack.rules, rule_warnings = rules_dl.read(pack, pack_dir, ordered, renames, calc_inputs=calc_inputs,
                                                       calc_parts=calc_parts, folds=pack.folds,
                                                       bodies=pack.rule_bodies, spans=pack.rule_spans,
                                                       rule_notes=rule_notes,
                                                       generated=generated, embedded=rezono_relational.sources(mods),
-                                                      native=rezono_derived.merged(native, derivations.sources),
+                                                      native=rezono_derived.merged(
+                                                          rezono_derived.merged(native, derivations.sources),
+                                                          requirements.sources,
+                                                      ),
                                                       semantics=pack.rule_semantics)
             pack.warnings += rule_warnings
             pack.rule_properties = derivations.properties
-            rule_sentences = rezono_derived.notes(pack, pack_dir, meta, derivations,
+            rule_sentences = rezono_derived.notes(pack, pack_dir, meta, all_notes,
                                                   packs=ordered, rule_notes=rule_notes)
             if pack.rules:   # a variable or a column that joins two currencies is an error
                 amounts.columns(pack.rules, amounts.tables(pack))
